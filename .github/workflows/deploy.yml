@@ -40,6 +40,8 @@ jobs:
           cp -r src/lanternhold/. site/
           echo "lanternhold.born2gamellc.com" > site/CNAME
           touch site/.nojekyll
+          printf 'User-agent: *\nAllow: /\nSitemap: https://lanternhold.born2gamellc.com/sitemap.xml\n' > site/robots.txt
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>https://lanternhold.born2gamellc.com/</loc></url>\n</urlset>\n' > site/sitemap.xml
           echo "${{ steps.check.outputs.sha }}" > site/deployed-from.txt
       - uses: actions/configure-pages@v5
         if: steps.check.outputs.skip != '1'
