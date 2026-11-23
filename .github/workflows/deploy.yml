@@ -1,0 +1,52 @@
+# Publishes the Lanternhold game to lanternhold.born2gamellc.com.
+# The game's source stays in johnmink1/pricing-tools/lanternhold; this copies it from there.
+name: Deploy Lanternhold
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Get the game from pricing-tools
+        uses: actions/checkout@v4
+        with:
+          repository: johnmink1/pricing-tools
+          path: src
+      - name: Skip if nothing changed
+        id: check
+        run: |
+          sha=$(cd src && git log -1 --format=%H -- lanternhold)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          live=$(curl -fsS https://lanternhold.born2gamellc.com/deployed-from.txt || true)
+          if [ "$live" = "$sha" ] && [ "${{ github.event_name }}" = "schedule" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+      - name: Build the site folder
+        if: steps.check.outputs.skip != '1'
+        run: |
+          mkdir site
+          cp -r src/lanternhold/. site/
+          echo "lanternhold.born2gamellc.com" > site/CNAME
+          touch site/.nojekyll
+          echo "${{ steps.check.outputs.sha }}" > site/deployed-from.txt
+      - uses: actions/configure-pages@v5
+        if: steps.check.outputs.skip != '1'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.check.outputs.skip != '1'
+        with:
+          path: site
+      - id: deployment
+        if: steps.check.outputs.skip != '1'
+        uses: actions/deploy-pages@v4
