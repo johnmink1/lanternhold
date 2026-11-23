@@ -29,7 +29,7 @@ jobs:
       - name: Skip if nothing changed
         id: check
         run: |
-          sha=$(cd src && git log -1 --format=%H -- lanternhold)
+          sha=$(cd src && git log -1 --format=%H -- lanternhold lanternhold-wiki)
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           live=$(curl -fsS https://lanternhold.born2gamellc.com/deployed-from.txt || true)
           if [ "$live" = "$sha" ] && [ "${{ github.event_name }}" = "schedule" ]; then echo "skip=1" >> "$GITHUB_OUTPUT"; fi
@@ -43,6 +43,12 @@ jobs:
           printf 'User-agent: *\nAllow: /\nSitemap: https://lanternhold.born2gamellc.com/sitemap.xml\n' > site/robots.txt
           printf '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>https://lanternhold.born2gamellc.com/</loc></url>\n</urlset>\n' > site/sitemap.xml
           echo "${{ steps.check.outputs.sha }}" > site/deployed-from.txt
+      - name: Build the player wiki from the game's data
+        if: steps.check.outputs.skip != '1'
+        run: |
+          if [ -f src/lanternhold-wiki/build.js ]; then
+            node src/lanternhold-wiki/build.js src/lanternhold site https://lanternhold.born2gamellc.com || echo "::warning::The wiki did not build; the game still publishes."
+          fi
       - uses: actions/configure-pages@v5
         if: steps.check.outputs.skip != '1'
       - uses: actions/upload-pages-artifact@v3
