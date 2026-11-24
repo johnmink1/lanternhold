@@ -1,4 +1,4 @@
-/* lh-build 202611241841 */
+/* lh-build 202611241953 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2220,7 +2220,7 @@ body.atench #ghostlamp,body.atench #merchant,body.atench #spwarn,body.atench .fl
 body.isfull #app{max-width:min(1840px,100%)}
 body{overflow-x:clip}
 /* v114 @mentions */
-.chatform{position:relative}
+.chatform,.cpform{position:relative}
 .atbox{position:absolute;left:10px;bottom:calc(100% + 4px);display:flex;flex-direction:column;min-width:180px;max-width:calc(100% - 20px);background:var(--bg2);border:1px solid var(--line2);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.45);overflow:hidden;z-index:5}
 .atbox[hidden]{display:none}
 .atbox button{all:unset;cursor:pointer;padding:8px 12px;font-size:14px;color:var(--text)}
