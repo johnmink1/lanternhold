@@ -2,6 +2,10 @@
 
 This handoff stands on its own for the new Lanternhold project. It is current as of **v119**, live at https://lanternhold.born2gamellc.com.
 
+## Where Lanternhold work happens
+
+From 24 Nov 2026, John's Claude project **Lanternhold** is the home for everything about the game: code and releases, the wiki, the AWS backend, promotion and itch.io, and player feedback. The Born 2 Game project no longer takes Lanternhold work. This repo is the project's repository, and this file is the long-form memory: update it when something lasting changes (a new system, a deploy, a decision from John).
+
 ## Release rule (John, 24 Nov 2026)
 
 Do not ship changes one at a time. Collect everything John asks for into one numbered release, build and test it all together, then ship it once with a single summary of what changed. Only an urgent fix to something broken goes out on its own.
@@ -139,3 +143,6 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
   - The shop feel.
 - A separate Lanternhold Discord, which John will set up later.
 - itch.io page: born2gamellc.itch.io/lanternhold. John is signed in in Brave, and the upload is a small wrapper zip that plays the live site.
+- **itch.io updates are still pending** (as of 24 Nov 2026). The description edits are approved; the devlog draft still needs John's OK. Both texts and the status are in `docs/lanternhold-promo/PROMO-HANDOFF.md`. Last attempt was blocked by itch's Cloudflare check and no itch sign-in in Claude's built-in browser on John's PC.
+- **Promo follow-ups:** the IG/FB Story is not posted, the in-store QR sign is not printed, and the day-3/day-7 results check against the 23 Nov baseline (7 heroes, deepest floor 135) needs redoing. Never post anything public without John's OK on that specific post.
+- **Attribution gap:** promo links carry `?ref=<place>`, but the game doesn't record it yet.
