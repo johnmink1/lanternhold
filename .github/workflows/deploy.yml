@@ -1,12 +1,11 @@
-# Publishes the Lanternhold game to lanternhold.born2gamellc.com.
-# The game's source stays in johnmink1/pricing-tools/lanternhold; this copies it from there.
+# Publishes the Lanternhold game to lanternhold.born2gamellc.com on every push to main.
+# The game's source lives in this repository (moved from johnmink1/pricing-tools on 24 Nov 2026).
 name: Deploy Lanternhold
 on:
-  schedule:
-    - cron: '*/10 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
+    paths: ['lanternhold/**', 'lanternhold-wiki/**', '.github/workflows/deploy.yml']
 permissions:
   contents: read
   pages: write
@@ -22,10 +21,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url }}
     steps:
-      - name: Get the game from pricing-tools
+      - name: Get the game
         uses: actions/checkout@v5
         with:
-          repository: johnmink1/pricing-tools
           path: src
       - name: Skip if nothing changed
         id: check
