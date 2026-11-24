@@ -1,4 +1,4 @@
-/* lh-build 202611241818 */
+/* lh-build 202611241835 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -2795,10 +2795,32 @@
 
   // ---------- header & stage ----------
   let lastRelicCount = -1, lastFeatCount = -1, slowTick = 0;
+  // Hover the gold and Dust in the top bar (John, 2026-11-24): income, NPC wages as a negative, and what hires cost so far.
+  function paintMoneyTips() {
+    const g = document.querySelector('.stat.gold'), d = document.querySelector('.stat.dust');
+    const hires = Object.keys(S.hires || {}), signed = hires.filter(id => !L.shortHire(S, id)).length, wph = L.wagesPerHour(S);
+    const inc = S.hero ? L.npcIncomeMin(S) * 60 : 0, owed = S.owed || 0;
+    if (g) {
+      let t = 'Gold. Every monster drops some. Spend it on training, upgrades and the Store.';
+      if (S.hero) t += ' Income about +' + fmt(inc) + ' an hour.';
+      if (wph > 0) t += ' NPC wages −' + fmt(wph) + ' an hour (' + signed + (signed === 1 ? ' hire' : ' hires') + '), so about ' + (inc - wph >= 0 ? '+' : '−') + fmt(Math.abs(inc - wph)) + ' an hour after wages.';
+      else if (hires.length) t += ' No wages due: your hires are on paid-up short contracts.';
+      if (owed >= 1) t += ' Unpaid wages owed: −' + fmt(owed) + '. Past an hour’s worth, your priciest hire walks off.';
+      if ((S.wagesPaid || 0) >= 1 || (S.npcGold || 0) >= 1) t += ' Spent on hires so far: −' + fmt(S.npcGold || 0) + ' to hire, −' + fmt(S.wagesPaid || 0) + ' in wages.';
+      if (g.dataset.tip !== t) g.dataset.tip = t;
+      g.classList.toggle('drain', wph > 0);
+    }
+    if (d) {
+      let t = 'Dust. Scrap gear to get it, more from rarer and deeper pieces. Enchanting and disenchanting cost Dust.';
+      if (hires.length || (S.npcDust || 0) > 0) t += ' NPC wages −0 Dust an hour: hires are paid in gold. Dust is only spent to hire (Rare, Epic, Legendary) or for new faces at the Guild Hall' + ((S.npcDust || 0) > 0 ? ': −' + fmt(S.npcDust) + ' so far.' : '.');
+      if (d.dataset.tip !== t) d.dataset.tip = t;
+    }
+  }
   function updatePanel(force) {
     const now = Date.now();
     if (force) paintTabLocks();
     $('gold').textContent = fmt(S.gold);
+    if (now - (updatePanel.tipAt || 0) > 2000) { updatePanel.tipAt = now; paintMoneyTips(); }
     { const sg = $('sigils'); if (sg) { let bal = typeof prof !== 'undefined' && prof ? prof.bal : null; if (!(bal >= 0)) { bal = null; try { const c = localStorage.getItem('lh_bal'); if (c != null && +c >= 0) bal = +c; } catch (e) {} } const on = bal != null && signedIn(); if (sg.hidden === on) sg.hidden = !on; if (on) { const t = bal.toLocaleString(); if ($('sigilct').textContent !== t) { $('sigilct').textContent = t; try { localStorage.setItem('lh_bal', String(bal)); } catch (e) {} } } } }
     $('dps').textContent = fmt(L.totalDps(S, now));
     { const tt = $('taptip'); if (tt) { const now = Date.now(), d = L.clickDamage(S, now), w = L.relicVal ? L.relicVal(S, 'whet') : 0, c = L.critChance(S);
@@ -5497,6 +5519,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
+      'Hover your gold and Dust in the top bar to see your income, your NPC wages as a negative per hour, and what hires have cost you so far.',
+    ] },
     { v: 118, date: 'November 24, 2026', title: 'The NPC Guild', items: [
       'The Guild Hall now has an NPC Guild next to the Players Guild. Hire companions for gold or Dust: Common, Uncommon, Rare, Epic or Legendary. Rarer hires fight harder and work camp jobs better, but cost more.',
       'Hires draw an hourly wage, even while you are away. Sign one on to take a companion spot, or take a 2 hour contract when you have no room: paid up front, no wage.',
