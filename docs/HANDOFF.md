@@ -139,4 +139,4 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
   - Mercy Corps rarity.
   - The shop feel.
 - A separate Lanternhold Discord, which John will set up later.
-- itch.io page: born2gamellc.itch.io/lanternhold. John is signed in in Brave, and the upload is a small wrapper zip that plays the live site.
+- itch.io page: born2gamellc.itch.io/lanternhold (edit: itch.io/game/edit/5427018). John is signed in in Brave; make itch changes there through Claude in Chrome, not the built-in browser. The upload is a small wrapper zip that plays the live site, so a release needs only a devlog, not a new upload. Last devlog: 24 Nov 2026, covering v86–v119.

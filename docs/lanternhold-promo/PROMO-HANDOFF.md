@@ -11,8 +11,8 @@ Everything the promo work produced is in this folder: `images/` (finished art) a
 | Instagram post | **Posted** 23 Nov 2026 5:49 PM ET, square image. https://www.instagram.com/p/DgGfZ3DFzMJ/ |
 | Discord store-wide promo | **Not posted, by John's choice** ("dont post the discord one"). Was queued in born2game-bot PR #199 and removed in PR #200 before its slot. A #war-front launch post (bot, 23 Nov 08:10 ET) and #lanternhold-guide/#lanternhold-chat wiki posts already exist. |
 | IG/FB Story | Not posted. Image ready (`images/lanternhold-story.png`); Stories can't go through the Wix API, so post by hand with a link sticker to `https://lanternhold.born2gamellc.com/?ref=story`. |
-| itch.io description | Approved by John (24 Nov: "update any information like the dev log and everything here: https://itch.io/dashboard"). **Not yet done**: Claude's built-in browser on John's PC hit itch's Cloudflare "Verify you are human" check and is not signed in to the itch account (born2gamellc). John was asked to tick the check and sign in there; then apply the edits below. |
-| itch.io devlog | Drafted below. **Needs John's OK before publishing.** |
+| itch.io description | **Updated** 24 Nov 2026 ~2:05 PM ET with John's OK, through v119, from John's Brave (John: all web changes go through his Brave, not Claude's built-in browser). The 23 Nov text and 24 Nov edits below are superseded; the live page is the source of truth. |
+| itch.io devlog | **Posted** 24 Nov 2026: "Lanternhold update: the Hold, the NPC Guild and Legendary loot" (covers v86–v119), https://born2gamellc.itch.io/lanternhold/devlog/1804263. The v69–v93 draft below was never posted and is superseded. itch baseline before: 87 views, 0 downloads, 0 followers. |
 | More places to list the game | Ranked list + drafts below. **Awaiting John's picks** (nothing listed yet). |
 | In-store QR sign | Made: `images/lanternhold-qr-sign-5x7.pdf` (5x7 in, QR to `?ref=store`). Not printed yet. |
 | Results tracking | Day-3/day-7 check was scheduled in the old thread and has been cancelled; redo it here. |
