@@ -11,6 +11,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -19,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url }}
     steps:
       - name: Get the game from pricing-tools
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: johnmink1/pricing-tools
           path: src
@@ -51,10 +52,18 @@ jobs:
           fi
       - uses: actions/configure-pages@v5
         if: steps.check.outputs.skip != '1'
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         if: steps.check.outputs.skip != '1'
         with:
           path: site
       - id: deployment
         if: steps.check.outputs.skip != '1'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      # GitHub sometimes can't see a just-uploaded artifact yet; give it a moment and publish again.
+      - name: Wait before retrying the publish
+        if: steps.check.outputs.skip != '1' && steps.deployment.outcome == 'failure'
+        run: sleep 30
+      - id: deployment2
+        if: steps.check.outputs.skip != '1' && steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
