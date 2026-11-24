@@ -8,7 +8,7 @@ Do not ship changes one at a time. Collect everything John asks for into one num
 
 ## Where the code lives
 
-**`johnmink1/pricing-tools`** is the source of truth. Edit only here.
+**`johnmink1/lanternhold`** is the source of truth (moved from `johnmink1/pricing-tools` on 24 Nov 2026, history kept). Edit only here. The old copies in pricing-tools are gone; a `LANTERNHOLD-MOVED.md` there points here.
 
 | Path | What it is |
 |---|---|
@@ -25,7 +25,7 @@ Do not ship changes one at a time. Collect everything John asks for into one num
 | `infra/lambda/*.js` | Lambda sources: heroes, market, mail, admin, profile, warden, exchange, store, perks, authchal, wixlogin, invite, worldboss, looks, reset, loot. `python3 infra/build.py` minifies them into the YAML. The inline limit is 4 KB each. |
 | `infra/chat`, `infra/ring` | Chat and Ember Ring (PvP) server code. |
 
-**`johnmink1/lanternhold`** is only the GitHub Pages mirror. Its `deploy.yml` copies `lanternhold/` from pricing-tools and builds the wiki. It runs every ~10 minutes, or on demand.
+This repo also publishes the site: `.github/workflows/deploy.yml` builds `lanternhold/` plus the wiki and deploys GitHub Pages (custom domain lanternhold.born2gamellc.com) on every push to `main` that touches the game or wiki, or on demand (workflow_dispatch).
 
 ## How to release
 
@@ -38,9 +38,7 @@ Do not ship changes one at a time. Collect everything John asks for into one num
    - Use floor 51 for tests, because floor 50 is a boss floor.
    - `window.LHDebug = { S, save, L, events }` is available in the page. `migrate()` resets `s.foe` on load, so inject foes through `LHDebug.S`, not through the save.
 5. Open a PR into `main` and squash-merge it. Threads merge their own PRs.
-6. Publish by running `deploy.yml` on `johnmink1/lanternhold` with workflow_dispatch, ref `main`.
-   - Sometimes it needs a second trigger.
-   - `.github/workflows/lanternhold-publish.yml` in pricing-tools tries to start it automatically, but the `LANTERNHOLD_DEPLOY_TOKEN` secret has not worked.
+6. Merging publishes: `deploy.yml` runs on the push to `main` (a minute or two). If it doesn't start or fails, run it with workflow_dispatch, ref `main`; a deploy-pages hiccup sometimes needs a second run.
 7. Verify by fetching `https://lanternhold.born2gamellc.com/version.json?t=<now>` and matching the build number.
 
 House rules:
@@ -139,6 +137,5 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
   - Ambush frequency and the gold it gives.
   - Mercy Corps rarity.
   - The shop feel.
-- The `LANTERNHOLD_DEPLOY_TOKEN` secret, so deploys start on merge.
 - A separate Lanternhold Discord, which John will set up later.
 - itch.io page: born2gamellc.itch.io/lanternhold. John is signed in in Brave, and the upload is a small wrapper zip that plays the live site.
