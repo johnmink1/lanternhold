@@ -1,4 +1,4 @@
-/* lh-build 202611241841 */
+/* lh-build 202611241953 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4507,33 +4507,37 @@
     setTimeout(bgPoll, 4000);
     initDock();
     // @ autocomplete: type @ and a few letters, then tap a name (or press Tab / Enter) to fill it in.
+    // v119 fix (John: "the @ broke in chat"): one list now serves the phone chat box and every desktop chat window.
+    // Since v117 desktop chat happens in the dock windows, which never had the list, so @ did nothing there.
     const atBox = document.createElement('div'); atBox.className = 'atbox'; atBox.id = 'atbox'; atBox.hidden = true; $('chatform').appendChild(atBox);
-    let atSel = 0, atList = [];
-    const atQuery = () => { const inp = $('chatin'), v = inp.value.slice(0, inp.selectionStart == null ? inp.value.length : inp.selectionStart), m = v.match(/(^|\s)@([A-Za-z' \-]{0,16})$/); return m ? { q: m[2], at: v.length - m[2].length - 1 } : null; };
-    let atBoard = false;
-    function paintAt() {
-      const a = atQuery(), mine = S.hero ? S.hero.name.toLowerCase() : '';
+    let atSel = 0, atList = [], atInp = null, atBoard = false;
+    const isChatIn = t => !!(t && t.tagName === 'INPUT' && (t.id === 'chatin' || (t.closest && t.closest('.cpform'))));
+    const atQuery = inp => { const v = inp.value.slice(0, inp.selectionStart == null ? inp.value.length : inp.selectionStart), m = v.match(/(^|\s)@([A-Za-z' \-]{0,16})$/); return m ? { q: m[2], at: v.length - m[2].length - 1 } : null; };
+    function paintAt(inp) {
+      if (inp) atInp = inp; inp = atInp; if (!inp || !inp.isConnected) { atBox.hidden = true; atList = []; return; }
+      if (inp.form && atBox.parentNode !== inp.form) inp.form.appendChild(atBox);
+      const a = atQuery(inp), mine = S.hero ? S.hero.name.toLowerCase() : '';
       // The Players Guild board adds every registered hero to the list; fetch it once, the first time @ is typed.
       if (a && !atBoard && !(boardList && boardList.length)) { atBoard = true; api('GET', null, '/heroes').then(r => { if (r && r.heroes && !(boardList && boardList.length)) boardList = r.heroes; paintAt(); }).catch(() => {}); }
       atList = a ? knownChatters().filter(p => p.name.toLowerCase() !== mine && p.name.toLowerCase().startsWith(a.q.toLowerCase())).slice(0, 6) : [];
-      if (a && a.q.includes(' ') && !atList.length) atList = [];
       atBox.hidden = !atList.length; if (atSel >= atList.length) atSel = 0;
       atBox.innerHTML = atList.map((p, i) => '<button type="button" class="' + (i === atSel ? 'on' : '') + '" data-atname="' + esc(p.name) + '">@' + esc(p.name) + '</button>').join('');
     }
     function pickAt(name) {
-      const inp = $('chatin'), a = atQuery(); if (!a) return;
+      const inp = atInp, a = inp && atQuery(inp); if (!a) return;
       const end = inp.selectionStart == null ? inp.value.length : inp.selectionStart;
       inp.value = inp.value.slice(0, a.at) + '@' + name + ' ' + inp.value.slice(end);
       const pos = a.at + name.length + 2; inp.setSelectionRange(pos, pos); atBox.hidden = true; atList = []; inp.focus();
     }
-    $('chatin').addEventListener('input', paintAt);
-    $('chatin').addEventListener('keydown', e => {
-      if (atBox.hidden || !atList.length) return;
+    document.addEventListener('input', e => { if (isChatIn(e.target)) paintAt(e.target); });
+    // Capture phase, so Tab / Enter pick a name before the form sends the message.
+    document.addEventListener('keydown', e => {
+      if (e.target !== atInp || !isChatIn(e.target) || atBox.hidden || !atList.length) return;
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); atSel = (atSel + (e.key === 'ArrowDown' ? 1 : atList.length - 1)) % atList.length; paintAt(); }
-      else if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); pickAt(atList[atSel].name); }
-      else if (e.key === 'Escape') { atBox.hidden = true; }
-    });
-    $('chatin').addEventListener('blur', () => setTimeout(() => { atBox.hidden = true; }, 150));
+      else if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); pickAt(atList[atSel].name); }
+      else if (e.key === 'Escape') { e.preventDefault(); atBox.hidden = true; }
+    }, true);
+    document.addEventListener('focusout', e => { if (isChatIn(e.target)) setTimeout(() => { if (document.activeElement !== atInp) atBox.hidden = true; }, 150); });
     atBox.addEventListener('mousedown', e => { const b = e.target.closest('[data-atname]'); if (b) { e.preventDefault(); pickAt(b.dataset.atname); } });
     $('chatform').addEventListener('submit', async e => {
       e.preventDefault();
@@ -5524,6 +5528,7 @@
   const PATCH_NOTES = [
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
+      'Fixed: typing @ in the desktop chat windows shows the list of players again (Tab, Enter or a click fills in the name). It only worked in the phone chat before.',
     ] },
     { v: 118, date: 'November 24, 2026', title: 'The NPC Guild', items: [
       'The Guild Hall now has an NPC Guild next to the Players Guild. Hire companions for gold or Dust: Common, Uncommon, Rare, Epic or Legendary. Rarer hires fight harder and work camp jobs better, but cost more.',
