@@ -1,4 +1,4 @@
-/* lh-build 202611241835 */
+/* lh-build 202611241841 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2355,3 +2355,10 @@ body.atench .achips{display:none}
 .npcbh{margin:12px 0 2px}
 .npcacts .btn{display:inline-flex;align-items:center;gap:4px;flex-direction:row}
 .npcacts .btn svg{width:14px;height:14px;flex:none}
+/* gold / Dust hover table (v119) */
+.mtip{min-width:210px}.mtip>b{display:block;margin-bottom:4px;font-size:13px}
+.mtip table{width:100%;border-collapse:collapse;font-size:12.5px}
+.mtip td{padding:2px 0}.mtip td+td{text-align:right;white-space:nowrap;padding-left:14px}
+.mtip tr:has(.tot) td{border-top:1px solid rgba(255,255,255,.18);padding-top:4px}
+.mtip .pos{color:#8fdc6a}.mtip .neg{color:#ff7b6b}.mtip .mut{color:var(--muted)}
+.mtip small{display:block;margin-top:6px;color:var(--muted);font-size:11.5px;line-height:1.35}
