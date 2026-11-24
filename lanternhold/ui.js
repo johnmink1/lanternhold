@@ -1,4 +1,4 @@
-/* lh-build 202611241818 */
+/* lh-build 202611241835 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5519,7 +5519,7 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 119, date: 'November 2026', title: 'Coming next', items: [
+    { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar to see your income, your NPC wages as a negative per hour, and what hires have cost you so far.',
     ] },
     { v: 118, date: 'November 24, 2026', title: 'The NPC Guild', items: [
