@@ -786,7 +786,7 @@
   const npcRerollCost = s => npcDust(s, 25) * (1 + ((s.hall && s.hall.rr) || 0));
   function npcReroll(s) {
     const h = hallState(s), c = npcRerollCost(s); if ((s.dust || 0) < c) return false;
-    s.dust -= c; h.rr = (h.rr || 0) + 1; h.offers = rollOffers(s).concat((h.offers || []).filter(o => o.keep)); return true;
+    s.dust -= c; s.npcDust = (s.npcDust || 0) + c; h.rr = (h.rr || 0) + 1; h.offers = rollOffers(s).concat((h.offers || []).filter(o => o.keep)); return true;
   }
   // A lore companion's story beat: they wait at the Guild Hall as a Legendary hire, kept on offer until hired.
   function npcLegendArrives(s, id) {
@@ -807,8 +807,8 @@
     if (kind === 'short') { if (Object.keys(s.hires || {}).filter(id => shortHire(s, id)).length >= NPC_SHORT_MAX) return { ok: false, why: 'You already have ' + NPC_SHORT_MAX + ' on short contracts' }; }
     else if (companions(s).length >= rosterCap(s)) return { ok: false, why: 'No free spot. Send someone back to the Hall, or take a short contract' };
     const c = npcCost(s, o.rar, bench ? 'bench' : kind);
-    if (pay === 'dust') { if (!c.dustAlt || (s.dust || 0) < c.dustAlt) return { ok: false, why: 'Not enough Dust' }; s.dust -= c.dustAlt; }
-    else { if (s.gold < c.gold || (s.dust || 0) < c.dust) return { ok: false, why: s.gold < c.gold ? 'Not enough gold' : 'Not enough Dust' }; s.gold -= c.gold; s.dust = (s.dust || 0) - c.dust; }
+    if (pay === 'dust') { if (!c.dustAlt || (s.dust || 0) < c.dustAlt) return { ok: false, why: 'Not enough Dust' }; s.dust -= c.dustAlt; s.npcDust = (s.npcDust || 0) + c.dustAlt; }
+    else { if (s.gold < c.gold || (s.dust || 0) < c.dust) return { ok: false, why: s.gold < c.gold ? 'Not enough gold' : 'Not enough Dust' }; s.gold -= c.gold; s.dust = (s.dust || 0) - c.dust; s.npcDust = (s.npcDust || 0) + c.dust; s.npcGold = (s.npcGold || 0) + c.gold; }
     s.hires = s.hires || {};
     const legend = LEGENDS.includes(o.id);
     s.hires[o.id] = { rar: o.rar, kind: bench ? (bench.kind || 'sign') : kind, at: now, until: (bench ? bench.kind : kind) === 'short' ? now + NPC_SHORT_MS : 0, m: legend ? null : { id: o.id, name: o.name, cls: o.cls, side: o.side, rar: o.rar, hue: o.hue } };
