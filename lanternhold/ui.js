@@ -1,4 +1,4 @@
-/* lh-build 202611250254 */
+/* lh-build 202611250304 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1604,14 +1604,14 @@
     const why = bench ? null : L.npcReq(S, o), full = L.companions(S).length >= L.rosterCap(S);
     const nShort = Object.keys(S.hires || {}).filter(id => L.shortHire(S, id)).length;
     const c = L.npcPrice(S, o, 'sign', bench), cs = bench ? c : L.npcPrice(S, o, 'short', false);
-    const wage = R.wage * L.npcIncomeMin(S) * 60;
+    const wage = L.npcOfferWage(S, o);
     const price = x => coin + fmt(x.gold) + (x.dust ? ' + ' + fmt(x.dust) + ' Dust' : '');
     const can = x => S.gold >= x.gold && (S.dust || 0) >= (x.dust || 0);
     const side = L.SIDES[m.side];
     let acts = '';
     if (why) acts = '<span class="npclock">' + icon('lock') + esc(why) + '</span>';
     else if (bench) acts = '<button class="btn small" data-hire="b:' + o.id + '|' + (o.kind || 'sign') + '|gold"' + (can(c) && (o.kind === 'short' || !full) ? '' : ' disabled') + (c.free ? ' data-tip="They left during a wage bug of ours, so they come back free.">Hire back · free' : '>Hire back · ' + price(c)) + '</button>';
-    else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour.">Sign on · ' + price(c) + '</button>' +
+    else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour, which grows as you train and gear them.">Sign on · ' + price(c) + '</button>' +
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
     return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
@@ -5540,6 +5540,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 120, date: 'November 25, 2026', title: 'Wages follow the hire', items: [
+      'An NPC hire\u2019s wage now depends on their own power: power level, rarity and gear. It no longer climbs just because your income or your other companions grow. Train or gear a hire and their wage rises with them.',
+    ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
       'Fixed: very big saves (thousands of items) could not sync to your account, so the account save fell behind. Big saves are now packed down to about a tenth of the size.',

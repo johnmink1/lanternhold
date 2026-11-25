@@ -1,4 +1,4 @@
-/* lh-build 202611250254 */
+/* lh-build 202611250304 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -774,7 +774,29 @@
     if (!bench && !o.until && kind === 'short') return { gold: Math.round(c.gold * NPC_SHORT_PART), dust: 0, dustAlt: 0 };
     return c;
   }
-  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return npcRar(h.rar).wage * npcIncomeMin(s) * 60; };
+  // v120 (John, 25 Nov 2026): a wage follows the hire's own stats, not your income. It is a share (4x the old
+  // party share) of the gold that companion's own power brings in: power = power level, rank and gear, the same
+  // for every class. Train or gear them and their wage goes up; your other companions getting stronger doesn't.
+  const NPC_OWN = 4;
+  function npcPower(s, id) {
+    if (!id || !lvl(s, id) || !memberById(id)) return 0;
+    return scale(s, id) * gearMult(s, id, 'dps') * (1 + wearVal(s, id, 'crit') + wearVal(s, id, 'power'));
+  }
+  // Gold an hour per point of power across your best five (an offer's power is counted as if they had joined).
+  function goldPerPowerH(s, extra) {
+    const ids = [...new Set(s.unlocked.concat(s.party.filter(Boolean)))].filter(id => !shortHire(s, id));
+    const top = ids.map(id => npcPower(s, id)).concat(extra ? [extra] : []).sort((a, b) => b - a).slice(0, PARTY_SIZE).reduce((a, x) => a + x, 0);
+    return top > 0 ? npcIncomeMin(s) * 60 / top : 0;
+  }
+  const npcWageFor = (s, rar, power, extra) => npcRar(rar).wage * NPC_OWN * power * goldPerPowerH(s, extra);
+  // An offer's wage once hired: their power at the level they would join at, with no gear yet.
+  function npcOfferWage(s, o) {
+    const m = memberById(o.id) || npcMember(o);
+    const lv = o.lv || s.levels[o.id] || (LEGENDS.includes(o.id) ? 1 : 0) || Math.max(1, Math.round(Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))) * npcRar(o.rar).lvF));
+    const p = Math.pow(lv * milestoneMult(lv) * TIER[m.tier || 0].stat * (m.pow || NPC_POWER), POW);
+    return npcWageFor(s, o.rar, p, s.unlocked.includes(o.id) ? 0 : p);
+  }
+  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return npcWageFor(s, h.rar, npcPower(s, id)); };
   const wagesPerHour = s => Object.keys(s.hires || {}).reduce((a, id) => a + wagePerHour(s, id), 0);
   const legendBeat = id => STORY.find(b => b.join === id);
   function npcReq(s, o) {
@@ -3010,7 +3032,7 @@
   }
 
   const api = {
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcPower, npcOfferWage, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
