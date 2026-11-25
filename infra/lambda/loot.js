@@ -1,7 +1,7 @@
 // World boss loot. v120 (John, 25 Nov 2026): personal rolls, not one lottery. After an event every player who hit
 // rolls their own Legendary chance, seeded by event + player so a retry sees the same roll:
 // chance = min(3%, 0.4% x max(1, digits - 2)) x min(1, 0.4 + 0.2 x phases broken), digits = log10(damage).
-// v121 (John, 25 Nov 2026): boss gear is Mythic and a drop should be rare (was min(20%, 2% x ...)).
+// v125 (John, 25 Nov 2026): boss gear is Mythic and a drop should be rare (was min(20%, 2% x ...)).
 // They also get boss shards and the same number of Rift tokens (the game's token shop trades 150 for a piece):
 // 1 + max(0, whole digits - 2) + min(phases, 5). The preview (2026-11-23) counted monsters' worth, so its scores
 // are scaled x1000 first. Boss shards trade on their own market (pk sh# for listings, ss#<seller> for the seller's

@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- lh-build 202611250444 -->
+<!-- lh-build 202611251228 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -62,7 +62,7 @@ ls.setItem("lh_ref",r.toLowerCase())})()}catch(e){}</script>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611250444">
+<link rel="stylesheet" href="style.css?v=202611251228">
 </head>
 <body>
 <div id="app">
@@ -157,7 +157,7 @@ ls.setItem("lh_ref",r.toLowerCase())})()}catch(e){}</script>
       <div class="tabbody" id="tab-party">
         <div id="campbar"></div>
         <div class="buybar"><span>Train</span><div class="seg" id="buyseg"><button data-n="1" class="on">x1</button><button data-n="10">x10</button><button data-n="25">x25</button><button data-n="max">Max</button></div></div>
-        <div class="formhead"><span><b>Marching order</b> <i class="tipi" data-tip="The top of the list stands at the front, nearest the monsters. Tanks up front, healers in the middle, and watch the back for ambushes.">i</i></span><span class="fbtns"><button class="btn ghost small" id="f-recruit">Recruit players</button><button class="btn ghost small" id="f-auto">Auto-arrange</button></span></div>
+        <div class="formhead"><span><b>Marching order</b> <i class="tipi" data-tip="The top of the list stands at the front, nearest the monsters. Tanks up front, healers in the middle, and watch the back for ambushes.">i</i></span><span class="fbtns"><button class="btn ghost small" id="f-recruit">Recruit players</button><button class="btn ghost small" id="f-auto">Auto-arrange</button><button class="btn ghost small" id="f-train">Training Grounds</button></span></div>
         <div class="kin" id="kinline" hidden></div>
         <div class="kin victor" id="winline" hidden></div>
         <div id="seats"></div>
@@ -211,6 +211,14 @@ ls.setItem("lh_ref",r.toLowerCase())})()}catch(e){}</script>
           <div class="gain">You would gain <b id="embergain">0</b> Embers and <b id="kindgain">0</b> Kindling</div>
           <p class="muted" id="rekindlenote">Reach hero level 20 and floor 75 to rekindle.</p>
           <button class="btn big" id="btn-rekindle" disabled>Rekindle</button>
+        </div>
+        <div class="rekindle npbox" id="npbox">
+          <svg viewBox="0 0 32 32" class="bigflame" aria-hidden="true"><use href="#i-star"/></svg>
+          <h2>New Playthrough <span class="npb" id="nptier" hidden></span></h2>
+          <p>After the Lampmother falls on floor 150, start the whole story again at the next tier, NP+1 up to NP+10. <i class="tipi" data-tip="Everything you earned in play resets: gold, Dust, floors, power and hero levels, stat points, skills, gear, Embers, relics, companions, hires and the story. Everything bought with Sigils stays, plus your profile, journal lore, feats and Ember Ring rating. Each tier: monsters +25% health and damage, gear drops at +10% item level, and you keep +2% damage, health and gold for good.">i</i></p>
+          <div class="gain" id="npgain">+25 Sigils and a new tier badge</div>
+          <p class="muted" id="npnote">Beat the floor 150 guardian to open it.</p>
+          <button class="btn big" id="btn-np" disabled>Start New Playthrough</button>
         </div>
       </div>
       <div class="tabbody" id="tab-admin" hidden><div id="admspawn"></div><div id="adminbox"></div></div>
@@ -299,13 +307,13 @@ ls.setItem("lh_ref",r.toLowerCase())})()}catch(e){}</script>
   window.LH_CLOUD = { region: "us-east-1", clientId: "191dppk0cud8d3bdgh3lbmgjr2", api: "https://nyu3u8gc73.execute-api.us-east-1.amazonaws.com" };
 </script>
 <div class="tip" id="tip" role="tooltip" hidden></div>
-<script>window.LH_BUILD = "202611250444";</script>
+<script>window.LH_BUILD = "202611251228";</script>
 <script>window.LH_SUPPORT_URL = ""; /* Buy Me a Coffee page; the button stays hidden while this is empty */</script>
-<script src="music.js?v=202611250444"></script>
-<script src="core.js?v=202611250444"></script>
-<script src="sprites.js?v=202611250444"></script>
-<script src="vector.js?v=202611250444"></script>
-<script src="ui.js?v=202611250444"></script>
-<script src="intro.js?v=202611250444"></script>
+<script src="music.js?v=202611251228"></script>
+<script src="core.js?v=202611251228"></script>
+<script src="sprites.js?v=202611251228"></script>
+<script src="vector.js?v=202611251228"></script>
+<script src="ui.js?v=202611251228"></script>
+<script src="intro.js?v=202611251228"></script>
 </body>
 </html>
