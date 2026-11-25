@@ -1,4 +1,4 @@
-/* lh-build 202611241953 */
+/* lh-build 202611250113 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1620,11 +1620,11 @@
   }
   function npcGuildHtml() {
     if (S.mode !== 'multi') return '';
-    const h = L.hallState(S), now = Date.now(), wph = L.wagesPerHour(S), inc = L.npcIncomeMin(S) * 60;
+    const h = L.hallState(S), now = Date.now(), wph = L.wagesPerHour(S), away = L.offlineEarnPerSec(S) * 3600;
     const next = Math.max(0, (h.at + L.NPC_ROTATE - now) / 1000), rr = L.npcRerollCost(S), full = L.companions(S).length >= L.rosterCap(S);
     let x = '<h3 class="sub" id="npcg">NPC Guild</h3><div class="growcard npcg">' +
       '<p>Hire companions for gold or Dust. Rarer ones fight harder and work camp jobs better, but cost more and draw a bigger wage every hour, even while you are away. Legendaries are the lore companions of the story. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p>' +
-      '<div class="npcstat"><span>Wages <b>' + fmt(wph) + ' gold/h</b></span><span>Income about <b>' + fmt(inc) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
+      '<div class="npcstat"><span>Wages <b>' + fmt(wph) + ' gold/h</b></span><span data-tip="What your party brings home each hour while you are away. You earn more while you play.">Away income <b>' + fmt(away) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
       '<button class="btn small ghost" data-npcreroll' + ((S.dust || 0) >= rr ? '' : ' disabled') + '>New faces now · ' + fmt(rr) + ' Dust</button></div>' +
       (full ? '<p class="note">Every companion spot is taken. Let someone go from the Campfire, or take a 2 hour contract.</p>' : '') +
       '<div class="board npcoffers">' + h.offers.map(o => npcCard(o, false)).join('') + '</div>';
@@ -2799,16 +2799,16 @@
   function paintMoneyTips() {
     const g = document.querySelector('.stat.gold'), d = document.querySelector('.stat.dust');
     const hires = Object.keys(S.hires || {}), signed = hires.filter(id => !L.shortHire(S, id)).length, wph = L.wagesPerHour(S);
-    const inc = S.hero ? L.npcIncomeMin(S) * 60 : 0, owed = S.owed || 0, net = inc - wph;
+    const inc = S.hero ? L.offlineEarnPerSec(S) * 3600 : 0, owed = S.owed || 0, net = inc - wph;
     const row = (k, v, c) => '<tr><td>' + k + '</td><td class="' + (c || '') + '">' + v + '</td></tr>';
     const sg = (v, cls) => '<b class="' + cls + '">' + (v >= 0 ? '+' : '−') + fmt(Math.abs(v)) + '</b>';
     if (g) {
       let h = '<div class="mtip"><b>Gold</b><table>';
-      if (S.hero) h += row('Income', sg(inc, 'pos') + ' /h');
-      if (wph > 0) h += row('NPC wages (' + signed + ')', sg(-wph, 'neg') + ' /h') + row('After wages', sg(net, net >= 0 ? 'pos' : 'neg') + ' /h', 'tot');
+      if (S.hero) h += row('Away income', sg(inc, 'pos') + ' /h');
+      if (wph > 0) h += row('NPC wages (' + signed + ')', sg(-wph, 'neg') + ' /h') + row('Away, after wages', sg(net, net >= 0 ? 'pos' : 'neg') + ' /h', 'tot');
       if (owed >= 1) h += row('Owed', sg(-owed, 'neg'));
       if ((S.wagesPaid || 0) >= 1 || (S.npcGold || 0) >= 1) h += row('Hire fees so far', sg(-(S.npcGold || 0), 'neg')) + row('Wages paid so far', sg(-(S.wagesPaid || 0), 'neg'));
-      h += '</table><small>' + (owed >= 1 ? 'Owe more than an hour of wages and your priciest hire walks off.' : 'From monsters. Spend it on training, upgrades and the Store.') + '</small></div>';
+      h += '</table><small>' + (owed >= 1 ? 'Owe more than an hour of wages and your priciest hire walks off.' : 'From monsters. You earn more while you play than while away. Spend it on training, upgrades and the Store.') + '</small></div>';
       if (g.dataset.tiph !== h) { g.dataset.tiph = h; g.dataset.tip = 'Gold'; if (tipFor === g) showTip(g); }
     }
     if (d) {
@@ -5528,6 +5528,8 @@
   const PATCH_NOTES = [
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
+      'Fixed: NPC Guild hire prices and wages no longer jump around. They used to count a mage\u2019s spell as always on (prices up to 70% too high) and drop when a companion was down or sent to the Campfire. Prices now follow your best five companions at full strength, so the price you see is the price you pay.',
+      'The gold hover and the NPC Guild now show your away income (what your party brings home while you are gone), so you can see whether your wages are covered overnight.',
       'Fixed: typing @ in the desktop chat windows shows the list of players again (Tab, Enter or a click fills in the name). It only worked in the phone chat before.',
     ] },
     { v: 118, date: 'November 24, 2026', title: 'The NPC Guild', items: [

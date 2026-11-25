@@ -130,6 +130,8 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
     - v118 scene chips: the world boss and Loot Goblin bars moved into `#arena` as `.achips` (top-left, expand on hover).
     - v119 fix (24 Nov 2026, John: "the @ broke in chat"): the v114 @ autocomplete was bound only to the phone chat box `#chatin`, so the v117 desktop chat windows (`.cpform` inputs) never showed it. It is now one shared controller (`paintAt(inp)`, `pickAt`, document-level `input`/`keydown` capture/`focusout` listeners, `isChatIn`) that moves `#atbox` into whichever chat form is being typed in. Test with a fake session in localStorage (`lanternhold.session.v1`) and Playwright routes stubbing `/chat` and `/heroes`; set `lh_intro` so the intro doesn't eat keys.
 
+    - v119 fix (25 Nov 2026, John: "check the NPC hire cost"): hire prices and wages used `offlineGoldPerSec`, whose `totalDps(s, 0)` counts a mage's spell as always on once it was ever cast (+~70%) and drops for anyone down or unseated (unseat 4 companions at camp = Legendary for a third of the price). `npcIncomeMin` now uses `npcIncomeBase` (`steadyDps` of the best 5 non-short members, no timed buffs, no downs), cached per save in a WeakMap. The gold hover and Guild show **away income** (`offlineEarnPerSec`), the real overnight figure. Still open: `offlineGoldPerSec` itself keeps the mage bug (pays mage parties more away gold and raises Store prices), and wages are a share of the yardstick, which is 2x away income, so 3+ Legendaries cost more than away income (John to decide).
+
 ## Open asks and things to watch
 
 - **John's verdict on v102.** He rejected the v98 and v99 shop screens ("horrible", "hard to follow"). v102 follows mockup Option A, the Hold view, and In the Deep option 2.
