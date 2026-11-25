@@ -1,4 +1,4 @@
-/* lh-build 202611250306 */
+/* lh-build 202611250307 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -776,9 +776,16 @@
   }
   // v120 (John, 25 Nov 2026): a wage is worked out from the hire's own stats, the same rule for every NPC:
   //   wage per hour = base fee (by rarity) x 2.74% more per power level (the training cost curve)
+  //   (spellcasters also draw Dust, see NPC_DUST_FEE)
   //                   x (1 + a quarter of their gear damage bonus) x (1 + a quarter of their gear health bonus)
   // Your income and your other companions play no part. Train or gear a hire and their wage goes up with them.
-  const NPC_FEE = { common: 10, uncommon: 25, rare: 60, epic: 150, legendary: 400 }, NPC_GEAR_W = 0.25;
+  const NPC_FEE = { common: 15, uncommon: 40, rare: 90, epic: 225, legendary: 600 }, NPC_GEAR_W = 0.25;
+  // Spellcasters (mages, necromancers, healers) also draw Dust: a fee by rarity, +4% per power level.
+  const NPC_DUST_FEE = { common: 0.5, uncommon: 1, rare: 2, epic: 4, legendary: 8 }, NPC_CASTER = ['mage', 'necro', 'healer'];
+  const npcDustAt = (rar, lv) => (NPC_DUST_FEE[rar] || 0) * (1 + Math.max(1, lv) / 25);
+  const npcCaster = id => { const m = memberById(id); return !!(m && NPC_CASTER.includes(m.cls)); };
+  const dustWagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short' || !npcCaster(id)) return 0; return npcDustAt(h.rar, lvl(s, id)); };
+  const dustWagesPerHour = s => Object.keys(s.hires || {}).reduce((a, id) => a + dustWagePerHour(s, id), 0);
   function npcWageAt(rar, lv, dpsPct, hpPct) {
     return (NPC_FEE[rar] || NPC_FEE.common) * Math.pow(COST_GROWTH, Math.max(1, lv)) * (1 + NPC_GEAR_W * Math.max(0, dpsPct || 0)) * (1 + NPC_GEAR_W * Math.max(0, hpPct || 0));
   }
@@ -786,9 +793,13 @@
   function npcWageParts(s, id) {
     const h = s.hires && s.hires[id]; if (!h) return [];
     const lv = lvl(s, id), d = gearMult(s, id, 'dps') - 1, hp = gearMult(s, id, 'hp') - 1, base = npcWageAt(h.rar, 1, 0, 0), atLv = npcWageAt(h.rar, lv, 0, 0), withD = npcWageAt(h.rar, lv, d, 0);
-    return [['Base fee', base], ['Power level ' + lv, atLv - base], ['Gear damage', withD - atLv], ['Gear health', npcWageAt(h.rar, lv, d, hp) - withD]];
+    return [['Base fee', base], ['Power level ' + lv, atLv - base], ['Gear damage', withD - atLv], ['Gear health', npcWageAt(h.rar, lv, d, hp) - withD]].concat(npcCaster(id) ? [['Dust', dustWagePerHour(s, id), 'dust']] : []);
   }
   // An offer's wage once hired: the power level they would join at, with no gear yet.
+  function npcOfferLv(s, o) {
+    return o.lv || s.levels[o.id] || (LEGENDS.includes(o.id) ? 1 : 0) || Math.max(1, Math.round(Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))) * npcRar(o.rar).lvF));
+  }
+  const npcOfferDust = (s, o) => { const m = memberById(o.id) || o; return NPC_CASTER.includes(m.cls) ? npcDustAt(o.rar, npcOfferLv(s, o)) : 0; };
   function npcOfferWage(s, o) {
     const lv = o.lv || s.levels[o.id] || (LEGENDS.includes(o.id) ? 1 : 0) || Math.max(1, Math.round(Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))) * npcRar(o.rar).lvF));
     return npcWageAt(o.rar, lv, 0, 0);
@@ -901,6 +912,20 @@
   function payWages(s, dt, now, events, away) {
     if (!s.hires) return;
     for (const id of Object.keys(s.hires)) if (s.hires[id].kind === 'short' && s.hires[id].until <= now) { const nm = (memberById(id) || {}).name; npcRelease(s, id, 'short', now); events && events.push({ type: 'npcleft', id, name: nm, why: 'short' }); }
+    // Spellcasters' Dust wages work the same way, from your Dust: past an hour owed, the priciest caster walks off.
+    const dper = dustWagesPerHour(s);
+    if (dper > 0) {
+      s.owedDust = (s.owedDust || 0) + dper * (away ? NPC_AWAY_WAGE : 1) * dt / 3600;
+      const dp = Math.min(s.owedDust, Math.max(0, s.dust || 0)); s.dust = (s.dust || 0) - dp; s.owedDust -= dp; s.dustWagesPaid = (s.dustWagesPaid || 0) + dp;
+      while (s.owedDust > dustWagesPerHour(s) && dustWagesPerHour(s) > 0) {
+        const id = Object.keys(s.hires).filter(x => dustWagePerHour(s, x) > 0).sort((a, b) => dustWagePerHour(s, b) - dustWagePerHour(s, a))[0];
+        const nm = (memberById(id) || {}).name, w = dustWagePerHour(s, id), tot = dustWagesPerHour(s);
+        s.owedDust = Math.max(0, s.owedDust * (1 - w / tot));
+        npcRelease(s, id, 'unpaid', now); events && events.push({ type: 'npcleft', id, name: nm, why: 'unpaid' });
+      }
+      if (dustWagesPerHour(s) <= 0) s.owedDust = 0;
+    } else s.owedDust = 0;
+    if (!s.hires) return;
     // Unpaid wages run up as a debt; past one hour's worth, the priciest hire walks off and takes their share of it.
     const per = wagesPerHour(s);
     if (per <= 0) { s.owed = 0; return; }
@@ -3029,7 +3054,7 @@
   }
 
   const api = {
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, NPC_DUST_FEE, NPC_CASTER, dustWagePerHour, dustWagesPerHour, npcOfferDust, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
