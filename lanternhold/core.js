@@ -1,4 +1,4 @@
-/* lh-build 202611250113 */
+/* lh-build 202611250125 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -863,13 +863,15 @@
     return true;
   }
   // Wages every second, offline too (dt in seconds). Short contracts end on time.
-  function payWages(s, dt, now, events) {
+  // Away from the game wages run at half rate, so they stay the same share of the (smaller) away income (John, 25 Nov 2026).
+  const NPC_AWAY_WAGE = 0.5;
+  function payWages(s, dt, now, events, away) {
     if (!s.hires) return;
     for (const id of Object.keys(s.hires)) if (s.hires[id].kind === 'short' && s.hires[id].until <= now) { const nm = (memberById(id) || {}).name; npcRelease(s, id, 'short', now); events && events.push({ type: 'npcleft', id, name: nm, why: 'short' }); }
     // Unpaid wages run up as a debt; past one hour's worth, the priciest hire walks off and takes their share of it.
     const per = wagesPerHour(s);
     if (per <= 0) { s.owed = 0; return; }
-    s.owed = (s.owed || 0) + per * dt / 3600;
+    s.owed = (s.owed || 0) + per * (away ? NPC_AWAY_WAGE : 1) * dt / 3600;
     const pay = Math.min(s.owed, Math.max(0, s.gold)); s.gold -= pay; s.owed -= pay; s.wagesPaid = (s.wagesPaid || 0) + pay;
     while (s.owed > wagesPerHour(s) && Object.keys(s.hires).some(id => s.hires[id].kind !== 'short')) {
       const id = Object.keys(s.hires).filter(x => s.hires[x].kind !== 'short').sort((a, b) => wagePerHour(s, b) - wagePerHour(s, a))[0];
@@ -2994,7 +2996,7 @@
   }
 
   const api = {
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcIncomeMin, payWages,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
