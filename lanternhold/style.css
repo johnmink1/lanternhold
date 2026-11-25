@@ -1,4 +1,4 @@
-/* lh-build 202611250543 */
+/* lh-build 202611250606 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2019,6 +2019,7 @@ body.resting .taptip{display:none}
 .spwarn.burn{border-color:#ff8a3d;box-shadow:0 0 18px rgba(255,122,61,.5)}
 .spwarn.poison{border-color:#8fd16a;background:rgba(10,30,8,.88);box-shadow:0 0 18px rgba(143,209,106,.4)}
 .spwarn[hidden]{display:none}
+.spwarn.shuf{border-color:#e879f9;background:rgba(30,8,36,.9);box-shadow:0 0 18px rgba(232,121,249,.45)}
 @keyframes spw{from{opacity:.75}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.spwarn{animation:none}}
 .foemods .mod.m-sp{background:#2a0e10;border-color:#a8382e;color:#ffd0c8}

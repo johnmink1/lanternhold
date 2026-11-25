@@ -1,4 +1,4 @@
-/* lh-build 202611250543 */
+/* lh-build 202611250606 */
 /* Lanternhold pixel sprites. Each sprite is a grid of palette keys; '.' is empty. */
 (function (root) {
   'use strict';
@@ -326,6 +326,43 @@
   ] };
 
   // Guardians are 20x20.
+  // locked door and locked chest (v123): a Rogue in the party picks the lock
+  S.door = { pal: { k: '#14100c', s: '#4a4652', t: '#6a6672', w: '#6a4422', l: '#8a5a2e', d: '#3e2812', i: '#9aa8b6', g: '#f2c14e', y: '#fff0a0' }, px: [
+    '...kkkkkkkkkk...',
+    '..kssttttttssk..',
+    '.ksskkkkkkkkssk.',
+    '.kskllwllwlllsk.',
+    '.kskllwllwlllsk.',
+    '.kskiiiiiiiiisk.',
+    '.kskllwllwlllsk.',
+    '.kskllwllwkkksk.',
+    '.kskllwllkgyksk.',
+    '.kskllwllkggksk.',
+    '.kskllwllwkkksk.',
+    '.kskiiiiiiiiisk.',
+    '.kskllwllwlllsk.',
+    '.kskddwddwdddsk.',
+    '.ksskkkkkkkkssk.',
+    'kkkkkkkkkkkkkkkk',
+  ] };
+  S.lockbox = { pal: { k: '#1a120a', w: '#5a3a1a', l: '#7a5228', d: '#3a2410', i: '#9aa8b6', j: '#c9d6e0', g: '#f2c14e', y: '#fff0a0' }, px: [
+    '................',
+    '................',
+    '................',
+    '...kkkkkkkkkk...',
+    '..kllllllllllk..',
+    '.kliiiiiiiiiilk.',
+    '.kwwwwwkkkwwwwk.',
+    '.kiiiiikgykiiik.',
+    '.kwwwwkgyygkwwk.',
+    '.kkkkkkgkkgkkkk.',
+    '.kwwwwkggggkwwk.',
+    '.kiwwwwkkkkwwik.',
+    '.kiwwwwwwwwwwik.',
+    '.kiddddddddddik.',
+    '.kkkkkkkkkkkkkk.',
+    '................',
+  ] };
   S.golem = { pal: { k: '#14110e', s: '#7d7466', l: '#a49a88', d: '#4f483e', e: '#6ff0ff', m: '#4f8a46' }, px: [
     '....................',
     '.......kkkkkk.......',
