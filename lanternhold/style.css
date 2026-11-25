@@ -1,4 +1,4 @@
-/* lh-build 202611250540 */
+/* lh-build 202611250543 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2449,3 +2449,16 @@ body.atench .achips{display:none}
 .pfava.np7{--npg:7}.pfava.np8{--npg:8}.pfava.np9{--npg:9}
 .pfava.np10{--npg:10;animation:npglow 3s ease-in-out infinite}
 @keyframes npglow{50%{box-shadow:0 0 40px rgba(255,220,130,1)}}
+/* Training Grounds (v122) */
+.ttab{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+.ttab th{text-align:left;color:var(--muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
+.ttab td{padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbar{display:inline-block;width:56px;height:6px;border-radius:3px;background:var(--bg2);vertical-align:middle;overflow:hidden}
+.tbar i{display:block;height:100%;background:var(--ember)}
+.tsum{color:var(--muted);font-size:13px;margin:6px 0 10px}
+.tdummy{display:flex;gap:14px;align-items:center;margin:8px 0}
+.dummy{flex:none;width:92px;height:92px;border-radius:14px;border:2px solid #8a6a3a;background:radial-gradient(circle at 50% 40%,#5a4328,#2a1f14);color:#e9c98a;display:grid;place-items:center;cursor:pointer;font-weight:700}
+.dummy svg{width:34px;height:34px}.dummy:active{transform:scale(.95)}
+.tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
+#tr-rows{overflow-x:auto}
+@media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}

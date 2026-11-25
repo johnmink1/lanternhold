@@ -1,4 +1,4 @@
-/* lh-build 202611250540 */
+/* lh-build 202611250543 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1622,6 +1622,7 @@
     if (t.dataset.move) { const [i, d] = t.dataset.move.split(':').map(Number); if (L.moveMember(S, i, i + d)) { sfx.buy(); updateSeats(true); updateAbilities(true); } return; }
     if (t.dataset.autot && !L.passOn(S)) { openPass(); return; }
     if (t.dataset.autot) { const id = t.dataset.autot; S.autoTrain = S.autoTrain || {}; S.autoTrain[id] = !S.autoTrain[id]; if (!S.autoTrain[id]) delete S.autoTrain[id]; sfx.buy(); updateSeats(true); if (S.autoTrain[id]) toast('refresh', 'Auto-train on', L.memberById(id).name + ' will train whenever you have the gold' + (S.party.includes(id) ? '.' : ' and you are at camp.'), ''); return; }
+    if (t.id === 'f-train') { openTraining(); return; }
     if (t.id === 'f-auto') { L.autoFormation(S); S.formationManual = false; sfx.buy(); updateSeats(true); updateAbilities(true); toast('shield', 'Party arranged', 'Tank in front, rogue behind it, healers in the middle where they reach everyone, casters at the back.', ''); return; }
     if (t.dataset.rosterbuy != null) { buyRosterSpot().then(ok => { if (ok) { sfx.relic(); toast('flame', 'A new spot by the fire', 'Your campfire holds ' + L.fireCap(S) + ' companions now, plus your party.', 'feat'); } }); return; }
     if ((t.dataset.unseat || t.dataset.seat) && !gateUse('camp')) return;
@@ -4566,6 +4567,33 @@
       (set ? '<div class="setinfo on"><b>' + set.name + '</b><small>2 pieces: ' + set.two + '. 3 pieces: ' + set.three + '.</small><small class="lore">' + esc(set.lore) + '</small></div>' : '') +
       '<p class="note">A preview of an item linked in chat. Viewing it does not add it to your pack.</p><div class="row"><button class="btn ghost" id="lp-x">Close</button></div>', md => { md.querySelector('#lp-x').onclick = closeModal; });
   }
+  // ---------- Training Grounds (v122, John 25 Nov 2026: a damage dummy) ----------
+  // Steady numbers for the seated party (no timed buffs), plus a 10 s live test on a dummy you can strike.
+  // Nothing here costs or earns anything, and the real fight keeps going while the window is open.
+  let trainRun = null;
+  function trainRows() {
+    const ids = S.party.filter(Boolean), d = ids.map(id => L.steadyDps(S, id)), tot = d.reduce((a, b) => a + b, 0) || 1;
+    return '<table class="ttab"><thead><tr><th>Member</th><th>Damage/s</th><th>vs guardians</th><th>Share</th><th>Heal/s</th><th>Health</th></tr></thead><tbody>' +
+      ids.map((id, i) => { const m = L.memberById(id), pct = Math.round(d[i] / tot * 100), hl = L.healPerSec(S, id);
+        return '<tr><td><b>' + esc(m.name) + '</b> ' + classTag(m.cls) + '</td><td>' + fmt(d[i]) + '</td><td>' + fmt(d[i] * (1 + L.wearVal(S, id, 'boss'))) + '</td><td><span class="tbar"><i style="width:' + pct + '%"></i></span> ' + pct + '%</td><td>' + (hl ? fmt(hl) : '-') + '</td><td>' + fmt(L.maxHpOf(S, id)) + '</td></tr>'; }).join('') +
+      '</tbody></table><p class="tsum">Party <b>' + fmt(tot) + '</b> damage/s steady &middot; strike <b>' + fmt(L.clickDamage(S, Date.now())) + '</b> &middot; critical chance <b>' + Math.round(L.critChance(S) * 100) + '%</b> (x5)</p>';
+  }
+  function openTraining() {
+    trainRun = null;
+    modal('<div class="center"><h2>Training Grounds</h2><p class="note">A practice dummy for comparing gear, seats and skills. Steady numbers leave out timed buffs and anyone who is down.</p></div>' +
+      '<div id="tr-rows">' + trainRows() + '</div>' +
+      '<div class="tdummy"><button class="dummy" id="tr-hit" title="Strike the dummy">' + icon('shield') + '<span>Dummy</span></button><div id="tr-live"><p>Press <b>Start 10 s test</b>, then strike the dummy as fast as you like. The test counts your party as it is right now, buffs and all.</p></div></div>' +
+      '<div class="row"><button class="btn" id="tr-go">Start 10 s test</button><button class="btn ghost" id="tr-x">Close</button></div>', md => {
+      const live = md.querySelector('#tr-live'), go = md.querySelector('#tr-go');
+      const paint = () => { const r = trainRun; if (!r) return; const t = Math.min(10, (Date.now() - r.at) / 1000), all = r.party + r.taps;
+        live.innerHTML = '<p><b>' + t.toFixed(1) + ' s</b> &middot; party ' + fmt(r.party) + ' &middot; strikes ' + fmt(r.taps) + ' (' + r.n + (r.crit ? ', ' + r.crit + ' critical' : '') + ')</p><p class="tbig">' + fmt(all / Math.max(0.1, t)) + ' <small>damage/s</small></p>' + (r.done ? '<p class="note">Done. Change gear or seats and run it again to compare.</p>' : ''); };
+      const step = () => { const r = trainRun; if (!r || r.done || !document.body.contains(live)) return; const now = Date.now(), dt = Math.min(0.5, (now - r.last) / 1000); r.last = now; r.party += L.totalDps(S, now) * dt;
+        if (now - r.at >= 10000) { r.done = true; go.disabled = false; go.textContent = 'Run again'; } paint(); if (!r.done) setTimeout(step, 100); };
+      go.onclick = () => { trainRun = { at: Date.now(), last: Date.now(), party: 0, taps: 0, n: 0, crit: 0 }; go.disabled = true; md.querySelector('#tr-rows').innerHTML = trainRows(); step(); };
+      md.querySelector('#tr-hit').onclick = () => { const r = trainRun; if (!r || r.done) return; const c = Math.random() < L.critChance(S); r.taps += L.clickDamage(S, Date.now()) * (c ? 5 : 1); r.n++; if (c) r.crit++; try { sfx.hit && sfx.hit(); } catch (e) {} paint(); };
+      md.querySelector('#tr-x').onclick = () => { trainRun = null; closeModal(); };
+    });
+  }
   // NP+ tier badge (v122): shown on the profile card, the Players Guild board and in chat.
   function npBadge(n) { n = n | 0; return n > 0 ? '<span class="npb" title="New Playthrough tier ' + n + '">NP+' + Math.min(10, n) + '</span>' : ''; }
   // NP+ portrait ring (Chipplin's idea, 25 Nov 2026): a gold ring around the profile picture that grows brighter each tier.
@@ -5720,6 +5748,9 @@
         'Companions, gear, relics and your character stay; levels reset.',
         'Embers count from floor 60, so a deeper descent pays far more. Your hero keeps their level.',
         'Rekindle when progress slows down.']],
+      ['Training Grounds', 'i:sword', 'A practice dummy on the Party tab for comparing setups.', [
+        'Shows each seated member’s steady damage per second (no timed buffs), damage against guardians, share of the party’s damage, healing and health.',
+        'Press <b>Start 10 s test</b> and strike the dummy: it measures your party as it is right now, buffs included, plus your strikes. Nothing there costs or earns anything.']],
       ['New Playthrough (NP+)', 'i:star', 'After the floor 150 guardian, start the whole story again at a harder tier for Sigils and a badge.', [
         'Open it from <b>Skills</b>, Rekindle view, once the Lampmother on floor 150 falls. Tiers go from <b>NP+1</b> to <b>NP+10</b>, at most one a week.',
         'Each start pays <b>+25 Sigils</b> and shows your tier as a badge on your profile, the Players Guild board and in chat.',
@@ -5880,6 +5911,7 @@
       'Resets: gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story. Kept: everything bought with Sigils (Wardrobe, Bag of Holding, campfire spots, Lanternholder, tonics), your profile, journal lore, feats, Ember Ring rating and Rift tokens.',
       'Fair trading: each tier has its own market, mail only goes between heroes on the same tier, trading opens 24 hours after you start, gear from an earlier tier can not be worn, and your old listings, offers and unclaimed mail are cleared when you start. One tier a week at most.',
       'Your tier also shows as a gold ring around your profile picture, brighter at every tier (thanks for the idea, Chipplin).',
+      'New: <b>Training Grounds</b> on the Party tab. See each seated member’s steady damage, damage against guardians, share, healing and health, then run a 10 second test on a practice dummy (strike it too) to compare gear, seats and skills.',
     ] },
     { v: 121, date: 'November 25, 2026', title: 'Rarer set pieces and steadier filters', items: [
       'Set pieces are rarer: every chance to find a region, class or job set piece is halved. A guardian now drops a set piece about 1 time in 18 (was about 1 in 9). The map’s drop chances show the new odds.',
