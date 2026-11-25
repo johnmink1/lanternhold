@@ -650,7 +650,7 @@
     { id: 'con', name: 'Constitution', short: 'CON', desc: 'party health',                fx: { php: 0.008 } },
     { id: 'int', name: 'Intelligence', short: 'INT', desc: 'ability power and damage',    fx: { power: 0.01, pdps: 0.002 } },
     { id: 'wis', name: 'Wisdom',       short: 'WIS', desc: 'healing and ability cooldowns', fx: { pheal: 0.008, cd: 0.003 } },
-    { id: 'cha', name: 'Charisma',     short: 'CHA', desc: 'gold from every fight',       fx: { gold: 0.008 } },
+    { id: 'cha', name: 'Charisma',     short: 'CHA', desc: 'gold from every fight and lower hire wages', fx: { gold: 0.008 } },
     { id: 'lck', name: 'Luck',         short: 'LCK', desc: 'a little of everything: loot, chests, crits, gold, Sigils and ambush spoils', fx: { loot: 0.005, chest: 0.0002, crit: 0.0005, gold: 0.003, sig: 0.000002, spoils: 0.01 } },
   ];
   const STAT_CLASS = { tank: ['str', 'con'], healer: ['wis', 'cha'], rogue: ['dex', 'lck'], mage: ['int', 'wis'], necro: ['int', 'con'] };
@@ -823,14 +823,36 @@
   function npcWageParts(s, id) {
     const h = s.hires && s.hires[id]; if (!h) return [];
     const lv = lvl(s, id), d = gearMult(s, id, 'dps') - 1, hp = gearMult(s, id, 'hp') - 1, base = npcWageAt(h.rar, 1, 0, 0), atLv = npcWageAt(h.rar, lv, 0, 0), withD = npcWageAt(h.rar, lv, d, 0);
-    return [['Base fee', base], ['Power level ' + lv, atLv - base], ['Gear damage', withD - atLv], ['Gear health', npcWageAt(h.rar, lv, d, hp) - withD]];
+    const w = wageOf(s, h.rar, lv, d, hp), out = [['Base fee', base], ['Power level ' + lv, atLv - base], ['Gear damage', withD - atLv], ['Gear health', w.stat - withD]];
+    if (w.capped) out.push(['Capped at ' + Math.round(WAGE_CAP[h.rar] * 100) + '% of income', w.cap - w.stat]);
+    if (w.relief > 0) out.push(['Your wage relief ' + Math.round(w.relief * 100) + '%', -Math.min(w.stat, w.cap) * w.relief]);
+    return out;
   }
   // An offer's wage once hired: the power level they would join at, with no gear yet.
   function npcOfferWage(s, o) {
     const lv = o.lv || s.levels[o.id] || (LEGENDS.includes(o.id) ? 1 : 0) || Math.max(1, Math.round(Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))) * npcRar(o.rar).lvF));
-    return npcWageAt(o.rar, lv, 0, 0);
+    return wageOf(s, o.rar, lv, 0, 0).wage;
   }
-  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return npcWageAt(h.rar, lvl(s, id), gearMult(s, id, 'dps') - 1, gearMult(s, id, 'hp') - 1); };
+  // v125 (John, 25 Nov 2026): a hire's wage never passes WAGE_CAP of your steady income an hour (the NPC Guild's
+  // yardstick, npcIncomeMin), so a party whose power level ran ahead of its floor can still keep one. Below that,
+  // the player earns the wage down with the game's own systems (John: push players to stats, camp, gear and
+  // region masteries): every region with all three mastery stars, Charisma points and a Quartermaster at camp
+  // each take a share off, together at most WAGE_RELIEF_MAX.
+  const WAGE_CAP = { common: 0.03, uncommon: 0.06, rare: 0.15, epic: 0.3, legendary: 0.4 };
+  const WAGE_RELIEF_MAST = 0.02, WAGE_RELIEF_CHA = 0.004, WAGE_RELIEF_MAX = 0.5;
+  function wageRelief(s) {
+    let full = 0; for (const r in (s.mast || {})) if (masteryStars(s, r) === 3) full++;
+    const cha = ((s.attr || {}).cha || 0) * WAGE_RELIEF_CHA * ((STAT_CLASS[heroCls(s)] || []).includes('cha') ? STAT_AFFINITY : 1);
+    const parts = [['Region mastery (' + full + ' full region' + (full === 1 ? '' : 's') + ')', full * WAGE_RELIEF_MAST], ['Charisma', cha], ['Quartermaster at camp', campBonus(s, 'wage')]].filter(x => x[1] > 1e-9);
+    return { parts, total: Math.min(WAGE_RELIEF_MAX, parts.reduce((a, x) => a + x[1], 0)) };
+  }
+  const wageCapAt = (s, rar) => (WAGE_CAP[rar] || WAGE_CAP.common) * npcIncomeMin(s) * 60;
+  // The stat wage, the income cap, and what the player's relief takes off: { stat, cap, capped, relief, wage }.
+  function wageOf(s, rar, lv, dpsPct, hpPct) {
+    const stat = npcWageAt(rar, lv, dpsPct, hpPct), cap = wageCapAt(s, rar), relief = wageRelief(s).total, base = Math.min(stat, cap);
+    return { stat, cap, capped: stat > cap, relief, wage: base * (1 - relief) };
+  }
+  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return wageOf(s, h.rar, lvl(s, id), gearMult(s, id, 'dps') - 1, gearMult(s, id, 'hp') - 1).wage; };
   const wagesPerHour = s => Object.keys(s.hires || {}).reduce((a, id) => a + wagePerHour(s, id), 0);
   const legendBeat = id => STORY.find(b => b.join === id);
   function npcReq(s, o) {
@@ -1439,9 +1461,13 @@
   }
   // Region set drop odds, before Loot bonuses.
   // Set pieces are rarer since v121 (John, 2026-11-25: "they are dropping pretty easily"): every set chance is halved.
-  const SET_RATE = 0.5;
+  // v125 (John, 2026-11-25: "set items should still be harder to get ... it's becoming common"): region set pieces
+  // are halved again (one piece still earns a region's third mastery star) and class and job set pieces drop at a
+  // quarter of the v121 rate. Baseline before: John's save had 117 set pieces after 32 h (59 region, 31 class, 27 job),
+  // about one per 25 guardians.
+  const SET_RATE = 0.25, SET_RATE_KIT = 0.125;
   const RSET_DROP = { boss: 0.025 * SET_RATE, chest: 0.006 * SET_RATE, elite: 0.0015 * SET_RATE, pack: 0.0004 * SET_RATE, foe: 0.00005 * SET_RATE };
-  const JSET_BOSS = 0.03 * SET_RATE, JSET_CHEST = 0.008 * SET_RATE, CSET_BOSS = 0.06 * SET_RATE;
+  const JSET_BOSS = 0.03 * SET_RATE_KIT, JSET_CHEST = 0.008 * SET_RATE_KIT, CSET_BOSS = 0.06 * SET_RATE_KIT;
   function rollJobSet(s, f, r) {
     const classes = Array.from(new Set(s.party.filter(Boolean).map(id => memberById(id).cls)));
     const cls = classes.length ? classes[Math.floor(r() * classes.length)] : CLASS_ORDER[Math.floor(r() * 5)];
@@ -2070,6 +2096,7 @@
     { id: 'armor', name: 'Armorer', stat: 'hp', aff: 'tank', base: 0.02, icon: 'shield', fmt: 'party health', desc: 'Hammers dents out of shields and straps on spare plate.' },
     { id: 'prospect', name: 'Prospector', stat: 'gold', aff: 'rogue', base: 0.025, icon: 'coin', fmt: 'gold', desc: 'Pans the underground streams for coin the dead left behind.' },
     { id: 'lamp', name: 'Lamplighter', stat: 'lamp', aff: 'necro', base: 0.35, icon: 'lamp', fmt: 'lantern oil per guardian', desc: 'Trims the wick and rations the oil.' },
+    { id: 'quarter', name: 'Quartermaster', stat: 'wage', aff: 'tank', base: 0.01, icon: 'coin', fmt: 'off hire wages', desc: 'Keeps the Guild Hall ledgers and haggles every hire\u2019s wage down.' },
   ];
   // Extra job output from what a companion wears: job affixes plus a job set.
   function jobGear(s, id, jid) {
@@ -3429,7 +3456,7 @@
   const api = {
     npPlus, incomeHour, priceH, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
     steadyDps, NP_MAX, NP_FOE, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,

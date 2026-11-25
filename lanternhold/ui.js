@@ -1834,7 +1834,7 @@
     let acts = '';
     if (why) acts = '<span class="npclock">' + icon('lock') + esc(why) + '</span>';
     else if (bench) acts = '<button class="btn small" data-hire="b:' + o.id + '|' + (o.kind || 'sign') + '|gold"' + (can(c) && (o.kind === 'short' || !full) ? '' : ' disabled') + (c.free ? ' data-tip="They left during a wage bug of ours, so they come back free.">Hire back · free' : '>Hire back · ' + price(c)) + '</button>';
-    else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour: a ' + R.name + ' base fee of ' + fmt(L.NPC_FEE[o.rar]) + ', more for each power level and their gear.">Sign on · ' + price(c) + '</button>' +
+    else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour: a ' + R.name + ' base fee of ' + fmt(L.NPC_FEE[o.rar]) + ', more for each power level and their gear, never more than ' + Math.round(L.WAGE_CAP[o.rar] * 100) + '% of your income, less your wage relief.">Sign on · ' + price(c) + '</button>' +
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
     return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
@@ -1846,8 +1846,8 @@
     const h = L.hallState(S), now = Date.now(), wph = L.wagesPerHour(S), away = L.offlineEarnPerSec(S) * 3600;
     const next = Math.max(0, (h.at + L.NPC_ROTATE - now) / 1000), rr = L.npcRerollCost(S), full = L.companions(S).length >= L.rosterCap(S);
     let x = '<h3 class="sub" id="npcg">NPC Guild</h3><div class="growcard npcg">' +
-      '<p>Hire companions for gold or Dust. Rarer ones fight harder and work camp jobs better, but cost more and draw a bigger wage every hour, even while you are away. Legendaries are the lore companions of the story. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p>' +
-      '<div class="npcstat"><span data-tip="Half that while you are away.">Wages <b>' + fmt(wph) + ' gold/h</b></span><span data-tip="What your party brings home each hour while you are away. You earn more while you play.">Away income <b>' + fmt(away) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
+      '<p>Hire companions for gold or Dust. Rarer ones fight harder and work camp jobs better, but cost more and draw a bigger wage every hour, even while you are away. Legendaries are the lore companions of the story. A wage never passes a share of your income, and full region masteries, Charisma and a Quartermaster at camp bring it down. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p>' +
+      '<div class="npcstat"><span data-tip="Half that while you are away.">Wages <b>' + fmt(wph) + ' gold/h</b></span>' + (() => { const rl = L.wageRelief(S); return '<span data-tip="' + esc('Takes a share off every hire\u2019s wage, up to ' + Math.round(L.WAGE_RELIEF_MAX * 100) + '%. ' + (rl.parts.length ? rl.parts.map(p => p[0] + ' ' + Math.round(p[1] * 100) + '%').join(', ') + '. ' : '') + 'Earn more with all three mastery stars in a region (' + Math.round(L.WAGE_RELIEF_MAST * 100) + '% each), Charisma and a Quartermaster at camp.') + '">Wage relief <b>' + Math.round(rl.total * 100) + '%</b></span>'; })() + '<span data-tip="What your party brings home each hour while you are away. You earn more while you play.">Away income <b>' + fmt(away) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
       '<button class="btn small ghost" data-npcreroll' + ((S.dust || 0) >= rr ? '' : ' disabled') + '>New faces now · ' + fmt(rr) + ' Dust</button></div>' +
       (full ? '<p class="note">Every companion spot is taken. Let someone go from the Campfire, or take a 2 hour contract.</p>' : '') +
       '<div class="board npcoffers">' + h.offers.map(o => npcCard(o, false)).join('') + '</div>';
@@ -6105,6 +6105,10 @@
       'Beat it and everyone who fought shares the Golden Goblin\u2019s Hoard: 5 Gilded rings with their own set bonus, plus Gilded shards toward the ring you are missing. Top damage and the most morsels fed improve your odds. Curios and Hold works carry over to your next tier, and Pip hands back any Curio you no longer carry.',
       'Also for NP+: Reforge at the Armorer (reroll an item\u2019s enchantments, cost doubles each time, up to 6 times), the Dust Press at the Enchanter (turn gold into Dust, up to 200 a day), and Hold works: 4 renovations with a small perk each and 4 decorations just for looks.',
       'The NP+ trading market now keeps a 5% fee on each sale.',
+      'NPC Guild wages have a ceiling: a hire never costs more than a set share of your income an hour (Common 3%, Uncommon 6%, Rare 15%, Epic 30%, Legendary 40%). Parties whose power level ran ahead of their floor can keep an Epic again.',
+      'Wage relief: every region with all three mastery stars takes 2% off every hire\u2019s wage, Charisma takes some off, and the new Quartermaster camp job (best for Tanks) haggles it down further. Up to 50% in all. See it in the NPC Guild.',
+      'World boss loot: your Rift tokens are saved to your account together with the rest of the claim.',
+      'Set pieces are rarer again: region set pieces drop half as often as before, and class and job set pieces a quarter as often. One region piece still earns that region\u2019s mastery star.',
     ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Fixed: past about 97 levels of the Moth-wing Charm every fight turned into a Treasure Chest, so some heroes got stuck opening chests at the bottom of Act One. The charm now tops out at +20% (treasure chests at most 25% of fights), and re-beating the Lampmother no longer counts as a first clear for relic finds.',
@@ -7189,8 +7193,8 @@
     S.wbLoot[id] = 1; const b = L.WB_SETS[r.boss] ? r.boss : 0, set = L.WB_SETS[b], sh = L.shardsOf(S);
     sh[b] = (sh[b] || 0) + (r.sh || 0);
     let it = null; if (r.leg) { it = L.makeLegend(S, b); S.bag.push(it); S.stats.legends = (S.stats.legends || 0) + 1; }
+    S.wbTok = (S.wbTok || 0) + (r.tok || 0); // before the cloud push, so the account copy has the tokens too
     save(); try { pushCloud(true); } catch (e) {} updateGear(true);
-    S.wbTok = (S.wbTok || 0) + (r.tok || 0); save();
     const odds = Math.round((r.p || 0) * 1000) / 10, got = (r.sh ? shName(b, r.sh) : 'no shards') + (r.tok ? ' and ' + r.tok + ' Rift tokens (' + fmt(S.wbTok) + ' saved)' : '');
     if (it) { sfx.boss && sfx.boss(); toast('crown', 'MYTHIC: ' + L.gearName(it), 'Your ' + odds + '% roll for ' + set.name + ' came up! Plus ' + got + '.', 'feat'); }
     else toast('relic', set.word + ' loot', 'No Mythic this time (your roll was ' + odds + '%). You got ' + got + '. ' + L.WB_TOKEN_COST + ' tokens buy a piece in the Market.', '');
