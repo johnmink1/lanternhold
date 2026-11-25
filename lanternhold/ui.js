@@ -1,4 +1,4 @@
-/* lh-build 202611250222 */
+/* lh-build 202611250250 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6075,6 +6075,7 @@
       'Solo and Multiplayer modes. Optional accounts with cloud saves.'] },
   ];
   const NOTES_V = PATCH_NOTES[0].v;
+  try { const ve = $('ver'), b = window.LH_BUILD || ''; if (ve) { ve.textContent = 'v' + NOTES_V + (b ? ' \u00b7 build ' + b.slice(4, 8) + '.' + b.slice(8) : ''); ve.dataset.tip = 'Version ' + NOTES_V + (b ? ', build ' + b + ' (UTC). The game updates itself when a new build is out.' : ''); } } catch (e) {}
   function openNotes() {
     S.seenNotes = NOTES_V; save();
     modal('<div class="maphead"><div><h2>What’s new</h2><small>Patch notes for Lanternhold.</small></div><button class="iconbtn" id="n-x" aria-label="Close">&times;</button></div><div class="notes">' +
