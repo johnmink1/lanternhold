@@ -1,4 +1,4 @@
-/* lh-build 202611250543 */
+/* lh-build 202611250606 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -39,6 +39,7 @@
     if (dormant) return;
     S.lastSeen = Date.now();
     const o = Object.assign({}, S); delete o.foe; delete o.enchAt; delete o.shopK;
+    if (o.shuf) { o.party = L.shufBase(S); delete o.shuf; } // never save a shuffled line
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(o)); } catch (e) {}
   }
 
@@ -261,10 +262,10 @@
   // who a marked-position special will land on (the same spot in the line the core picked)
   function spTarget() { const w = S.foe && S.foe.spWind; if (!w || w.pos < 0) return null; const live = S.party.filter(id => id && !S.down[id]); return live[Math.min(w.pos, live.length - 1)] || null; }
   // the wind-up warning across the top of the arena
-  function spWarn(text, cls) {
+  function spWarn(text, cls, sec) {
     let el = $('spwarn'); if (!el) { el = document.createElement('div'); el.id = 'spwarn'; arena.appendChild(el); }
     el.className = 'spwarn ' + (cls || ''); el.innerHTML = text; el.hidden = false;
-    clearTimeout(spWarn.t); spWarn.t = setTimeout(() => { el.hidden = true; }, (L.SPECIAL_WARN || 1.5) * 1000 + 700);
+    clearTimeout(spWarn.t); spWarn.t = setTimeout(() => { el.hidden = true; }, (sec || L.SPECIAL_WARN || 1.5) * 1000 + 700);
   }
   function partyLayout(fx, fyy) {
     const floorY = fyy || Math.round(H * 0.7);
@@ -977,6 +978,9 @@
       case 'resback': flog('party', nm(e.id) + ' has mana again', 'rb' + e.id, 3000); break;
       case 'poison': flog('party', nm(e.id) + ' is poisoned', 'ps' + e.id, 6000); break;
       case 'special': { const sp = L.SPECIALS[e.sp] || {}, hit = e.hits.filter(h => !h.dodge); flog('fight', '<b class="bad">' + esc((S.foe && S.foe.name) || 'The foe') + ': ' + esc(sp.name || 'special') + '</b> hits ' + (e.kind === 'all' ? 'the whole party' : hit.map(h => nm(h.id)).join(', ') || 'nobody') + (hit.length ? ' for ' + fmt(hit.reduce((a, h) => a + h.dmg, 0)) : '') + (sp.dot ? ' and leaves them ' + (sp.dot === 'burn' ? 'burning' : 'poisoned') + ' for ' + L.DOT_FIGHTS + ' fights' : '')); break; }
+      case 'shuffle': flog('fight', '<b class="bad">' + esc((S.foe && S.foe.name) || 'The guardian') + ' scatters your line!</b> The formation is scrambled for ' + Math.round(e.sec) + 's'); break;
+      case 'shufblock': flog('fight', nm(e.id) + ' <b class="good">holds the line</b> behind Shield Wall: the formation stays put'); break;
+      case 'shufend': flog('party', 'Your line snaps back into marching order', 'shufend', 3000); break;
       case 'ambush': if (e.first) flog('fight', e.guarded ? nm(e.target) + ' guards the rear from an ambush' : '<b class="bad">Ambush!</b> ' + nm(e.target) + ' is hit from behind'); break;
       case 'mercy': flog('fight', '<b class="good">Mercy Corps:</b> ' + esc(e.who) + (e.kind === 'wounded' ? ' is wounded on the path' : ' is held captive')); break;
       case 'rescued': flog('fight', '<b class="good">Rescued ' + esc(e.who) + '</b>: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' min'); break;
@@ -998,6 +1002,9 @@
       case 'sigil': flog('loot', 'Found <b>' + e.n + ' Sigils</b>'); break;
       case 'relic': flog('loot', 'Relic: <b>' + esc(e.relic.name) + '</b>' + (e.level > 1 ? ' (level ' + e.level + ')' : '')); break;
       case 'goblinflee': flog('loot', '<b class="bad">The Loot Goblin escaped</b>' + (e.item ? ' with ' + esc(L.gearName(e.item)) : '')); break;
+      case 'lock': flog('fight', e.rogue ? nm(e.rogue) + ' kneels at a <b>' + (e.k === 'door' ? 'locked door' : 'locked chest') + '</b> and starts picking the lock' : 'A <b>' + (e.k === 'door' ? 'locked door' : 'locked chest') + '</b> bars the way, but nobody in the party can pick it. Bring a Rogue.'); break;
+      case 'lockpass': flog('fight', 'The party walks past the ' + (e.k === 'door' ? 'locked door' : 'locked chest')); break;
+      case 'lockopen': flog('loot', (e.id ? nm(e.id) : 'Your Rogue') + ' opens the ' + (e.k === 'door' ? 'door' : 'chest') + ': <b class="good">' + (e.gold ? fmt(e.gold) + ' gold' : fmt(e.dust) + ' Dust') + '</b>' + (e.sigil ? ' and a <b>Sigil</b>' : '')); break;
       case 'goblinkill': flog('loot', '<b class="good">Loot Goblin slain</b>' + (e.item ? ', ' + esc(L.gearName(e.item)) + ' recovered' : '')); break;
       case 'herolevel': flog('party', nm('you') + ' reaches <b>level ' + e.lv + '</b>'); break;
     }
@@ -1019,7 +1026,19 @@
     let kills = 0, gold = 0;
     for (const e of events) {
       logEv(e);
-      if (e.type === 'hit' && e.nexus) {
+      if (e.type === 'hit' && e.lock) {
+        floatText('Pick!', 'auto', FOE_X + (Math.random() - 0.5) * 0.16, 0.42 + (Math.random() - 0.5) * 0.16); tone(900 + Math.random() * 300, 0.04, 'square', 0.02, 700);
+      } else if (e.type === 'lock') {
+        floatText(e.k === 'door' ? 'A locked door' : 'A locked chest', 'skill', FOE_X - 0.08, 0.2);
+        if (e.rogue) { const a = mAnim(e.rogue); floatText('Picking the lock...', 'heal', a.x / W, (a.y - 18) / H); }
+        if (!S.stats.lockSeen) { S.stats.lockSeen = 1; toast('key', 'Locked ' + (e.k === 'door' ? 'door' : 'chest'), 'Only a Rogue can pick a lock. ' + (e.rogue ? L.memberById(e.rogue).name + ' is on it: tap to help. ' : 'You have no Rogue in the party, so you will have to walk past. ') + 'Doors hide gold, chests hide Dust, and either may hold a Sigil.', e.rogue ? '' : 'warn'); }
+      } else if (e.type === 'lockpass') {
+        floatText('No Rogue to pick it', 'dodge', FOE_X - 0.08, 0.24);
+      } else if (e.type === 'lockopen') {
+        sfx.relic(); foeAnim.flash = tAnim + 0.1;
+        floatText(e.gold ? '+' + fmt(e.gold) + ' gold' : '+' + fmt(e.dust) + ' Dust', 'skill', FOE_X, 0.22);
+        burst(W * FOE_X, H * 0.55, 18, e.gold ? ['#f5c242', '#ffe39a', '#c8952a'] : ['#9fd6ec', '#e8f6ff', '#5aa8ff'], 40);
+      } else if (e.type === 'hit' && e.nexus) {
         floatText('0', 'nexus', FOE_X + (Math.random() - 0.5) * 0.16, 0.4 + (Math.random() - 0.5) * 0.2);
         foeAnim.flash = tAnim + 0.05;
       } else if (e.type === 'nexus') {
@@ -1067,6 +1086,19 @@
         spWarn('<b>' + esc(sp.name) + '</b>' + (sp.kind === 'all' ? ' incoming: the whole party' : sp.kind === 'pos' && who ? ' marks ' + esc(who.name) + ' (spot ' + (e.pos + 1) + ')' : ' incoming'), sp.dot || '');
         tone(180, 0.25, 'sawtooth', 0.03, 120);
         if (!S.stats.spSeen) { S.stats.spSeen = 1; toast('skull', 'Special attacks', 'Guardians, and some monsters, wind up a big move every few seconds. A red ring shows who it will hit. Shields and a tank\u2019s guard soften it, and a healer\u2019s ability or Purify clears burns and poison.', 'warn'); }
+      } else if (e.type === 'shufwarn') {
+        spWarn('<b>Scatter</b> in ' + e.sec + 's: the line is about to be thrown into disorder. Raise Shield Wall to hold it!', 'shuf', e.sec);
+        tone(220, 0.35, 'triangle', 0.035, 140);
+        if (!S.stats.shufSeen) { S.stats.shufSeen = 1; toast('shield', 'Formation shuffle', 'The guardian on every ' + L.SHUFFLE_EVERY + 'th floor scatters your marching order for ' + L.SHUFFLE_TIME + ' seconds. A tank behind Shield Wall when it lands holds the line. The Lodestone Anchor relic shortens it. The line snaps back on its own.', 'warn'); }
+      } else if (e.type === 'shuffle') {
+        foeAnim.lunge = tAnim + 0.25; foeAnim.shake = tAnim + 0.3;
+        for (const id of S.party) if (id) { const a = mAnim(id); a.hit = tAnim + 0.2; }
+        floatText('Scattered!', 'crit', FOE_X - 0.25, 0.3);
+        sfx.thud(); updateSeats(true); updateAbilities(true);
+      } else if (e.type === 'shufblock') {
+        const a = mAnim(e.id); floatText('Holds the line', 'heal', a.x / W, (a.y - 16) / H); burst(a.x, a.y, 12, ['#f5c242', '#ffe39a', '#c8952a'], 30);
+      } else if (e.type === 'shufend') {
+        floatText('Back in line', 'heal', FOE_X - 0.3, 0.32); updateSeats(true); updateAbilities(true);
       } else if (e.type === 'special') {
         const sp = L.SPECIALS[e.sp] || {}, col = sp.dot === 'burn' ? ['#ff7a3d', '#ffd26a', '#ff3d2a'] : sp.dot === 'poison' ? ['#8fd16a', '#c9f0a0', '#4a8a2a'] : ['#ff8a78', '#ffe0c0', '#c84a3a'];
         foeAnim.lunge = tAnim + 0.25; foeAnim.shake = tAnim + 0.2;
@@ -1127,7 +1159,7 @@
         bragSack(e.item);
       } else if (e.type === 'sigil') {
         sfx.relic(); floatText('+' + e.n + ' Sigils', 'skill', FOE_X, 0.15);
-        toast('star', 'Sigils found!', (e.chest ? 'A chest' : 'The guardian') + ' held ' + e.n + (e.n === 1 ? ' Sigil' : ' Sigils') + '. ' + (signedIn() ? 'They go straight to your wallet.' : 'Sign in to keep them in your wallet.'), 'relic');
+        toast('star', 'Sigils found!', (e.lock ? 'The locked ' + e.lock : e.chest ? 'A chest' : 'The guardian') + ' held ' + e.n + (e.n === 1 ? ' Sigil' : ' Sigils') + '. ' + (signedIn() ? 'They go straight to your wallet.' : 'Sign in to keep them in your wallet.'), 'relic');
         claimFound();
       } else if (e.type === 'lore') {
         const lo = L.LORE.find(x => x.id === e.id); toast('book', 'New journal entry', lo.title, 'feat');
@@ -3432,7 +3464,7 @@
   try { sess = JSON.parse(localStorage.getItem(TOK_KEY) || 'null'); } catch (e) {}
   const signedIn = () => !!(sess && sess.refresh);
   function storeSess() { try { sess ? localStorage.setItem(TOK_KEY, JSON.stringify(sess)) : localStorage.removeItem(TOK_KEY); } catch (e) {} }
-  function saveObj() { S.lastSeen = Date.now(); const o = Object.assign({}, S); delete o.foe; delete o._frenzyAcc; delete o.enchAt; delete o.shopK; return o; }
+  function saveObj() { S.lastSeen = Date.now(); const o = Object.assign({}, S); delete o.foe; delete o._frenzyAcc; delete o.enchAt; delete o.shopK; if (o.shuf) { o.party = L.shufBase(S); delete o.shuf; } return o; }
   function summary(o) { return 'Floor ' + (o.maxFloorEver || 1) + ', ' + fmt(o.embers || 0) + ' Embers, ' + fmtTime((o.stats && o.stats.playTime) || 0) + ' played'; }
   function claims(jwt) { try { return JSON.parse(decodeURIComponent(escape(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return {}; } }
 
@@ -5636,6 +5668,14 @@
         'A red banner names it and a <b>red ring</b> shows who it will hit: the whole party, a hero and the ones beside them, or one marked spot in your line.',
         'Marked spots ignore your tank, so keep the back of the line healthy. Shields and a tank\u2019s guard still soften every hit.',
         '<b>Burns</b> and <b>poison</b> keep ticking for ' + L.DOT_FIGHTS + ' fights. The badge over a hero counts them down. A healer\u2019s ability, Purify or the campfire clears them.']],
+      ['Formation shuffle', 's:golem,wyrm', 'The guardian on every ' + L.SHUFFLE_EVERY + 'th floor (25, 50, 75 ...) can throw your line into disorder.', [
+        'A banner warns you <b>' + L.SHUFFLE_WARN + ' seconds</b> ahead. Then your heroes are mixed up for ' + L.SHUFFLE_TIME + ' seconds: your tank may end up at the back and your healer out of reach.',
+        'The line <b>snaps back</b> on its own after that, or as soon as the guardian falls. It never stays shuffled in your save.',
+        'Counter it: a <b>tank behind Shield Wall</b> when it lands holds the line and nothing moves. With auto-cast on, the tank saves Shield Wall for the shuffle. The <b>Lodestone Anchor</b> relic cuts the time by 20% per level (up to 80%).']],
+      ['Locked doors and chests', 's:door,lockbox', 'From floor ' + L.LOCK_FLOOR + ', about 1 fight in 50 is a lock instead of a monster.', [
+        'Only a <b>Rogue</b> can pick it. It takes about ' + L.LOCK_TIME + ' seconds, and every tap helps. A stunned or fallen Rogue has to get up first.',
+        'A <b>door</b> hides gold (about ' + L.LOCK_GOLD + ' fights\u2019 worth), a <b>chest</b> hides Dust, and either has a ' + Math.round(L.LOCK_SIGIL * 100) + '% chance of a <b>Sigil</b>. Found Sigils share a daily limit with chests and guardians.',
+        'No Rogue in the party? You walk past it after a few seconds.']],
       ['Ambushes', 's:hound,bat,riftling', 'Sometimes 2 to 4 monsters team up and jump the party.', [
         'Shown as <b>Ambush ×2</b> to <b>×4</b>. More health, harder hits, rear first.',
         'Pays several times the gold, better gear odds and extra XP. Luck makes it bigger.']],
@@ -5905,6 +5945,12 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 123, date: 'November 25, 2026', title: 'Formation shuffle and locked doors', items: [
+      'The guardians on floors 25, 50, 75, 100, 125 and 150 (and those floors again in every New Playthrough) now scatter your marching order. A banner warns you 3 seconds ahead, the line stays mixed up for 10 seconds, then it snaps back on its own, or straight away when the guardian falls.',
+      'Counter it with your tank: if Shield Wall is up when the scatter lands, the tank holds the line and nothing moves. With auto-cast on, the tank now saves Shield Wall for the scatter in those fights.',
+      'New relic: Lodestone Anchor. Each level cuts the scatter time by 20%, up to 80%.',
+      'Locked doors and chests (John\u2019s idea): from floor 10, about 1 fight in 50 is a lock instead of a monster. Only a Rogue can pick it (about 5 seconds, taps help). Doors hide gold, chests hide Dust, and either has a 1% chance of a Sigil. No Rogue? You walk past it.',
+    ] },
     { v: 122, date: 'November 25, 2026', title: 'New Playthrough (NP+)', items: [
       'Beat the Lampmother on floor 150 and you can start a New Playthrough from the Skills tab (Rekindle view). The whole story starts again at the next tier, NP+1 up to NP+10, and you get +25 Sigils and a tier badge on your profile, the Players Guild and in chat.',
       'Each tier: monsters have +25% health and damage, gear drops at +10% item level, and you keep +2% damage, health and gold for good (up to +20% at NP+10).',
