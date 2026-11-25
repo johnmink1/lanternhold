@@ -1,4 +1,4 @@
-/* lh-build 202611251638 */
+/* lh-build 202611252317 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -65,6 +65,8 @@
   const WAR_KEY = { covenant: 'covenant', ascendancy: 'radiant', tide: 'tide' };
   const warWinOn = s => !!(s && s.warWin && s.warWin.side && sideOf(s) === s.warWin.side);
   const reviveMs = s => (warWinOn(s) ? WARWIN_REVIVE : REVIVE_TIME) * 1000;
+  // v126 Two-Headed Coin (Pip's Curio): a fallen hero has a 25% chance to be back up in 3 seconds.
+  const downAt = (s, now) => now + (fxOnW(s, 'coin') && Math.random() < 0.25 ? 3000 : reviveMs(s));
   // Banner lantern (John, 2026-11-24): the more Grand War territories your banner holds right now, the bigger its buff:
   // +1% damage, health, healing and gold per territory, up to +15%. s.warLive = { held: { side: n }, total, week } comes
   // from the war site's /api/nexus.json and refreshes every 15 minutes.
@@ -492,14 +494,14 @@
 
   function maxHpOf(s, id) {
     const m = memberById(id);
-    return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * npBonus(s) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)));
+    return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * npBonus(s) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)) * (1 + renoVal(s, 'hp') + (fxOnW(s, 'globe') ? 0.05 : 0) + (fxOnW(s, 'g2') ? 0.05 : 0)));
   }
   // The Lantern Keeper (John, 2026-11-24): while the store owner's verified account is online, every hero gets
   // +KEEPER to damage, healing, gold, hero XP and gear finds. The page learns it from the server (s.keeper.until).
   const KEEPER = 0.25;
   const keeperOn = s => !!(s.keeper && s.keeper.until > (s.clock || Date.now()));
   const keeperMult = s => keeperOn(s) ? 1 + KEEPER : 1;
-  function partyMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')); }
+  function partyMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')) * (1 + curioColl(s) + renoVal(s, 'dps') + (fxOnW(s, 'g0') ? 0.05 : 0)); }
   // Your own hero hits harder as a tank or healer, so every class can carry a run at a similar pace.
   const HERO_DPS = { tank: 3, healer: 5 };
   function memberDps(s, id, now) {
@@ -537,8 +539,8 @@
   const oom = (s, id) => !!(s.oom && s.oom[id]);
   function clickDamage(s, now) { return (1 + totalDps(s, now) * 0.05) * (1 + relicVal(s, 'whet')); }
   function goldMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'gold')) * (1 + gearGold(s)) * (1 + kup(s, 'purse')) * (1 + relicVal(s, 'locket')) * sidePerk(s, 'gold') * (1 + campBonus(s, 'gold')) * (1 + sk(s, 'gold')); }
-  function critChance(s) { return 0.04 + relicVal(s, 'dice') + sk(s, 'crit'); }
-  function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern'); }
+  function critChance(s) { return 0.04 + relicVal(s, 'dice') + sk(s, 'crit') + (fxOnW(s, 'die') ? 0.06 : 0) + (fxOnW(s, 'g1') ? 0.03 : 0); }
+  function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern') + (fxOnW(s, 'glass') ? 10 : 0); }
   // Capped (v124 fix): the Moth-wing Charm had no cap, so a hero who kept re-beating the Lampmother stacked it past
   // 97 levels and every fight became a Treasure Chest (Chipplin, 25 Nov 2026: +380M gold a second at floor 149/150).
   const MOTH_MAX = 0.2, CHEST_MAX = 0.25;
@@ -1022,7 +1024,7 @@
     if (!s.hero) return 0;
     const base = (1 + s.floor / 25) * (foe.boss ? 15 : foe.chest ? 2 : foe.elite ? 4 : 1) * (foe.pack ? foe.pack * PACK_XP : 1);
     const before = heroLevel(s).lv;
-    const xp = base * (1 + sk(s, 'xp') + masteryXp(s) + beastBonus(s, foe)) * keeperMult(s);
+    const xp = base * (1 + sk(s, 'xp') + masteryXp(s) + beastBonus(s, foe) + renoVal(s, 'xp') + (fxOnW(s, 'hat') ? 0.15 : 0)) * keeperMult(s);
     s.hxp += xp;
     const after = heroLevel(s).lv;
     if (after > before && events) events.push({ type: 'herolevel', lv: after, from: before, pts: pointsFor(after) - pointsFor(before) });
@@ -1318,7 +1320,19 @@
     { word: 'Sovereign', name: 'The Hollow Sovereign’s Court',  k: 'dps',  piece: { main: 'Scepter-Blade', chest: 'Mantle',       ring: 'Crown-Ring', neck: 'Torc' }, lore: 'The Sovereign ruled nothing but echoes. Its court regalia still answers to a command.' },
     { word: 'Nyxmaw',    name: 'Maw-Tooth Panoply',              k: 'heal', piece: { main: 'Fang',          chest: 'Hide',         ring: 'Coil',    neck: 'Tooth' }, lore: 'Pulled from the Maw of the Nyx. It mends what it once would have devoured.' },
     { word: 'Leviathan', name: 'Ashen Leviathan’s Hoard',        k: 'gold', piece: { main: 'Harpoon',       chest: 'Scaleguard',   ring: 'Band',    neck: 'Pearl' }, lore: 'Treasure from the belly of the ash-whale, still warm, still smelling of smoke.' },
+    // v126: the Golden Loot Goblin's rings (NP+ only, never from a world boss or the Rift Gate). Five rings, one per
+    // ring slot, each with its own power (GG_RINGS); set bonuses in wbBonus. Upgraded with Gilded shards (shards[GG]).
+    { word: 'Gilded', name: 'The Golden Goblin’s Hoard', k: 'gg', piece: { ring: 'Ring' }, lore: 'Every ring still smells faintly of mimic. The goblin bit each one to check it was real.' },
   ];
+  const GG = 4, WB_BOSSES = 4, GG_DUP = 10;
+  const GG_RINGS = [
+    { name: 'Grinning Band', fx: '+5% party damage' },
+    { name: 'Coinbiter Loop', fx: '+3% critical chance for the party' },
+    { name: 'Gilt-Tooth Ring', fx: '+5% party health' },
+    { name: 'Pickpocket’s Coil', fx: '+10% gear finds' },
+    { name: 'Goblin King’s Signet', fx: 'The Loot Goblin can never steal from your pack' },
+  ];
+  const GG_TWO = 0.1, GG_THREE = 0.1, GG_FIVE = 0.25;
   const WB_SLOTS = ['main', 'chest', 'ring', 'neck'];
   const WB_PCT = 0.34, WB_TWO = { hp: 0.15, dps: 0.15, heal: 0.15, gold: 0.25 }, WB_FOUR = 0.3;
   const wbUpCost = it => (it.up || 0) + 1; // boss shards of that boss to raise a Legendary one level
@@ -1373,6 +1387,8 @@
   const itemScore = it => { const w = weightOf(it); return gearPct(it) * (w.dps + w.hp); };
   function gearName(it) {
     if (it.rar === 'goblin') return 'Loot Goblin’s Sack';
+    if (it.wb === GG && GG_RINGS[it.gr]) return GG_RINGS[it.gr].name;
+    if (it.cu && curioById(it.cu)) return curioById(it.cu).name;
     if (it.wb != null && WB_SETS[it.wb]) return WB_SETS[it.wb].word + ' ' + WB_SETS[it.wb].piece[it.slot === 'robe' ? 'chest' : it.slot];
     if (it.rset != null && REGION_SETS[it.rset]) return REGION_SETS[it.rset].word + ' ' + rsetPiece(it);
     if (it.jset) return JOB_SETS[it.jset].pieces[it.slot];
@@ -1435,7 +1451,7 @@
   const BOH_COST = 6500;
   const bagCap = s => s.boh ? Infinity : GEAR_CAP + BAG_STEP * (s.bagUps || 0) + (passOn(s) ? PASS_BAG : 0);
   function dropGear(s, foe, rng, events) {
-    const r = rng || Math.random, f = s.floor, loot = 1 + campBonus(s, 'loot') + sk(s, 'loot');
+    const r = rng || Math.random, f = s.floor, loot = 1 + campBonus(s, 'loot') + sk(s, 'loot') + renoVal(s, 'loot') + (fxOnW(s, 'g3') ? 0.1 : 0);
     let it = null;
     const rk = foe.boss ? 'boss' : foe.chest ? 'chest' : foe.elite ? 'elite' : foe.pack ? 'pack' : 'foe';
     if (!foe.goblin && r() < RSET_DROP[rk] * loot) it = rollRegionSet(s, f, r);
@@ -1809,14 +1825,19 @@
   }
   function wbBonus(s, id, kind) {
     const c = wbCounts(s, id), cls = memberById(id).cls; let v = 0;
+    const gn = c[GG] || 0, gk = kind === 'dps' || kind === 'hp' || (kind === 'heal' && cls === 'healer');
+    if (gn >= 2 && (kind === 'dps' || (kind === 'heal' && cls === 'healer'))) v += GG_TWO;
+    if (gn >= 3 && kind === 'hp') v += GG_THREE;
+    if (gn >= 5 && gk) v += GG_FIVE;
     for (const i in c) {
+      if (+i === GG) continue;
       const n = c[i], k = WB_SETS[i] && WB_SETS[i].k; if (!k || n < 2) continue;
       if (k === kind || (k === 'heal' && kind === 'hp' && cls !== 'healer')) v += WB_TWO[k];
       if (n >= 4 && (kind === 'dps' || kind === 'hp' || (kind === 'heal' && cls === 'healer'))) v += WB_FOUR;
     }
     return v;
   }
-  const shardsOf = s => { if (!Array.isArray(s.shards)) s.shards = [0, 0, 0, 0]; return s.shards; };
+  const shardsOf = s => { if (!Array.isArray(s.shards)) s.shards = [0, 0, 0, 0, 0]; while (s.shards.length < WB_SETS.length) s.shards.push(0); return s.shards; };
   // A Legendary from world boss b, for the hero's class, at the player's deepest depth.
   // The winner can always wear it: item level follows their deepest floor, capped by the hero's level.
   function makeLegend(s, b, rng) {
@@ -1827,7 +1848,7 @@
   // piece of any boss set, so every delver gets there in the end and stronger parties get there sooner.
   const WB_TOKEN_COST = 40;
   function buyLegend(s, b, rng) {
-    if (!s.hero || !WB_SETS[b] || (s.wbTok || 0) < WB_TOKEN_COST) return null;
+    if (!s.hero || !WB_SETS[b] || b >= WB_BOSSES || (s.wbTok || 0) < WB_TOKEN_COST) return null;
     s.wbTok -= WB_TOKEN_COST; const it = makeLegend(s, b, rng); s.bag.push(it); s.stats.legends = (s.stats.legends || 0) + 1;
     return it;
   }
@@ -2250,8 +2271,8 @@
     lockPick(s, dt, now, rng, events);
   }
   function lockPick(s, sec, now, rng, events) {
-    const f = s.foe; f.pick += sec; f.hp = Math.max(1, f.max * (1 - f.pick / LOCK_TIME));
-    if (f.pick < LOCK_TIME) return;
+    const f = s.foe, lt = LOCK_TIME * (fxOnW(s, 'key') ? 0.5 : 1); f.pick += sec; f.hp = Math.max(1, f.max * (1 - f.pick / lt));
+    if (f.pick < lt) return;
     const fl = s.floor, r = rng || Math.random, out = { type: 'lockopen', k: f.lock, gold: 0, dust: 0, sigil: 0, id: lockRogue(s) };
     if (f.lock === 'door') { out.gold = lockGold(s, fl); s.gold += out.gold; s.stats.goldEarned += out.gold; }
     else { out.dust = lockDust(s, fl); s.dust = (s.dust || 0) + out.dust; }
@@ -2273,6 +2294,7 @@
   }
   // Picks what the goblin grabs: any unworn item, better ones more likely.
   function goblinGrab(s, r) {
+    if (fxOnW(s, 'g4')) return null; // the Goblin King's Signet
     const pool = s.bag.filter(it => !it.lk && !wearer(s, it.uid)); if (!pool.length) return null;
     const w = pool.map(it => 1 + 2 * Math.max(0, RARITY.findIndex(x => x.id === it.rar)));
     let x = r() * w.reduce((a, b) => a + b, 0);
@@ -2311,6 +2333,7 @@
   // How much of a party member's damage reaches the boss: class trait, then half for hired and story companions.
   function wbMult(s, id) {
     if (!s.wb || s.wb.old || !s.foe || !s.foe.world) return 1;
+    if (s.wb.gob) return id === 'you' || isGuest(s, id) ? 1 : WB_NPC;
     const t = WB_TRAITS[s.wb.k || 0], c = memberById(id) && memberById(id).cls;
     return (c === t.weak ? 1 + WB_WEAK : t.resist.includes(c) ? 1 - WB_RESIST : 1) * (id === 'you' || isGuest(s, id) ? 1 : WB_NPC);
   }
@@ -2336,11 +2359,12 @@
     s.stats.wbAssaults = (s.stats.wbAssaults || 0) + 1;
     // ck = the part of the score from the player's own strikes, iv = gaps between those strikes (ms). The server
     // re-runs the rhythm check on iv and drops ck from a machine-even assault (worldboss.js).
-    events && events.push({ type: 'wbend', score, fell: !!fell, ck: Math.min(score, cut(wb.ck || 0)), iv: (wb.iv || []).slice(0, 3000) });
+    events && events.push({ type: 'wbend', score, fell: !!fell, ck: Math.min(score, cut(wb.ck || 0)), iv: (wb.iv || []).slice(0, 3000), gob: wb.gob ? wb.id : null });
   }
   function wbFoe(s) {
     const f = Math.max(1, s.maxFloorEver);
     const nu = !s.wb.old && s.wb.cap, t = WB_TRAITS[s.wb.k || 0];
+    if (s.wb.gob) return { name: s.wb.name, sprite: 'goldgoblin', world: true, gob: true, boss: false, chest: false, elite: false, side: null, ambush: 0, pack: 0, hp: 1e300, max: 1e300, hue: 0, atk: foeDps(f, true) * FOE_SWING * 0.9, mods: [], ward: 0, wardAt: 0, sp: null, spAt: 0, spWind: null };
     return { name: s.wb.name, sprite: 'colossus', world: true, boss: false, chest: false, elite: false, side: null, ambush: 0, pack: 0, hp: 1e300, max: 1e300, hue: 0, atk: foeDps(f, true) * FOE_SWING * (nu ? WB_ATK : 0.8), mods: [], ward: 0, wardAt: 0, sp: nu ? t.sp : null, spAt: 0, spWind: null };
   }
   function rollMods(f, boss, elite, b, r) {
@@ -2359,7 +2383,7 @@
       if (s.foe.lock || s.foe.wounded) return; // overkill never spills onto a lock
       const foe = s.foe, mult = (foe.boss ? 1 + relicVal(s, 'lens') : 1) * (1 + fxOn(s, 'vuln', now || Date.now())) * (1 + beastBonus(s, foe));
       let dmg = amount * mult;
-      if (foe.world) { s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); return; }
+      if (foe.world) { if (s.wb.gob && gobDash(s, now || Date.now()) && !gobRogue(s)) return; s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); return; }
       if (foe.shield > 0) dmg *= 1 - SHIELD_CUT;
       if (foe.ward > 0) { const soak = Math.min(foe.ward, dmg); foe.ward -= soak; dmg -= soak; amount = dmg / mult; if (dmg <= 0) return; }
       if (dmg < foe.hp) { foe.hp -= dmg; drain(s, dmg); return; }
@@ -2634,7 +2658,7 @@
   }
   function hurtHero(s, t, dmg, now, events) {
     s.hp[t] = (s.hp[t] == null ? maxHpOf(s, t) : s.hp[t]) - dmg;
-    if (s.hp[t] <= 0) { s.hp[t] = 0; s.down[t] = now + reviveMs(s); if (s.dots) delete s.dots[t]; events && events.push({ type: 'fall', id: t }); return true; }
+    if (s.hp[t] <= 0) { s.hp[t] = 0; s.down[t] = downAt(s, now); if (s.dots) delete s.dots[t]; events && events.push({ type: 'fall', id: t }); return true; }
     return false;
   }
   function addDot(s, t, k, dps, events) {
@@ -2750,10 +2774,10 @@
     if (mods.includes('venom')) { s.poison = s.poison || {}; s.poison[t] = { dps: dmg * 0.12, until: now + 5000 }; events && events.push({ type: 'poison', id: t }); }
     if (mods.includes('cleave')) {
       const live = s.party.filter(id => id && !s.down[id]), nx = live[live.indexOf(t) + 1];
-      if (nx) { s.hp[nx] = (s.hp[nx] == null ? maxHpOf(s, nx) : s.hp[nx]) - dmg * 0.4; if (s.hp[nx] <= 0) { s.hp[nx] = 0; s.down[nx] = now + reviveMs(s); events && events.push({ type: 'fall', id: nx }); } }
+      if (nx) { s.hp[nx] = (s.hp[nx] == null ? maxHpOf(s, nx) : s.hp[nx]) - dmg * 0.4; if (s.hp[nx] <= 0) { s.hp[nx] = 0; s.down[nx] = downAt(s, now); events && events.push({ type: 'fall', id: nx }); } }
     }
     if (s.hp[t] <= 0) {
-      s.hp[t] = 0; s.down[t] = now + reviveMs(s);
+      s.hp[t] = 0; s.down[t] = downAt(s, now);
       events && events.push({ type: 'fall', id: t });
       if (!alive(s).length) wipe(s, now, events);
     }
@@ -2828,7 +2852,7 @@
   const visiting = s => !!(s && s.enchAt);
   // The Hold's shops (v102): kind 'ench' (the Enchanter), 'arm' (the Armorer), 'store' (the Quartermaster's Store, v107)
   // or 'portal' (the Rift Gate outside the walls, v120: Rift tokens for world boss Legendaries). s.enchAt and s.shopK are never saved.
-  function visitEnchanter(s, now, kind) { if (!s.hero || s.enchAt) return false; s.enchAt = now || Date.now(); s.shopK = kind === 'arm' || kind === 'store' || kind === 'portal' ? kind : 'ench'; return true; }
+  function visitEnchanter(s, now, kind) { if (!s.hero || s.enchAt) return false; s.enchAt = now || Date.now(); s.shopK = kind === 'arm' || kind === 'store' || kind === 'portal' || ((kind === 'dicer' || kind === 'gulp') && npPlus(s)) ? kind : 'ench'; return true; }
   function leaveEnchanter(s) { if (!s.enchAt) return false; s.enchAt = 0; s.shopK = null; return true; }
   // The Armorer's forge melts spare gear for SMELT_MULT x the scrap gold, but gives no Dust.
   const SMELT_MULT = 2;
@@ -2962,7 +2986,7 @@
     if (s.foe.lock) { lockTick(s, dt, now, rng, events); return; }
     if (s.foe.goblin) {
       s.foe.flee += dt;
-      if (s.foe.flee >= GOBLIN_TIME) { goblinFlee(s, rng, events); return; }
+      if (s.foe.flee >= GOBLIN_TIME + (fxOnW(s, 'mouse') ? 5 : 0)) { goblinFlee(s, rng, events); return; }
     }
     if (s.foe.boss) {
       s.lantern += dt;
@@ -2986,7 +3010,7 @@
     if (s.poison) for (const id in s.poison) {
       const p = s.poison[id]; if (p.until <= now || s.down[id] || !s.party.includes(id)) { delete s.poison[id]; continue; }
       s.hp[id] -= p.dps * dt;
-      if (s.hp[id] <= 0) { s.hp[id] = 0; s.down[id] = now + reviveMs(s); delete s.poison[id]; events && events.push({ type: 'fall', id }); if (!alive(s).length) { wipe(s, now, events); return; } }
+      if (s.hp[id] <= 0) { s.hp[id] = 0; s.down[id] = downAt(s, now); delete s.poison[id]; events && events.push({ type: 'fall', id }); if (!alive(s).length) { wipe(s, now, events); return; } }
     }
     if (s.dots) for (const id in s.dots) {
       const d = s.dots[id]; if (s.down[id] || !s.party.includes(id)) { delete s.dots[id]; continue; }
@@ -3109,7 +3133,7 @@
   // Everything else (gold, Dust, floors, levels, XP, stat points, skills, Kindling, gear, Embers, relics, companions,
   // hires, story) starts fresh.
   const NP_KEEP = ['hero', 'mode', 'lore', 'feats', 'settings', 'stats', 'boh', 'rosterUps', 'pass', 'passTrial', 'passTrialGiven', 'sub', 'keeper', 'created', 'econ', 'wd', 'ref', 'npLog',
-    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv'];
+    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv', 'curios', 'reno', 'pip', 'gulpLoot'];
   // Applies the reset in place once the server has granted tier `tier` at time `at`. Returns false if not allowed.
   // force: the server says this account is already on `tier` (another device started it), so reset to it anyway.
   function startNP(s, tier, at, force) {
@@ -3224,7 +3248,182 @@
     return s;
   }
 
+  // ---------- NP+ gold sinks (v126, John 25 Nov 2026: "ideas for players to spend gold on", all NP+ only) ----------
+  // Every price is hours of the player's own income (the figure the Store prices from), so a sink bites the same at any
+  // depth. Pip the Dicer's Lucky Crates and Curios, the Armorer's Reforge, Hold renovations and decorations, the
+  // Enchanter's Dust Press, and Gulp the Hoard Mimic (global, server: infra/lambda/gulp.js and goblin.js), whose
+  // Golden Loot Goblin drops the Gilded rings (WB_SETS[GG]). Curios owned, renovations and decorations survive NP+.
+  const npPlus = s => npTier(s) >= 1;
+  const incomeHour = s => Math.max(3600, offlineGoldPerSec(s) * 3600);
+  const priceH = (s, h) => Math.max(1, Math.round(incomeHour(s) * h));
+  const sinkFloor = s => Math.max(1, s.maxFloor || s.floor || 1);
+  // Pip the Dicer: three crates of gear (never Common) and a chance at a Curio. Gold only, never Sigils.
+  const CRATES = [
+    { id: 'pouch', name: 'Cloth Pouch', h: 0.5, odds: [['fine', 0.6], ['rare', 0.3], ['epic', 0.09], ['set', 0.01]], cu: 0 },
+    { id: 'coffer', name: 'Iron Coffer', h: 3, odds: [['rare', 0.55], ['epic', 0.35], ['set', 0.08], ['rset', 0.02]], cu: 0.005 },
+    { id: 'casket', name: 'Gilded Casket', h: 12, odds: [['epic', 0.63], ['set', 0.25], ['rset', 0.12]], cu: 0.09 },
+  ];
+  const CURIO_PITY = 10, CURIO_PER = 0.01, CURIO_ALL = 0.02;
+  const CURIOS = [
+    { id: 'die', name: 'Loaded Die', fx: '+6% critical chance for the party' },
+    { id: 'coin', name: 'Two-Headed Coin', fx: 'When a hero falls, 25% chance they are back up in 3 seconds' },
+    { id: 'hat', name: 'Pip’s Spare Hat', fx: '+15% hero XP' },
+    { id: 'glass', name: 'Hourglass of Borrowed Time', fx: '+10 seconds of lantern on guardian floors' },
+    { id: 'key', name: 'Skeleton Key', fx: 'Rogues pick locks twice as fast' },
+    { id: 'mouse', name: 'Wind-up Mouse', fx: 'The Loot Goblin waits 5 seconds longer before it flees' },
+    { id: 'globe', name: 'Snow Globe of the Hold', fx: '+5% party health' },
+    { id: 'tooth', name: 'Mimic’s Baby Tooth', fx: 'Each morsel you feed Gulp counts 1.5 times toward your goblin loot bonus' },
+  ];
+  const curioById = id => CURIOS.find(c => c.id === id);
+  const crateById = id => CRATES.find(c => c.id === id);
+  const crateCost = (s, id) => priceH(s, crateById(id).h);
+  const curiosOf = s => s.curios || (s.curios = {});
+  const curioCount = s => CURIOS.filter(c => curiosOf(s)[c.id]).length;
+  const curioColl = s => { const n = curioCount(s); return n * CURIO_PER + (n >= CURIOS.length ? CURIO_ALL : 0); };
+  // What every Curio and Gilded ring worn by the seated party adds, cached for a second (critChance and friends run per hit).
+  const wornFx = new WeakMap();
+  function fxSet(s) {
+    const t = Math.floor((s.clock || Date.now()) / 1000), c = wornFx.get(s);
+    if (c && c.t === t && c.g === s.gear && c.n === s.bag.length) return c.v;
+    const v = {}, by = {}; for (const it of s.bag) if (it.cu || it.gr != null) by[it.uid] = it;
+    for (const id of s.party) if (id) { const g = equipped(s, id); for (const p in g) { const it = by[g[p]]; if (!it) continue; if (it.cu) v[it.cu] = 1; if (it.gr != null) v['g' + it.gr] = 1; } }
+    wornFx.set(s, { t, g: s.gear, n: s.bag.length, v }); return v;
+  }
+  const fxOnW = (s, k) => !!(s && s.bag && s.party && fxSet(s)[k]);
+  function makeCurio(s, id, r) {
+    const f = sinkFloor(s);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls: heroCls(s) || 'tank', slot: 'neck', rar: 'epic', cu: id, lk: 1, ilvl: npIlvl(s, f), up: 0, t: npT(s) }, r || Math.random);
+  }
+  function crateGear(s, rar, r) {
+    const f = sinkFloor(s);
+    if (rar === 'rset') { const it = rollRegionSet(s, f, r); if (it) { s.lore['rset_' + it.rset] = Date.now(); return it; } rar = 'set'; }
+    if (rar === 'set') return rollGear(s, Math.max(15, f), { set: true }, r);
+    const it = rollGear(s, f, null, r); it.rar = rar; delete it.aff;
+    if (r() < (AFFIX_CHANCE[rar] || 0)) it.aff = { j: JOB_KEYS[Math.floor(r() * JOB_KEYS.length)], v: Math.round((0.1 + r() * 0.2) * (rar === 'epic' ? 1.5 : 1) * 100) / 100 };
+    return rollEnch(it, r);
+  }
+  // Opens one crate: gear always, a Curio sometimes (one you don't own yet; caskets guarantee one every CURIO_PITY).
+  function openCrate(s, id, rng) {
+    const r = rng || Math.random, c = crateById(id); if (!c || !npPlus(s) || !s.hero) return null;
+    const cost = crateCost(s, id); if (s.gold < cost) return null;
+    s.gold -= cost; const pip = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }); pip.spent += cost; pip.opened++;
+    let x = r(), rar = c.odds[c.odds.length - 1][0]; for (const [k, p] of c.odds) { if (x < p) { rar = k; break; } x -= p; }
+    const item = crateGear(s, rar, r); s.bag.push(item); if (item.set) s.lore['set_' + item.set] = Date.now();
+    let curio = null; const missing = CURIOS.filter(q => !curiosOf(s)[q.id]);
+    if (c.cu && missing.length) {
+      if (id === 'casket') pip.n++;
+      if (r() < c.cu || (id === 'casket' && pip.n >= CURIO_PITY)) {
+        const q = missing[Math.floor(r() * missing.length)]; curio = makeCurio(s, q.id, r); s.bag.push(curio); curiosOf(s)[q.id] = Date.now(); pip.n = 0;
+      }
+    }
+    s.stats.goldSunk = (s.stats.goldSunk || 0) + cost;
+    return { cost, item, curio };
+  }
+  // A Curio you own but no longer carry (sold, or left behind by a new NP+ tier) can be taken again from Pip for free.
+  const curioHeld = (s, id) => s.bag.some(it => it.cu === id);
+  function retakeCurio(s, id) {
+    if (!npPlus(s) || !curiosOf(s)[id] || curioHeld(s, id)) return null;
+    const it = makeCurio(s, id); s.bag.push(it); return it;
+  }
+
+  // The Armorer's Reforge: rerolls an item's enchantments, job affix and weapon type, keeping item level, rarity and
+  // upgrades. 1 hour of income, doubling for each reforge of the same item (at most REFORGE_MAX).
+  const REFORGE_H = 1, REFORGE_MAX = 6;
+  const canReforge = it => !!it && ['common', 'fine', 'rare', 'epic'].includes(it.rar) && !it.cu && it.wb == null && !it.gob && (it.rf || 0) < REFORGE_MAX;
+  const reforgeCost = (s, it) => priceH(s, REFORGE_H * Math.pow(2, (it && it.rf) || 0));
+  function reforge(s, uid, rng) {
+    const r = rng || Math.random, it = itemOf(s, uid); if (!npPlus(s) || !canReforge(it)) return null;
+    const cost = reforgeCost(s, it); if (s.gold < cost) return null;
+    s.gold -= cost; s.stats.goldSunk = (s.stats.goldSunk || 0) + cost;
+    const was = { en: it.en, ty: it.ty, aff: it.aff };
+    if (it.slot === 'main') { const l = TY_MAIN[it.cls] || ['sword']; it.ty = l[Math.floor(r() * l.length)]; }
+    delete it.aff; if (r() < (AFFIX_CHANCE[it.rar] || 0) * 2) it.aff = { j: JOB_KEYS[Math.floor(r() * JOB_KEYS.length)], v: Math.round((0.1 + r() * 0.2) * (it.rar === 'epic' ? 1.5 : 1) * 100) / 100 };
+    rollEnch(it, r); it.rf = (it.rf || 0) + 1; enchDirty && enchDirty();
+    return { cost, item: it, was };
+  }
+
+  // Hold renovations (one-time projects, a small perk each) and decorations (looks only).
+  const RENOS = [
+    { id: 'tower', name: 'The Watchtower', h: 24, k: 'dps', v: 0.02, fx: '+2% party damage', line: 'A lookout over the stair, with a brass bell for the night watch.' },
+    { id: 'bath', name: 'The Bathhouse', h: 36, k: 'hp', v: 0.02, fx: '+2% party health', line: 'Hot springs piped up from the deep. Everyone comes back a little tougher.' },
+    { id: 'fire', name: 'The Great Campfire', h: 48, k: 'xp', v: 0.02, fx: '+2% hero XP', line: 'A ring of stone benches round a fire big enough for every tale.' },
+    { id: 'garden', name: 'The Lantern Garden', h: 72, k: 'loot', v: 0.02, fx: '+2% gear finds', line: 'Glowing lantern-flowers that light the path to buried things.' },
+  ];
+  const DECOS = [
+    { id: 'moth', name: 'Pet lantern-moth', h: 6, line: 'A fat, friendly moth that flutters round your party in the Hold.' },
+    { id: 'trim', name: 'Gold-trimmed tents', h: 12, line: 'Gold thread on every tent and flag in the Hold.' },
+    { id: 'fount', name: 'Coin fountain', h: 24, line: 'A fountain in the yard that splashes gold coins.' },
+    { id: 'statue', name: 'Statue of your hero', h: 48, line: 'Your hero in polished stone, in the middle of the Hold.' },
+  ];
+  const renoCost = (s, id) => { const x = RENOS.find(q => q.id === id) || DECOS.find(q => q.id === id); return x ? priceH(s, x.h) : Infinity; };
+  const renoVal = (s, k) => { if (!s || !s.reno) return 0; let v = 0; for (const x of RENOS) if (x.k === k && s.reno[x.id]) v += x.v; return v; };
+  function buildReno(s, id) {
+    if (!npPlus(s) || !s.hero) return false; s.reno = s.reno || {}; if (s.reno[id]) return false;
+    const cost = renoCost(s, id); if (!(cost <= s.gold)) return false;
+    s.gold -= cost; s.reno[id] = Date.now(); s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; return cost;
+  }
+
+  // The Enchanter's Dust Press: gold into Dust at a poor rate, capped each day.
+  const PRESS_H = 2 / 60, PRESS_DAY = 200;
+  const pressDay = now => Math.floor((now || Date.now()) / 864e5);
+  const pressLeft = (s, now) => { const p = s.press; return PRESS_DAY - (p && p.d === pressDay(now) ? p.n : 0); };
+  const pressCost = (s, n) => priceH(s, PRESS_H * n);
+  function pressDust(s, n, now) {
+    n = Math.min(n | 0, pressLeft(s, now)); if (!npPlus(s) || n <= 0) return 0;
+    const cost = pressCost(s, n); if (s.gold < cost) return 0;
+    const d = pressDay(now); if (!s.press || s.press.d !== d) s.press = { d, n: 0 };
+    s.gold -= cost; s.press.n += n; s.dust = (s.dust || 0) + n; s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; return cost;
+  }
+
+  // Gulp the Hoard Mimic: one morsel = 10 minutes of income. The server (gulp.js) counts them, rolls the goblin and keeps
+  // the fed counter; the game takes the gold once the server has taken the morsels. 1 in 20 morsels Gulp coughs
+  // something up (a tonic, Dust or a Fine piece). Never gold.
+  const MORSEL_H = 10 / 60, GULP_DAY = 12, GULP_BURP = 0.05;
+  const morselCost = s => priceH(s, MORSEL_H);
+  function feedGulp(s, n, rng) {
+    const r = rng || Math.random, cost = morselCost(s) * n; if (!npPlus(s) || n <= 0 || s.gold < cost) return null;
+    s.gold -= cost; s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; s.stats.morsels = (s.stats.morsels || 0) + n;
+    const burps = [];
+    for (let i = 0; i < n; i++) if (r() < GULP_BURP) {
+      const k = r();
+      if (k < 0.4) { const t = TONICS[Math.floor(r() * TONICS.length)]; s.items[t.id] = (s.items[t.id] || 0) + 1; burps.push(t.name); }
+      else if (k < 0.75) { const d = Math.max(5, Math.round(5 + sinkFloor(s) / 5)); s.dust = (s.dust || 0) + d; burps.push(d + ' Dust'); }
+      else { const it = crateGear(s, 'fine', r); s.bag.push(it); burps.push(gearName(it)); }
+    }
+    return { cost, burps };
+  }
+  // The Golden Loot Goblin, fought like a world boss (2-minute assaults on a shared health bar, server goblin.js) but it
+  // runs off GOB_TIME after it appears. Cooldown GOB_COOL. Every GOB_DASH seconds it dashes for GOB_DASH_LEN: a party
+  // without a Rogue loses its target (no damage) until it stops.
+  const GOB_TIME = 30 * 60, GOB_COOL = 5 * 60, GOB_DASH = 30, GOB_DASH_LEN = 2;
+  function startGoblinAssault(s, now, gob) {
+    if (!npPlus(s) || !gob || now >= gob.until || resting(s, now) || !alive(s).length || (s.wb && s.wb.until > now)) return false;
+    const unit = foeHp(Math.max(1, s.maxFloorEver), false);
+    s.wb = { until: Math.min(gob.until, now + WB_TIME * 1000), at: now, score: 0, name: 'The Golden Loot Goblin', id: gob.id, gob: 1, cap: WB_CEIL * unit };
+    s.foe = null; s.foeSwing = 0; return true;
+  }
+  const gobDash = (s, now) => !!(s.wb && s.wb.gob && ((now - s.wb.at) / 1000) % GOB_DASH >= GOB_DASH - GOB_DASH_LEN);
+  const gobRogue = s => alive(s).some(id => memberById(id).cls === 'rogue');
+  // A Gilded ring from the goblin (one you don't own yet when the server says you won one).
+  function makeGilded(s, gr, rng) {
+    const r = rng || Math.random, cls = heroCls(s) || 'tank';
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: 'ring', rar: 'legend', wb: GG, gr, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0, t: npT(s) }, r);
+  }
+  const ggOwned = s => { const o = {}; for (const it of s.bag) if (it.wb === GG && it.gr != null) o[it.gr] = 1; return o; };
+  // Pays out a goblin claim from the server: { ring: true|false, sh: shards }. Duplicates after the full set become shards.
+  function lootGoblin(s, res, rng) {
+    const r = rng || Math.random, sh = shardsOf(s); let it = null, dup = 0;
+    sh[GG] = (sh[GG] || 0) + (res.sh || 0);
+    if (res.ring) {
+      const own = ggOwned(s), miss = GG_RINGS.map((_, i) => i).filter(i => !own[i]);
+      if (miss.length) { it = makeGilded(s, miss[Math.floor(r() * miss.length)], r); s.bag.push(it); s.stats.gilded = (s.stats.gilded || 0) + 1; }
+      else { dup = GG_DUP; sh[GG] += GG_DUP; }
+    }
+    return { item: it, dup };
+  }
+
   const api = {
+    npPlus, incomeHour, priceH, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
     steadyDps, NP_MAX, NP_FOE, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
     NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,

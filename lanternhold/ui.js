@@ -1,4 +1,4 @@
-/* lh-build 202611251638 */
+/* lh-build 202611252317 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -473,7 +473,8 @@
     const k = Math.min(W / 198, H / 74), vw = W / k, vh = H / k;
     return (SG = { k, vw, vh, ex: Math.round(vw / 2 + 48), fy: Math.round(64 + (vh - 74) * 0.8) });
   }
-  const shopKind = () => S.shopK === 'arm' || S.shopK === 'store' || S.shopK === 'portal' ? S.shopK : 'ench';
+  const OUTDOOR = { portal: 1, dicer: 1, gulp: 1 };
+  const shopKind = () => S.shopK === 'arm' || S.shopK === 'store' || OUTDOOR[S.shopK] ? S.shopK : 'ench';
   function shopGlow(g, cx, cy, r, rgb, a) { const q = g.createRadialGradient(cx, cy, 0, cx, cy, r); q.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); q.addColorStop(1, 'rgba(' + rgb + ',0)'); g.globalCompositeOperation = 'lighter'; g.fillStyle = q; g.fillRect(cx - r, cy - r, r * 2, r * 2); g.globalCompositeOperation = 'source-over'; }
   function shopShelf(g, sx, y, w, seed) {
     let s = seed; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
@@ -486,7 +487,7 @@
   function buildShop(kind) {
     const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height;
     const g = c.getContext('2d'); g.scale(R * SG.k, R * SG.k);
-    if (kind === 'portal') return buildPortal(c, g);
+    if (OUTDOOR[kind]) return buildPortal(c, g, kind);
     const W = SG.vw, H = SG.vh, fy = SG.fy, ench = kind === 'ench', store = kind === 'store', warm = !!(ench || store), ex = SG.ex;
     let lg = g.createLinearGradient(0, 0, 0, fy);
     if (ench) { lg.addColorStop(0, '#1a1128'); lg.addColorStop(1, '#352350'); } else if (store) { lg.addColorStop(0, '#1d140c'); lg.addColorStop(1, '#43301d'); } else { lg.addColorStop(0, '#17130f'); lg.addColorStop(1, '#3a2a20'); }
@@ -527,7 +528,7 @@
   }
   // The Rift Gate (v120, John: "a portal style location, not in a house: an outside portal with a guy next to it and a
   // chest"). Night sky over the Hold's walls, flagstones and grass, a signpost; the arch and the chest are drawn live.
-  function buildPortal(c, g) {
+  function buildPortal(c, g, kind) {
     const W = SG.vw, H = SG.vh, fy = SG.fy, ex = SG.ex;
     let lg = g.createLinearGradient(0, 0, 0, fy); lg.addColorStop(0, '#070a1e'); lg.addColorStop(0.6, '#1a1238'); lg.addColorStop(1, '#2e1d4a'); g.fillStyle = lg; g.fillRect(0, 0, W, fy);
     let sd = 5; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
@@ -544,10 +545,29 @@
     for (let i = 0; i < 70; i++) { const gx = r() * W, gy = fy + r() * 4; g.strokeStyle = r() < 0.5 ? '#3f6a2e' : '#2f5224'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(gx, gy + 2); g.lineTo(gx + (r() - 0.5) * 2, gy - 2 - r() * 3); g.stroke(); }
     // a signpost by the path
     const sx = ex - 58, sy = fy - 26; g.fillStyle = '#4a2f1c'; g.fillRect(sx - 1, sy, 2.4, 26);
-    g.font = '700 6px Inter, system-ui, sans-serif'; const text = 'THE RIFT GATE', tw = g.measureText(text).width + 8;
+    if (kind === 'dicer') buildWagon(g, ex, fy); else if (kind === 'gulp') buildGulpYard(g, ex, fy);
+    g.font = '700 6px Inter, system-ui, sans-serif'; const text = kind === 'dicer' ? 'PIP’S LUCKY CRATES' : kind === 'gulp' ? 'GULP THE HOARD MIMIC' : 'THE RIFT GATE', tw = g.measureText(text).width + 8;
     g.fillStyle = '#5a3a22'; g.beginPath(); g.moveTo(sx - tw / 2, sy - 9); g.lineTo(sx + tw / 2, sy - 9); g.lineTo(sx + tw / 2 + 4, sy - 4.5); g.lineTo(sx + tw / 2, sy); g.lineTo(sx - tw / 2, sy); g.fill();
     g.strokeStyle = '#a8742e'; g.lineWidth = 0.6; g.stroke(); g.fillStyle = '#e9d5ff'; g.textAlign = 'center'; g.fillText(text, sx, sy - 2.6); g.textAlign = 'left';
     return c;
+  }
+  // v126 Pip's wagon: a striped carnival wagon with bunting behind Pip, and a stack of crates for a counter.
+  function buildWagon(g, ex, fy) {
+    const wx = ex + 6, wy = fy - 46, ww = 64, wh = 36;
+    for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#f5e6c8' : '#c0392b'; g.fillRect(wx + i * ww / 8, wy, ww / 8 + 0.3, wh); }
+    g.fillStyle = '#2a1a0e'; g.beginPath(); g.moveTo(wx - 4, wy); g.quadraticCurveTo(wx + ww / 2, wy - 20, wx + ww + 4, wy); g.lineTo(wx + ww + 4, wy + 3); g.quadraticCurveTo(wx + ww / 2, wy - 16, wx - 4, wy + 3); g.fill();
+    g.fillStyle = '#6a2a8a'; g.beginPath(); g.moveTo(wx - 2, wy); g.quadraticCurveTo(wx + ww / 2, wy - 18, wx + ww + 2, wy); g.lineTo(wx + ww + 2, wy - 1); g.quadraticCurveTo(wx + ww / 2, wy - 21, wx - 2, wy - 1); g.fill();
+    g.fillStyle = '#f5c242'; g.fillRect(wx, wy + wh - 3, ww, 3);
+    for (const cx of [wx + 10, wx + ww - 10]) { g.fillStyle = '#3a2614'; g.beginPath(); g.arc(cx, fy - 6, 7, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#a8742e'; g.lineWidth = 1; g.stroke(); g.beginPath(); for (let a = 0; a < 6; a++) { g.moveTo(cx, fy - 6); g.lineTo(cx + Math.cos(a) * 7, fy - 6 + Math.sin(a) * 7); } g.stroke(); }
+    const cols = ['#f5c242', '#c0392b', '#2f9e63', '#3b82f6']; g.strokeStyle = '#2a1a0e'; g.lineWidth = 0.5; g.beginPath(); g.moveTo(ex - 90, fy - 56); g.quadraticCurveTo(ex - 40, fy - 44, wx, wy - 8); g.stroke();
+    for (let i = 0; i < 9; i++) { const t = i / 9, x = ex - 90 + (wx - ex + 90) * t, y = fy - 56 + 12 * Math.sin(t * Math.PI) - 4 * t; g.fillStyle = cols[i % 4]; g.beginPath(); g.moveTo(x - 2, y); g.lineTo(x + 2, y); g.lineTo(x, y + 4); g.fill(); }
+  }
+  // v126 Gulp's corner of the yard: a post he is chained to, and coins scattered on the flagstones.
+  function buildGulpYard(g, ex, fy) {
+    g.fillStyle = '#4a2f1c'; g.fillRect(ex + 46, fy - 40, 5, 40); g.fillStyle = '#6a4426'; g.fillRect(ex + 45, fy - 42, 7, 3);
+    g.strokeStyle = '#8a8f9a'; g.lineWidth = 1; for (let i = 0; i < 6; i++) { g.beginPath(); g.ellipse(ex + 44 - i * 4, fy - 16 + i * 1.2, 2, 1.2, 0, 0, Math.PI * 2); g.stroke(); }
+    let sd = 9; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 26; i++) { g.fillStyle = r() < 0.5 ? '#f5c242' : '#d4a020'; g.beginPath(); g.ellipse(ex - 40 + r() * 100, fy + 2 + r() * 10, 1.6, 0.8, 0, 0, Math.PI * 2); g.fill(); }
   }
   // The gate itself (behind the keeper), swirling, and the token chest where a counter would be.
   function drawPortalRoom(W, fy, ex) {
@@ -586,6 +606,14 @@
   }
   function drawShopCounter(ex, fy, kind) {
     if (kind === 'portal') return drawPortalChest(ex, fy);
+    if (kind === 'gulp') return fy - 2;
+    if (kind === 'dicer') {
+      // three crates stacked as Pip's counter, one lid ajar with a glint inside
+      const crate = (x, y, w, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, w * 0.7); ctx.strokeStyle = '#2a1a0e'; ctx.lineWidth = 0.7; ctx.strokeRect(x, y, w, w * 0.7); ctx.fillStyle = '#f5c242'; ctx.fillRect(x, y + w * 0.3, w, 1.2); };
+      crate(ex - 26, fy - 13, 18, '#7a5530'); crate(ex - 7, fy - 13, 18, '#5a3a8a'); crate(ex + 12, fy - 13, 18, '#7a5530');
+      shopGlow(ctx, ex + 2, fy - 14, 14, '245,194,66', 0.25 + 0.08 * Math.sin(tAnim * 3));
+      return fy - 13;
+    }
     const cw = 54, top = fy - 13, ench = kind !== 'arm';
     let lg = ctx.createLinearGradient(0, top, 0, fy); lg.addColorStop(0, ench ? '#6a4024' : '#3a3a42'); lg.addColorStop(1, ench ? '#2e1a0c' : '#1e1e24'); ctx.fillStyle = lg; ctx.fillRect(ex - cw / 2, top + 2, cw, fy - top);
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.6; for (let i = 0; i < 3; i++) ctx.strokeRect(ex - cw / 2 + 3 + i * 16, top + 5, 15, fy - top - 7);
@@ -615,16 +643,17 @@
   function drawShopRoom(W, fy, ex, kind) {
     const ench = kind === 'ench';
     if (kind === 'portal') drawPortalRoom(W, fy, ex);
+    else if (kind === 'gulp') { const m = gp.st ? gp.st.m || 0 : 0; shopGlow(ctx, ex, fy - 20, 60, '245,194,66', 0.12 + Math.min(0.3, m / 2000) + (gp.st && gp.st.stir ? 0.15 + 0.1 * Math.sin(tAnim * 4) : 0)); }
     // hanging lanterns and the room light (indoors)
-    if (kind !== 'portal') for (const lx of [ex - 120, ex - 72]) {
+    if (!OUTDOOR[kind]) for (const lx of [ex - 120, ex - 72]) {
       const ly = Math.max(13, fy - 70), s = Math.sin(tAnim * 1.1 + lx) * 0.6;
       ctx.strokeStyle = '#2a1a0e'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(lx, 6); ctx.lineTo(lx + s, ly - 4); ctx.stroke();
       shopGlow(ctx, lx + s, ly, 26, '255,200,110', 0.3);
       ctx.fillStyle = '#3a2618'; ctx.fillRect(lx + s - 3, ly - 4.5, 6, 1.5); ctx.fillRect(lx + s - 3, ly + 3.5, 6, 1.5);
       ctx.fillStyle = 'rgba(255,214,140,.9)'; ctx.fillRect(lx + s - 2.4, ly - 3, 4.8, 6.5); flame(ctx, lx + s, ly + 2.5, 4 + Math.sin(tAnim * 7 + lx) * 0.5, Math.sin(tAnim * 4 + lx));
     }
-    shopGlow(ctx, ex - 77, fy + 6, 108, kind === 'portal' ? '168,140,255' : '255,190,110', kind === 'portal' ? 0.08 : 0.16);
-    if (kind === 'portal') { /* drawn above */ } else if (ench) {
+    shopGlow(ctx, ex - 77, fy + 6, 108, kind === 'portal' ? '168,140,255' : '255,190,110', OUTDOOR[kind] ? 0.08 : 0.16);
+    if (OUTDOOR[kind]) { /* drawn above */ } else if (ench) {
       // a rune circle turning slowly behind the Enchanter
       ctx.save(); ctx.translate(ex, fy - 44); ctx.globalAlpha = 0.55 + 0.15 * Math.sin(tAnim * 1.5); ctx.strokeStyle = 'rgba(196,181,253,.8)'; ctx.lineWidth = 0.8;
       ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.stroke();
@@ -641,8 +670,8 @@
       if (Math.random() < 0.15) particles.push({ x: hx + (Math.random() - 0.5) * 14, y: fy - 22, vx: (Math.random() - 0.5) * 6, vy: -10 - Math.random() * 12, life: 1 + Math.random(), age: 0, c: Math.random() < 0.5 ? '#ffb347' : '#ff6a1f', s: 1 });
     }
     // the shopkeeper at monster size behind the counter, facing the party
-    const k = sprite(ench ? 'enchanter' : kind === 'store' ? 'quartermaster' : kind === 'portal' ? 'riftkeeper' : 'armorer', 0, false), kw = k.lw * 3, kh = k.lh * 3, br = Math.sin(tAnim * 1.4) * 0.5;
-    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, fy - 11); ctx.clip(); ctx.translate(ex, 0); ctx.scale(-1, 1); ctx.drawImage(k, -kw / 2, fy - 4 - kh + br, kw, kh); ctx.restore();
+    const k = sprite(ench ? 'enchanter' : kind === 'store' ? 'quartermaster' : kind === 'portal' ? 'riftkeeper' : kind === 'dicer' ? 'dicer' : kind === 'gulp' ? 'gulp' : 'armorer', 0, false), kw = k.lw * 3, kh = k.lh * 3, br = Math.sin(tAnim * (kind === 'gulp' ? 3 : 1.4)) * (kind === 'gulp' ? 1.2 : 0.5);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, kind === 'gulp' ? fy + 4 : fy - 11); ctx.clip(); ctx.translate(ex, 0); ctx.scale(-1, 1); ctx.drawImage(k, -kw / 2, fy - 4 - kh + br, kw, kh); ctx.restore();
     const top = drawShopCounter(ex, fy, kind);
     // what you picked sits on the counter
     const picks = (ench ? [EW.dst, EW.src] : kind === 'arm' ? [AW.a, AW.b] : []).map(u => u && L.itemOf(S, u));
@@ -1164,7 +1193,7 @@
       } else if (e.type === 'lore') {
         const lo = L.LORE.find(x => x.id === e.id); toast('book', 'New journal entry', lo.title, 'feat');
       } else if (e.type === 'wbend') {
-        sendAssault(e.score, e.fell, e.ck, e.iv);
+        if (e.gob) sendGoblin(e.gob, e.score, e.fell, e.ck, e.iv); else sendAssault(e.score, e.fell, e.ck, e.iv);
       } else if (e.type === 'goblinflee') {
         sfx.fail(); floatText(e.item ? 'Stolen!' : 'Escaped!', 'crit', 0.5, 0.3);
         if (e.item) toast('bag', e.again ? 'He got away again' : 'The Loot Goblin stole ' + L.gearName(e.item), (e.again ? 'He still has ' + L.gearName(e.item) + ' and' : 'He') + ' fled to floor ' + e.floor + '. Find him there and kill him to get it back.', 'warn');
@@ -2221,7 +2250,8 @@
     modal('<div class="enchpanel picker fieldench" id="fieldench"></div>', md => { md.querySelector('#fieldench').addEventListener('click', shopClick); paintEnchPanel(true); });
   }
   function visitEnch(kind) {
-    kind = kind === 'arm' || kind === 'store' || kind === 'portal' ? kind : 'ench';
+    kind = kind === 'arm' || kind === 'store' || OUTDOOR[kind] ? kind : 'ench';
+    if ((kind === 'dicer' || kind === 'gulp') && !L.npPlus(S)) return false;
     if (L.visiting(S)) S.shopK = kind; else if (!L.visitEnchanter(S, Date.now(), kind)) return false;
     closeModal(); sfx.relic(); particles.length = 0; paintEnchOv(); updatePanel(true);
     const a = document.querySelector('.stagehead') || $('arena'); if (a && a.scrollIntoView && innerWidth < 900) a.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -2264,7 +2294,7 @@
     const bonus = b => (b.k === 'gold' ? '+' + Math.round(L.WB_TWO.gold * 100) + '% gold' : '+' + Math.round(L.WB_TWO[b.k] * 100) + '% ' + (b.k === 'hp' ? 'health' : b.k === 'dps' ? 'damage' : 'healing')) + ' with 2 pieces, +' + Math.round(L.WB_FOUR * 100) + '% damage and health with 4';
     return head + (PW.done ? '<div class="ewdone">' + PW.done + '</div>' : '') + '<h3 class="ewq">Which Legendary set calls to you?</h3>' +
       '<p class="ewhint">“Every world boss you fight pays tokens for the damage you dealt. Bring me ' + cost + ' and the Rift gives up a piece (a random slot) of any set it has swallowed.”</p>' +
-      '<div class="rglist">' + L.WB_SETS.map((b, k) => '<div class="rgrow"><div><b>' + esc(b.name) + '</b><small>' + bonus(b) + ' · ' + fmt(sh[k] || 0) + ' ' + esc(b.word) + ' shards for upgrades</small></div><button class="btn small" data-tokbuy="' + k + '"' + (tok < cost ? ' disabled title="Not enough Rift tokens"' : '') + '>' + icon('relic') + cost + ' tokens</button></div>').join('') + '</div>' +
+      '<div class="rglist">' + L.WB_SETS.slice(0, L.WB_BOSSES).map((b, k) => '<div class="rgrow"><div><b>' + esc(b.name) + '</b><small>' + bonus(b) + ' · ' + fmt(sh[k] || 0) + ' ' + esc(b.word) + ' shards for upgrades</small></div><button class="btn small" data-tokbuy="' + k + '"' + (tok < cost ? ' disabled title="Not enough Rift tokens"' : '') + '>' + icon('relic') + cost + ' tokens</button></div>').join('') + '</div>' +
       '<p class="note small">Legendaries are bound to you and can’t be merged. Upgrade them at the Armorer with that boss’s shards.</p>';
   }
   $('enchpanel') && $('enchpanel').addEventListener('click', e => {
@@ -2292,7 +2322,7 @@
   });
   function armPanelHtml() {
     const gold = '<span class="epdust">' + icon('coin') + '<b>' + fmt(S.gold) + '</b> gold</span>';
-    const tabs = '<div class="ewtabs forge" role="tablist">' + [['up', 'Upgrade'], ['merge', 'Merge'], ['mass', 'Mass merge'], ['smelt', 'Scrap for gold']].map(([k, n]) => '<button role="tab" class="' + (AW.mode === k ? 'on' : '') + '" data-awmode="' + k + '">' + n + '</button>').join('') + '</div>';
+    const tabs = '<div class="ewtabs forge" role="tablist">' + [['up', 'Upgrade'], ['merge', 'Merge'], ['mass', 'Mass merge'], ['smelt', 'Scrap for gold']].concat(L.npPlus(S) ? [['rf', 'Reforge']] : []).map(([k, n]) => '<button role="tab" class="' + (AW.mode === k ? 'on' : '') + '" data-awmode="' + k + '">' + n + '</button>').join('') + '</div>';
     const perk = '<p class="shopperk">' + icon('star') + '<span>Armorer’s forge: every merge here carries ' + Math.round(L.SHOP_FX.mergeCut * 100) + '% less risk than merging in the field.</span></p>';
     const head = '<div class="ephead"><b>The Armorer’s counter</b>' + gold + '</div>' + tabs + (AW.done ? '<div class="ewdone">' + icon('star') + '<span>' + AW.done + '</span></div>' : '');
     const A = AW.a && L.itemOf(S, AW.a), B = AW.b && L.itemOf(S, AW.b);
@@ -2306,6 +2336,15 @@
         '<label class="chk"><input type="checkbox" data-ewopt="keepUp"' + (scrapOpts.keepUp ? ' checked' : '') + '><span><b>Keep upgraded pieces</b></span></label>' +
         '<div class="ewsum">' + (list.length ? '<p><b>' + list.length + '</b> ' + (list.length === 1 ? 'piece becomes' : 'pieces become') + ' <b>' + fmt(g) + ' gold</b>.</p>' : (scrapList().length ? '<p>Nothing matches these filters. Try All or Anyone.</p>' : '<p>Nothing matches. Tick more rarities above.</p>')) +
         '<button class="btn danger" data-awgo="smelt"' + (list.length ? '' : ' disabled') + '>Melt ' + list.length + '</button></div>';
+    }
+    if (AW.mode === 'rf' && L.npPlus(S)) {
+      const enTxt = x => { const l = L.enchList(x); return l.length ? l.map(e => esc(L.ENCH[e.id].name) + ' ' + ROMAN9[e.t]).join(', ') : 'no enchants'; };
+      const rfTag = x => { const c = L.reforgeCost(S, x); return '<span class="ewcost gold' + (S.gold < c ? ' short' : '') + '">' + icon('coin') + fmt(c) + '</span>'; };
+      if (!A) return head + '<h3 class="ewq">Which item should the Armorer reforge?</h3><p class="ewhint">Reforging rerolls an item’s enchantments, its job affix and (for a main hand) its weapon type. Item level, rarity and upgrades stay. ' + L.REFORGE_H + ' hour of your income, doubling each time you reforge the same piece (up to ' + L.REFORGE_MAX + ' times).</p>' +
+        (l => sfList(l, sfApply(l).slice(0, 60).map(x => ewItemRow(x, 'data-awa="' + x.uid + '"', enTxt(x) + ((x.rf || 0) ? ' &middot; reforged ' + x.rf + '×' : '') + ewWorn(x), rfTag(x))), 'Nothing to reforge. Common to Epic gear can be reforged.'))(S.bag.filter(L.canReforge).sort(byWorn));
+      const c = L.reforgeCost(S, A), ok = L.canReforge(A);
+      return head + ewPicked('Reforging', A, ewName(A), 'a') + '<div class="ewsum"><p>Now: ' + enTxt(A) + (A.aff ? ' &middot; job affix' : '') + '.</p>' + (ok ? '<p>Costs ' + icon('coin') + '<b>' + fmt(c) + ' gold</b>' + (S.gold < c ? '. You have ' + fmt(S.gold) + '.' : '.') + ' Reforged ' + (A.rf || 0) + ' of ' + L.REFORGE_MAX + ' times.</p>' : '<p>This piece can’t be reforged any more.</p>') +
+        '<button class="btn" data-awgo="rf"' + (!ok || S.gold < c ? ' disabled' : '') + '>' + (ok ? 'Reforge for ' + fmt(c) + ' gold' : 'Fully reforged') + '</button></div>';
     }
     if (AW.mode === 'mass') {
       const all = L.massMergePlan(S, mmCap), plan = all.filter(p => sfPass(p.a)), exp = plan.reduce((a, p) => a + p.risk, 0), fexp = plan.reduce((a, p) => a + L.mergeRisk(S, p.a, p.b).field, 0);
@@ -2374,9 +2413,14 @@
     const field = !L.visiting(S), title = field ? 'Enchanting in the field' : 'The Enchanter’s counter';
     const perk = field ? '<p class="shopperk field">' + icon('flare') + '<span>In the field a moved enchant loses one tier and costs ' + Math.round((L.FIELD_FX.dust - 1) * 100) + '% more Dust. <button class="linkbtn" data-ewgo="visit">Go to the Enchanter</button> for full tier, normal Dust and a ' + Math.round(L.SHOP_FX.enchUp * 100) + '% chance of +1 tier.</span></p>'
       : '<p class="shopperk">' + icon('star') + '<span>Enchanter’s touch: enchants keep their tier, cost the normal Dust, and have a ' + Math.round(L.SHOP_FX.enchUp * 100) + '% chance to come out one tier stronger.</span></p>';
-    const tabs = '<div class="ewtabs" role="tablist">' + [['on', 'Enchant an item'], ['dis', 'Disenchant']].concat(field ? [] : [['scrap', 'Scrap for Dust']]).map(([k, n]) => '<button role="tab" class="' + (EW.mode === k ? 'on' : '') + '" data-ewmode="' + k + '">' + n + '</button>').join('') + '</div>';
+    const tabs = '<div class="ewtabs" role="tablist">' + [['on', 'Enchant an item'], ['dis', 'Disenchant']].concat(field ? [] : [['scrap', 'Scrap for Dust']]).concat(!field && L.npPlus(S) ? [['press', 'Dust Press']] : []).map(([k, n]) => '<button role="tab" class="' + (EW.mode === k ? 'on' : '') + '" data-ewmode="' + k + '">' + n + '</button>').join('') + '</div>';
     let body = '', steps = [], cur = 0;
     const done = EW.done ? '<div class="ewdone">' + icon('star') + '<span>' + EW.done + '</span></div>' : '';
+    if (EW.mode === 'press' && !field && L.npPlus(S)) {
+      const left = L.pressLeft(S), one = L.pressCost(S, 1), opts = [10, 50, left].filter((n, i, a) => n > 0 && a.indexOf(n) === i);
+      return '<div class="ephead"><b>' + title + '</b>' + dust + '</div>' + tabs + done + '<h3 class="ewq">Press gold into Dust?</h3><p class="ewhint">The Enchanter’s Dust Press turns gold into Dust at a poor rate: ' + fmt(one) + ' gold (' + Math.round(L.PRESS_H * 60) + ' minutes of your income) for each Dust, up to ' + L.PRESS_DAY + ' Dust a day. Scrapping gear is still the cheap way.</p>' +
+        '<div class="ewsum"><p><b>' + left + '</b> Dust left to press today.</p><div class="row">' + (opts.length ? opts.map(n => '<button class="btn small" data-ewgo="press" data-n="' + n + '"' + (S.gold < L.pressCost(S, n) ? ' disabled' : '') + '>Press ' + n + ' Dust (' + fmt(L.pressCost(S, n)) + ' gold)</button>').join('') : '<p>The press is cooling down until tomorrow (UTC).</p>') + '</div></div>';
+    }
     if (EW.mode === 'scrap') {
       const list = shopScrap(), gold = list.reduce((a, it) => a + L.salvageValue(it), 0), dd = list.reduce((a, it) => a + L.dustValue(it), 0);
       body = '<h3 class="ewq">Which gear should the Enchanter break down for Dust?</h3><p class="ewhint">Worn and locked items are never scrapped. You also get gold.</p>' + sfBar(scrapList(), { noSort: 1, noRar: 1 }) +
@@ -2448,8 +2492,8 @@
     el.hidden = !on; if (!on) { el.dataset.h = ''; return; }
     // A timed redraw (gold ticking) between press and release would swap the button out and lose the tap, so wait for the release.
     if ((!force && panelHeld) || (document.activeElement && document.activeElement.tagName === 'SELECT' && el.contains(document.activeElement))) return;
-    const kind = shopKind(), arm = kind === 'arm', h = kind === 'store' ? storePanelHtml() : kind === 'portal' ? portalPanelHtml() : arm ? armPanelHtml() : enchPanelHtml(); if (!force && el.dataset.h === h) return;
-    const step = kind === 'store' ? 's' + SW.mode : kind === 'portal' ? 'p' : arm ? 'a' + AW.mode + !!AW.a + !!AW.b : EW.mode + !!EW.dst + !!EW.src + EW.idx;
+    const kind = shopKind(), arm = kind === 'arm', h = kind === 'store' ? storePanelHtml() : kind === 'portal' ? portalPanelHtml() : kind === 'dicer' ? dicerPanelHtml() : kind === 'gulp' ? gulpPanelHtml() : arm ? armPanelHtml() : enchPanelHtml(); if (!force && el.dataset.h === h) return;
+    const step = kind === 'store' ? 's' + SW.mode : OUTDOOR[kind] ? kind : arm ? 'a' + AW.mode + !!AW.a + !!AW.b : EW.mode + !!EW.dst + !!EW.src + EW.idx;
     const sc = el.querySelector('.ewlist'), top = sc ? sc.scrollTop : 0, same = el.dataset.step === step;
     el.innerHTML = h; el.dataset.h = h; el.dataset.step = step;
     if (!same) el.scrollTop = 0;
@@ -2490,6 +2534,12 @@
       else { sfx.coin(); awReset('merge'); AW.done = 'The merge failed and both ' + esc(L.gearName(res.a)) + ' pieces were lost. +' + fmt(res.xp) + ' hero XP for trying.'; }
       return paintEnchPanel(true);
     }
+    if (d.awgo === 'rf') {
+      const it = L.itemOf(S, AW.a); if (!it) return; const was = craftItem(it), r = L.reforge(S, it.uid); if (!r) return;
+      craftLog('hammer', 'Reforged at the Armorer', L.gearName(it) + ' was reforged.', ['Now: ' + craftItem(it)], [craftCost(r.cost, 'gold'), 'Was: ' + was]);
+      save(); updateGear(true); updateSeats(true); sfx.relic(); shopBurst();
+      AW.done = esc(L.gearName(it)) + ' is reforged: ' + (L.enchList(it).map(e => esc(L.ENCH[e.id].name) + ' ' + ROMAN9[e.t]).join(', ') || 'no enchants') + '.'; return paintEnchPanel(true);
+    }
     if (d.awgo === 'smelt') {
       const l = shopScrap(); if (!l.length) return; let g = 0; const was = l.map(craftItem); for (const it of l) g += L.smelt(S, it.uid);
       logScrap('Melted at the Armorer', was, g, 0);
@@ -2497,6 +2547,7 @@
       AW.done = 'Melted ' + l.length + (l.length === 1 ? ' piece' : ' pieces') + ' for ' + fmt(g) + ' gold.'; return paintEnchPanel(true);
     }
     if (d.ewmode) { ewReset(d.ewmode); EW.done = null; paintEnchPanel(true); paintEnchOv(); return; }
+    if (d.ewgo === 'press') { const n = +d.n, c = L.pressDust(S, n); if (!c) return; craftLog('dust', 'Pressed Dust at the Enchanter', n + ' Dust from gold.', [n + ' Dust'], [craftCost(c, 'gold')]); save(); sfx.relic(); shopBurst(); EW.done = 'The press hisses: +' + n + ' Dust for ' + fmt(c) + ' gold.'; return paintEnchPanel(true); }
     if (d.ewgo === 'visit') { const keep = Object.assign({}, EW); visitEnch('ench'); Object.assign(EW, keep, { done: null }); paintEnchPanel(true); return; }
     if (d.ewdst) return ewSet({ dst: d.ewdst, slot: null });
     if (d.ewsrc) return ewSet({ src: d.ewsrc, idx: +d.ewi });
@@ -2534,11 +2585,12 @@
   function paintEnchOv() {
     const on = L.visiting(S), kind = shopKind(), arm = on && kind === 'arm';
     const SHOPS = { ench: ['enchanter', 'The Enchanter', 'Enchanter'], arm: ['armorer', 'The Armorer', 'Armorer'], store: ['quartermaster', 'The Store', 'Store'], portal: ['riftkeeper', 'The Rift Gate', 'Rift Gate'] };
+    if (L.npPlus(S)) Object.assign(SHOPS, { dicer: ['dicer', 'Pip’s Lucky Crates', 'Pip'], gulp: ['gulp', 'Gulp the Hoard Mimic', 'Gulp'] });
     document.body.classList.toggle('atench', on);
     let hd = $('shophead');
     if (!hd && on) {
       hd = document.createElement('div'); hd.id = 'shophead'; hd.className = 'shophead';
-      hd.addEventListener('click', e => { if (e.target.closest('[data-ev="leave"]')) leaveEnch(); const sw = e.target.closest('[data-ev="swap"]'); if (sw) { if (sw.dataset.k === 'arm') awReset(); else if (sw.dataset.k === 'store') SW.mode = 'ton'; else ewReset(); visitEnch(sw.dataset.k); } });
+      hd.addEventListener('click', e => { if (e.target.closest('[data-ev="leave"]')) leaveEnch(); const sw = e.target.closest('[data-ev="swap"]'); if (sw) { if (sw.dataset.k === 'arm') awReset(); else if (sw.dataset.k === 'store') SW.mode = 'ton'; else if (sw.dataset.k === 'gulp' || sw.dataset.k === 'dicer') { DW.done = null; if (sw.dataset.k === 'gulp') loadGulp(); } else ewReset(); visitEnch(sw.dataset.k); } });
       const sh = document.querySelector('.stagehead'); sh && sh.insertBefore(hd, sh.firstChild);
     }
     if (hd) {
@@ -3106,9 +3158,13 @@
     if (f) {
       $('foename').textContent = f.pack ? f.name + ' and ' + (f.pack - 1) + ' more' : f.rescue ? f.name + ', holding ' + f.rescue : f.name;
       if (f.goblin && !f.seen) { f.seen = 1; goblinArrives(f); }
-      const tag = $('foetag'); tag.textContent = f.wounded || f.rescue ? 'Mercy Corps' : f.world ? 'World boss' : f.goblin ? 'Thief' : f.pack ? 'Ambush ×' + f.pack + ' · XP ×' + f.pack * L.PACK_XP : f.boss ? 'Guardian' : f.chest ? 'Treasure' : f.elite ? L.SIDES[f.side].name : ''; if (f.pack) tag.dataset.tip = f.pack + ' foes at once: ' + f.pack * L.PACK_XP + '× hero XP and ' + f.pack * L.PACK_GOLD + '× gold.'; else if (f.wounded) tag.dataset.tip = 'A wounded Mercy Corps companion. Nobody fights: your healers mend them, Lantern Hymn helps a lot, and every tap is a bandage. Heal them to full for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.'; else if (f.rescue) tag.dataset.tip = 'This monster holds ' + f.rescue + ' of the Mercy Corps captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.'; else delete tag.dataset.tip; tag.className = 'tag' + (f.wounded || f.rescue ? ' mercy' : '') + (f.world ? ' world' : '') + (f.goblin ? ' thief' : '') + (f.chest ? ' chest' : '') + (f.pack ? ' ambush' : f.elite ? ' war w-' + f.side : '');
+      const tag = $('foetag'); tag.textContent = f.wounded || f.rescue ? 'Mercy Corps' : f.world ? (f.gob ? 'Golden goblin' : 'World boss') : f.goblin ? 'Thief' : f.pack ? 'Ambush ×' + f.pack + ' · XP ×' + f.pack * L.PACK_XP : f.boss ? 'Guardian' : f.chest ? 'Treasure' : f.elite ? L.SIDES[f.side].name : ''; if (f.pack) tag.dataset.tip = f.pack + ' foes at once: ' + f.pack * L.PACK_XP + '× hero XP and ' + f.pack * L.PACK_GOLD + '× gold.'; else if (f.wounded) tag.dataset.tip = 'A wounded Mercy Corps companion. Nobody fights: your healers mend them, Lantern Hymn helps a lot, and every tap is a bandage. Heal them to full for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.'; else if (f.rescue) tag.dataset.tip = 'This monster holds ' + f.rescue + ' of the Mercy Corps captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.'; else delete tag.dataset.tip; tag.className = 'tag' + (f.wounded || f.rescue ? ' mercy' : '') + (f.world ? ' world' : '') + (f.goblin ? ' thief' : '') + (f.chest ? ' chest' : '') + (f.pack ? ' ambush' : f.elite ? ' war w-' + f.side : '');
       { const sp = f.sp && L.SPECIALS[f.sp], mk = (f.mods || []).join(',') + '|' + (f.sp || ''); if (mk !== lastModKey) { lastModKey = mk; $('foemods').innerHTML = (sp ? '<span class="mod m-sp' + (sp.dot ? ' m-' + sp.dot : '') + '" title="' + esc(sp.desc + (sp.dot ? '. ' + (sp.dot === 'burn' ? 'Burns' : 'Poison') + ' last ' + L.DOT_FIGHTS + ' fights.' : '.')) + '">' + esc(sp.name) + '</span>' : '') + (f.mods || []).map(m => '<span class="mod m-' + m + '" title="' + esc(L.MODS[m].desc) + '">' + esc(L.MODS[m].name) + '</span>').join(''); } }
-      if (f.world && S.wb) {
+      if (f.world && S.wb && S.wb.gob) {
+        const g = gp.st && gp.st.gob, hp = g ? g.hp : 1, left = Math.max(0, 1 - ((g ? g.total : 0) + S.wb.score) / hp);
+        $('hpbar').style.width = left * 100 + '%'; $('wardbar').style.width = '0%';
+        $('hptext').textContent = Math.ceil(left * 100) + '% left · your damage ' + fmt(Math.floor(S.wb.score)) + (L.gobDash(S, Date.now()) ? (L.gobRogue(S) ? ' · it dashes, your Rogue keeps up!' : ' · it dashed away!') : '');
+      } else if (f.world && S.wb) {
         const ph = L.wbPhase(wbState().total + S.wb.score, wbState().w.id), pct = ph.into / ph.need * 100;
         $('hpbar').style.width = Math.max(0, 100 - pct) + '%'; $('wardbar').style.width = '0%';
         $('hptext').textContent = 'Phase ' + (ph.broken + 1) + ' · ' + Math.floor(100 - pct) + '% left · your damage ' + wbNum(S.wb.score, S.wb.old);
@@ -5232,7 +5288,10 @@
     ['store', 'Store', 'healer', '#2f9e63', 'Tonics, oil, draughts'],
     ['portal', 'Rift Gate', 'riftkeeper', '#7c3aed', 'Rift tokens for Legendaries'],
   ];
-  const HOLD_X = i => 36 + i * 72;
+  // v126: NP+ heroes also find Pip's wagon and Gulp in the yard.
+  const HOLD_NP = [['dicer', 'Pip’s wagon', 'dicer', '#c0392b', 'Lucky Crates and Curios'], ['gulp', 'Gulp', 'gulp', '#f5c242', 'Feed the Hoard Mimic']];
+  const holdTents = () => L.npPlus(S) ? HOLD_TENTS.concat(HOLD_NP) : HOLD_TENTS;
+  const HOLD_X = i => { const n = holdTents().length; return n > 5 ? 26 + i * 308 / (n - 1) : 36 + i * 72; };
   function drawHold(cv) {
     const cw = cv.clientWidth || 600, ch = cv.clientHeight || 280, dpr = window.devicePixelRatio || 1, W2 = 360, H2 = Math.round(W2 * ch / cw), k = cw * dpr / W2;
     cv.width = Math.round(W2 * k); cv.height = Math.round(H2 * k); const x = cv.getContext('2d'); x.setTransform(k, 0, 0, k, 0, 0); x.imageSmoothingQuality = 'high';
@@ -5244,8 +5303,16 @@
     g = x.createLinearGradient(0, gy, 0, H2); g.addColorStop(0, '#3a3024'); g.addColorStop(1, '#1a140e'); x.fillStyle = g; x.fillRect(0, gy, W2, H2 - gy);
     const ty = gy + (H2 - gy) * 0.42;
     x.fillStyle = '#5a4a36'; x.beginPath(); x.ellipse(W2 / 2, ty + 20, 160, 12, 0, 0, Math.PI * 2); x.fill();
-    HOLD_TENTS.forEach(([id, n, who, col], i) => {
+    const deco = S.reno || {};
+    if (deco.fount) { const fx = W2 / 2 + 70, fy2 = ty + 30; x.fillStyle = '#5a5a6a'; x.beginPath(); x.ellipse(fx, fy2, 16, 5, 0, 0, Math.PI * 2); x.fill(); x.fillStyle = '#3b82f6'; x.beginPath(); x.ellipse(fx, fy2 - 1, 13, 3.6, 0, 0, Math.PI * 2); x.fill(); x.fillStyle = '#f5c242'; for (let q = 0; q < 7; q++) { x.beginPath(); x.arc(fx - 6 + q * 2, fy2 - 8 - (q % 3) * 3, 1.1, 0, Math.PI * 2); x.fill(); } }
+    if (deco.statue) { const hx = W2 / 2 - 80, s = sprite(L.memberById('you') ? L.memberById('you').cls : 'tank', 0, false); x.fillStyle = '#6a6a76'; x.fillRect(hx - 9, ty + 18, 18, 10); x.save(); x.globalAlpha = 0.9; x.filter = 'grayscale(1) brightness(1.3)'; x.drawImage(s, hx - s.lw * 1.2, ty + 18 - s.lh * 2.4, s.lw * 2.4, s.lh * 2.4); x.restore(); }
+    holdTents().forEach(([id, n, who, col], i) => {
       const tx = HOLD_X(i);
+      if (id === 'dicer' || id === 'gulp') {
+        if (id === 'dicer') { for (let q = 0; q < 6; q++) { x.fillStyle = q % 2 ? '#f5e6c8' : '#c0392b'; x.fillRect(tx - 20 + q * 6.6, ty - 30, 6.8, 26); } x.fillStyle = '#6a2a8a'; x.beginPath(); x.moveTo(tx - 23, ty - 30); x.quadraticCurveTo(tx, ty - 44, tx + 23, ty - 30); x.fill(); x.fillStyle = '#3a2614'; x.beginPath(); x.arc(tx - 13, ty - 3, 4, 0, Math.PI * 2); x.arc(tx + 13, ty - 3, 4, 0, Math.PI * 2); x.fill(); }
+        const s = sprite(who, 0, false), k2 = id === 'gulp' ? 1.6 : 2, sw = s.lw * k2, sh = s.lh * k2; x.save(); x.translate(id === 'gulp' ? tx : tx + 18, 0); x.scale(-1, 1); x.drawImage(s, -sw / 2, ty + 3 - sh, sw, sh); x.restore();
+        return;
+      }
       if (id === 'portal') {
         // a small standing-stone gate outside the tents, swirling violet, the warden beside it
         const pg = x.createRadialGradient(tx, ty - 20, 1, tx, ty - 20, 22); pg.addColorStop(0, '#f5e8ff'); pg.addColorStop(0.4, '#a855f7'); pg.addColorStop(1, 'rgba(76,29,149,0)'); x.fillStyle = pg; x.beginPath(); x.ellipse(tx, ty - 20, 12, 19, 0, 0, Math.PI * 2); x.fill();
@@ -5254,26 +5321,29 @@
         return;
       }
       if (id === 'camp') { x.fillStyle = '#3a2618'; x.fillRect(tx - 10, ty - 2, 20, 3); for (let q = 0; q < 4; q++) flame(x, tx - 6 + q * 4, ty - 2, 10 + (q % 2) * 4, 0); const gg = x.createRadialGradient(tx, ty - 8, 0, tx, ty - 8, 40); gg.addColorStop(0, 'rgba(255,150,60,.4)'); gg.addColorStop(1, 'rgba(255,150,60,0)'); x.fillStyle = gg; x.fillRect(tx - 40, ty - 48, 80, 80); return; }
-      x.fillStyle = col; x.globalAlpha = 0.92; x.beginPath(); x.moveTo(tx - 28, ty); x.lineTo(tx, ty - 44); x.lineTo(tx + 28, ty); x.fill(); x.globalAlpha = 1;
-      x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.moveTo(tx, ty - 44); x.lineTo(tx + 28, ty); x.lineTo(tx + 6, ty); x.fill();
+      const tw2 = holdTents().length > 5 ? 22 : 28;
+      x.fillStyle = col; x.globalAlpha = 0.92; x.beginPath(); x.moveTo(tx - tw2, ty); x.lineTo(tx, ty - 44); x.lineTo(tx + tw2, ty); x.fill(); x.globalAlpha = 1;
+      if (deco.trim) { x.strokeStyle = '#f5c242'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(tx - tw2, ty); x.lineTo(tx, ty - 44); x.lineTo(tx + tw2, ty); x.stroke(); }
+      x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.moveTo(tx, ty - 44); x.lineTo(tx + tw2, ty); x.lineTo(tx + 6, ty); x.fill();
       x.fillStyle = '#1a120a'; x.beginPath(); x.moveTo(tx - 9, ty); x.lineTo(tx, ty - 20); x.lineTo(tx + 9, ty); x.fill();
       x.strokeStyle = '#2a1a0e'; x.lineWidth = 1; x.beginPath(); x.moveTo(tx, ty - 44); x.lineTo(tx, ty - 52); x.stroke(); x.fillStyle = col; x.fillRect(tx, ty - 52, 8, 4);
-      const s = sprite(who, 0, false), sw = s.lw * 2, sh = s.lh * 2; x.save(); x.translate(tx + 24, 0); x.scale(-1, 1); x.drawImage(s, -sw / 2, ty + 3 - sh, sw, sh); x.restore();
+      const s = sprite(who, 0, false), sw = s.lw * 2, sh = s.lh * 2; x.save(); x.translate(tx + tw2 - 4, 0); x.scale(-1, 1); x.drawImage(s, -sw / 2, ty + 3 - sh, sw, sh); x.restore();
     });
+    if (deco.moth) { const mx = W2 / 2 + 40 + Math.sin(Date.now() / 600) * 6, my = ty - 6; x.fillStyle = 'rgba(255,214,140,.35)'; x.beginPath(); x.arc(mx, my, 7, 0, Math.PI * 2); x.fill(); x.fillStyle = '#e8d6a8'; x.beginPath(); x.ellipse(mx - 3, my, 3.4, 2.2, -0.5, 0, Math.PI * 2); x.ellipse(mx + 3, my, 3.4, 2.2, 0.5, 0, Math.PI * 2); x.fill(); x.fillStyle = '#5a3a22'; x.fillRect(mx - 0.6, my - 2, 1.2, 4); }
     const party = S.party.filter(Boolean);
     party.forEach((id, i) => { const m = L.memberById(id); if (!m) return; const s = sprite(m.cls, lookHue(m), false); x.drawImage(s, W2 / 2 - party.length * 9 + i * 18 - 3, ty + 4 - (i % 2) * 3, s.lw * 2, s.lh * 2); });
-    return { ty: ty / H2, xs: HOLD_TENTS.map((_, i) => HOLD_X(i) / W2) };
+    return { ty: ty / H2, xs: holdTents().map((_, i) => HOLD_X(i) / W2) };
   }
   function openHold() {
     modal('<div class="maphead"><div><h2>The Hold</h2><small>Iron Covenant fortress above the tear. Tap a tent to go there. Your dive on floor ' + S.floor + ' waits for you.</small></div><button class="iconbtn" id="hold-x" aria-label="Close">&times;</button></div>' +
-      '<div class="holdview"><canvas id="holdcv"></canvas><div class="holdtents">' + HOLD_TENTS.map(([id, n, , , sub]) => '<button data-hold="' + id + '"><b>' + n + '</b><small>' + sub + '</small></button>').join('') + '</div></div>' +
-      '<div class="row"><button class="btn ghost" id="hold-map">&larr; Map of the Deep</button></div>', md => {
+      '<div class="holdview"><canvas id="holdcv"></canvas><div class="holdtents' + (holdTents().length > 5 ? ' n7' : '') + '">' + holdTents().map(([id, n, , , sub]) => '<button data-hold="' + id + '"><b>' + n + '</b><small>' + sub + '</small></button>').join('') + '</div></div>' +
+      '<div class="row"><button class="btn ghost" id="hold-map">&larr; Map of the Deep</button>' + (L.npPlus(S) ? '<button class="btn ghost" id="hold-works">Hold works</button>' : '') + '</div>', md => {
         md.classList.add('holdsheet');
         const cv = $('holdcv'); requestAnimationFrame(() => drawHold(cv));
-        md.querySelector('#hold-x').onclick = closeModal; md.querySelector('#hold-map').onclick = openMap;
+        md.querySelector('#hold-x').onclick = closeModal; md.querySelector('#hold-map').onclick = openMap; const wk = md.querySelector('#hold-works'); if (wk) wk.onclick = openWorks;
         md.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => {
           const k = b.dataset.hold; closeModal();
-          if (k === 'camp') { if (S.floor > L.CAMP_FLOOR) campModal(); } else if (k === 'ench') enchanterModal(); else if (k === 'arm') armorerModal(); else if (k === 'portal') visitEnch('portal'); else openStore();
+          if (k === 'camp') { if (S.floor > L.CAMP_FLOOR) campModal(); } else if (k === 'ench') enchanterModal(); else if (k === 'arm') armorerModal(); else if (k === 'portal') visitEnch('portal'); else if (k === 'dicer' || k === 'gulp') { DW.done = null; if (k === 'gulp') loadGulp(); visitEnch(k); } else openStore();
         });
       });
   }
@@ -5797,6 +5867,11 @@
         'Per tier: monsters <b>+25%</b> health and damage, gear drops at <b>+10%</b> item level, and you keep <b>+2%</b> damage, health and gold for good.',
         '<b>Resets</b>: gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story. <b>Kept</b>: everything bought with Sigils, your profile, journal lore, feats, Ember Ring rating and Rift tokens.',
         'Trading is per tier: you see and buy only your tier’s market, mail only goes to heroes on your tier, trading opens 24 hours after you start, and gear from an earlier tier can not be worn. Your old listings, offers and unclaimed mail are cleared when you start.']],
+      ['NP+ gold sinks', 'i:coin', 'From NP+1: Pip, Gulp and the Golden Loot Goblin, plus Reforge, the Dust Press and Hold works.', [
+        '<b>Pip the Dicer</b> sells Lucky Crates for gold (30 minutes, 3 hours or 12 hours of your income). Coffers and Caskets can hold one of <b>8 Curios</b>; every 10th Casket without one is sure to have one.',
+        '<b>Gulp the Hoard Mimic</b> eats morsels of gold (10 minutes of income, 12 a day). The fed counter is shared by all NP+ heroes.',
+        'Each morsel makes the <b>Golden Loot Goblin</b> slightly more likely. When it appears you have <b>30 minutes</b> to beat it in 2-minute assaults, or it escapes. Bring a Rogue for its dashes. The reward is the <b>Gilded</b> ring set and Gilded shards.',
+        '<b>Reforge</b> (Armorer), the <b>Dust Press</b> (Enchanter) and <b>Hold works</b> (Hold view) also take gold. The NP+ market keeps a 5% fee on sales.']],
       ['Story, journal and map', 'i:book', 'The story unfolds as you descend.', [
         'Replay scenes in the <b>Journal</b>.',
         'The <b>Map of the Deep</b> shows every region and lets you travel to floors you have reached. Each region’s dossier lists its <b>possible loot</b> with your real odds per kill, after your drop bonuses.']],
@@ -5945,6 +6020,15 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 126, date: 'November 25, 2026', title: 'NP+ gold sinks: Pip, Gulp and the Golden Loot Goblin', items: [
+      'New for New Playthrough heroes (NP+1 and up). Everything below is priced in hours of your own gold income, so it stays worth thinking about at any depth.',
+      'Pip the Dicer (John\u2019s idea) sets up his wagon outside the Hold. Buy a Lucky Crate with gold: a Pouch (30 minutes of income), a Coffer (3 hours) or a Casket (12 hours). Each crate holds a piece of gear, with better odds in bigger crates, and Coffers and Caskets can also hold one of 8 Curios, small trinkets with odd little perks. Every 10th Casket without a Curio is sure to have one. Crates take gold only, never Sigils.',
+      'Gulp the Hoard Mimic (John\u2019s idea) lives in the yard and is always hungry. Feed it morsels of gold (10 minutes of income each, 12 a day) and watch the fed counter climb for everyone on NP+. Now and then it burps something back up.',
+      'Every morsel fed by anyone makes the Golden Loot Goblin slightly more likely to appear. It is very rare. When it shows up, every NP+ hero gets 30 minutes to beat it down together in 2-minute assaults, like the world boss. It dashes about, so bring a Rogue to keep up. If time runs out it escapes with its loot.',
+      'Beat it and everyone who fought shares the Golden Goblin\u2019s Hoard: 5 Gilded rings with their own set bonus, plus Gilded shards toward the ring you are missing. Top damage and the most morsels fed improve your odds. Curios and Hold works carry over to your next tier, and Pip hands back any Curio you no longer carry.',
+      'Also for NP+: Reforge at the Armorer (reroll an item\u2019s enchantments, cost doubles each time, up to 6 times), the Dust Press at the Enchanter (turn gold into Dust, up to 200 a day), and Hold works: 4 renovations with a small perk each and 4 decorations just for looks.',
+      'The NP+ trading market now keeps a 5% fee on each sale.',
+    ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Fixed: past about 97 levels of the Moth-wing Charm every fight turned into a Treasure Chest, so some heroes got stuck opening chests at the bottom of Act One. The charm now tops out at +20% (treasure chests at most 25% of fights), and re-beating the Lampmother no longer counts as a first clear for relic finds.',
       'Nine new feats for the long haul, each worth the usual +1% damage and healing: Lone Lantern (defeat the Lampmother with only your own hero in the party), Masterwork (+10 gear in every open slot on your hero), Forged Company (all five heroes in +10 gear), Ash and Ember (rekindle 5 times), The Undying Flame (rekindle 25 times), Jailbreaker (defeat 500 guardians), Reliquary (find every relic), Again, and Deeper (reach NP+3) and Lantern Eternal (reach NP+10).',
@@ -6625,7 +6709,7 @@
     const row = (l, act) => '<div class="trow">' + shTile(l.k) + '<div class="tinfo"><b>' + shName(l.k, l.n) + '</b><small>' + (act === 'buy' ? 'From ' + esc(l.name) + ' &middot; ' : '') + fmt(Math.round(l.price / l.n)) + ' gold each</small></div><div class="tact"><span class="price">' + icon('coin') + fmt(l.price) + '</span>' +
       (act === 'buy' ? '<button class="btn small" data-hbuy="' + l.id + '"' + (l.price > S.gold ? ' disabled title="Not enough gold"' : '') + '>Buy</button>' : '<button class="btn ghost small" data-hcancel="' + l.id + '">Take down</button>') + '</div></div>';
     h += '<h3 class="sub">For sale</h3>' + (others.length ? '<div class="tlist">' + others.map(l => row(l, 'buy')).join('') + '</div>' : '<div class="mkempty">' + icon('relic') + '<b>No shards for sale right now</b><small>Check back after the next world boss.</small></div>');
-    h += '<h3 class="sub">Sell shards</h3><div class="sigform"><label>Boss<select id="h-k">' + L.WB_SETS.map((b, k) => '<option value="' + k + '">' + b.word + ' (' + (have[k] || 0) + ')</option>').join('') + '</select></label><label>Shards<input id="h-n" type="number" min="1" max="99" step="1" value="1"></label><label>Total price in gold<input id="h-p" type="number" min="1" step="1"></label><button class="btn" id="h-list">List</button></div>' +
+    h += '<h3 class="sub">Sell shards</h3><div class="sigform"><label>Boss<select id="h-k">' + L.WB_SETS.slice(0, L.WB_BOSSES).map((b, k) => '<option value="' + k + '">' + b.word + ' (' + (have[k] || 0) + ')</option>').join('') + '</select></label><label>Shards<input id="h-n" type="number" min="1" max="99" step="1" value="1"></label><label>Total price in gold<input id="h-p" type="number" min="1" step="1"></label><button class="btn" id="h-list">List</button></div>' +
       '<p class="note small">Your shards are held while they are listed. When they sell, the gold arrives in your mailbox.</p>';
     if (x.mine.length) h += '<h3 class="sub">Your listings</h3><div class="tlist">' + x.mine.map(l => row(l, 'mine')).join('') + '</div>';
     return h + '</div>';
@@ -6840,7 +6924,7 @@
     const it = L.itemOf(S, uid); if (!it) return;
     const sug = Math.max(10, Math.round(L.salvageValue(it) * 3));
     modal('<div class="itemhead r-' + it.rar + '">' + tradeTile(it) + '<div><h2>Sell ' + tradeName(it) + '</h2><small>' + tradeSub(it) + '</small></div></div>' +
-      '<p>Set a price in gold. Other players can buy it for a week. If nobody does, take it down from the market to get it back.</p>' +
+      '<p>Set a price in gold. Other players can buy it for a week. If nobody does, take it down from the market to get it back.' + (L.npPlus(S) ? ' On the NP+ market a 5% fee is taken from the gold when it sells.' : '') + '</p>' +
       '<label class="field">Price<input id="t-price" type="number" min="1" step="1" inputmode="numeric" value="' + sug + '"></label><small class="note">Salvage value is ' + fmt(L.salvageValue(it)) + ' gold.</small>' +
       (L.wearer(S, uid) ? '<p class="note">' + esc(L.memberById(L.wearer(S, uid)).name) + ' will take it off.</p>' : '') +
       '<div class="row"><button class="btn" id="t-sell">List for sale</button><button class="btn ghost" id="t-cancel">Cancel</button></div>', md => {
@@ -7042,6 +7126,143 @@
   setTimeout(() => loadBoss().then(paintBoss), 3000);
   setInterval(() => { if (!document.hidden) loadBoss().then(paintBoss); }, 120000);
   setInterval(paintBoss, 1000);
+  // ---------- NP+ gold sinks (v126): Pip the Dicer's wagon and Gulp the Hoard Mimic ----------
+  // Both are visited shops (S.shopK 'dicer' / 'gulp') that only NP+ heroes see. Pip sells Lucky Crates for gold and
+  // keeps the Curio shelf; Gulp eats morsels of gold for the whole NP+ community (server gulp.js) and, very rarely,
+  // the Golden Loot Goblin bursts out of it (server goblin.js), fought in 2-minute assaults like a world boss.
+  const DW = { done: null };
+  const hrs = h => h < 1 ? Math.round(h * 60) + ' minutes' : h + (h === 1 ? ' hour' : ' hours');
+  const rarName = r => r === 'rset' ? 'Region set' : (L.RARITY.find(x => x.id === r) || { name: r }).name;
+  function dicerPanelHtml() {
+    const gold = '<span class="epdust">' + icon('coin') + '<b>' + fmt(S.gold) + '</b> gold</span>', own = L.curiosOf(S), n = L.curioCount(S), pip = S.pip || { n: 0 };
+    const head = '<div class="ephead"><b>Pip’s Lucky Crates</b>' + gold + '</div>' + (DW.done ? '<div class="ewdone">' + icon('star') + '<span>' + DW.done + '</span></div>' : '');
+    const crate = c => { const cost = L.crateCost(S, c.id), odds = c.odds.map(([k, p]) => rarName(k) + ' ' + Math.round(p * 1000) / 10 + '%').join(' · ');
+      return '<div class="rgrow"><div><b>' + c.name + '</b><small>' + hrs(c.h) + ' of your income · ' + odds + (c.cu ? ' · Curio ' + Math.round(c.cu * 1000) / 10 + '%' : '') + '</small></div><button class="btn small" data-crate="' + c.id + '"' + (S.gold < cost ? ' disabled title="Not enough gold"' : '') + '>' + icon('coin') + fmt(cost) + '</button></div>'; };
+    const shelf = L.CURIOS.map(q => { const has = own[q.id], held = has && L.curioHeld(S, q.id);
+      return '<div class="cuitem' + (has ? ' own' : '') + '"><b>' + (has ? esc(q.name) : '???') + '</b><small>' + (has ? esc(q.fx) : 'Not found yet') + '</small>' + (has && !held ? '<button class="btn ghost small" data-curetake="' + q.id + '">Take it again</button>' : '') + '</div>'; }).join('');
+    return head + '<h3 class="ewq">“Step right up! Which crate calls to you?”</h3>' +
+      '<p class="ewhint">Every crate holds one piece of gear at your depth, never Common. Bigger crates hold rarer things, and only Pip has Curios: eight odd trinkets with powers of their own.</p>' +
+      '<div class="rglist">' + L.CRATES.map(crate).join('') + '</div>' +
+      '<h3 class="sub">The Curio shelf (' + n + ' of ' + L.CURIOS.length + ')</h3><p class="note small">Each Curio you own adds +' + Math.round(L.CURIO_PER * 100) + '% party damage, +' + Math.round((L.CURIOS.length * L.CURIO_PER + L.CURIO_ALL) * 100) + '% with all ' + L.CURIOS.length + '. You never find one you already own, and a Gilded Casket brings one at least every ' + L.CURIO_PITY + ' (' + (pip.n || 0) + ' since your last). Curios stay yours through New Playthroughs: take them again here for free.</p>' +
+      '<div class="cushelf">' + shelf + '</div>' +
+      '<p class="note small">Crates cost gold only, never Sigils. Prices follow how much gold you earn.</p>';
+  }
+  $('enchpanel') && $('enchpanel').addEventListener('click', e => {
+    if (shopKind() !== 'dicer') return;
+    const t = e.target.closest('[data-crate],[data-curetake]'); if (!t || t.disabled) return;
+    if (t.dataset.curetake) { const it = L.retakeCurio(S, t.dataset.curetake); if (it) { save(); updateGear(true); shopBurst(); DW.done = esc(L.gearName(it)) + ' is back in your bag.'; paintEnchPanel(true); } return; }
+    const was = S.gold, r = L.openCrate(S, t.dataset.crate); if (!r) return;
+    save(); try { pushCloud(true); } catch (x) {} updateGear(true); shopBurst();
+    const c = L.crateById(t.dataset.crate);
+    craftLog('coin', 'Opened a ' + c.name + ' at Pip’s wagon', L.gearName(r.item) + (r.curio ? ' and the Curio ' + L.gearName(r.curio) : '') + '.', [craftItem(r.item)].concat(r.curio ? [craftItem(r.curio)] : []), [craftCost(r.cost, 'gold')]);
+    if (r.curio) { sfx.boss && sfx.boss(); toast('crown', 'CURIO: ' + L.gearName(r.curio), L.curioById(r.curio.cu).fx + '. It’s in your bag.', 'feat'); } else sfx.relic();
+    DW.done = 'The ' + c.name + ' held <b>' + esc(L.gearName(r.item)) + '</b> (' + rarName(r.item.rset != null ? 'rset' : r.item.rar) + ')' + (r.curio ? ' and the Curio <b>' + esc(L.gearName(r.curio)) + '</b>!' : '.') + ' -' + fmt(was - S.gold) + ' gold.';
+    paintEnchPanel(true);
+  });
+  // Gulp's state from the server: { fed, m, mood, top, mine: { m, today }, gob, stir, prev }.
+  const gp = { st: null, at: 0, busy: false, err: '', seen: '' };
+  const GULP_MOODS = [[0, 'Peckish'], [100, 'Chomping'], [250, 'Glittering'], [400, 'Bulging'], [600, 'Shaking']];
+  const gulpMood = m => GULP_MOODS.filter(x => m >= x[0]).pop()[1];
+  const gobLive = () => { const g = gp.st && gp.st.gob; return g && Date.now() < g.until ? g : null; };
+  async function loadGulp() {
+    if (!CL || !signedIn() || !L.npPlus(S)) { gp.st = null; return; }
+    try { const r = await api('GET', null, '/gulp'); if (r) { gp.st = r; gp.at = Date.now(); gp.err = ''; } else gp.err = 'asleep'; } catch (e) { gp.err = 'asleep'; }
+    const g = gobLive(); if (g && gp.seen !== g.id) { gp.seen = g.id; sfx.boss && sfx.boss(); toast('crown', 'The Golden Loot Goblin burst out of Gulp!', 'It runs off in ' + wbDur(g.until - Date.now()) + '. Join the hunt from the gold bar above the fight.', 'feat'); }
+    paintGob(); if (shopKind() === 'gulp' && L.visiting(S)) paintEnchPanel();
+    const p = gp.st && gp.st.prev; if (p && p.me && p.me.score > 0 && !(S.gulpLoot || {})[p.id]) claimGoblin(p.id);
+  }
+  function gulpPanelHtml() {
+    const st = gp.st, gold = '<span class="epdust">' + icon('coin') + '<b>' + fmt(S.gold) + '</b> gold</span>', mc = L.morselCost(S);
+    const head = '<div class="ephead"><b>Gulp the Hoard Mimic</b>' + gold + '</div>' + (DW.done ? '<div class="ewdone">' + icon('star') + '<span>' + DW.done + '</span></div>' : '');
+    if (!st) return head + '<h3 class="ewq">Gulp is fast asleep.</h3><p class="ewhint">' + (!signedIn() ? 'Sign in to feed Gulp. Every NP+ hero feeds the same mimic.' : gp.err ? 'Gulp is snoring. He wakes up once the Hold’s new server piece is live. Check back soon.' : 'Waking him up…') + '</p>';
+    const mine = st.mine || { m: 0, today: 0 }, left = Math.max(0, L.GULP_DAY - (mine.today || 0)), bonus = Math.min(30, Math.round(2 * (mine.m || 0) * (L.fxOnW(S, 'tooth') ? 1.5 : 1)));
+    const btn = n => '<button class="btn small" data-feed="' + n + '"' + (S.gold < mc * n || gp.busy ? ' disabled' : '') + '>Feed ' + n + ' (' + fmt(mc * n) + ' gold)</button>';
+    const g = gobLive();
+    return head + '<div class="gulpsign"><div><small>Gold fed since the last goblin</small><b>' + fmt(st.fed || 0) + '</b></div><div><small>Morsels</small><b>' + fmt(st.m || 0) + '</b></div><div><small>Mood</small><b>' + gulpMood(st.m || 0) + '</b></div></div>' +
+      (g ? '<p class="shopperk gob">' + icon('crown') + '<span><b>The Golden Loot Goblin is loose!</b> It runs off in ' + wbDur(g.until - Date.now()) + '. <button class="linkbtn" data-gobgo="1">Join the hunt</button></span></p>' : st.stir ? '<p class="shopperk gob">' + icon('star') + '<span>Something is stirring inside Gulp… it glows gold.</span></p>' : '') +
+      '<h3 class="ewq">Feed Gulp?</h3><p class="ewhint">One morsel is ' + hrs(L.MORSEL_H) + ' of your income (' + fmt(mc) + ' gold). Every NP+ hero feeds the same Gulp, and every morsel fed makes the Golden Loot Goblin a little likelier to burst out. Now and then Gulp coughs something up.</p>' +
+      '<div class="row gulpbtns">' + [1, 3, 12].map(btn).join('') + '</div>' +
+      '<p class="note small">Today: ' + (mine.today || 0) + ' morsels fed, ' + left + ' more count toward waking the goblin (' + L.GULP_DAY + ' a day). Your goblin loot bonus: <b>+' + bonus + '%</b> ring chance from ' + (mine.m || 0) + ' morsels since the last goblin (up to +30%).</p>' +
+      (st.top && st.top.length ? '<h3 class="sub">Gulp’s favourite feeders</h3><ol class="wbtop">' + st.top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + fmt(t.m) + ' morsels</b></li>').join('') + '</ol>' : '') +
+      '<p class="note small">The goblin wears the Golden Goblin’s Hoard: ' + L.GG_RINGS.map(x => esc(x.name)).join(', ') + '. It runs off ' + L.GOB_TIME / 60 + ' minutes after it appears, so hunt it together.</p>';
+  }
+  $('enchpanel') && $('enchpanel').addEventListener('click', async e => {
+    if (shopKind() !== 'gulp') return;
+    const t = e.target.closest('[data-feed],[data-gobgo]'); if (!t || t.disabled) return;
+    if (t.dataset.gobgo) { leaveEnch(); return joinGoblin(); }
+    const n = +t.dataset.feed, cost = L.morselCost(S) * n; if (gp.busy || S.gold < cost) return;
+    gp.busy = true; paintEnchPanel(true);
+    try {
+      const r = await api('POST', { n, g: Math.round(cost), t: L.fxOnW(S, 'tooth') ? 1 : 0 }, '/gulp/feed'); if (!r || !r.ok) throw 0;
+      const f = L.feedGulp(S, n); save(); try { pushCloud(true); } catch (x) {} sfx.coin(); shopBurst();
+      if (gp.st) Object.assign(gp.st, { fed: r.fed, m: r.m, mine: r.mine, stir: r.stir, gob: r.gob || gp.st.gob });
+      DW.done = 'Gulp gobbled ' + n + (n === 1 ? ' morsel' : ' morsels') + ' (' + fmt(f.cost) + ' gold). ' + (f.burps.length ? 'Burp! Out came ' + f.burps.map(esc).join(', ') + '.' : 'Om nom nom.');
+      if (f.burps.length) toast('star', 'Gulp coughed something up', f.burps.join(', ') + '.', 'feat');
+      if (r.gob) loadGulp();
+    } catch (x) { toast('lock', 'Gulp didn’t eat that', 'The server could not take the morsels. Your gold is untouched. Try again in a moment.', 'warn'); }
+    gp.busy = false; paintEnchPanel(true); paintCamp();
+  });
+  // The goblin bar above the fight, the assault and the claim.
+  function paintGob() {
+    const el = $('gobbar'); if (!el) return; const g = L.npPlus(S) && gobLive(), now = Date.now(), inA = S.wb && S.wb.gob && S.wb.until > now;
+    let h = '';
+    if (inA) h = icon('crown') + '<span><b>Hunting the Golden Loot Goblin</b> · ' + wbDur(S.wb.until - now) + ' left · your damage <b>' + fmt(Math.floor(S.wb.score)) + '</b></span>';
+    else if (g) { const ready = g.me && g.me.last ? Math.max(0, g.me.last + L.GOB_COOL * 1000 - now) : 0, pct = Math.min(100, Math.floor((g.total || 0) / g.hp * 100));
+      h = icon('crown') + '<i class="cb">' + pct + '%</i><span><b>The Golden Loot Goblin is loose!</b> · ' + pct + '% hunted · runs off in ' + wbDur(g.until - now) + '</span>' + (ready > 0 ? '<em class="wait">Next assault ' + wbDur(ready) + '</em>' : '<em>Hunt it</em>'); }
+    if (h !== el.dataset.h) { el.dataset.h = h; el.innerHTML = h; el.hidden = !h; el.classList.toggle('on', !!inA); }
+  }
+  function joinGoblin() {
+    const g = gobLive(), now = Date.now(); if (!g || !L.npPlus(S)) return;
+    const ready = g.me && g.me.last ? g.me.last + L.GOB_COOL * 1000 - now : 0;
+    if (ready > 0) { toast('crown', 'Catch your breath', 'Your next assault on the goblin is ready in ' + wbDur(ready) + '.', ''); return; }
+    if (L.resting(S, now)) { toast('flame', 'Your party is resting', 'Head back into the deep first, then hunt the goblin.', 'warn'); return; }
+    if (L.visiting(S)) leaveEnch();
+    if (!L.startGoblinAssault(S, now, g)) return;
+    sfx.boss(); toast('crown', 'Hunt the goblin!', 'Two minutes against the Golden Loot Goblin. Every ' + L.GOB_DASH + ' seconds it dashes away: a Rogue in your party keeps you on it.', 'feat');
+    updateStage && updateStage(); paintGob();
+  }
+  async function sendGoblin(id, score, fell, ck, iv) {
+    if (!(score > 0)) { toast('crown', 'The goblin got away from you', fell ? 'Your party fell before landing a blow.' : 'No damage this time.', ''); return; }
+    try {
+      const r = await api('POST', { id, score, ck: ck || 0, iv: iv || [] }, '/goblin/hit');
+      const g = gp.st && gp.st.gob; if (g && r) { g.total = r.total; g.me = { last: Date.now(), score: ((g.me && g.me.score) || 0) + r.add }; }
+      toast('crown', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + fmt(score) + ' damage to the Golden Loot Goblin.' + (r && r.total >= (g ? g.hp : Infinity) ? ' It’s cornered!' : ''), 'feat');
+    } catch (e) { toast('lock', 'The assault did not count', 'The server could not record it. Try again in a moment.', 'warn'); }
+    loadGulp();
+  }
+  async function claimGoblin(id) {
+    if (gp.busy) return; gp.busy = true; S.gulpLoot = S.gulpLoot || {};
+    try {
+      const r = await api('POST', { id, t: L.fxOnW(S, 'tooth') ? 1 : 0 }, '/goblin/claim');
+      if (r && r.ok) {
+        S.gulpLoot[id] = 1; const o = L.lootGoblin(S, r); if (typeof prof !== 'undefined' && prof && r.bal != null) prof.bal = r.bal;
+        save(); try { pushCloud(true); } catch (x) {} updateGear(true);
+        const sh = r.sh ? r.sh + ' Gilded shard' + (r.sh === 1 ? '' : 's') : 'no shards';
+        if (!r.killed) toast('crown', 'The Golden Loot Goblin escaped', 'It ran back into Gulp with its hoard. You kept ' + sh + ' for your assaults. Gulp is still hungry, so the next one comes sooner.', '');
+        else if (o.item) { sfx.boss && sfx.boss(); toast('crown', 'GILDED: ' + L.gearName(o.item), L.GG_RINGS[o.item.gr].fx + '. Plus ' + sh + (r.sig ? ' and ' + r.sig + ' Sigils' : '') + '. You ranked ' + r.rank + ' of ' + r.n + '.', 'feat'); }
+        else toast('crown', 'The Golden Loot Goblin is down!', (o.dup ? 'You already own every ring, so a ring became ' + o.dup + ' Gilded shards. ' : 'No ring this time (' + Math.round((r.p || 0) * 100) + '% roll). ') + 'You got ' + sh + (r.sig ? ' and ' + r.sig + ' Sigils' : '') + '.', 'feat');
+      }
+    } catch (e) { /* the claim retries on the next poll */ }
+    gp.busy = false;
+  }
+  $('gobbar') && $('gobbar').addEventListener('click', () => { if (S.wb && S.wb.gob) return; if (gobLive()) joinGoblin(); else visitEnch('gulp'); });
+  setTimeout(loadGulp, 5000);
+  setInterval(() => { if (!document.hidden && L.npPlus(S)) loadGulp(); }, 60000);
+  setInterval(paintGob, 1000);
+  // Hold renovations and decorations (NP+): one-time gold projects, opened from the Hold view.
+  function openWorks() {
+    const row = (x, perk) => { const has = S.reno && S.reno[x.id], cost = L.renoCost(S, x.id);
+      return '<div class="rgrow"><div><b>' + esc(x.name) + '</b><small>' + esc(x.line) + (perk ? ' · <b>' + esc(x.fx) + '</b>' : ' · looks only') + ' · ' + hrs(x.h) + ' of your income</small></div>' +
+        (has ? '<span class="pill ok">Built</span>' : '<button class="btn small" data-reno="' + x.id + '"' + (S.gold < cost ? ' disabled title="Not enough gold"' : '') + '>' + icon('coin') + fmt(cost) + '</button>') + '</div>'; };
+    modal('<div class="maphead"><div><h2>Hold works</h2><small>NP+ projects for the Hold. Built once, kept through every New Playthrough.</small></div><button class="iconbtn" id="wk-x" aria-label="Close">&times;</button></div>' +
+      '<h3 class="sub">Renovations</h3><div class="rglist">' + L.RENOS.map(x => row(x, true)).join('') + '</div>' +
+      '<h3 class="sub">Decorations</h3><div class="rglist">' + L.DECOS.map(x => row(x, false)).join('') + '</div>' +
+      '<p class="note small">Prices follow how much gold you earn.</p><div class="row"><button class="btn ghost" id="wk-hold">&larr; The Hold</button></div>', md => {
+        md.querySelector('#wk-x').onclick = closeModal; md.querySelector('#wk-hold').onclick = openHold;
+        md.querySelectorAll('[data-reno]').forEach(b => b.onclick = () => { const id = b.dataset.reno, x = L.RENOS.find(q => q.id === id) || L.DECOS.find(q => q.id === id), c = L.buildReno(S, id); if (!c) return;
+          save(); try { pushCloud(true); } catch (e) {} sfx.relic(); toast('star', x.name + ' is built', (x.fx ? x.fx + '. ' : '') + '-' + fmt(c) + ' gold.', 'feat'); updatePanel(true); openWorks(); });
+      });
+  }
   // ---------- The Ember Ring (PvP) ----------
   // Only the player's own hero fights here, one on one, against the saved build of another player's hero.
   // The server fights the duel (infra/ring/index.js); this part sends our build, shows challengers and class

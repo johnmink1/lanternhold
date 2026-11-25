@@ -347,7 +347,7 @@ Resources:
       Code:
         ZipFile: |
           // built from infra/lambda/market.js by infra/build.py
-          const{DynamoDBClient:q,GetItemCommand:I,QueryCommand:B,TransactWriteItemsCommand:O}=require("@aws-sdk/client-dynamodb"),E=require("crypto"),b=new q({}),f=process.env.TABLE,D=process.env.HEROES,h=["tank","healer","rogue","mage","necro"],J="main off head neck chest robe legs feet ring".split(" "),L=["common","fine","rare","epic","set"],j="forage smith herb armor prospect lamp".split(" "),M={vigil:"tank",grace:"healer",night:"rogue",regalia:"mage",crown:"necro"},P=/(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard)/i,v=7*864e5,$=864e5,r=(e,i)=>({statusCode:e,body:JSON.stringify(i)}),p={error:1},H=e=>E.createHash("sha256").update("lh:"+e).digest("hex").slice(0,16),t=e=>({S:String(e)});function R(e){if(!e||!h.includes(e.cls)||!J.includes(e.slot)||!L.includes(e.rar))return null;const i=e.set||"",s=e.jset||"",a=e.aff||0;if(i?M[i]!==e.cls||e.rar!=="set":s?!j.includes(s)||e.rar!=="set":e.rar==="set")return null;const m=Math.floor(+e.ilvl),l=Math.floor(+e.up||0);return m>=1&&m<=1e6&&l>=0&&l<=10?{cls:e.cls,slot:e.slot,rar:e.rar,set:i||void 0,jset:s||void 0,aff:j.includes(a.j)&&a.v>0&&a.v<=.5?{j:a.j,v:+a.v}:void 0,en:/^([a-l][1-9]){0,4}$/.test(e.en)?e.en:void 0,ty:/^\w{3,11}$/.test(e.ty)?e.ty:void 0,t:e.t>=1&&e.t<=10?e.t|0:void 0,ilvl:m,up:l}:null}const z=e=>/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(e)&&!P.test(e.replace(/[^a-z]/gi,"")),Q=e=>(e=Math.floor(+e),e>=1&&e<1e60?e:0),A=()=>Date.now().toString(36).padStart(9,"0")+E.randomBytes(3).toString("hex"),w=(e,i)=>b.send(new B({TableName:f,KeyConditionExpression:"pk = :p",ExpressionAttributeValues:{":p":t(e)},...i})),N=e=>({id:e.sk.S,cls:e.cls.S,seller:e.seller.S,name:e.name.S,item:JSON.parse(e.item.S),price:+e.price.S,at:+e.at.N});exports.handler=async e=>{const i=e.requestContext.authorizer&&e.requestContext.authorizer.jwt&&e.requestContext.authorizer.jwt.claims;if(!i||!i.sub)return r(401,p);const s=H(i.sub),a=e.routeKey.split("/").pop(),m=e.queryStringParameters||{},l=Date.now(),T={error:"name"};let c={};if(e.body)try{c=JSON.parse(e.isBase64Encoded?Buffer.from(e.body,"base64").toString():e.body)}catch{return r(400,p)}const y=(await b.send(new I({TableName:D,Key:{pid:t(s)}}))).Item||{},S=y.np?+y.np.N:0,K=y.npAt&&+y.npAt.N>l-$,k=n=>"mkt#"+n+(S?"#"+S:"");if(K&&(a==="list"||a==="buy"))return r(403,{error:"lock"});if(a==="market"){if(m.mine){const d=await w("sell#"+s);return r(200,{me:s,listings:(d.Items||[]).map(N)})}if(!h.includes(m.cls))return r(400,p);const n=await w(k(m.cls),{ScanIndexForward:!1,Limit:80}),u=l-v;return r(200,{me:s,listings:(n.Items||[]).map(N).filter(d=>d.at>u)})}if(a==="list"){const n=R(c.item),u=Q(c.price);if(!n||!u||(n.t|0)<S)return r(400,p);if(!z(String(c.name||"")))return r(400,T);if((await w("sell#"+s,{Select:"COUNT"})).Count>=25)return r(400,{error:"full"});const o=A(),g={cls:t(n.cls),seller:t(s),name:t(c.name),item:t(JSON.stringify(n)),price:t(u),at:{N:""+l}};return await b.send(new O({TransactItems:[{Put:{TableName:f,Item:Object.assign({pk:t(k(n.cls)),sk:t(o)},g)}},{Put:{TableName:f,Item:Object.assign({pk:t("sell#"+s),sk:t(o)},g)}}]})),r(200,{ok:!0,id:o})}if(a==="buy"||a==="cancel"){const n=String(c.id||""),u=String(c.cls||"");if(!/^[0-9a-z]{15}$/.test(n)||!h.includes(u))return r(400,p);const d=await b.send(new I({TableName:f,Key:{pk:t(k(u)),sk:t(n)}}));if(!d.Item)return r(404,{error:"gone"});const o=N(d.Item),g=a==="buy";if(g?o.seller===s||o.at<l-v:o.seller!==s)return r(403,p);if(g&&!z(String(c.name||"")))return r(400,T);const C=[{Delete:{TableName:f,Key:{pk:t(k(u)),sk:t(n)},ConditionExpression:"attribute_exists(sk)"}},{Delete:{TableName:f,Key:{pk:t("sell#"+o.seller),sk:t(n)}}}];g&&C.push({Put:{TableName:f,Item:{pk:t("inbox#"+o.seller),sk:t(A()),type:t("sale"),from:t(s),fromName:t(c.name),item:t(JSON.stringify(o.item)),gold:t(o.price),at:{N:""+l}}}});try{await b.send(new O({TransactItems:C}))}catch(x){if(x.name==="TransactionCanceledException")return r(404,{error:"gone"});throw x}return r(200,{ok:!0,item:o.item,price:o.price})}return r(404,p)};
+          const{DynamoDBClient:q,GetItemCommand:I,QueryCommand:B,TransactWriteItemsCommand:O}=require("@aws-sdk/client-dynamodb"),E=require("crypto"),b=new q({}),f=process.env.TABLE,D=process.env.HEROES,S=["tank","healer","rogue","mage","necro"],J="main off head neck chest robe legs feet ring".split(" "),L=["common","fine","rare","epic","set"],j="forage smith herb armor prospect lamp".split(" "),M={vigil:"tank",grace:"healer",night:"rogue",regalia:"mage",crown:"necro"},P=/(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard)/i,v=7*864e5,$=864e5,r=(e,i)=>({statusCode:e,body:JSON.stringify(i)}),p={error:1},H=e=>E.createHash("sha256").update("lh:"+e).digest("hex").slice(0,16),t=e=>({S:String(e)});function R(e){if(!e||!S.includes(e.cls)||!J.includes(e.slot)||!L.includes(e.rar))return null;const i=e.set||"",s=e.jset||"",o=e.aff||0;if(i?M[i]!==e.cls||e.rar!=="set":s?!j.includes(s)||e.rar!=="set":e.rar==="set")return null;const m=Math.floor(+e.ilvl),l=Math.floor(+e.up||0);return m>=1&&m<=1e6&&l>=0&&l<=10?{cls:e.cls,slot:e.slot,rar:e.rar,set:i||void 0,jset:s||void 0,aff:j.includes(o.j)&&o.v>0&&o.v<=.5?{j:o.j,v:+o.v}:void 0,en:/^([a-l][1-9]){0,4}$/.test(e.en)?e.en:void 0,ty:/^\w{3,11}$/.test(e.ty)?e.ty:void 0,t:e.t>=1&&e.t<=10?e.t|0:void 0,ilvl:m,up:l}:null}const z=e=>/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(e)&&!P.test(e.replace(/[^a-z]/gi,"")),Q=e=>(e=Math.floor(+e),e>=1&&e<1e60?e:0),A=()=>Date.now().toString(36).padStart(9,"0")+E.randomBytes(3).toString("hex"),w=(e,i)=>b.send(new B({TableName:f,KeyConditionExpression:"pk = :p",ExpressionAttributeValues:{":p":t(e)},...i})),N=e=>({id:e.sk.S,cls:e.cls.S,seller:e.seller.S,name:e.name.S,item:JSON.parse(e.item.S),price:+e.price.S,at:+e.at.N});exports.handler=async e=>{const i=e.requestContext.authorizer&&e.requestContext.authorizer.jwt&&e.requestContext.authorizer.jwt.claims;if(!i||!i.sub)return r(401,p);const s=H(i.sub),o=e.routeKey.split("/").pop(),m=e.queryStringParameters||{},l=Date.now(),T={error:"name"};let c={};if(e.body)try{c=JSON.parse(e.isBase64Encoded?Buffer.from(e.body,"base64").toString():e.body)}catch{return r(400,p)}const y=(await b.send(new I({TableName:D,Key:{pid:t(s)}}))).Item||{},h=y.np?+y.np.N:0,K=y.npAt&&+y.npAt.N>l-$,k=n=>"mkt#"+n+(h?"#"+h:"");if(K&&(o==="list"||o==="buy"))return r(403,{error:"lock"});if(o==="market"){if(m.mine){const d=await w("sell#"+s);return r(200,{me:s,listings:(d.Items||[]).map(N)})}if(!S.includes(m.cls))return r(400,p);const n=await w(k(m.cls),{ScanIndexForward:!1,Limit:80}),u=l-v;return r(200,{me:s,listings:(n.Items||[]).map(N).filter(d=>d.at>u)})}if(o==="list"){const n=R(c.item),u=Q(c.price);if(!n||!u||(n.t|0)<h)return r(400,p);if(!z(String(c.name||"")))return r(400,T);if((await w("sell#"+s,{Select:"COUNT"})).Count>=25)return r(400,{error:"full"});const a=A(),g={cls:t(n.cls),seller:t(s),name:t(c.name),item:t(JSON.stringify(n)),price:t(u),at:{N:""+l}};return await b.send(new O({TransactItems:[{Put:{TableName:f,Item:Object.assign({pk:t(k(n.cls)),sk:t(a)},g)}},{Put:{TableName:f,Item:Object.assign({pk:t("sell#"+s),sk:t(a)},g)}}]})),r(200,{ok:!0,id:a})}if(o==="buy"||o==="cancel"){const n=String(c.id||""),u=String(c.cls||"");if(!/^[0-9a-z]{15}$/.test(n)||!S.includes(u))return r(400,p);const d=await b.send(new I({TableName:f,Key:{pk:t(k(u)),sk:t(n)}}));if(!d.Item)return r(404,{error:"gone"});const a=N(d.Item),g=o==="buy";if(g?a.seller===s||a.at<l-v:a.seller!==s)return r(403,p);if(g&&!z(String(c.name||"")))return r(400,T);const C=[{Delete:{TableName:f,Key:{pk:t(k(u)),sk:t(n)},ConditionExpression:"attribute_exists(sk)"}},{Delete:{TableName:f,Key:{pk:t("sell#"+a.seller),sk:t(n)}}}];g&&C.push({Put:{TableName:f,Item:{pk:t("inbox#"+a.seller),sk:t(A()),type:t("sale"),from:t(s),fromName:t(c.name),item:t(JSON.stringify(a.item)),gold:t(h?Math.floor(a.price*.95):a.price),at:{N:""+l}}}});try{await b.send(new O({TransactItems:C}))}catch(x){if(x.name==="TransactionCanceledException")return r(404,{error:"gone"});throw x}return r(200,{ok:!0,item:a.item,price:a.price})}return r(404,p)};
 
   MailFunctionRole:
     Type: AWS::IAM::Role
@@ -1701,6 +1701,159 @@ Resources:
       AuthorizationType: JWT
       AuthorizerId: !Ref JwtAuthorizer
       Target: !Sub 'integrations/${NpIntegration}'
+
+  # v126 NP+ gold sinks (John, 25 Nov 2026): Gulp the Hoard Mimic and the Golden Loot Goblin (infra/lambda/gulp.js, goblin.js).
+  GulpFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: gulp-tables
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:Query, dynamodb:UpdateItem]
+                Resource: !GetAtt BossTable.Arn
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:Scan]
+                Resource: !GetAtt HeroesTable.Arn
+  GulpFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: lanternhold-gulp
+      Runtime: nodejs22.x
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 10
+      Role: !GetAtt GulpFunctionRole.Arn
+      Environment:
+        Variables:
+          BOSS: !Ref BossTable
+          HEROES: !Ref HeroesTable
+      Code:
+        ZipFile: |
+          // built from infra/lambda/gulp.js by infra/build.py
+          const w=require("@aws-sdk/client-dynamodb"),k=require("crypto"),b=new w.DynamoDBClient({}),{BOSS:A,HEROES:O}=process.env,g=(t,r)=>({statusCode:t,body:JSON.stringify(r)}),p=t=>({S:String(t)}),s=t=>({N:String(t)}),V=t=>k.createHash("sha256").update("lh:"+t).digest("hex").slice(0,16),q=12,z=1e-5,B=1e-5,P=.02,G=72*36e5,H=48*36e5,M=30*6e4,L=2.5,U=150,f=Math.max,S=Math.min,j=t=>10*(1.22**(t-1)*1.03**f(0,t-60)*1.04**f(0,t-140))**.4*1.0108**(f(0,t-15)+f(0,t-40)),e=(t,r)=>t&&t[r]?+t[r].N:0,d=async(t,r)=>(await b.send(new w.GetItemCommand({TableName:A,Key:{w:p(t),s:p(r)}}))).Item,y=(t,r,a,o,c,u)=>b.send(new w.UpdateItemCommand({TableName:A,Key:{w:p(t),s:p(r)},UpdateExpression:a,ExpressionAttributeValues:o,ConditionExpression:c,ExpressionAttributeNames:u,ReturnValues:"ALL_NEW"})),E=async(...t)=>{try{return(await y(...t)).Attributes}catch(r){if(r.name==="ConditionalCheckFailedException")return null;throw r}};async function F(t,r){if(t.gid&&r>=e(t,"gu")){const a=await d("gob#"+t.gid.S,"#"),o=e(a,"total")>=e(a,"hp");t=await E("gulp","#","SET prev=:i, cyc=:c, fed=:f, m=:m, #l=:t REMOVE gid",{":i":t.gid,":c":s(e(t,"cyc")+1),":f":s(o?0:Math.floor(e(t,"fed")/2)),":m":s(o?0:Math.floor(e(t,"m")/2)),":t":s(r)},"gid=:i",{"#l":"last"})||await d("gulp","#")}if(t.stir&&!t.gid){if(r-e(t,"stir")>H)return await E("gulp","#","REMOVE stir",void 0,"attribute_exists(stir)")||t;const a=((await b.send(new w.ScanCommand({TableName:O}))).Items||[]).filter(i=>e(i,"np")>=1&&r-e(i,"seen")<18e4&&!i.ban);if(!a.length)return t;const o=r.toString(36),c=L*a.reduce((i,h)=>i+U*j(S(1500,e(h,"fl")+10)),0),u=await E("gulp","#","SET gid=:i, gu=:u REMOVE stir",{":i":p(o),":u":s(r+M)},"attribute_not_exists(gid) AND attribute_exists(stir)");return u?(await y("gob#"+o,"#","SET hp=:h, cy=:c, gu=:u, n=:n ADD #t :z",{":h":s(c),":c":s(e(u,"cyc")),":u":s(r+M),":n":s(a.length),":z":s(0)},void 0,{"#t":"total"}),u):d("gulp","#")}return t}exports.handler=async t=>{const r=t.requestContext.authorizer&&t.requestContext.authorizer.jwt&&t.requestContext.authorizer.jwt.claims;if(!r||!r.sub)return g(401,{error:1});const a=V(r.sub),o=Date.now(),c=(await b.send(new w.GetItemCommand({TableName:O,Key:{pid:p(a)}}))).Item;if(!c||!c.name||c.ban||e(c,"np")<1)return g(403,{error:"np"});let u={};try{u=JSON.parse(t.isBase64Encoded?Buffer.from(t.body||"","base64").toString():t.body||"{}")}catch{return g(400,{error:1})}let i=await d("gulp","#")||{},h=0;const C="gulpd#"+new Date(o).toISOString().slice(0,10);if(t.routeKey==="POST /gulp/feed"){const n=Math.floor(+u.n),l=f(0,S(1e300,+u.g||0));if(!(n>=1&&n<=50))return g(400,{error:1});const m=await y(C,a,"ADD n :k",{":k":s(n)}),K=f(0,S(n,q-(e(m.Attributes,"n")-n)));i=(await y("gulp","#","ADD fed :g, m :k",{":g":s(l),":k":s(n)})).Attributes,await y("gulpc#"+e(i,"cyc"),a,"SET nm=:n, c=:c ADD m :k, #w :w",{":n":c.name,":c":c.cls,":k":s(n),":w":s(n*(u.t?1.5:1))},void 0,{"#w":"w"});const R=e(i,"m")-n;for(let x=0;x<K;x++)k.randomInt(1e9)/1e9<S(P,z+B*(R+x))&&(h=1);h&&!i.gid&&!i.stir&&o-e(i,"last")>=G&&(i=await E("gulp","#","SET stir=:t",{":t":s(o)},"attribute_not_exists(stir) AND attribute_not_exists(gid)")||i)}else if(t.routeKey!=="GET /gulp")return g(404,{error:1});i=await F(i,o);const _=e(i,"cyc"),D=(await b.send(new w.QueryCommand({TableName:A,KeyConditionExpression:"w=:w",ExpressionAttributeValues:{":w":p("gulpc#"+_)}}))).Items||[],N=D.find(n=>n.s.S===a),v=await d(C,a);let T=null,I=null;if(i.gid){const n=i.gid.S,l=await d("gob#"+n,"#"),m=await d("gob#"+n,a);T={id:n,until:e(i,"gu"),hp:e(l,"hp"),total:e(l,"total"),me:{last:e(m,"last"),score:e(m,"score")}}}if(i.prev){const n=i.prev.S,l=await d("gob#"+n,"#"),m=await d("gob#"+n,a);I={id:n,killed:e(l,"total")>=e(l,"hp"),me:{score:e(m,"score"),cl:!!(m&&m.cl)}}}return g(200,{ok:!0,fed:e(i,"fed"),m:e(i,"m"),stir:!!i.stir,gob:T,prev:I,mine:{m:e(N,"m"),w:e(N,"w"),today:e(v,"n")},top:D.sort((n,l)=>e(l,"m")-e(n,"m")).slice(0,10).map(n=>({name:n.nm.S,cls:n.c.S,m:e(n,"m")}))})};
+
+  GulpIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GulpFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  GulpInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GulpFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*'
+
+  GulpGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /gulp
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub 'integrations/${GulpIntegration}'
+
+  GulpFeedRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /gulp/feed
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub 'integrations/${GulpIntegration}'
+
+  GoblinFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: goblin-tables
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:Query, dynamodb:UpdateItem]
+                Resource: !GetAtt BossTable.Arn
+              - Effect: Allow
+                Action: [dynamodb:GetItem]
+                Resource: !GetAtt HeroesTable.Arn
+              - Effect: Allow
+                Action: [dynamodb:UpdateItem]
+                Resource: !GetAtt WalletsTable.Arn
+  GoblinFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: lanternhold-goblin
+      Runtime: nodejs22.x
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 10
+      Role: !GetAtt GoblinFunctionRole.Arn
+      Environment:
+        Variables:
+          BOSS: !Ref BossTable
+          HEROES: !Ref HeroesTable
+          WALLETS: !Ref WalletsTable
+      Code:
+        ZipFile: |
+          // built from infra/lambda/goblin.js by infra/build.py
+          const a=require("@aws-sdk/client-dynamodb"),K=require("crypto"),u=new a.DynamoDBClient({}),{BOSS:E,HEROES:v,WALLETS:z}=process.env,r=(e,s)=>({statusCode:e,body:JSON.stringify(s)}),i=e=>({S:String(e)}),c=e=>({N:String(e)}),B=e=>K.createHash("sha256").update("lh:"+e).digest("hex").slice(0,16),H=e=>parseInt(K.createHash("sha256").update(e).digest("hex").slice(0,8),16)/4294967296,R=5*6e4,W=150,d=Math.max,A=Math.min,U="ConditionalCheckFailedException",P=e=>10*(1.22**(e-1)*1.03**d(0,e-60)*1.04**d(0,e-140))**.4*1.0108**(d(0,e-15)+d(0,e-40)),n=(e,s)=>e&&e[s]?+e[s].N:0,_=async(e,s)=>(await u.send(new a.GetItemCommand({TableName:E,Key:{w:i(e),s:i(s)}}))).Item;exports.handler=async e=>{const s=e.requestContext.authorizer&&e.requestContext.authorizer.jwt&&e.requestContext.authorizer.jwt.claims;if(!s||!s.sub)return r(401,{error:1});const m=B(s.sub),p=Date.now(),l=(await u.send(new a.GetItemCommand({TableName:v,Key:{pid:i(m)}}))).Item;if(!l||!l.name||l.ban||n(l,"np")<1)return r(403,{error:"np"});let b={};try{b=JSON.parse(e.isBase64Encoded?Buffer.from(e.body||"","base64").toString():e.body||"{}")}catch{return r(400,{error:1})}const g=String(b.id||"");if(!/^[0-9a-z]{6,12}$/.test(g))return r(400,{error:1});const h=await _("gob#"+g,"#");if(!h)return r(404,{error:"none"});const f=i("gob#"+g),I=n(h,"gu");if(e.routeKey==="POST /goblin/hit"){if(p>I+15e3)return r(409,{error:"gone"});let t=d(0,A(W*P(A(1500,n(l,"fl")+10)),Math.floor(+b.score||0)));const x=[].concat(b.iv||[]).slice(0,3e3).map(Number).filter(o=>o<1e3),N=x.length,C=x.reduce((o,T)=>o+T,0)/N;N>99&&(C<60||x.reduce((o,T)=>o+(T-C)**2,0)/N*625<C*C)&&(t=d(0,t-(+b.ck||0)));try{await u.send(new a.UpdateItemCommand({TableName:E,Key:{w:f,s:i(m)},UpdateExpression:"SET #l=:t, nm=:n, c=:c ADD score :s, a :one",ConditionExpression:"attribute_not_exists(#l) OR #l<:cut",ExpressionAttributeNames:{"#l":"last"},ExpressionAttributeValues:{":t":c(p),":n":l.name,":c":l.cls,":s":c(t),":one":c(1),":cut":c(p-R+5e3)}}))}catch(o){if(o.name===U)return r(429,{error:"cool"});throw o}const q=await u.send(new a.UpdateItemCommand({TableName:E,Key:{w:f,s:i("#")},UpdateExpression:"ADD #t :s",ExpressionAttributeNames:{"#t":"total"},ExpressionAttributeValues:{":s":c(t)},ReturnValues:"ALL_NEW"}));return r(200,{ok:!0,add:t,total:n(q.Attributes,"total")})}if(e.routeKey!=="POST /goblin/claim")return r(404,{error:1});if(p<I)return r(409,{error:"open"});const y=((await u.send(new a.QueryCommand({TableName:E,KeyConditionExpression:"w=:w",ExpressionAttributeValues:{":w":f}}))).Items||[]).filter(t=>t.s.S!=="#").sort((t,x)=>n(x,"score")-n(t,"score")),w=y.findIndex(t=>t.s.S===m)+1,S=y[w-1];if(!w||!(n(S,"score")>0))return r(404,{error:"none"});try{await u.send(new a.UpdateItemCommand({TableName:E,Key:{w:f,s:i(m)},UpdateExpression:"SET cl=:t",ConditionExpression:"attribute_not_exists(cl)",ExpressionAttributeValues:{":t":c(p)}}))}catch(t){if(t.name===U)return r(409,{error:"claimed"});throw t}if(!(n(h,"total")>=n(h,"hp")))return r(200,{ok:!0,killed:!1,sh:n(S,"a"),rank:w,n:y.length});const V=await _("gulpc#"+n(h,"cy"),m),k=.2+A(.3,.02*n(V,"w")),D=w<=3,O=2+(D?3:0),L=3+d(0,Math.floor(Math.log10(n(S,"score")))-2),M=await u.send(new a.UpdateItemCommand({TableName:z,Key:{userId:i(s.sub)},UpdateExpression:"SET bal=if_not_exists(bal,:g)+:a",ExpressionAttributeValues:{":g":c(100),":a":c(O)},ReturnValues:"UPDATED_NEW"}));return r(200,{ok:!0,killed:!0,ring:D||H(g+"#"+m)<k,p:k,sh:L,sig:O,rank:w,n:y.length,bal:n(M.Attributes,"bal")})};
+
+  GoblinIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GoblinFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  GoblinInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GoblinFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*'
+
+  GoblinHitRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /goblin/hit
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub 'integrations/${GoblinIntegration}'
+
+  GoblinClaimRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: POST /goblin/claim
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub 'integrations/${GoblinIntegration}'
 
   StoreMercyRoute:
     Type: AWS::ApiGatewayV2::Route

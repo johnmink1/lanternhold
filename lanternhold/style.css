@@ -1,4 +1,4 @@
-/* lh-build 202611251638 */
+/* lh-build 202611252317 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2463,3 +2463,23 @@ body.atench .achips{display:none}
 .tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
 #tr-rows{overflow-x:auto}
 @media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}
+/* v126 NP+ gold sinks: Pip's crates and Curio shelf, Gulp's sign, the goblin bar, Hold works */
+.holdtents.n7{grid-template-columns:repeat(7,1fr)}
+.holdtents.n7 button{padding:8px 2px;font-size:12px}
+@media (max-width:720px){.holdtents.n7{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:520px){.holdtents.n7{grid-template-columns:1fr 1fr}.holdtents.n7 button:last-child{grid-column:auto}}
+.cushelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:6px 0 10px}
+.cuitem{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px dashed var(--line2);border-radius:10px;background:#0f1420;color:var(--muted)}
+.cuitem b{font-size:13px;color:var(--muted)}.cuitem small{font-size:11.5px;line-height:1.35}
+.cuitem.own{border-style:solid;border-color:#c0392b88;background:color-mix(in srgb,#c0392b 10%,#0f1420);color:var(--text)}
+.cuitem.own b{color:#ffd9a8}.cuitem .btn{align-self:flex-start;margin-top:2px}
+.gulpsign{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;padding:8px;border:2px solid #a87418;border-radius:10px;background:linear-gradient(#5a3a22,#3a2614);text-align:center}
+.gulpsign small{display:block;color:#f5e6c8;font-size:11px}.gulpsign b{display:block;color:#ffd36b;font-size:18px;font-variant-numeric:tabular-nums}
+.gulpbtns{flex-wrap:wrap;gap:6px}
+.shopperk.gob{border-color:#f5c242;background:color-mix(in srgb,#f5c242 12%,transparent)}
+.gobbar{border-color:#a87418;background:linear-gradient(90deg,#2a1c06,#3a2808);color:#ffe9b0}
+.gobbar svg{color:#f5c242}.gobbar em{background:#f5c242;color:#2a1c06}.gobbar em.wait{background:transparent;color:#f5c242;border-color:#a87418}
+.gobbar:hover,.gobbar.on{border-color:#f5c242}.gobbar.on{box-shadow:0 0 0 1px #f5c24255,0 0 18px #f5c24244}
+.pill.ok{padding:3px 10px;border-radius:999px;background:#1f5c3c;color:#c8f7d4;font-size:12px;font-weight:700}
+/* v126: with Pip and Gulp the shop header has six buttons; let them wrap on narrow screens */
+@media (max-width:720px){.shophead .shopbtns{flex:1 1 100%;flex-wrap:wrap;gap:6px}.shophead .shopbtns .btn{padding:5px 9px}}

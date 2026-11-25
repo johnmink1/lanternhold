@@ -1,6 +1,7 @@
 // Market: list an item for gold, browse by class, buy, cancel. Listings live under mkt#<cls> with a
 // pointer under sell#<seller>, written and removed together in transactions. Gold is paid into the
-// seller's mailbox (inbox#<seller>) as a 'sale' letter they claim.
+// seller's mailbox (inbox#<seller>) as a 'sale' letter they claim. v126 (John, 25 Nov 2026, NP+ gold sinks): NP+ market
+// sales pay the seller 95%; the 5% leaves the game.
 const { DynamoDBClient, GetItemCommand, QueryCommand, TransactWriteItemsCommand } = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
 const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES;
 const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'], SLOT = 'main off head neck chest robe legs feet ring'.split(' '), RAR = ['common', 'fine', 'rare', 'epic', 'set'], JOB = 'forage smith herb armor prospect lamp'.split(' ');
@@ -65,7 +66,7 @@ exports.handler = async (e) => {
     const ops = [
       { Delete: { TableName: T, Key: { pk: S(mk(cls)), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } },
       { Delete: { TableName: T, Key: { pk: S('sell#' + L.seller), sk: S(id) } } }];
-    if (buy) ops.push({ Put: { TableName: T, Item: { pk: S('inbox#' + L.seller), sk: S(newId()), type: S('sale'), from: S(me), fromName: S(b.name), item: S(JSON.stringify(L.item)), gold: S(L.price), at: { N: '' + now } } } });
+    if (buy) ops.push({ Put: { TableName: T, Item: { pk: S('inbox#' + L.seller), sk: S(newId()), type: S('sale'), from: S(me), fromName: S(b.name), item: S(JSON.stringify(L.item)), gold: S(np ? Math.floor(L.price * .95) : L.price), at: { N: '' + now } } } });
     try { await db.send(new TransactWriteItemsCommand({ TransactItems: ops })); }
     catch (x) { if (x.name === 'TransactionCanceledException') return res(404, { error: 'gone' }); throw x; }
     return res(200, { ok: true, item: L.item, price: L.price });

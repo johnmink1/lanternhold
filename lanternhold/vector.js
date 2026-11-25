@@ -1,4 +1,4 @@
-/* lh-build 202611251638 */
+/* lh-build 202611252317 */
 /* Lanternhold illustrated sprites. Each sprite is drawn as layered SVG (outline, shading, rim light, detail),
    tinted per companion or biome, rendered once to an image and then drawn on the arena canvas. */
 (function (root) {
@@ -363,6 +363,74 @@
       L_('M56 58 Q58 66 59 74 M64 58 Q62 66 61 74', '#9aa0b2', 0.9),
       // silver clasp at the neck
       C(60, 66, 3, trim, ' stroke-width="1"'),
+    ].join('');
+  } };
+  // Pip the Dicer (v126, NP+ gold sinks): a cheerful halfling showman in a tall striped hat with dice on the band,
+  // a red waistcoat with gold buttons, and a big die held up in one hand. Sells Lucky Crates for gold.
+  ART.dicer = { w: 120, h: 160, draw(c) {
+    const coat = c.lg(['#e04848', '#b02a2a', '#6e1414'], 0, 0, 1, 1), coatD = '#5a1010', shirt = c.lg(['#fffaf0', '#e8dcc0'], 0, 0, 0, 1);
+    const pants = c.lg(['#3a4a7a', '#24305a'], 0, 0, 0, 1), boot = c.lg(['#6a4426', '#3a2614'], 0, 0, 0, 1), skin = c.lg([SK.light, SK.mid], 0, 0, 1, 1);
+    const hat = c.lg(['#2a2a3a', '#14141e'], 0, 0, 1, 1), gold = c.lg(['#fff0b8', '#f5c242', '#a87418'], 0, 0, 1, 1), hair = c.lg(['#c87a2a', '#8a4a14']);
+    const die = (x, y, s) => [P('M' + (x - s) + ' ' + (y - s) + ' H' + (x + s) + ' V' + (y + s) + ' H' + (x - s) + 'Z', '#fffaf0', ' stroke-width="1.4"'), C(x - s / 2, y - s / 2, s / 5, '#1a1a24'), C(x, y, s / 5, '#1a1a24'), C(x + s / 2, y + s / 2, s / 5, '#1a1a24')].join('');
+    return [
+      E(60, 156, 34, 4, '#000', ' opacity=".35"'),
+      // boots and short legs
+      P('M44 128 L42 150 L32 152 L32 156 L50 156 L52 130Z', pants), P('M68 130 L70 150 L80 152 L80 156 L62 156 L60 130Z', pants),
+      P('M30 150 H52 V157 H30Z', boot, ' stroke-width="1.6"'), P('M60 150 H82 V157 H60Z', boot, ' stroke-width="1.6"'),
+      // round body: shirt, waistcoat, gold buttons, a coin purse
+      P('M34 96 Q30 132 44 134 Q60 138 76 134 Q90 132 86 96 Q60 84 34 96Z', shirt),
+      P('M34 96 Q30 132 44 134 L54 134 L58 96Z', coat), P('M86 96 Q90 132 76 134 L66 134 L62 96Z', coat),
+      Pn('M74 98 Q84 104 86 122 Q84 132 76 134 L68 134Z', coatD, ' opacity=".4"'),
+      ...[104, 114, 124].map(y => C(56, y, 1.8, gold, ' stroke="#6a4a10" stroke-width=".6"')),
+      P('M72 120 Q80 118 82 126 Q80 134 72 132 Q68 126 72 120Z', c.mat('#8a5a2a'), ' stroke-width="1.2"'), C(76, 119, 1.6, gold),
+      // left arm on the hip, right arm holding a big die up high
+      P('M36 98 Q24 106 26 118 L34 120 Q34 110 40 104Z', coat), Eo(30, 121, 5, 4.5, skin),
+      P('M84 98 Q98 90 100 76 L92 72 Q90 84 80 92Z', coat), Eo(96, 70, 5.5, 5, skin),
+      die(98, 56, 9),
+      // head: big grin, freckles, curly hair
+      ...[[42, 70], [78, 70], [44, 60], [76, 60]].map(([x, y]) => C(x, y, 6, hair)),
+      P('M42 70 Q42 50 60 48 Q78 50 78 70 Q78 88 60 90 Q42 88 42 70Z', skin),
+      E(53, 68, 2, 2.4, '#1a2440'), E(67, 68, 2, 2.4, '#1a2440'), C(53.7, 67.2, 0.8, '#ffffff'), C(67.7, 67.2, 0.8, '#ffffff'),
+      P('M50 77 Q60 87 70 77 Q60 81 50 77Z', '#7a2020', ' stroke-width="1.2"'), P('M52 77.5 Q60 80 68 77.5 L67 79 Q60 81 53 79Z', '#ffffff', ' stroke="none"'),
+      ...[[48, 74], [50, 76], [70, 74], [72, 76]].map(([x, y]) => C(x, y, 0.7, '#c86a3a')),
+      E(47, 75, 3, 1.8, '#ff8a7a', ' opacity=".35"'), E(73, 75, 3, 1.8, '#ff8a7a', ' opacity=".35"'),
+      L_('M49 62 Q53 60 57 62 M63 62 Q67 60 71 62', '#8a4a14', 1.4),
+      // tall striped hat with dice on the band
+      P('M36 52 Q60 44 84 52 L84 56 Q60 50 36 56Z', hat, ' stroke-width="1.8"'),
+      P('M44 50 L46 14 Q60 8 74 14 L76 50 Q60 46 44 50Z', hat),
+      ...[22, 32].map(y => P('M45.5 ' + y + ' Q60 ' + (y - 4) + ' 74.5 ' + y + ' L75 ' + (y + 4) + ' Q60 ' + y + ' 45 ' + (y + 4) + 'Z', '#e04848', ' stroke="none"')),
+      P('M44 42 Q60 38 76 42 L76 48 Q60 44 44 48Z', gold, ' stroke-width="1.2"'),
+      die(52, 45, 3), die(68, 45, 3),
+    ].join('');
+  } };
+  // Gulp the Hoard Mimic (v126, NP+ only): a fat treasure chest with too many teeth, googly eyes on the lid, a long pink
+  // tongue and stubby feet. Everyone who has started NP+ feeds the same Gulp gold.
+  ART.gulp = { w: 160, h: 140, draw(c) {
+    const wood = c.lg(['#a8723e', '#7a4a22', '#4a2a10'], 0, 0, 1, 1), woodD = '#3a1e08', band = c.lg(['#fff0b8', '#f5c242', '#a87418'], 0, 0, 0, 1);
+    const mouth = c.lg(['#4a0e1e', '#1e0408'], 0, 0, 0, 1), tongue = c.lg(['#ff9ab0', '#e0527a', '#a8264e'], 0, 0, 1, 1), tooth = c.lg(['#ffffff', '#ece4cc'], 0, 0, 0, 1);
+    const teeth = (y, up) => { let d = ''; for (let x = 30; x < 130; x += 10) d += P(up ? 'M' + x + ' ' + y + ' L' + (x + 5) + ' ' + (y + 10) + ' L' + (x + 10) + ' ' + y + 'Z' : 'M' + x + ' ' + y + ' L' + (x + 5) + ' ' + (y - 10) + ' L' + (x + 10) + ' ' + y + 'Z', tooth, ' stroke-width="1.2"'); return d; };
+    return [
+      E(80, 134, 62, 6, '#000', ' opacity=".4"'),
+      // stubby feet
+      ...[36, 62, 98, 124].map(x => P('M' + (x - 7) + ' 120 Q' + (x - 9) + ' 134 ' + x + ' 134 Q' + (x + 9) + ' 134 ' + (x + 7) + ' 120Z', wood, ' stroke-width="1.8"')),
+      // the box
+      P('M22 72 H138 V124 Q80 130 22 124Z', wood), Pn('M110 72 H138 V124 Q124 126 110 127Z', woodD, ' opacity=".35"'),
+      ...[86, 102].map(y => L_('M24 ' + y + ' H136', '#3a1e08', 1.4, ' opacity=".6"')),
+      P('M22 72 H138 V78 H22Z', band, ' stroke-width="1.4"'), P('M36 72 H44 V126 H36Z', band, ' stroke-width="1.4"'), P('M116 72 H124 V126 H116Z', band, ' stroke-width="1.4"'),
+      // the open mouth, coins inside, teeth top and bottom, the tongue lolling over the front
+      P('M26 72 Q80 52 134 72 Q80 80 26 72Z', mouth, ' stroke-width="1.6"'),
+      ...[[60, 68], [72, 64], [86, 66], [98, 68], [78, 70]].map(([x, y]) => Eo(x, y, 5, 2.4, band, ' stroke-width="1"')),
+      teeth(72, false),
+      P('M70 74 Q66 96 74 110 Q82 118 90 108 Q96 94 90 74Z', tongue, ' stroke-width="1.8"'), L_('M80 78 Q80 94 81 106', '#a8264e', 1.4),
+      // the lid, tipped open, with teeth along its edge and a lock plate
+      P('M20 66 Q80 50 140 66 L134 28 Q80 4 26 28Z', wood), Pn('M112 30 Q130 34 134 28 L140 66 Q126 62 114 60Z', woodD, ' opacity=".35"'),
+      P('M20 66 Q80 50 140 66 L139 60 Q80 44 21 60Z', band, ' stroke-width="1.2"'), P('M74 10 H86 V54 H74Z', band, ' stroke-width="1.4"'),
+      ...(() => { let d = []; for (let x = 28; x < 132; x += 10) d.push(P('M' + x + ' ' + (62 - Math.abs(x - 80) * 0.0) + ' L' + (x + 5) + ' ' + (71 - Math.abs(x + 5 - 80) * 0.12) + ' L' + (x + 10) + ' ' + 62 + 'Z', tooth, ' stroke-width="1.2"')); return d; })(),
+      P('M74 34 H86 V46 H74Z', c.mat('#c9a040'), ' stroke-width="1.2"'), C(80, 39, 2, '#3a1e08'),
+      // googly eyes on top of the lid, looking at the party
+      Eo(54, 22, 11, 11, '#ffffff', ' stroke-width="2"'), Eo(106, 22, 11, 11, '#ffffff', ' stroke-width="2"'),
+      C(50, 24, 5, '#1a1a24'), C(102, 24, 5, '#1a1a24'), C(48.5, 22.5, 1.6, '#ffffff'), C(100.5, 22.5, 1.6, '#ffffff'),
+      L_('M42 8 Q54 2 64 8 M96 8 Q106 2 118 8', '#3a1e08', 2.2),
     ].join('');
   } };
   // Mercy Corps wounded (v117, John: "needs better art"): a field medic slumped against a boulder on a bedroll,
@@ -775,6 +843,12 @@
       Pn('M78 56 Q80 42 94 38', 'none', ' stroke="#ffffff" stroke-width="1.5" opacity=".4"'),
     ].join('');
   });
+  // The Golden Loot Goblin (v126): the Loot Goblin in gold, with a royal purple vest.
+  ART.goldgoblin = F(c => {
+    const lg = c.lg.bind(c), map = { '#8fd16a': '#fff3b0', '#5aa042': '#f2c14e', '#2f6a2a': '#a8761e', '#7a4a3a': '#6b2fa0', '#53302a': '#47206e', '#321a16': '#2a1046', '#c9a36a': '#fff1a8', '#8c6a3a': '#e0a93a', '#5a4022': '#8a5a14' };
+    c.lg = (st, ...a) => lg(st.map(x => typeof x === 'string' ? map[x] || x : [map[x[0]] || x[0], x[1]]), ...a);
+    try { return ART.goblin.draw(c); } finally { c.lg = lg; }
+  }, ART.goblin.w, ART.goblin.h);
   // World boss: the Rift Colossus, a giant of void crystal with the Nyx Rift burning through its chest.
   ART.colossus = F(c => {
     const body = c.lg(['#4a3a6e', '#2a1f45', '#150f26'], 0.1, 0, 0.9, 1), plate = c.lg(['#6a58a0', '#3c2f66', '#1f1838'], 0.15, 0, 0.85, 1),
