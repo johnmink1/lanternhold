@@ -1,4 +1,4 @@
-/* lh-build 202611250418 */
+/* lh-build 202611250426 */
 /* Lanternhold illustrated sprites. Each sprite is drawn as layered SVG (outline, shading, rim light, detail),
    tinted per companion or biome, rendered once to an image and then drawn on the arena canvas. */
 (function (root) {
@@ -324,6 +324,45 @@
       P('M55 51 Q60 55 65 51', 'none', ' stroke-width="1.3"'),
       E(51, 50, 2.6, 1.5, '#ff8a7a', ' opacity=".35"'), E(69, 50, 2.6, 1.5, '#ff8a7a', ' opacity=".35"'),
       L_('M49 38 Q53 36 57 38 M63 38 Q67 36 71 38', '#a3a8b6', 1.1),
+    ].join('');
+  } };
+  // The Rift Gate's keeper, Warden Sable (John, 2026-11-25, v120): stands outside by the portal and trades Rift tokens
+  // for world boss Legendaries. A tall hooded warden in deep violet with silver stars, a crystal-topped staff and a
+  // silver beard under the hood.
+  ART.riftkeeper = { w: 120, h: 160, draw(c) {
+    const robe = c.lg(['#4c2a8a', '#2a1650', '#160b2e'], 0, 0, 1, 1), robeD = '#120826', trim = c.lg(['#f4f4f6', '#b9bfd0'], 0, 0, 0, 1);
+    const skin = c.lg([SK.light, SK.mid], 0, 0, 1, 1), beard = c.lg(['#f4f4f6', '#c9ccd6', '#9aa0b2'], 0, 0, 0, 1), staff = c.mat('#6a4426');
+    const gem = c.lg(['#ffffff', '#e9d5ff', '#a855f7', '#6d28d9'], 0, 0, 1, 1);
+    return [
+      // long robe to the ground with a silver hem
+      P('M36 66 Q26 108 22 154 Q60 162 98 154 Q94 108 84 66 Q60 56 36 66Z', robe),
+      Pn('M64 64 Q74 108 80 158 Q90 157 98 154 Q94 108 84 66Z', robeD, ' opacity=".45"'),
+      P('M22 148 Q60 158 98 148 L98 154 Q60 162 22 154Z', trim, ' stroke-width="1"'),
+      // silver stars stitched on the robe
+      ...[[42, 104], [74, 92], [52, 132], [82, 126], [36, 128]].map(([x, y]) => P('M' + x + ' ' + (y - 4) + ' L' + (x + 1.2) + ' ' + (y - 1.2) + ' L' + (x + 4) + ' ' + y + ' L' + (x + 1.2) + ' ' + (y + 1.2) + ' L' + x + ' ' + (y + 4) + ' L' + (x - 1.2) + ' ' + (y + 1.2) + ' L' + (x - 4) + ' ' + y + ' L' + (x - 1.2) + ' ' + (y - 1.2) + 'Z', '#e6e8f0', ' stroke-width=".6"')),
+      // a belt with a token pouch
+      P('M38 92 Q60 98 82 92 L82 98 Q60 104 38 98Z', c.mat('#8a6a2a'), ' stroke-width="1"'), P('M66 98 H76 V110 Q71 113 66 110Z', c.mat('#6a3a8a'), ' stroke-width="1"'), C(71, 104, 1.8, '#f5c242'),
+      // left arm at the side, right arm holding the staff
+      P('M30 70 Q20 96 26 114 L36 112 Q34 96 40 82Z', robe), Eo(30, 116, 5.5, 5, skin),
+      L_('M100 26 L94 156', '#3a2614', 5), L_('M100 26 L94 156', '#8a5a2a', 3),
+      P('M86 70 Q100 74 100 92 L92 96 Q90 84 82 80Z', robe), Eo(96, 94, 5.5, 5, skin),
+      // the staff's rift crystal, glowing
+      C(101, 18, 16, c.rg([['#f0e0ff', 0.8], ['#a855f7', 0.35], ['#6d28d9', 0]]), ''),
+      P('M101 4 L108 16 L101 30 L94 16Z', gem, ' stroke-width="1.4"'), L_('M98 12 L101 7', '#ffffff', 1, ' opacity=".8"'),
+      P('M94 30 Q101 26 108 30 L106 34 Q101 31 96 34Z', staff, ' stroke-width="1"'),
+      // hood over the head
+      P('M38 50 Q36 16 60 12 Q84 16 82 50 Q84 68 60 72 Q36 68 38 50Z', robe),
+      Pn('M60 14 Q82 18 82 50 Q82 66 64 71Z', robeD, ' opacity=".4"'),
+      // face in the hood's shadow, silver beard
+      P('M48 40 Q48 28 60 27 Q72 28 72 40 Q72 52 60 56 Q48 52 48 40Z', skin),
+      Pn('M48 36 Q60 26 72 36 Q66 30 60 30 Q54 30 48 36Z', '#1a0e30', ' opacity=".5"'),
+      E(55, 40, 1.8, 2, '#1a2440'), E(65, 40, 1.8, 2, '#1a2440'), C(55.6, 39.3, 0.7, '#ffffff'), C(65.6, 39.3, 0.7, '#ffffff'),
+      L_('M51 35 Q55 33 58 35 M62 35 Q65 33 69 35', '#c9ccd6', 1.2),
+      P('M48 44 Q50 52 55 50 Q60 54 65 50 Q70 52 72 44 Q76 60 68 74 Q62 82 60 88 Q58 82 52 74 Q44 60 48 44Z', beard),
+      P('M54 47 Q60 44 66 47 Q60 50 54 47Z', '#e6e8f0', ' stroke-width=".8"'),
+      L_('M56 58 Q58 66 59 74 M64 58 Q62 66 61 74', '#9aa0b2', 0.9),
+      // silver clasp at the neck
+      C(60, 66, 3, trim, ' stroke-width="1"'),
     ].join('');
   } };
   // Mercy Corps wounded (v117, John: "needs better art"): a field medic slumped against a boulder on a bedroll,

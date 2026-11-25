@@ -1,4 +1,4 @@
-/* lh-build 202611250418 */
+/* lh-build 202611250426 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -472,7 +472,7 @@
     const k = Math.min(W / 198, H / 74), vw = W / k, vh = H / k;
     return (SG = { k, vw, vh, ex: Math.round(vw / 2 + 48), fy: Math.round(64 + (vh - 74) * 0.8) });
   }
-  const shopKind = () => S.shopK === 'arm' || S.shopK === 'store' ? S.shopK : 'ench';
+  const shopKind = () => S.shopK === 'arm' || S.shopK === 'store' || S.shopK === 'portal' ? S.shopK : 'ench';
   function shopGlow(g, cx, cy, r, rgb, a) { const q = g.createRadialGradient(cx, cy, 0, cx, cy, r); q.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); q.addColorStop(1, 'rgba(' + rgb + ',0)'); g.globalCompositeOperation = 'lighter'; g.fillStyle = q; g.fillRect(cx - r, cy - r, r * 2, r * 2); g.globalCompositeOperation = 'source-over'; }
   function shopShelf(g, sx, y, w, seed) {
     let s = seed; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
@@ -485,6 +485,7 @@
   function buildShop(kind) {
     const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height;
     const g = c.getContext('2d'); g.scale(R * SG.k, R * SG.k);
+    if (kind === 'portal') return buildPortal(c, g);
     const W = SG.vw, H = SG.vh, fy = SG.fy, ench = kind === 'ench', store = kind === 'store', warm = !!(ench || store), ex = SG.ex;
     let lg = g.createLinearGradient(0, 0, 0, fy);
     if (ench) { lg.addColorStop(0, '#1a1128'); lg.addColorStop(1, '#352350'); } else if (store) { lg.addColorStop(0, '#1d140c'); lg.addColorStop(1, '#43301d'); } else { lg.addColorStop(0, '#17130f'); lg.addColorStop(1, '#3a2a20'); }
@@ -523,7 +524,67 @@
     g.fillStyle = ench ? '#e9d5ff' : store ? '#c8f7d4' : '#ffd9a8'; g.textAlign = 'center'; g.fillText(text, ex, sy + 8); g.textAlign = 'left';
     return c;
   }
+  // The Rift Gate (v120, John: "a portal style location, not in a house: an outside portal with a guy next to it and a
+  // chest"). Night sky over the Hold's walls, flagstones and grass, a signpost; the arch and the chest are drawn live.
+  function buildPortal(c, g) {
+    const W = SG.vw, H = SG.vh, fy = SG.fy, ex = SG.ex;
+    let lg = g.createLinearGradient(0, 0, 0, fy); lg.addColorStop(0, '#070a1e'); lg.addColorStop(0.6, '#1a1238'); lg.addColorStop(1, '#2e1d4a'); g.fillStyle = lg; g.fillRect(0, 0, W, fy);
+    let sd = 5; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 90; i++) { g.fillStyle = 'rgba(255,255,255,' + (0.25 + r() * 0.6) + ')'; const sz = r() < 0.1 ? 1 : 0.5; g.fillRect(r() * W, r() * (fy - 30), sz, sz); }
+    g.fillStyle = 'rgba(233,213,255,.85)'; g.beginPath(); g.arc(W * 0.12, 14, 6, 0, Math.PI * 2); g.fill(); g.fillStyle = '#0b0f26'; g.beginPath(); g.arc(W * 0.12 + 2.5, 12.5, 5.2, 0, Math.PI * 2); g.fill();
+    // far hills, then the Hold's wall and towers behind the party
+    g.fillStyle = '#161230'; g.beginPath(); g.moveTo(0, fy - 22); for (let x = 0; x <= W; x += 12) g.lineTo(x, fy - 26 - Math.sin(x * 0.03) * 6 - Math.sin(x * 0.011) * 8); g.lineTo(W, fy); g.lineTo(0, fy); g.fill();
+    g.fillStyle = '#1e1a30'; const wx = ex - 70; g.fillRect(0, fy - 34, wx, 34); for (let x = 0; x < wx; x += 10) g.fillRect(x, fy - 39, 6, 5);
+    [[wx - 30, 14], [Math.max(10, wx - 120), 12]].forEach(([tx, tw]) => { g.fillRect(tx, fy - 56, tw, 56); for (let i = 0; i < tw; i += 6) g.fillRect(tx + i, fy - 60, 4, 4); g.fillStyle = 'rgba(255,200,110,.7)'; g.fillRect(tx + tw / 2 - 1.5, fy - 48, 3, 4); g.fillStyle = '#1e1a30'; });
+    // the ground: grass at the edges, a flagstone path to the gate
+    lg = g.createLinearGradient(0, fy, 0, H); lg.addColorStop(0, '#24331f'); lg.addColorStop(1, '#0e140c'); g.fillStyle = lg; g.fillRect(0, fy, W, H - fy);
+    g.fillStyle = '#3a3446'; for (let y = fy + 1, k = 0; y < H; y += 4 + k * 1.6, k++) for (let x = (k % 2) * 6 - 6; x < W; x += 13 + k) { g.fillRect(x, y, 11 + k, 3 + k * 1.2); }
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, fy, W, 1.2);
+    for (let i = 0; i < 70; i++) { const gx = r() * W, gy = fy + r() * 4; g.strokeStyle = r() < 0.5 ? '#3f6a2e' : '#2f5224'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(gx, gy + 2); g.lineTo(gx + (r() - 0.5) * 2, gy - 2 - r() * 3); g.stroke(); }
+    // a signpost by the path
+    const sx = ex - 58, sy = fy - 26; g.fillStyle = '#4a2f1c'; g.fillRect(sx - 1, sy, 2.4, 26);
+    g.font = '700 6px Inter, system-ui, sans-serif'; const text = 'THE RIFT GATE', tw = g.measureText(text).width + 8;
+    g.fillStyle = '#5a3a22'; g.beginPath(); g.moveTo(sx - tw / 2, sy - 9); g.lineTo(sx + tw / 2, sy - 9); g.lineTo(sx + tw / 2 + 4, sy - 4.5); g.lineTo(sx + tw / 2, sy); g.lineTo(sx - tw / 2, sy); g.fill();
+    g.strokeStyle = '#a8742e'; g.lineWidth = 0.6; g.stroke(); g.fillStyle = '#e9d5ff'; g.textAlign = 'center'; g.fillText(text, sx, sy - 2.6); g.textAlign = 'left';
+    return c;
+  }
+  // The gate itself (behind the keeper), swirling, and the token chest where a counter would be.
+  function drawPortalRoom(W, fy, ex) {
+    const px = ex + 36, py = fy - 34, rw = 22, rh = 32;
+    shopGlow(ctx, px, py, 70, '168,85,247', 0.22 + 0.05 * Math.sin(tAnim * 2));
+    ctx.save(); ctx.translate(px, py);
+    ctx.beginPath(); ctx.ellipse(0, 0, rw - 4, rh - 4, 0, 0, Math.PI * 2); ctx.clip();
+    const vg = ctx.createRadialGradient(0, 0, 1, 0, 0, rh); vg.addColorStop(0, '#f5e8ff'); vg.addColorStop(0.25, '#c084fc'); vg.addColorStop(0.7, '#5b21b6'); vg.addColorStop(1, '#1e0b3a'); ctx.fillStyle = vg; ctx.fillRect(-rw, -rh, rw * 2, rh * 2);
+    ctx.rotate(tAnim * 0.8); ctx.strokeStyle = 'rgba(245,232,255,.55)'; ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) { ctx.beginPath(); for (let t = 0; t < 1; t += 0.05) { const a = i / 5 * Math.PI * 2 + t * 5, d = 2 + t * rh; ctx.lineTo(Math.cos(a) * d * 0.7, Math.sin(a) * d); } ctx.stroke(); }
+    ctx.restore();
+    // standing stones of the arch
+    ctx.fillStyle = '#4a4458'; ctx.strokeStyle = '#1a1626'; ctx.lineWidth = 1;
+    for (let i = 0; i < 11; i++) { const a = Math.PI + i / 10 * Math.PI, sx = px + Math.cos(a) * (rw + 1), sy = py + Math.sin(a) * (rh + 1) * (i === 0 || i === 10 ? 0 : 1); ctx.save(); ctx.translate(sx, sy); ctx.rotate(a + Math.PI / 2); ctx.fillRect(-3.5, -3, 7, 6); ctx.strokeRect(-3.5, -3, 7, 6); ctx.restore(); }
+    ctx.fillRect(px - rw - 5, py, 8, fy - py); ctx.strokeRect(px - rw - 5, py, 8, fy - py); ctx.fillRect(px + rw - 3, py, 8, fy - py); ctx.strokeRect(px + rw - 3, py, 8, fy - py);
+    ctx.fillStyle = 'rgba(192,132,252,.9)'; for (let i = 0; i < 3; i++) { const a = Math.PI * (1.2 + i * 0.3), rx = px + Math.cos(a) * (rw + 1), ry = py + Math.sin(a) * (rh + 1); ctx.fillRect(rx - 1, ry - 1, 2, 2); }
+    if (Math.random() < 0.2) particles.push({ x: px + (Math.random() - 0.5) * rw, y: py + (Math.random() - 0.5) * rh, vx: (Math.random() - 0.5) * 8, vy: -6 - Math.random() * 8, life: 1 + Math.random(), age: 0, c: Math.random() < 0.5 ? '#c084fc' : '#f5e8ff', s: 1 });
+    // two torches on the path
+    for (const tx of [ex - 30, ex + 66]) { ctx.fillStyle = '#3a2618'; ctx.fillRect(tx - 0.8, fy - 22, 1.6, 22); flame(ctx, tx, fy - 22, 5 + Math.sin(tAnim * 7 + tx) * 0.6, Math.sin(tAnim * 4 + tx)); shopGlow(ctx, tx, fy - 24, 22, '255,190,110', 0.25); }
+  }
+  // The token chest in front of the keeper: open, with Rift tokens glinting inside.
+  function drawPortalChest(ex, fy) {
+    const cx = ex - 2, cw = 30, ch = 14, top = fy - ch;
+    shopGlow(ctx, cx, top, 24, '245,194,66', 0.22 + 0.06 * Math.sin(tAnim * 3));
+    // lid tipped back
+    ctx.fillStyle = '#5a3418'; ctx.beginPath(); ctx.moveTo(cx - cw / 2, top); ctx.lineTo(cx + cw / 2, top); ctx.lineTo(cx + cw / 2 - 2, top - 10); ctx.quadraticCurveTo(cx, top - 15, cx - cw / 2 + 2, top - 10); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#1a0e06'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.fillStyle = '#c9a040'; ctx.fillRect(cx - 1.5, top - 13, 3, 13);
+    // the tokens: violet coins heaped up
+    for (let i = 0; i < 9; i++) { const tx = cx - 11 + (i % 5) * 5.5 + (i > 4 ? 2.5 : 0), ty = top - 1 - (i > 4 ? 2.2 : 0); ctx.fillStyle = i % 3 ? '#a855f7' : '#e9d5ff'; ctx.beginPath(); ctx.ellipse(tx, ty, 2.6, 1.2, 0, 0, Math.PI * 2); ctx.fill(); }
+    // the box
+    const lg = ctx.createLinearGradient(0, top, 0, fy); lg.addColorStop(0, '#7a4a22'); lg.addColorStop(1, '#3a2010'); ctx.fillStyle = lg; ctx.fillRect(cx - cw / 2, top, cw, ch);
+    ctx.strokeStyle = '#1a0e06'; ctx.strokeRect(cx - cw / 2, top, cw, ch);
+    ctx.fillStyle = '#c9a040'; ctx.fillRect(cx - cw / 2, top + 3, cw, 1.6); ctx.fillRect(cx - cw / 2 + 3, top, 1.6, ch); ctx.fillRect(cx + cw / 2 - 4.6, top, 1.6, ch); ctx.fillRect(cx - 2, top + 5, 4, 4);
+    if (Math.random() < 0.06) particles.push({ x: cx + (Math.random() - 0.5) * 20, y: top - 2, vx: 0, vy: -8, life: 0.7, age: 0, c: '#fff3c0', s: 1 });
+    return top;
+  }
   function drawShopCounter(ex, fy, kind) {
+    if (kind === 'portal') return drawPortalChest(ex, fy);
     const cw = 54, top = fy - 13, ench = kind !== 'arm';
     let lg = ctx.createLinearGradient(0, top, 0, fy); lg.addColorStop(0, ench ? '#6a4024' : '#3a3a42'); lg.addColorStop(1, ench ? '#2e1a0c' : '#1e1e24'); ctx.fillStyle = lg; ctx.fillRect(ex - cw / 2, top + 2, cw, fy - top);
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.6; for (let i = 0; i < 3; i++) ctx.strokeRect(ex - cw / 2 + 3 + i * 16, top + 5, 15, fy - top - 7);
@@ -552,16 +613,17 @@
   }
   function drawShopRoom(W, fy, ex, kind) {
     const ench = kind === 'ench';
-    // hanging lanterns and the room light
-    for (const lx of [ex - 120, ex - 72]) {
+    if (kind === 'portal') drawPortalRoom(W, fy, ex);
+    // hanging lanterns and the room light (indoors)
+    if (kind !== 'portal') for (const lx of [ex - 120, ex - 72]) {
       const ly = Math.max(13, fy - 70), s = Math.sin(tAnim * 1.1 + lx) * 0.6;
       ctx.strokeStyle = '#2a1a0e'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(lx, 6); ctx.lineTo(lx + s, ly - 4); ctx.stroke();
       shopGlow(ctx, lx + s, ly, 26, '255,200,110', 0.3);
       ctx.fillStyle = '#3a2618'; ctx.fillRect(lx + s - 3, ly - 4.5, 6, 1.5); ctx.fillRect(lx + s - 3, ly + 3.5, 6, 1.5);
       ctx.fillStyle = 'rgba(255,214,140,.9)'; ctx.fillRect(lx + s - 2.4, ly - 3, 4.8, 6.5); flame(ctx, lx + s, ly + 2.5, 4 + Math.sin(tAnim * 7 + lx) * 0.5, Math.sin(tAnim * 4 + lx));
     }
-    shopGlow(ctx, ex - 77, fy + 6, 108, '255,190,110', 0.16);
-    if (ench) {
+    shopGlow(ctx, ex - 77, fy + 6, 108, kind === 'portal' ? '168,140,255' : '255,190,110', kind === 'portal' ? 0.08 : 0.16);
+    if (kind === 'portal') { /* drawn above */ } else if (ench) {
       // a rune circle turning slowly behind the Enchanter
       ctx.save(); ctx.translate(ex, fy - 44); ctx.globalAlpha = 0.55 + 0.15 * Math.sin(tAnim * 1.5); ctx.strokeStyle = 'rgba(196,181,253,.8)'; ctx.lineWidth = 0.8;
       ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.stroke();
@@ -578,7 +640,7 @@
       if (Math.random() < 0.15) particles.push({ x: hx + (Math.random() - 0.5) * 14, y: fy - 22, vx: (Math.random() - 0.5) * 6, vy: -10 - Math.random() * 12, life: 1 + Math.random(), age: 0, c: Math.random() < 0.5 ? '#ffb347' : '#ff6a1f', s: 1 });
     }
     // the shopkeeper at monster size behind the counter, facing the party
-    const k = sprite(ench ? 'enchanter' : kind === 'store' ? 'quartermaster' : 'armorer', 0, false), kw = k.lw * 3, kh = k.lh * 3, br = Math.sin(tAnim * 1.4) * 0.5;
+    const k = sprite(ench ? 'enchanter' : kind === 'store' ? 'quartermaster' : kind === 'portal' ? 'riftkeeper' : 'armorer', 0, false), kw = k.lw * 3, kh = k.lh * 3, br = Math.sin(tAnim * 1.4) * 0.5;
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, fy - 11); ctx.clip(); ctx.translate(ex, 0); ctx.scale(-1, 1); ctx.drawImage(k, -kw / 2, fy - 4 - kh + br, kw, kh); ctx.restore();
     const top = drawShopCounter(ex, fy, kind);
     // what you picked sits on the counter
@@ -611,7 +673,7 @@
   }
   // A shower of sparks on the counter when something is made.
   function shopBurst() {
-    const ex = SG.ex, y = SG.fy - 18, cols = shopKind() === 'ench' ? ['#f5c242', '#c4b5fd', '#f0abfc', '#ffffff'] : shopKind() === 'store' ? ['#f5c242', '#86efac', '#fff3c0', '#ffffff'] : ['#ffb347', '#ff6a1f', '#fff3c0', '#ffffff'];
+    const ex = SG.ex, y = SG.fy - 18, cols = shopKind() === 'ench' ? ['#f5c242', '#c4b5fd', '#f0abfc', '#ffffff'] : shopKind() === 'store' ? ['#f5c242', '#86efac', '#fff3c0', '#ffffff'] : shopKind() === 'portal' ? ['#f5c242', '#c084fc', '#e9d5ff', '#ffffff'] : ['#ffb347', '#ff6a1f', '#fff3c0', '#ffffff'];
     for (let i = 0; i < 40; i++) { const a = Math.random() * Math.PI * 2, v = 10 + Math.random() * 30; particles.push({ x: ex - 8, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 15, g: 30, life: 0.8 + Math.random() * 0.6, age: 0, c: cols[i % 4], s: 2 }); }
   }
 
@@ -2087,7 +2149,7 @@
     modal('<div class="enchpanel picker fieldench" id="fieldench"></div>', md => { md.querySelector('#fieldench').addEventListener('click', shopClick); paintEnchPanel(true); });
   }
   function visitEnch(kind) {
-    kind = kind === 'arm' || kind === 'store' ? kind : 'ench';
+    kind = kind === 'arm' || kind === 'store' || kind === 'portal' ? kind : 'ench';
     if (L.visiting(S)) S.shopK = kind; else if (!L.visitEnchanter(S, Date.now(), kind)) return false;
     closeModal(); sfx.relic(); particles.length = 0; paintEnchOv(); updatePanel(true);
     const a = document.querySelector('.stagehead') || $('arena'); if (a && a.scrollIntoView && innerWidth < 900) a.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -2122,6 +2184,25 @@
       (wardOn() ? '<button class="btn ghost small stward" data-swward="1">' + icon('star') + 'Open the Wardrobe</button>' : '') +
       '<p class="note small">Gold prices follow how much gold you earn. Speed-ups can also be bought with ' + TOKEN + '.</p>';
   }
+  // The Rift Gate's counter (v120): Warden Sable trades Rift tokens for a world boss Legendary of any set.
+  const PW = { done: null };
+  function portalPanelHtml() {
+    const tok = S.wbTok || 0, cost = L.WB_TOKEN_COST, sh = L.shardsOf(S);
+    const head = '<div class="ephead"><b>Warden Sable’s chest</b><span class="epdust">' + icon('relic') + '<b>' + fmt(tok) + '</b> Rift tokens</span></div>';
+    const bonus = b => (b.k === 'gold' ? '+' + Math.round(L.WB_TWO.gold * 100) + '% gold' : '+' + Math.round(L.WB_TWO[b.k] * 100) + '% ' + (b.k === 'hp' ? 'health' : b.k === 'dps' ? 'damage' : 'healing')) + ' with 2 pieces, +' + Math.round(L.WB_FOUR * 100) + '% damage and health with 4';
+    return head + (PW.done ? '<div class="ewdone">' + PW.done + '</div>' : '') + '<h3 class="ewq">Which Legendary set calls to you?</h3>' +
+      '<p class="ewhint">“Every world boss you fight pays tokens for the damage you dealt. Bring me ' + cost + ' and the Rift gives up a piece (a random slot) of any set it has swallowed.”</p>' +
+      '<div class="rglist">' + L.WB_SETS.map((b, k) => '<div class="rgrow"><div><b>' + esc(b.name) + '</b><small>' + bonus(b) + ' · ' + fmt(sh[k] || 0) + ' ' + esc(b.word) + ' shards for upgrades</small></div><button class="btn small" data-tokbuy="' + k + '"' + (tok < cost ? ' disabled title="Not enough Rift tokens"' : '') + '>' + icon('relic') + cost + ' tokens</button></div>').join('') + '</div>' +
+      '<p class="note small">Legendaries are bound to you and can’t be merged. Upgrade them at the Armorer with that boss’s shards.</p>';
+  }
+  $('enchpanel') && $('enchpanel').addEventListener('click', e => {
+    if (shopKind() !== 'portal') return;
+    const t = e.target.closest('[data-tokbuy]'); if (!t || t.disabled) return;
+    const k = +t.dataset.tokbuy, it = L.buyLegend(S, k); if (!it) return;
+    save(); try { pushCloud(true); } catch (x) {} updateGear(true); sfx.boss && sfx.boss(); shopBurst();
+    PW.done = 'The gate flares and gives up <b>' + esc(L.gearName(it)) + '</b>. It’s in your bag. ' + fmt(S.wbTok) + ' tokens left.';
+    toast('crown', 'LEGENDARY: ' + L.gearName(it), L.WB_TOKEN_COST + ' Rift tokens traded at the Rift Gate.', 'feat'); paintEnchPanel(true);
+  });
   $('enchpanel') && $('enchpanel').addEventListener('click', async e => {
     if (shopKind() !== 'store') return;
     const t = e.target.closest('[data-swmode],[data-buy],[data-drink],[data-sbuy],[data-swward]'); if (!t) return;
@@ -2295,8 +2376,8 @@
     el.hidden = !on; if (!on) { el.dataset.h = ''; return; }
     // A timed redraw (gold ticking) between press and release would swap the button out and lose the tap, so wait for the release.
     if (!force && panelHeld) return;
-    const kind = shopKind(), arm = kind === 'arm', h = kind === 'store' ? storePanelHtml() : arm ? armPanelHtml() : enchPanelHtml(); if (!force && el.dataset.h === h) return;
-    const step = kind === 'store' ? 's' + SW.mode : arm ? 'a' + AW.mode + !!AW.a + !!AW.b : EW.mode + !!EW.dst + !!EW.src + EW.idx;
+    const kind = shopKind(), arm = kind === 'arm', h = kind === 'store' ? storePanelHtml() : kind === 'portal' ? portalPanelHtml() : arm ? armPanelHtml() : enchPanelHtml(); if (!force && el.dataset.h === h) return;
+    const step = kind === 'store' ? 's' + SW.mode : kind === 'portal' ? 'p' : arm ? 'a' + AW.mode + !!AW.a + !!AW.b : EW.mode + !!EW.dst + !!EW.src + EW.idx;
     const sc = el.querySelector('.ewlist'), top = sc ? sc.scrollTop : 0, same = el.dataset.step === step;
     el.innerHTML = h; el.dataset.h = h; el.dataset.step = step;
     if (!same) el.scrollTop = 0;
@@ -2372,7 +2453,7 @@
   // In the shop the stage header names the shop and holds the way out. Everything else is in the counter panel.
   function paintEnchOv() {
     const on = L.visiting(S), kind = shopKind(), arm = on && kind === 'arm';
-    const SHOPS = { ench: ['enchanter', 'The Enchanter', 'Enchanter'], arm: ['armorer', 'The Armorer', 'Armorer'], store: ['quartermaster', 'The Store', 'Store'] };
+    const SHOPS = { ench: ['enchanter', 'The Enchanter', 'Enchanter'], arm: ['armorer', 'The Armorer', 'Armorer'], store: ['quartermaster', 'The Store', 'Store'], portal: ['riftkeeper', 'The Rift Gate', 'Rift Gate'] };
     document.body.classList.toggle('atench', on);
     let hd = $('shophead');
     if (!hd && on) {
@@ -4956,7 +5037,9 @@
     ['ench', 'Enchanter', 'enchanter', '#7c4dea', 'Enchant and disenchant'],
     ['arm', 'Armorer', 'armorer', '#9aa3b2', 'Upgrade, merge, melt'],
     ['store', 'Store', 'healer', '#2f9e63', 'Tonics, oil, draughts'],
+    ['portal', 'Rift Gate', 'riftkeeper', '#7c3aed', 'Rift tokens for Legendaries'],
   ];
+  const HOLD_X = i => 36 + i * 72;
   function drawHold(cv) {
     const cw = cv.clientWidth || 600, ch = cv.clientHeight || 280, dpr = window.devicePixelRatio || 1, W2 = 360, H2 = Math.round(W2 * ch / cw), k = cw * dpr / W2;
     cv.width = Math.round(W2 * k); cv.height = Math.round(H2 * k); const x = cv.getContext('2d'); x.setTransform(k, 0, 0, k, 0, 0); x.imageSmoothingQuality = 'high';
@@ -4969,7 +5052,14 @@
     const ty = gy + (H2 - gy) * 0.42;
     x.fillStyle = '#5a4a36'; x.beginPath(); x.ellipse(W2 / 2, ty + 20, 160, 12, 0, 0, Math.PI * 2); x.fill();
     HOLD_TENTS.forEach(([id, n, who, col], i) => {
-      const tx = 48 + i * 88;
+      const tx = HOLD_X(i);
+      if (id === 'portal') {
+        // a small standing-stone gate outside the tents, swirling violet, the warden beside it
+        const pg = x.createRadialGradient(tx, ty - 20, 1, tx, ty - 20, 22); pg.addColorStop(0, '#f5e8ff'); pg.addColorStop(0.4, '#a855f7'); pg.addColorStop(1, 'rgba(76,29,149,0)'); x.fillStyle = pg; x.beginPath(); x.ellipse(tx, ty - 20, 12, 19, 0, 0, Math.PI * 2); x.fill();
+        x.strokeStyle = '#4a4458'; x.lineWidth = 5; x.beginPath(); x.ellipse(tx, ty - 20, 14, 21, 0, Math.PI, Math.PI * 2); x.stroke(); x.fillStyle = '#4a4458'; x.fillRect(tx - 16.5, ty - 20, 5, 20); x.fillRect(tx + 11.5, ty - 20, 5, 20);
+        const s = sprite(who, 0, false), sw = s.lw * 2, sh = s.lh * 2; x.save(); x.translate(tx + 24, 0); x.scale(-1, 1); x.drawImage(s, -sw / 2, ty + 3 - sh, sw, sh); x.restore();
+        return;
+      }
       if (id === 'camp') { x.fillStyle = '#3a2618'; x.fillRect(tx - 10, ty - 2, 20, 3); for (let q = 0; q < 4; q++) flame(x, tx - 6 + q * 4, ty - 2, 10 + (q % 2) * 4, 0); const gg = x.createRadialGradient(tx, ty - 8, 0, tx, ty - 8, 40); gg.addColorStop(0, 'rgba(255,150,60,.4)'); gg.addColorStop(1, 'rgba(255,150,60,0)'); x.fillStyle = gg; x.fillRect(tx - 40, ty - 48, 80, 80); return; }
       x.fillStyle = col; x.globalAlpha = 0.92; x.beginPath(); x.moveTo(tx - 28, ty); x.lineTo(tx, ty - 44); x.lineTo(tx + 28, ty); x.fill(); x.globalAlpha = 1;
       x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.moveTo(tx, ty - 44); x.lineTo(tx + 28, ty); x.lineTo(tx + 6, ty); x.fill();
@@ -4979,7 +5069,7 @@
     });
     const party = S.party.filter(Boolean);
     party.forEach((id, i) => { const m = L.memberById(id); if (!m) return; const s = sprite(m.cls, lookHue(m), false); x.drawImage(s, W2 / 2 - party.length * 9 + i * 18 - 3, ty + 4 - (i % 2) * 3, s.lw * 2, s.lh * 2); });
-    return { ty: ty / H2, xs: HOLD_TENTS.map((_, i) => (48 + i * 88) / W2) };
+    return { ty: ty / H2, xs: HOLD_TENTS.map((_, i) => HOLD_X(i) / W2) };
   }
   function openHold() {
     modal('<div class="maphead"><div><h2>The Hold</h2><small>Iron Covenant fortress above the tear. Tap a tent to go there. Your dive on floor ' + S.floor + ' waits for you.</small></div><button class="iconbtn" id="hold-x" aria-label="Close">&times;</button></div>' +
@@ -4990,7 +5080,7 @@
         md.querySelector('#hold-x').onclick = closeModal; md.querySelector('#hold-map').onclick = openMap;
         md.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => {
           const k = b.dataset.hold; closeModal();
-          if (k === 'camp') { if (S.floor > L.CAMP_FLOOR) campModal(); } else if (k === 'ench') enchanterModal(); else if (k === 'arm') armorerModal(); else openStore();
+          if (k === 'camp') { if (S.floor > L.CAMP_FLOOR) campModal(); } else if (k === 'ench') enchanterModal(); else if (k === 'arm') armorerModal(); else if (k === 'portal') visitEnch('portal'); else openStore();
         });
       });
   }
@@ -5650,7 +5740,7 @@
       'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
       'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
       'New Legendary loot: when a world boss ends, everyone who fought rolls their own chance at a Legendary (2% to 20%, higher with more damage, full odds once 3 phases break). Several delvers can win.',
-      'You also get boss shards and Rift tokens for your damage. Trade 40 Rift tokens for a Legendary piece of any boss set in Market > Boss shards.',
+      'You also get boss shards and Rift tokens for your damage. Take 40 Rift tokens to Warden Sable at the new Rift Gate, a portal just outside the Hold (Map > The Hold, or the shop buttons), and trade them for a Legendary piece of any boss set.',
       'This week\'s preview boss keeps its scores until it ends on Friday, and pays out under the new loot rules.',
     ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
@@ -6287,8 +6377,7 @@
     const have = L.shardsOf(S);
     let h = '<div class="sigex"><div class="shhave">' + L.WB_SETS.map((b, k) => '<span class="shchip sh' + k + '">' + icon('relic') + '<b>' + (have[k] || 0) + '</b> ' + b.word + '</span>').join('') + '</div>' +
       '<p class="note small">Every world boss gives you boss shards for your damage. Each boss’s shards upgrade its own Legendary set.</p>' +
-      '<h3 class="sub">Rift tokens</h3><p class="note small">You have <b>' + fmt(S.wbTok || 0) + '</b> Rift tokens. World bosses give them for your damage. Trade ' + L.WB_TOKEN_COST + ' for a Legendary piece (a random slot) of any boss set.</p><div class="row">' +
-      L.WB_SETS.map((b, k) => '<button class="btn small" data-tokbuy="' + k + '"' + ((S.wbTok || 0) < L.WB_TOKEN_COST ? ' disabled' : '') + '>' + esc(b.name) + '</button>').join('') + '</div>';
+      '<h3 class="sub">Rift tokens</h3><p class="note small">You have <b>' + fmt(S.wbTok || 0) + '</b> Rift tokens. World bosses give them for your damage. Warden Sable at the Rift Gate trades ' + L.WB_TOKEN_COST + ' for a Legendary piece of any boss set.</p><div class="row"><button class="btn small" data-riftgo="1">' + icon('relic') + 'Go to the Rift Gate</button></div>';
     if (trade.msg) h += '<p class="note">' + esc(trade.msg) + '</p>';
     const x = trade.sh; if (!x) return h + '</div>';
     const others = x.l.filter(l => l.seller !== x.me).sort((a, b) => a.price / a.n - b.price / b.n);
@@ -6468,11 +6557,7 @@
       S.gold -= r.price; L.shardsOf(S)[r.k] = (L.shardsOf(S)[r.k] || 0) + r.n; afterTrade(); sfx.coin();
       toast('relic', 'Shards bought', '+' + shName(r.k, r.n) + ' for ' + fmt(r.price) + ' gold.', 'feat'); loadShards();
     });
-    if (d.tokbuy != null) {
-      const k = +d.tokbuy, it = L.buyLegend(S, k); if (!it) return;
-      save(); try { pushCloud(true); } catch (e) {} updateGear(true); sfx.boss && sfx.boss();
-      toast('crown', 'LEGENDARY: ' + L.gearName(it), L.WB_TOKEN_COST + ' Rift tokens traded for a piece of ' + L.WB_SETS[k].name + '. ' + fmt(S.wbTok) + ' tokens left.', 'feat'); paintTrade(); return;
-    }
+    if (d.riftgo) { if (S.hero) visitEnch('portal'); return; }
     if (d.hcancel) tradeAct(async () => {
       const r = await chatCall('POST', '/shards/cancel', { id: d.hcancel });
       L.shardsOf(S)[r.k] = (L.shardsOf(S)[r.k] || 0) + r.n; afterTrade(); toast('relic', 'Listing taken down', shName(r.k, r.n) + ' are back in your stash.', ''); loadShards();
@@ -6650,7 +6735,7 @@
         '<li><b>' + esc(tr.trait) + '</b><span>' + esc(tr.line) + ' Weak to ' + cn(tr.weak) + ' (+' + Math.round(L.WB_WEAK * 100) + '% damage), resists ' + tr.resist.map(cn).join(' and ') + ' (−' + Math.round(L.WB_RESIST * 100) + '%).</span></li>' +
         '<li><b>Fight beside players</b><span>Hired and story companions deal half damage to the boss. Your hero and other players\' heroes in your party deal full damage.</span></li>') +
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
-      '<li><b>Legendary loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a piece of <b>' + esc(s2.name) + '</b>: 2% to 20%, higher the more damage you dealt, and full odds once the server breaks 3 phases. Several delvers can win. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set in the Market.'; })() + '</span></li>' +
+      '<li><b>Legendary loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a piece of <b>' + esc(s2.name) + '</b>: 2% to 20%, higher the more damage you dealt, and full odds once the server breaks 3 phases. Several delvers can win. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set from Warden Sable at the Rift Gate, just outside the Hold.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
       (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
       (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
