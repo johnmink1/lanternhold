@@ -1,4 +1,4 @@
-/* lh-build 202611250621 */
+/* lh-build 202611251638 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -214,7 +214,7 @@
     { id: 'whet',     name: 'Grim Whetstone',          desc: '+25% strike damage per level',           per: 0.25 },
     { id: 'hourglass',name: 'Cracked Hourglass',       desc: '+10% ability duration per level',        per: 0.10 },
     { id: 'lamp',     name: 'Lamp of the First Delve', desc: '+3s lantern time per level',             per: 3 },
-    { id: 'moth',     name: 'Moth-wing Charm',         desc: '+1% treasure chest chance per level',    per: 0.01 },
+    { id: 'moth',     name: 'Moth-wing Charm',         desc: '+1% treasure chest chance per level (max 20%)', per: 0.01 },
     { id: 'ledger',   name: 'Ledger of Old Debts',     desc: '-1% training costs per level (max 25%)', per: 0.01 },
     { id: 'dice',     name: 'Bone Dice',               desc: '+2% critical strike chance per level',   per: 0.02 },
     { id: 'lens',     name: 'Deepglass Lens',          desc: '+6% damage to guardians per level',     per: 0.06 },
@@ -539,7 +539,10 @@
   function goldMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'gold')) * (1 + gearGold(s)) * (1 + kup(s, 'purse')) * (1 + relicVal(s, 'locket')) * sidePerk(s, 'gold') * (1 + campBonus(s, 'gold')) * (1 + sk(s, 'gold')); }
   function critChance(s) { return 0.04 + relicVal(s, 'dice') + sk(s, 'crit'); }
   function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern'); }
-  function chestChance(s) { return 0.03 + relicVal(s, 'moth') + sk(s, 'chest'); }
+  // Capped (v124 fix): the Moth-wing Charm had no cap, so a hero who kept re-beating the Lampmother stacked it past
+  // 97 levels and every fight became a Treasure Chest (Chipplin, 25 Nov 2026: +380M gold a second at floor 149/150).
+  const MOTH_MAX = 0.2, CHEST_MAX = 0.25;
+  function chestChance(s) { return Math.min(CHEST_MAX, 0.03 + Math.min(MOTH_MAX, relicVal(s, 'moth')) + sk(s, 'chest')); }
   function abilityDuration(s, ab) { return ab.dur * (1 + relicVal(s, 'hourglass')); }
 
   // ---------- Skill trees ----------
@@ -2544,7 +2547,9 @@
       s.stats.bossKills++;
       if (f === ACT_ONE_END && s.party.filter(Boolean).length === 1) s.stats.soloLamp = (s.stats.soloLamp || 0) + 1; // the Lampmother, alone
       if (f % 10 === 0) masteryMark(s, regionNo(f), 1, events);
-      const firstClear = f >= s.maxFloorEver - 1 && !regionNeed(s, f + 1);
+      // First clear = the deepest guardian beaten for the first time. It used to allow maxFloorEver - 1, so a party
+      // parked on the floor 150 seal (or farming its newest guardian) rolled the 35% relic chance on every kill.
+      const firstClear = f >= s.maxFloorEver && !regionNeed(s, f + 1);
       const chance = f < 10 ? 0 : (firstClear ? 0.35 : 0.03);
       const r = rng || Math.random;
       if (r() < chance) {
