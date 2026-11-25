@@ -104,10 +104,10 @@ const chip = (t, cls) => '<span class="chip' + (cls ? ' ' + cls : '') + '">' + t
 const kv = pairs => '<dl class="kv">' + pairs.filter(Boolean).map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + v + '</dd></div>').join('') + '</dl>';
 
 // ================= Guide pages (from the in-game Delver's Guide) =================
-const GUIDE_SLUG = { start: 'getting-started', party: 'your-party', fight: 'combat', gear: 'gear-and-loot', camp: 'camp', grow: 'getting-stronger', sigils: 'sigils-and-perks', social: 'playing-together' };
+const GUIDE_SLUG = { start: 'getting-started', party: 'your-party', fight: 'combat', gear: 'gear-and-loot', camp: 'camp', grow: 'getting-stronger', sigils: 'sigils-and-perks', social: 'playing-together', roadmap: 'roadmap' };
 const GUIDE_REL = {
   start: ['classes', 'regions'], party: ['classes', 'companions', 'banners'], fight: ['bestiary', 'regions', 'world-boss'],
-  gear: ['gear', 'sets', 'enchantments'], camp: ['camp-and-jobs'], grow: ['progression', 'classes'], sigils: ['store-items'], social: ['ember-ring', 'world-boss'],
+  gear: ['gear', 'sets', 'enchantments'], camp: ['camp-and-jobs'], grow: ['progression', 'classes'], sigils: ['store-items'], social: ['ember-ring', 'world-boss'], roadmap: ['regions', 'companions', 'banners'],
 };
 function guidePic(p, title) {
   if (!p) return '';

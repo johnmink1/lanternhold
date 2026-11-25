@@ -5475,6 +5475,74 @@
         'War banners fly on a pole behind your party and show on your hero in the Ember Ring, the standings, the Players Guild and next to your name in chat.',
         'Other players see your hero\u2019s outfit in the Players Guild, as a guest in their party and in the Ember Ring. Nothing here changes power.']],
     ] },
+    { id: 'roadmap', name: 'Roadmap', icon: 'map', topics: [
+      ['The road so far', 's:tank,healer,rogue,mage,necro', 'Lanternhold opened on November 22, 2026: five heroes, one lantern and a cellar full of Gloops. 119 updates later, the Deep is a front of the Grand War.', [
+        '<b>The first night</b> (updates 1 to 12): tap to strike, training, the Campfire, camp jobs, skill trees, Kindling and a full set of gear slots.',
+        '<b>The war comes down</b> (13 to 28): Act One below the Starless Vault, the alliances and their banners, the world map, Sigils, Mercy’s Blessing, the Lantern Pass and daily quests.',
+        '<b>A living Hold</b> (29 to 73): the Trading Post, the Players Guild, Ember Ring duels, world boss weekends, the Loot Goblin, merging, enchanting, the Wardrobe, music and the Nexus Guardian.',
+        '<b>Deeper fights</b> (74 to 100): region trials, special attacks, mana and stamina, burns and stuns, the Ghost Lantern, the merchant and bounties, and the Mercy Corps on the road.',
+        '<b>The Hold today</b> (102 to 119): the Hold’s tents, the Armorer and the Store, Legendary world boss loot, Victor’s Banner, Bestiary mastery, real weapon types, chat windows and the NPC Guild.']],
+      ['One year, four acts', 'i:map', 'The year follows the Grand War. Each season is one act: a chapter of the story, new places to go and new ways to play. It ends at the Last Surge, when the Nexus breaks or holds.', [
+        '<b>Act I · The First Incursion</b>: now to January 24, 2027 (Season 1).',
+        '<b>Act II · The Keeperless Lantern</b>: January to April 2027 (Season 2).',
+        '<b>Act III · The War Comes Down</b>: April to July 2027 (Season 3).',
+        '<b>Act IV · The Last Surge</b>: July to October 2027 (Season 4).',
+        '<b>Finale · The Breaking</b>: autumn 2027, about a year after the Hold first opened. The alliance holding the Nexus decides how it ends.',
+        'This is our plan, not a promise. Dates follow the Grand War’s seasons, and your feedback will move things around.']],
+      ['Act I · The First Incursion', 'i:lantern', 'Live now. Fifteen regions down to the Lampmother. Old Thessaly kept the lantern lit by feeding it bearers, and at the Rift Threshold you stopped her. Without its Lampmother, the seal fails at the next surge.', [
+        '<b>Expeditions</b> (December): the first version of NPC expeditions opens at the Guild Hall. See the next card.',
+        'Parties sealed at floor 150 keep busy: send your hires out while you wait for Act II.',
+        '<b>The Longest Night</b> (week of December 21): a winter festival. Lanterns hang over the Hold, a short festival quest line, and a looks-only lantern style.',
+        '<b>The first crowning</b> (January 24): the alliance holding the Nexus wins Season 1, and its players fly Victor’s Banner all through Act II.']],
+      ['Expeditions', 's:tank,rogue,mage', 'Send your hired NPCs out into the Deep on their own. They come back with loot, hero XP and gold, or they come back hurt, or they don’t come back at all.', [
+        'The <b>Expedition Board</b> at the Guild Hall posts jobs: scout a region, escort a Mercy Corps caravan, recover lantern-glass, break a warband camp, hunt a guardian’s echo. New jobs every 4 hours.',
+        'Every expedition has a <b>difficulty</b> (Easy, Fair, Hard, Deadly, Legendary), a <b>length</b> (30 minutes to a day) and a <b>skill</b>: Might (tanks), Mending (healers), Stealth (rogues), Arcana (mages) or Spirit (necromancers). A matching class goes in with a big edge.',
+        'Every NPC has a <b>gear rating</b> from the item levels, rarity and enchants they wear. Each expedition has a minimum gear rating, and an NPC under it won’t go. Kit them out at the Armorer and Enchanter first.',
+        'Before you send anyone, the board shows the odds, for example <b>Success 70% · Failure 24% · Fallen 6%</b>. Gear rating above the minimum, a matching skill, rarity, rank and a second NPC all raise them.',
+        '<b>Success</b>: gold, hero XP, Dust and loot whose item level follows the difficulty, with a chance at region set pieces. A great roll adds a bonus chest.',
+        '<b>Failure</b>: the NPC comes home hurt with nothing to show and rests a few hours. <b>Fallen</b>: on Deadly and Legendary jobs an NPC can fall and leave your company. Their gear always comes home to your bag.',
+        '<b>Mercy Corps recovery</b>: for a day after an NPC falls, the Corps can carry them home for gold and Dust. The story companions (Sir Ashe, the Pale Oracle, Varga, Brann and the Hollow King) never fall: the Corps always brings them home, and they rest a day.',
+        'Expeditions run while you are away. An NPC on one still draws a wage and doesn’t fight in your party. Short contracts can’t go.',
+        'Each return earns the NPC expedition ranks (Recruit, Veteran, Elite, Champion), and each rank adds a perk.']],
+      ['Act II · The Keeperless Lantern', 's:lich', 'January to April 2027. The Lampmother is gone and the lantern gutters. Someone has to keep it lit, and every alliance wants that someone to be theirs.', [
+        '<b>Story</b>: the Hold names your hero its Warden. Brann tries to re-carve the seal-wards without feeding them anyone. The Hollow King, the very first bearer, starts to remember his name.',
+        '<b>The Underreach</b>: eight new regions below the Threshold, floors 151 to 230, with new foes, guardians and region sets. The first one is shaped by the Season 1 winner: iron halls for the Covenant, lit stairs for the Ascendancy, flooded tunnels for the Tide.',
+        '<b>Rebuild the Hold</b>: raise the tents into buildings. The Campfire grows into a Barracks (more bench room), the Armorer into a Forge, the Enchanter into a Tower, and a new Expedition Gate and Map Room open.',
+        '<b>Expeditions, part two</b>: teams of up to three NPCs, and expedition traits such as Trapwise, Steady Hands and Lucky.',
+        '<b>Ember Ring seasons</b>: a ranked season each act, with a looks-only reward for the top delvers.',
+        '<b>The Thaw</b> (March): for one week the Weeping Aqueduct runs clean, and its eels drop spring gifts.',
+        '<b>Act finale</b>: the Hollow King remembers his name, and where the first lantern was lit. The Deep is not a back door to the Nexus. It is the Nexus’s root.']],
+      ['Act III · The War Comes Down', 's:sentinel,hound', 'April to July 2027. Now the alliances believe in the Deep. Their armies march down the stair, and the Hold is caught between them.', [
+        '<b>Story</b>: the Pale Oracle’s two roads split apart. Wren finds Vael’s old research and has to choose between the Ascendancy and the truth. Kestrel and Varga follow the Tide’s coin to its plan for the Hold.',
+        '<b>Faction contracts</b>: expeditions for your alliance. Each success adds to your alliance’s push for the Nexus and earns banner rewards.',
+        '<b>Siege of the Hold</b>: a weekend event where warbands storm the Hold. Every player defends a gate, and if the Hold stands, everyone shares the rewards.',
+        '<b>Warlords</b>: alliance elites rise into named Warlords who move between regions each week. Beat them to push your alliance’s front.',
+        '<b>Company expeditions</b>: Players Guild members pool their NPCs for long expeditions (12 to 48 hours) and share the loot.',
+        '<b>The Warrens of the Three Banners</b>: eight more regions, floors 231 to 310.',
+        '<b>Rift-glass</b>: a new crafting material from expeditions and the new regions, for a tenth enchant tier and for re-forging an item’s type.',
+        '<b>Midsummer Ember Games</b> (June): a festival tournament in the Ember Ring.',
+        '<b>Act finale</b>: the Tide breaks into the Lamplit Cellars, and the lantern cracks.']],
+      ['Act IV · The Last Surge', 's:wyrm,lich', 'July to October 2027. The lantern is cracked and the Rift is waking. Every alliance races for the Nexus root beneath the Hold.', [
+        '<b>Story</b>: the Unlit finally speaks. The Hollow King offers to become the new seal, by choice this time. Your party decides how far it will go to keep the light.',
+        '<b>The Nexus Root</b>: the last regions of the year, floors 311 to 400, ending at the Nyx Heart.',
+        '<b>Nexus expeditions</b>: Legendary jobs into the root, where hired NPCs can fall. Each success carries a relic to your alliance’s side of the Nexus.',
+        '<b>The Nyx Heart</b>: a world boss that lasts the whole final week. Every point of damage counts for the striker’s alliance.',
+        '<b>Alliance chapters</b>: the Covenant, the Ascendancy, the Tide, the Mercy Corps and the Unsworn each get their own final chapter and a Legendary set.',
+        '<b>Harvest of the Bone Orchard</b> (October): an autumn festival before the surge.']],
+      ['Finale · The Breaking', 'i:crown', 'At the Last Surge the alliance holding the Nexus decides the Rift’s fate, and the Deep changes for good. Every ending opens Year Two.', [
+        '<b>If the Iron Covenant holds</b>, the Nexus is sealed. The Covenant forges a new lantern from the Nexus itself, and no bearer is ever fed to it again. The Deep becomes a fortress. Year Two: <b>The Long Watch</b>, where something is still knocking from the other side.',
+        '<b>If the Radiant Ascendancy holds</b>, the Nexus is ruled. Its light becomes a ladder, the Deep fills with light, and heroes can Ascend, a new path above hero level. Year Two: <b>The Climb</b>, where the new light casts strange shadows.',
+        '<b>If the Devouring Tide holds</b>, the Nexus breaks. The Rift tears open across the Reach, and the Hold is the last light left burning. Year Two: <b>The Dark Year</b>, relighting the Reach one region at a time.',
+        '<b>If no alliance holds it clearly</b>, the Hollow King keeps his promise. He becomes the seal, the Nexus holds, and nobody rules it. Year Two: <b>The King’s Bargain</b>.',
+        '<b>The Mercy Corps</b>: if players reach the Mercy goal in the final season, no one is left in the dark. Whatever the ending, every companion is carried home.',
+        'Everyone who played the year gets a one-year relic, and the ending is written into the Journal for good.']],
+      ['What every act brings', 'i:star', 'A steady rhythm, so there is always something on the way.', [
+        'New story chapters in the Journal, and new regions with their own foes, guardians and region sets.',
+        'A new world boss with its own Legendary set and shards.',
+        'A festival week, an Ember Ring season and a Victor’s Banner for the alliance that wins the season.',
+        'New Bestiary pages and mastery for every new foe.',
+        'Ideas welcome: post them in the Help channel or the Lanternhold Discord’s feature requests.']],
+    ] },
   ];
   const guidePic = p => p.startsWith('s:') ? '<div class="gpic sprites">' + p.slice(2).split(',').map(n => '<img src="' + SP.spriteURL(n, 2, 0) + '" alt="">').join('') + '</div>' : '<div class="gpic">' + icon(p.slice(2)) + '</div>';
   let guideCat = 'start';
@@ -5486,6 +5554,7 @@
       '<div class="gbody">' + c.topics.map(([t, pic, sum, pts]) => '<section class="gcard">' + guidePic(pic) + '<div class="gtext"><h3>' + t + '</h3><p class="gsum">' + sum + '</p><ul>' + pts.map(x => '<li>' + x + '</li>').join('') + '</ul></div></section>').join('') + '</div></div>' +
       '<div class="row"><a class="btn ghost" href="https://lanternhold.born2gamellc.com/wiki/" target="_blank" rel="noopener">Full wiki</a><button class="btn ghost" id="g-notes">What’s new</button><button class="btn ghost" id="g-tut">Replay the tutorial</button><button class="btn" id="g-ok">Close</button></div>', md => {
         md.className = 'sheet wide guidesheet';
+        { const on = md.querySelector('.gnav .on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
         md.querySelectorAll('[data-gcat]').forEach(b => b.onclick = () => { openGuide(b.dataset.gcat); const gb = $('modalbody').querySelector('.gbody'); if (gb) gb.scrollTop = 0; });
         md.querySelector('#g-notes').onclick = openNotes;
         md.querySelector('#g-x').onclick = closeModal; md.querySelector('#g-ok').onclick = closeModal;
