@@ -1,4 +1,4 @@
-/* lh-build 202611250436 */
+/* lh-build 202611250441 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5157,7 +5157,7 @@
         });
       });
   }
-  // ---------- Training Ground (v120, John 25 Nov 2026) ----------
+  // ---------- Training Ground (v121, John 25 Nov 2026) ----------
   // Reached from Map > the Hold. The hero alone strikes a harmless Practice Mimic to read real damage and healing.
   // Core trainSandbox/trainTick run the normal fight rules on a throwaway copy of the save: no loot, gold or hero XP,
   // and the real party keeps delving meanwhile. Readouts: whole-session and last-5-second rates, totals, biggest hit.
@@ -5933,7 +5933,11 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate, a Training Ground and a crafting log', items: [
+    { v: 121, date: 'November 25, 2026', title: 'The Training Ground', items: [
+      'New: the Training Ground (Map > The Hold). Your hero alone strikes a Practice Mimic so you can see your real damage per second and healing per second, live, with totals, your biggest hit and a Reset button. Tap the mimic to add your own strikes.',
+      'Turn on "Mimic bites back" to test heals: the mimic nibbles your hero so healing and life steal show up. It can never knock you down. Nothing at the Training Ground drops loot or gives hero XP, and your party keeps delving while you practice.',
+    ] },
+    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate and a crafting log', items: [
       'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
       'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
       'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
@@ -5946,8 +5950,6 @@
       'While you wait at a guardian, the goal line under the floor shows the trial: how many alliance elites you have (out of 10) and the floor they open. Hover it for the full rule.',
       'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
       'Mages, necromancers and healers now cost Dust when they sign on, on top of gold. Wages are still gold only.',
-      'New: the Training Ground (Map > The Hold). Your hero alone strikes a Practice Mimic so you can see your real damage per second and healing per second, live, with totals, your biggest hit and a Reset button. Tap the mimic to add your own strikes.',
-      'Turn on "Mimic bites back" to test heals: the mimic nibbles your hero so healing and life steal show up. It can never knock you down. Nothing at the Training Ground drops loot or gives hero XP, and your party keeps delving while you practice.',
     ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',

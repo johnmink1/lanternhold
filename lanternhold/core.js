@@ -1,4 +1,4 @@
-/* lh-build 202611250436 */
+/* lh-build 202611250441 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -2707,7 +2707,7 @@
   // or 'portal' (the Rift Gate outside the walls, v120: Rift tokens for world boss Legendaries). s.enchAt and s.shopK are never saved.
   function visitEnchanter(s, now, kind) { if (!s.hero || s.enchAt) return false; s.enchAt = now || Date.now(); s.shopK = kind === 'arm' || kind === 'store' || kind === 'portal' ? kind : 'ench'; return true; }
   function leaveEnchanter(s) { if (!s.enchAt) return false; s.enchAt = 0; s.shopK = null; return true; }
-  // Training Ground (v120, John 25 Nov 2026): reached from the Hold. The hero alone hits a harmless practice mimic so the
+  // Training Ground (v121, John 25 Nov 2026): reached from the Hold. The hero alone hits a harmless practice mimic so the
   // player can read their real damage and healing. It runs the normal tick on a throwaway copy of the save, so nothing
   // there (gold, loot, hero XP, kills, quests, cooldowns, mana) ever reaches the real save, and the dive keeps going.
   // With bites on, the mimic nibbles TRAIN_BITE of the hero's max health a second so heals and life steal have work;
