@@ -754,11 +754,14 @@
     const v = Math.max(5, npcIncomeBase(s) * 60); incCache.set(s, { at: now, v }); return v;
   }
   const npcDust = (s, base) => base ? Math.round(base * (1 + (s.maxFloorEver || 1) / 25)) : 0;
-  function npcCost(s, rar, kind) {
+  // Spellcasters (mages, necromancers, healers) cost Dust once when they sign on, on top of gold (John, 25 Nov 2026).
+  // Nothing costs Dust by the hour. NPC_CASTER_DUST is the least a caster's sign-on takes, before floor scaling.
+  const NPC_CASTER = ['mage', 'necro', 'healer'], NPC_CASTER_DUST = { common: 10, uncommon: 25, rare: 60, epic: 150, legendary: 600 };
+  function npcCost(s, rar, kind, cls) {
     const r = npcRar(rar), inc = npcIncomeMin(s), gold = Math.round(inc * r.hireMin);
     if (kind === 'short') return { gold: Math.round(gold * NPC_SHORT_PART), dust: 0, dustAlt: 0 };
     if (kind === 'bench') return { gold: Math.round(gold * NPC_REHIRE), dust: 0, dustAlt: 0 };
-    return { gold, dust: npcDust(s, r.dust), dustAlt: npcDust(s, r.dustAlt) };
+    return { gold, dust: npcDust(s, NPC_CASTER.includes(cls) ? Math.max(r.dust, NPC_CASTER_DUST[rar] || 0) : r.dust), dustAlt: npcDust(s, r.dustAlt) };
   }
   // Prices are set when a face appears at the Hall (or walks to the bench) and hold until the next rotation, so a
   // price no longer creeps up while you save for it (v119 fix, Tim/John 25 Nov 2026). Anyone who went to the bench
@@ -766,7 +769,7 @@
   function npcLock(s, o, bench) {
     if (bench || o.until) {
       if (!o.cr) { o.c = { gold: 0, dust: 0, dustAlt: 0, free: 1 }; o.cr = 1; }
-    } else if (!o.c || o.ca !== (s.hall && s.hall.at)) { o.c = npcCost(s, o.rar, 'sign'); o.ca = s.hall && s.hall.at; }
+    } else if (!o.c || o.ca !== (s.hall && s.hall.at) || o.cv !== 2) { o.c = npcCost(s, o.rar, 'sign', (memberById(o.id) || o).cls); o.ca = s.hall && s.hall.at; o.cv = 2; }
     return o.c;
   }
   function npcPrice(s, o, kind, bench) {
@@ -774,7 +777,26 @@
     if (!bench && !o.until && kind === 'short') return { gold: Math.round(c.gold * NPC_SHORT_PART), dust: 0, dustAlt: 0 };
     return c;
   }
-  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return npcRar(h.rar).wage * npcIncomeMin(s) * 60; };
+  // v120 (John, 25 Nov 2026): a wage is worked out from the hire's own stats, the same rule for every NPC:
+  //   wage per hour = base fee (by rarity) x 2.74% more per power level (the training cost curve)
+  //                   x (1 + a quarter of their gear damage bonus) x (1 + a quarter of their gear health bonus)
+  // Your income and your other companions play no part. Train or gear a hire and their wage goes up with them.
+  const NPC_FEE = { common: 15, uncommon: 40, rare: 90, epic: 225, legendary: 600 }, NPC_GEAR_W = 0.25;
+  function npcWageAt(rar, lv, dpsPct, hpPct) {
+    return (NPC_FEE[rar] || NPC_FEE.common) * Math.pow(COST_GROWTH, Math.max(1, lv)) * (1 + NPC_GEAR_W * Math.max(0, dpsPct || 0)) * (1 + NPC_GEAR_W * Math.max(0, hpPct || 0));
+  }
+  // The parts of a hire's wage, for the tooltip: [label, gold an hour].
+  function npcWageParts(s, id) {
+    const h = s.hires && s.hires[id]; if (!h) return [];
+    const lv = lvl(s, id), d = gearMult(s, id, 'dps') - 1, hp = gearMult(s, id, 'hp') - 1, base = npcWageAt(h.rar, 1, 0, 0), atLv = npcWageAt(h.rar, lv, 0, 0), withD = npcWageAt(h.rar, lv, d, 0);
+    return [['Base fee', base], ['Power level ' + lv, atLv - base], ['Gear damage', withD - atLv], ['Gear health', npcWageAt(h.rar, lv, d, hp) - withD]];
+  }
+  // An offer's wage once hired: the power level they would join at, with no gear yet.
+  function npcOfferWage(s, o) {
+    const lv = o.lv || s.levels[o.id] || (LEGENDS.includes(o.id) ? 1 : 0) || Math.max(1, Math.round(Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))) * npcRar(o.rar).lvF));
+    return npcWageAt(o.rar, lv, 0, 0);
+  }
+  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return npcWageAt(h.rar, lvl(s, id), gearMult(s, id, 'dps') - 1, gearMult(s, id, 'hp') - 1); };
   const wagesPerHour = s => Object.keys(s.hires || {}).reduce((a, id) => a + wagePerHour(s, id), 0);
   const legendBeat = id => STORY.find(b => b.join === id);
   function npcReq(s, o) {
@@ -3042,7 +3064,7 @@
   }
 
   const api = {
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
