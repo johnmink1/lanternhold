@@ -7027,8 +7027,8 @@
     S.wbLoot[id] = 1; const b = L.WB_SETS[r.boss] ? r.boss : 0, set = L.WB_SETS[b], sh = L.shardsOf(S);
     sh[b] = (sh[b] || 0) + (r.sh || 0);
     let it = null; if (r.leg) { it = L.makeLegend(S, b); S.bag.push(it); S.stats.legends = (S.stats.legends || 0) + 1; }
+    S.wbTok = (S.wbTok || 0) + (r.tok || 0); // before the cloud push, so the account copy has the tokens too
     save(); try { pushCloud(true); } catch (e) {} updateGear(true);
-    S.wbTok = (S.wbTok || 0) + (r.tok || 0); save();
     const odds = Math.round((r.p || 0) * 1000) / 10, got = (r.sh ? shName(b, r.sh) : 'no shards') + (r.tok ? ' and ' + r.tok + ' Rift tokens (' + fmt(S.wbTok) + ' saved)' : '');
     if (it) { sfx.boss && sfx.boss(); toast('crown', 'LEGENDARY: ' + L.gearName(it), 'Your ' + odds + '% roll for ' + set.name + ' came up! Plus ' + got + '.', 'feat'); }
     else toast('relic', set.word + ' loot', 'No Legendary this time (your roll was ' + odds + '%). You got ' + got + '. ' + L.WB_TOKEN_COST + ' tokens buy a piece in the Market.', '');
