@@ -2432,3 +2432,5 @@ body.atench .achips{display:none}
 .rgrow small{color:var(--muted,#9aa3b2);font-size:12px;line-height:1.35}
 .rgrow .btn{flex:none;white-space:nowrap}
 .rgrow .btn{display:inline-flex;align-items:center;gap:6px}.rgrow .btn svg{width:15px;height:15px;flex:none}
+/* v120: region trial shown on the goal line while the party waits at a guardian */
+.goal.trial b{color:#ffcf6a}
