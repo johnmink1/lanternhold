@@ -1,4 +1,4 @@
-/* lh-build 202611250250 */
+/* lh-build 202611250254 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -3267,15 +3267,29 @@
     try { localStorage.removeItem(SAVE_KEY); localStorage.setItem('lanternhold.wiped', 'me'); } catch (e) {}
     S = L.newState(); location.reload();
   }
+  // Big saves (thousands of items) can pass the server's 300 KB limit, so a save over 150 KB is gzipped and sent
+  // as 'gz1:' + base64, about a tenth of the size. Smaller saves stay plain JSON (Tim, 25 Nov 2026: 1,880 items).
+  const PACK_AT = 150000;
+  async function packSave(str) {
+    if (str.length < PACK_AT || typeof CompressionStream === 'undefined') return str;
+    const buf = new Uint8Array(await new Response(new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+    let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return 'gz1:' + btoa(bin);
+  }
+  async function unpackSave(d) {
+    if (typeof d !== 'string' || d.slice(0, 4) !== 'gz1:') return d;
+    const bin = atob(d.slice(4)), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  }
   async function pushCloud(quiet) {
     if (!CL || !signedIn() || !S.hero || dormant) return;
     try {
       const o = saveObj();
-      await api('PUT', { data: JSON.stringify(o), floor: o.maxFloorEver, created: o.created || 0 });
+      await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0 });
       lastCloud = Date.now();
       if (S.mode === 'multi' && S.hero) publishHero();
       if (!quiet) toast('star', 'Progress synced', 'Your save is stored with your account.', 'feat');
-    } catch (e) { if (!quiet) toast('lock', 'Could not sync right now', 'Your progress is still saved on this device.', 'warn'); }
+    } catch (e) { if (!quiet) toast('lock', 'Could not sync right now', 'Your progress is still saved on this device.' + (/cloud \d+/.test(e && e.message) ? ' (' + e.message.replace('cloud', 'error') + ')' : ''), 'warn'); }
   }
   // Publish your hero to the board; owners earn gold whenever someone recruits them.
   async function publishHero() {
@@ -3297,7 +3311,7 @@
     if (!rec && !S.hero) { setup('You are signed in, but this account has no hero yet. Create one below and it will be saved to your account.'); return; }
     if (!rec) { await pushCloud(false); return; }
     if (rec.rst && (S.created || 0) < rec.rst) { playerReset(); return; }
-    let cloud; try { cloud = JSON.parse(rec.data); } catch (e) { if (S.hero) await pushCloud(true); else setup(); return; }
+    let cloud; try { cloud = JSON.parse(await unpackSave(rec.data)); } catch (e) { if (S.hero) await pushCloud(true); else setup(); return; }
     if (!S.hero) { useSave(cloud); return; }
     const ct = (cloud.stats && cloud.stats.playTime) || 0;
     if (Math.abs(ct - local.stats.playTime) < 5) { lastCloud = Date.now(); return; }
@@ -5528,6 +5542,7 @@
   const PATCH_NOTES = [
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
+      'Fixed: very big saves (thousands of items) could not sync to your account, so the account save fell behind. Big saves are now packed down to about a tenth of the size.',
       'NPC Guild prices are now set when a hire appears at the Hall or walks to the bench, and hold until the next new faces. They no longer creep up while you save for them.',
       'Sorry: everyone who went to the bench before this fix (walked off unpaid or let go while the old full-rate wages ran) comes back for free.',
       'Fixed: NPC Guild hire prices and wages no longer jump around. They used to count a mage\u2019s spell as always on (prices up to 70% too high) and drop when a companion was down or sent to the Campfire. Prices now follow your best five companions at full strength, so the price you see is the price you pay.',
