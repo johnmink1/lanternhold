@@ -4154,6 +4154,17 @@
     try { adminLog = (await adminApi('GET', '/admin/audit')).log || []; } catch (e) { adminLog = []; }
     paintAdmin();
   }
+  // Where players came from: the first ?ref= tag (or referring site) each signed-in hero arrived with (server field rf).
+  // "-" means the hero signed up before tracking, or came straight to the game. Needs the v120 admin Lambda.
+  const REF_NAME = { '-': 'Direct or before tracking', reddit: 'Reddit', itch: 'itch.io', newgrounds: 'Newgrounds', gamejolt: 'Game Jolt', crazygames: 'CrazyGames', facebook: 'Facebook', instagram: 'Instagram', discord: 'Discord', google: 'Google', website: 'Store website', war: 'Grand War site', store: 'In-store QR sign', email: 'Customer email', linktree: 'Linktree', story: 'Instagram/Facebook Story', x: 'X (Twitter)', tiktok: 'TikTok', youtube: 'YouTube' };
+  function refTally(players) {
+    if (!players.some(p => 'ref' in p)) return '';
+    const wk = Date.now() - 7 * 864e5, t = {};
+    players.forEach(p => { const k = p.ref || '-'; t[k] = t[k] || { n: 0, wk: 0 }; t[k].n++; if (p.seen > wk) t[k].wk++; });
+    const rows = Object.keys(t).sort((a, c) => t[c].n - t[a].n);
+    return '<h3 class="sub">Where players came from</h3><p class="note">Each signed-in hero, by the link or site they first arrived from. Active = seen in the last 7 days.</p>' +
+      '<div class="adm-list adm-refs">' + rows.map(k => '<div class="adm-row"><span class="adm-n"><b>' + esc(REF_NAME[k] || k) + '</b><small>' + esc(k) + '</small></span><span class="adm-rc"><b>' + t[k].n + '</b> hero' + (t[k].n === 1 ? '' : 'es') + ' &middot; ' + t[k].wk + ' active</span></div>').join('') + '</div>';
+  }
   function paintAdmin() {
     if (!adminList) return;
     const ago = t => { if (!t) return 'never'; const m = Math.floor((Date.now() - t) / 6e4); return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.floor(m / 60) + ' h ago' : Math.floor(m / 1440) + ' d ago'; };
@@ -4161,6 +4172,7 @@
     const on = adminList.players.filter(p => p.on).length, banned = adminList.players.filter(p => p.banned).length;
     $('adminbox').innerHTML =
       '<div class="adm-stats"><div><small>Players</small><b>' + adminList.players.length + '</b></div><div><small>Online now</small><b>' + on + '</b></div><div><small>Banned</small><b>' + banned + '</b></div><div><small>Last wipe</small><b>' + (adminList.epoch ? new Date(adminList.epoch).toLocaleDateString() : 'never') + '</b></div></div>' +
+      refTally(adminList.players) +
       '<div class="adm-bar"><input id="adm-q" type="search" placeholder="Find a player by name" value="' + esc(adminQ) + '"><button class="btn small ghost" id="adm-re">Refresh</button></div>' +
       '<div class="adm-list">' + (list.length ? list.map(p => '<div class="adm-row' + (p.banned ? ' banned' : '') + '"><span class="adm-n"><b>' + esc(p.name || 'Unnamed') + '</b>' + (p.cls ? ' ' + classTag(p.cls) : '') + '<small>' + (p.banned ? 'Banned' : (p.on ? '<span class="online">Online now</span> &middot; ' : 'Seen ' + ago(p.seen) + ' &middot; ') + 'power level ' + p.level + ', floor ' + p.floor) + '</small></span>' +
         (p.canBan ? '<button class="btn small ghost" data-grant="' + p.id + '">Sigils</button><button class="btn small ghost" data-reset="' + p.id + '">Reset</button>' : '') + (p.banned ? '<button class="btn small ghost" data-unban="' + p.id + '">Unban</button>' : '<button class="btn small danger" data-ban="' + p.id + '"' + (p.canBan ? '' : ' disabled title="They need to play once more before they can be banned"') + '>Ban</button>') + '</div>').join('') : '<p class="note">No players match.</p>') + '</div>' +
