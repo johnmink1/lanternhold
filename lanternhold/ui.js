@@ -1,4 +1,4 @@
-/* lh-build 202611250304 */
+/* lh-build 202611250306 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1596,7 +1596,7 @@
   function rarTag(id) {
     const r = L.npcRarOf(S, id); if (!r) return '';
     const R = L.npcRar(r), h = (S.hires || {})[id], w = h ? L.wagePerHour(S, id) : 0;
-    const tip = R.name + ' hire. ' + (h && h.kind === 'short' ? 'Short contract: ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) + ' left, already paid.' : 'Wage ' + fmt(w) + ' gold an hour, half that while you are away.');
+    const tip = R.name + ' hire. ' + (h && h.kind === 'short' ? 'Short contract: ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) + ' left, already paid.' : 'Wage ' + fmt(w) + ' gold an hour, half that while you are away (' + L.npcWageParts(S, id).map(p => p[0] + ' ' + fmt(p[1])).join(', ') + ').');
     return '<span class="rartag" style="--rc:' + R.color + '" data-tip="' + esc(tip) + '" tabindex="0">' + R.name + (h && h.kind === 'short' ? ' · ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) : '') + '</span>';
   }
   function npcCard(o, bench) {
@@ -1611,7 +1611,7 @@
     let acts = '';
     if (why) acts = '<span class="npclock">' + icon('lock') + esc(why) + '</span>';
     else if (bench) acts = '<button class="btn small" data-hire="b:' + o.id + '|' + (o.kind || 'sign') + '|gold"' + (can(c) && (o.kind === 'short' || !full) ? '' : ' disabled') + (c.free ? ' data-tip="They left during a wage bug of ours, so they come back free.">Hire back · free' : '>Hire back · ' + price(c)) + '</button>';
-    else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour, which grows as you train and gear them.">Sign on · ' + price(c) + '</button>' +
+    else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour: a ' + R.name + ' base fee of ' + fmt(L.NPC_FEE[o.rar]) + ', more for each power level and their gear.">Sign on · ' + price(c) + '</button>' +
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
     return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
@@ -5541,7 +5541,7 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 120, date: 'November 25, 2026', title: 'Wages follow the hire', items: [
-      'An NPC hire\u2019s wage now depends on their own power: power level, rarity and gear. It no longer climbs just because your income or your other companions grow. Train or gear a hire and their wage rises with them.',
+      'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
     ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',

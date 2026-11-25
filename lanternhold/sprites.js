@@ -1,4 +1,4 @@
-/* lh-build 202611250304 */
+/* lh-build 202611250306 */
 /* Lanternhold pixel sprites. Each sprite is a grid of palette keys; '.' is empty. */
 (function (root) {
   'use strict';
