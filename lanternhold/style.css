@@ -1,4 +1,4 @@
-/* lh-build 202611250254 */
+/* lh-build 202611250330 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2366,3 +2366,53 @@ body.atench .achips{display:none}
 /* Version under the title (John, 25 Nov 2026) */
 .brand .ver{display:block;font-style:normal;font-size:10.5px;line-height:1.3;letter-spacing:.06em;color:var(--muted);opacity:.85;white-space:nowrap;margin-top:2px}
 .brand .ver:empty{display:none}
+/* Guide: Roadmap tab (clickable act timeline) */
+.rm{display:flex;flex-direction:column;gap:12px}
+.rmtrack{display:flex;overflow-x:auto;padding:2px 0 0;scrollbar-width:thin}
+.rmstop{position:relative;flex:1 1 0;min-width:68px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:0 3px 9px;background:none;border:0;border-bottom:3px solid transparent;color:#9fb0c8;cursor:pointer;font:inherit;text-align:center}
+.rmstop::before{content:'';position:absolute;top:12px;left:0;right:0;height:3px;background:#2a3852}
+.rmstop:first-child::before{left:50%}.rmstop:last-child::before{right:50%}
+.rmstop.done::before{background:#f5c242}.rmstop.now::before{background:linear-gradient(90deg,#f5c242 50%,#2a3852 50%)}
+.rmdot{position:relative;z-index:1;width:20px;height:20px;border-radius:50%;background:#0b1220;border:3px solid #3a4a66;margin:3px 0 2px;box-sizing:border-box}
+.rmstop.done .rmdot{background:#f5c242;border-color:#f5c242}
+.rmstop.now .rmdot{border-color:#f5c242;background:#3a2c0c;box-shadow:0 0 0 4px rgba(245,194,66,.18),0 0 14px rgba(245,194,66,.6)}
+.rmstop b{font:700 13px 'Chakra Petch',sans-serif;color:#e8eef8;letter-spacing:.04em;text-transform:uppercase}
+.rmstop small{font-size:11px;line-height:1.25}
+.rmstop:hover b{color:#fff}.rmstop:hover .rmdot{border-color:#f5c242}
+.rmstop.on{border-bottom-color:#f5c242}.rmstop.on b{color:#f5c242}.rmstop.on small{color:#e8eef8}
+.rmpanel{border:1px solid #1f2a3d;border-radius:12px;background:#0b1220;padding:14px;display:flex;flex-direction:column;gap:12px}
+.rmhead{display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:start}
+.rmhead h3{margin:3px 0 5px;font:700 22px 'Chakra Petch',sans-serif;color:#fff;letter-spacing:.03em}
+.rmhead p{margin:0;color:#cdd7e6;font-size:14.5px;line-height:1.5}
+.rmtag{color:#f5c242;font:600 12px Inter,sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.rmst{font-style:normal;margin-left:8px;padding:2px 8px;border-radius:99px;font-size:10.5px;background:#1a2438;color:#9fb0c8;letter-spacing:.04em}
+.rmst.now{background:rgba(245,194,66,.18);color:#f5c242}.rmst.done{background:rgba(143,207,106,.16);color:#8fcf6a}
+.rmlist{display:flex;flex-direction:column;gap:6px}
+.rmitem{border:1px solid #1f2a3d;border-radius:10px;background:#0e1628}
+.rmitem[open]{border-color:rgba(245,194,66,.35)}
+.rmitem summary{list-style:none;display:flex;align-items:center;gap:12px;padding:10px 12px;cursor:pointer}
+.rmitem summary::-webkit-details-marker{display:none}
+.rmitem summary::after{content:'›';margin-left:auto;color:#6b7c99;font-size:22px;line-height:1;transition:transform .2s}
+.rmitem[open] summary::after{transform:rotate(90deg);color:#f5c242}
+.rmitem summary:hover{background:rgba(255,255,255,.02)}
+.rmitem summary svg{width:20px;height:20px;color:#f5c242;flex-shrink:0}
+.rmitem summary span{display:flex;flex-direction:column;gap:1px}
+.rmitem summary b{color:#e8eef8;font-size:14.5px}.rmitem summary small{color:#9fb0c8;font-size:12.5px}
+.rmitem ul{margin:0;padding:0 16px 12px 52px;color:#cdd7e6;font-size:13.5px;line-height:1.5}.rmitem li{margin:4px 0}
+.rmodds{display:flex;height:24px;border-radius:6px;overflow:hidden;margin:2px 16px 4px 52px;font:700 11.5px Inter,sans-serif;color:#0b1220}
+.rmodds span{display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden}
+.rmodds .ok{background:#8fcf6a}.rmodds .bad{background:#e9a447}.rmodds .fall{background:#e05a5a}
+.rmnote{display:block;margin:0 16px 12px 52px;color:#6b7c99;font-size:12px}
+.rmends{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.rmend{border:1px solid color-mix(in srgb,var(--c) 40%,transparent);border-left:4px solid var(--c);border-radius:10px;padding:10px 12px;background:color-mix(in srgb,var(--c) 7%,#0b1220)}
+.rmend small{color:var(--c);font:700 11px Inter,sans-serif;text-transform:uppercase;letter-spacing:.06em}
+.rmend b{display:block;color:#fff;font-size:15.5px;margin:3px 0 4px}
+.rmend p{margin:0 0 6px;color:#cdd7e6;font-size:13px;line-height:1.45}
+.rmend em{font-style:normal;color:var(--c);font-size:12.5px;font-weight:700}
+.rmnav{display:flex;justify-content:space-between;gap:8px}
+.rmfine{margin:0;color:#6b7c99;font-size:12px;text-align:center}
+@media (max-width:720px){
+ .rmhead{grid-template-columns:64px 1fr;gap:10px}.rmhead h3{font-size:19px}
+ .rmends{grid-template-columns:1fr}.rmstop{flex:0 0 96px}
+ .rmitem ul{padding-left:30px}.rmodds,.rmnote{margin-left:16px}
+}
