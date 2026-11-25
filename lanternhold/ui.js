@@ -1,4 +1,4 @@
-/* lh-build 202611250621 */
+/* lh-build 202611251638 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5946,6 +5946,7 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
+      'Fixed: past about 97 levels of the Moth-wing Charm every fight turned into a Treasure Chest, so some heroes got stuck opening chests at the bottom of Act One. The charm now tops out at +20% (treasure chests at most 25% of fights), and re-beating the Lampmother no longer counts as a first clear for relic finds.',
       'Nine new feats for the long haul, each worth the usual +1% damage and healing: Lone Lantern (defeat the Lampmother with only your own hero in the party), Masterwork (+10 gear in every open slot on your hero), Forged Company (all five heroes in +10 gear), Ash and Ember (rekindle 5 times), The Undying Flame (rekindle 25 times), Jailbreaker (defeat 500 guardians), Reliquary (find every relic), Again, and Deeper (reach NP+3) and Lantern Eternal (reach NP+10).',
     ] },
     { v: 123, date: 'November 25, 2026', title: 'Formation shuffle and locked doors', items: [
