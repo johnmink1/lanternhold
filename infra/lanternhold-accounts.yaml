@@ -111,6 +111,9 @@ Resources:
               - Effect: Allow
                 Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem]
                 Resource: !GetAtt SavesTable.Arn
+              - Effect: Allow
+                Action: [dynamodb:PutItem]
+                Resource: !GetAtt TradeTable.Arn
 
   SaveFunction:
     Type: AWS::Lambda::Function
@@ -124,48 +127,11 @@ Resources:
       Environment:
         Variables:
           TABLE: !Ref SavesTable
+          TRADE: !Ref TradeTable
       Code:
         ZipFile: |
-          const { DynamoDBClient, GetItemCommand, UpdateItemCommand, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
-          const db = new DynamoDBClient({});
-          const TABLE = process.env.TABLE;
-          const res = (code, body) => ({ statusCode: code, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-          exports.handler = async (event) => {
-            const sub = event.requestContext && event.requestContext.authorizer && event.requestContext.authorizer.jwt && event.requestContext.authorizer.jwt.claims.sub;
-            if (!sub) return res(401, { error: 'not signed in' });
-            const method = event.requestContext.http.method;
-            const Key = { userId: { S: sub } };
-            if (method === 'GET') {
-              const r = await db.send(new GetItemCommand({ TableName: TABLE, Key }));
-              if (!r.Item) return res(404, { error: 'no save' });
-              // rst: an admin reset this player; games created before it start over
-              return res(200, { data: r.Item.data.S, updated: Number(r.Item.updated.N), rst: r.Item.rst ? Number(r.Item.rst.N) : 0 });
-            }
-            if (method === 'PUT') {
-              let body = event.body || '';
-              if (event.isBase64Encoded) body = Buffer.from(body, 'base64').toString('utf8');
-              if (body.length > 300000) return res(413, { error: 'save too large' });
-              let parsed; try { parsed = JSON.parse(body); } catch (e) { return res(400, { error: 'bad json' }); }
-              if (typeof parsed.data !== 'string') return res(400, { error: 'missing data' });
-              const now = Date.now();
-              // UpdateItem keeps an admin reset stamp (rst); saves from games created before it are refused
-              try {
-                await db.send(new UpdateItemCommand({ TableName: TABLE, Key, UpdateExpression: 'SET #d = :d, updated = :u, floor = :f',
-                  ConditionExpression: 'attribute_not_exists(rst) OR rst <= :c', ExpressionAttributeNames: { '#d': 'data' },
-                  ExpressionAttributeValues: { ':d': { S: parsed.data }, ':u': { N: String(now) }, ':f': { N: String(Number(parsed.floor) || 0) }, ':c': { N: String(Number(parsed.created) || 0) } } }));
-              } catch (e) {
-                if (e.name !== 'ConditionalCheckFailedException') throw e;
-                const r = await db.send(new GetItemCommand({ TableName: TABLE, Key }));
-                return res(409, { error: 'reset', rst: Number(r.Item.rst.N) });
-              }
-              return res(200, { ok: true, updated: now });
-            }
-            if (method === 'DELETE') {
-              await db.send(new DeleteItemCommand({ TableName: TABLE, Key }));
-              return res(200, { ok: true });
-            }
-            return res(405, { error: 'method not allowed' });
-          };
+          // built from infra/lambda/save.js by infra/build.py
+          const u=require("@aws-sdk/client-dynamodb"),h=require("zlib"),f=require("crypto"),l=new u.DynamoDBClient({}),{TABLE:m,TRADE:g}=process.env,i=(t,e)=>({statusCode:t,headers:{"content-type":"application/json"},body:JSON.stringify(e)}),p=t=>f.createHash("sha256").update("lh:"+t).digest("hex").slice(0,16),r=t=>typeof t=="number"&&isFinite(t)?Math.round(t*100)/100:0;function y(t){let e;try{e=JSON.parse(t.slice(0,4)==="gz1:"?h.gunzipSync(Buffer.from(t.slice(4),"base64")).toString():t)}catch{return null}if(!e||typeof e!="object")return null;const a=e.stats||{},o=e.shards||{};return{g:r(e.gold),d:r(e.dust),k:r(e.kindling),e:r(e.embers),x:r(e.hxp),f:r(e.maxFloorEver),fl:r(e.floor),b:Array.isArray(e.bag)?e.bag.length:0,ki:r(a.kills),bk:r(a.bossKills),ge:r(a.goldEarned),pt:r(a.playTime),ls:r(e.lastSeen),cr:r(e.created),tk:r(e.wbTok),sh:Object.values(o).reduce((s,n)=>s+r(n),0),np:r(e.np),wp:r(e.wagesPaid),hr:e.hires?Object.keys(e.hires).length:0,rk:r(a.rekindles)}}async function S(t,e,a,o){const s=y(a);if(!s)return;let n="";try{n=JSON.stringify(Array.isArray(o.acts)?o.acts.slice(-30):[]).slice(0,6e3)}catch{}await l.send(new u.PutItemCommand({TableName:g,Item:{pk:{S:"alog#"+p(t)},sk:{S:e.toString(36)+f.randomBytes(2).toString("hex")},at:{N:String(e)},s:{S:JSON.stringify(s)},a:{S:n},dv:{S:String(o.dv||"").slice(0,12)},ttl:{N:String(Math.floor(e/1e3)+30*86400)}}}))}exports.handler=async t=>{const e=t.requestContext&&t.requestContext.authorizer&&t.requestContext.authorizer.jwt&&t.requestContext.authorizer.jwt.claims.sub;if(!e)return i(401,{error:"not signed in"});const a=t.requestContext.http.method,o={userId:{S:e}};if(a==="GET"){const s=await l.send(new u.GetItemCommand({TableName:m,Key:o}));return s.Item?i(200,{data:s.Item.data.S,updated:Number(s.Item.updated.N),rst:s.Item.rst?Number(s.Item.rst.N):0}):i(404,{error:"no save"})}if(a==="PUT"){let s=t.body||"";if(t.isBase64Encoded&&(s=Buffer.from(s,"base64").toString("utf8")),s.length>3e5)return i(413,{error:"save too large"});let n;try{n=JSON.parse(s)}catch{return i(400,{error:"bad json"})}if(typeof n.data!="string")return i(400,{error:"missing data"});const c=Date.now();try{await l.send(new u.UpdateItemCommand({TableName:m,Key:o,UpdateExpression:"SET #d = :d, updated = :u, floor = :f",ConditionExpression:"attribute_not_exists(rst) OR rst <= :c",ExpressionAttributeNames:{"#d":"data"},ExpressionAttributeValues:{":d":{S:n.data},":u":{N:String(c)},":f":{N:String(Number(n.floor)||0)},":c":{N:String(Number(n.created)||0)}}}))}catch(d){if(d.name!=="ConditionalCheckFailedException")throw d;const b=await l.send(new u.GetItemCommand({TableName:m,Key:o}));return i(409,{error:"reset",rst:Number(b.Item.rst.N)})}if(g)try{await S(e,c,n.data,n)}catch(d){console.log("activity log",d.name||d)}return i(200,{ok:!0,updated:c})}return a==="DELETE"?(await l.send(new u.DeleteItemCommand({TableName:m,Key:o})),i(200,{ok:!0})):i(405,{error:"method not allowed"})};
 
   HeroesTable:
     Type: AWS::DynamoDB::Table
@@ -733,7 +699,7 @@ Resources:
       Code:
         ZipFile: |
           // built from infra/lambda/admin.js by infra/build.py
-          const m=require("@aws-sdk/client-dynamodb"),b=require("@aws-sdk/client-cognito-identity-provider"),i=new m.DynamoDBClient({}),y=new b.CognitoIdentityProviderClient({}),{SAVES:g,HEROES:S,TRADE:N,POOL:I}=process.env,l=(t,o)=>({statusCode:t,headers:{"content-type":"application/json"},body:JSON.stringify(o)}),c=t=>({S:String(t)});async function h(){const t=await i.send(new m.GetItemCommand({TableName:g,Key:{userId:c("#epoch")}}));return t.Item?Number(t.Item.updated.N):0}async function E(t,o){const u=[];let f;do{const a=await i.send(new m.ScanCommand({TableName:t,ExclusiveStartKey:f}));for(const s of a.Items||[])(!o||!o(s))&&u.push(s);f=a.LastEvaluatedKey}while(f);return u}exports.handler=async t=>{const o=t.routeKey;if(o==="GET /epoch")return l(200,{epoch:await h()});if(o==="GET /leaderboard"){const a=await E(S),s=a.filter(n=>n.name&&!n.ban&&n.seen&&Date.now()-n.seen.N<18e4).length,e=a.filter(n=>n.name&&n.fl&&!n.ban).map(n=>({name:n.name.S,cls:n.cls.S,level:+n.lv.N,floor:+n.fl.N,side:n.sd?n.sd.S:"unsworn"})).sort((n,d)=>d.floor-n.floor||d.level-n.level).slice(0,50);let p=null;try{const n=new Set(((await y.send(new b.ListUsersInGroupCommand({UserPoolId:I,GroupName:"admins"}))).Users||[]).map(r=>r.Username)),d=a.find(r=>r.u&&n.has(r.u.S)&&r.name&&!r.ban&&r.seen&&Date.now()-r.seen.N<18e4);d&&(p=d.name.S)}catch{}return{statusCode:200,headers:{"content-type":"application/json","cache-control":"public, max-age=60"},body:JSON.stringify({top:e,online:s,keeper:p})}}const u=t.requestContext.authorizer&&t.requestContext.authorizer.jwt&&t.requestContext.authorizer.jwt.claims;if(!u||!String(u["cognito:groups"]||"").includes("admins"))return l(403,{error:"admin only"});let f={};if(t.body)try{f=JSON.parse(t.isBase64Encoded?Buffer.from(t.body,"base64").toString():t.body)}catch{return l(400,{error:"bad json"})}if(o==="GET /admin/players"){const a=Date.now(),s=(await E(S)).map(e=>({id:e.pid.S,name:e.name?e.name.S:e.bn?e.bn.S:"",cls:e.cls?e.cls.S:"",level:e.lv?+e.lv.N:0,floor:e.fl?+e.fl.N:0,seen:e.seen?+e.seen.N:0,on:e.seen?a-e.seen.N<18e4:!1,banned:!!e.ban,canBan:!!e.u,ref:e.rf?e.rf.S:""})).sort((e,p)=>p.seen-e.seen);return l(200,{players:s,epoch:await h()})}if(o==="POST /admin/ban"||o==="POST /admin/unban"){const a=String(f.id||"");if(!/^[0-9a-f]{16}$/.test(a))return l(400,{error:"id"});const s=await i.send(new m.GetItemCommand({TableName:S,Key:{pid:c(a)}}));if(!s.Item||!s.Item.u)return l(404,{error:"player"});const e=s.Item.u.S;if(e===u.sub)return l(400,{error:"self"});if(o==="POST /admin/unban")return await y.send(new b.AdminEnableUserCommand({UserPoolId:I,Username:e})),await i.send(new m.UpdateItemCommand({TableName:S,Key:{pid:c(a)},UpdateExpression:"REMOVE ban"})),l(200,{ok:!0});await y.send(new b.AdminDisableUserCommand({UserPoolId:I,Username:e})),await y.send(new b.AdminUserGlobalSignOutCommand({UserPoolId:I,Username:e}));const p=s.Item.name?s.Item.name.S:s.Item.bn?s.Item.bn.S:"";await i.send(new m.PutItemCommand({TableName:S,Item:{pid:c(a),u:c(e),bn:c(p),ban:{N:String(Date.now())}}}));let n,d=0;do{const r=await i.send(new m.QueryCommand({TableName:N,KeyConditionExpression:"pk = :p",ExpressionAttributeValues:{":p":c("sell#"+a)},ExclusiveStartKey:n}));for(const w of r.Items||[]){const C=w.cls?w.cls.S:"";await i.send(new m.DeleteItemCommand({TableName:N,Key:{pk:w.pk,sk:w.sk}})),C&&await i.send(new m.DeleteItemCommand({TableName:N,Key:{pk:c("mkt#"+C),sk:w.sk}})),d++}n=r.LastEvaluatedKey}while(n);return l(200,{ok:!0,listings:d})}return l(404,{error:"not found"})};
+          const m=require("@aws-sdk/client-dynamodb"),w=require("@aws-sdk/client-cognito-identity-provider"),u=new m.DynamoDBClient({}),y=new w.CognitoIdentityProviderClient({}),{SAVES:g,HEROES:S,TRADE:I,POOL:N}=process.env,d=(t,o)=>({statusCode:t,headers:{"content-type":"application/json"},body:JSON.stringify(o)}),i=t=>({S:String(t)});async function E(){const t=await u.send(new m.GetItemCommand({TableName:g,Key:{userId:i("#epoch")}}));return t.Item?Number(t.Item.updated.N):0}async function k(t,o){const f=[];let p;do{const a=await u.send(new m.ScanCommand({TableName:t,ExclusiveStartKey:p}));for(const s of a.Items||[])(!o||!o(s))&&f.push(s);p=a.LastEvaluatedKey}while(p);return f}exports.handler=async t=>{const o=t.routeKey;if(o==="GET /epoch")return d(200,{epoch:await E()});if(o==="GET /leaderboard"){const a=await k(S),s=a.filter(n=>n.name&&!n.ban&&n.seen&&Date.now()-n.seen.N<18e4).length,e=a.filter(n=>n.name&&n.fl&&!n.ban).map(n=>({name:n.name.S,cls:n.cls.S,level:+n.lv.N,floor:+n.fl.N,side:n.sd?n.sd.S:"unsworn"})).sort((n,r)=>r.floor-n.floor||r.level-n.level).slice(0,50);let c=null;try{const n=new Set(((await y.send(new w.ListUsersInGroupCommand({UserPoolId:N,GroupName:"admins"}))).Users||[]).map(l=>l.Username)),r=a.find(l=>l.u&&n.has(l.u.S)&&l.name&&!l.ban&&l.seen&&Date.now()-l.seen.N<18e4);r&&(c=r.name.S)}catch{}return{statusCode:200,headers:{"content-type":"application/json","cache-control":"public, max-age=60"},body:JSON.stringify({top:e,online:s,keeper:c})}}const f=t.requestContext.authorizer&&t.requestContext.authorizer.jwt&&t.requestContext.authorizer.jwt.claims;if(!f||!String(f["cognito:groups"]||"").includes("admins"))return d(403,{error:"admin only"});let p={};if(t.body)try{p=JSON.parse(t.isBase64Encoded?Buffer.from(t.body,"base64").toString():t.body)}catch{return d(400,{error:"bad json"})}if(o==="GET /admin/players"){const a=Date.now(),s=(await k(S)).map(e=>({id:e.pid.S,name:e.name?e.name.S:e.bn?e.bn.S:"",cls:e.cls?e.cls.S:"",level:e.lv?+e.lv.N:0,floor:e.fl?+e.fl.N:0,seen:e.seen?+e.seen.N:0,on:e.seen?a-e.seen.N<18e4:!1,banned:!!e.ban,canBan:!!e.u,ref:e.rf?e.rf.S:""})).sort((e,c)=>c.seen-e.seen);return d(200,{players:s,epoch:await E()})}if(o==="GET /admin/log"){const a=t.queryStringParameters||{},s=String(a.id),e=a.before,c={":p":i("alog#"+s)};if(!/^[0-9a-f]{16}$/.test(s))return d(400,{error:"id"});e&&(c[":b"]=i(e));const n=await u.send(new m.QueryCommand({TableName:I,KeyConditionExpression:"pk = :p"+(e?" AND sk < :b":""),ExpressionAttributeValues:c,ScanIndexForward:!1,Limit:200}));return d(200,{rows:(n.Items||[]).map(r=>({sk:r.sk.S,at:+r.at.N,s:r.s.S,a:r.a&&r.a.S,dv:r.dv&&r.dv.S})),more:n.LastEvaluatedKey&&n.LastEvaluatedKey.sk.S})}if(o==="POST /admin/ban"||o==="POST /admin/unban"){const a=String(p.id||"");if(!/^[0-9a-f]{16}$/.test(a))return d(400,{error:"id"});const s=await u.send(new m.GetItemCommand({TableName:S,Key:{pid:i(a)}}));if(!s.Item||!s.Item.u)return d(404,{error:"player"});const e=s.Item.u.S;if(e===f.sub)return d(400,{error:"self"});if(o==="POST /admin/unban")return await y.send(new w.AdminEnableUserCommand({UserPoolId:N,Username:e})),await u.send(new m.UpdateItemCommand({TableName:S,Key:{pid:i(a)},UpdateExpression:"REMOVE ban"})),d(200,{ok:!0});await y.send(new w.AdminDisableUserCommand({UserPoolId:N,Username:e})),await y.send(new w.AdminUserGlobalSignOutCommand({UserPoolId:N,Username:e}));const c=s.Item.name?s.Item.name.S:s.Item.bn?s.Item.bn.S:"";await u.send(new m.PutItemCommand({TableName:S,Item:{pid:i(a),u:i(e),bn:i(c),ban:{N:String(Date.now())}}}));let n,r=0;do{const l=await u.send(new m.QueryCommand({TableName:I,KeyConditionExpression:"pk = :p",ExpressionAttributeValues:{":p":i("sell#"+a)},ExclusiveStartKey:n}));for(const b of l.Items||[]){const C=b.cls?b.cls.S:"";await u.send(new m.DeleteItemCommand({TableName:I,Key:{pk:b.pk,sk:b.sk}})),C&&await u.send(new m.DeleteItemCommand({TableName:I,Key:{pk:i("mkt#"+C),sk:b.sk}})),r++}n=l.LastEvaluatedKey}while(n);return d(200,{ok:!0,listings:r})}return d(404,{error:"not found"})};
 
   AdminIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -765,6 +731,15 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: GET /admin/players
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub 'integrations/${AdminIntegration}'
+
+  AdminLogRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /admin/log
       AuthorizationType: JWT
       AuthorizerId: !Ref JwtAuthorizer
       Target: !Sub 'integrations/${AdminIntegration}'

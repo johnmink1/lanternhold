@@ -1345,10 +1345,23 @@
     const x = { ic, title: String(title || ''), sub: String(sub || ''), cls: cls || '', t: Date.now(), n: 1 };
     if (det) { const cut = l => { const m = new Map(); for (const v of l || []) m.set(v, (m.get(v) || 0) + 1); l = [...m].map(([v, n]) => n > 1 ? n + '× ' + v : v); return l.length > 14 ? l.slice(0, 13).concat(['and ' + (l.length - 13) + ' more']) : l; }; x.g = cut(det.g); x.l = cut(det.l); }
     notes.push(x);
+    actPush([x.t, x.cls, x.title + (x.sub ? ': ' + x.sub : ''), x.g, x.l]);
     if (notes.length > 120) notes = notes.slice(-120);
     try { localStorage.setItem(NOTE_KEY, JSON.stringify(notes)); } catch (e) {}
     paintNoteDot();
   }
+  // Activity for the admin audit log (v125): every bell entry, plus "while you were away" gold, rides along with the
+  // next cloud sync (pushCloud) and is stored with it on the server for 30 days. Only admins can read it.
+  var ACT_KEY = 'lh_acts', acts = [];
+  try { acts = JSON.parse(localStorage.getItem(ACT_KEY) || '[]'); if (!Array.isArray(acts)) acts = []; } catch (e) {}
+  function actPush(a) {
+    if (!acts) acts = [];
+    const cut = l => Array.isArray(l) && l.length ? l.slice(0, 4).map(v => String(v).slice(0, 90)) : undefined;
+    acts.push(a.length > 3 ? [a[0], a[1], String(a[2]).slice(0, 180), cut(a[3]), cut(a[4])].filter(v => v !== undefined) : a);
+    if (acts.length > 30) acts = acts.slice(-30);
+    try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
+  }
+  function devId() { let d = ''; try { d = localStorage.getItem('lh_dev') || ''; if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem('lh_dev', d); } } catch (e) {} return d; }
   function paintNoteDot() {
     const d = $('notedot'); if (!d) return;
     const n = notes.filter(x => x.n).length; d.hidden = !n; d.textContent = n > 9 ? '9+' : n || '';
@@ -3546,6 +3559,7 @@
     sec = Math.min(win, sec);
     const g = L.offlineEarnPerSec(S) * sec;
     if (g > 0) { S.gold += g; S.stats.goldEarned += g; }
+    if (away >= 60) actPush([Date.now(), 'away', Math.round(away), Math.round(g)]);
     const wagesBefore = S.wagesPaid || 0, wev = [];
     L.payWages(S, sec, Date.now(), wev, true);
     const wpaid = (S.wagesPaid || 0) - wagesBefore;
@@ -3640,9 +3654,10 @@
   async function pushCloud(quiet) {
     if (!CL || !signedIn() || !S.hero || dormant) return;
     try {
-      const o = saveObj();
-      await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0 });
+      const o = saveObj(), sent = acts.slice();
+      await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId() });
       lastCloud = Date.now();
+      acts = acts.filter(a => !sent.includes(a)); try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
       if (S.mode === 'multi' && S.hero) publishHero();
       if (!quiet) toast('star', 'Progress synced', 'Your save is stored with your account.', 'feat');
     } catch (e) { if (!quiet) toast('lock', 'Could not sync right now', 'Your progress is still saved on this device.' + (/cloud \d+/.test(e && e.message) ? ' (' + e.message.replace('cloud', 'error') + ')' : ''), 'warn'); }
@@ -4445,6 +4460,7 @@
       refTally(adminList.players) +
       '<div class="adm-bar"><input id="adm-q" type="search" placeholder="Find a player by name" value="' + esc(adminQ) + '"><button class="btn small ghost" id="adm-re">Refresh</button></div>' +
       '<div class="adm-list">' + (list.length ? list.map(p => '<div class="adm-row' + (p.banned ? ' banned' : '') + '"><span class="adm-n"><b>' + esc(p.name || 'Unnamed') + '</b>' + (p.cls ? ' ' + classTag(p.cls) : '') + '<small>' + (p.banned ? 'Banned' : (p.on ? '<span class="online">Online now</span> &middot; ' : 'Seen ' + ago(p.seen) + ' &middot; ') + 'power level ' + p.level + ', floor ' + p.floor) + '</small></span>' +
+        '<button class="btn small ghost" data-log="' + p.id + '">View Log</button>' +
         (p.canBan ? '<button class="btn small ghost" data-grant="' + p.id + '">Sigils</button><button class="btn small ghost" data-reset="' + p.id + '">Reset</button>' : '') + (p.banned ? '<button class="btn small ghost" data-unban="' + p.id + '">Unban</button>' : '<button class="btn small danger" data-ban="' + p.id + '"' + (p.canBan ? '' : ' disabled title="They need to play once more before they can be banned"') + '>Ban</button>') + '</div>').join('') : '<p class="note">No players match.</p>') + '</div>' +
       '<h3 class="sub">Grand War links</h3>' + (adminLinks.length ? '<p class="note">Players asking to show their Grand War commander badges. Approve only when you know the player is that commander, for example from Discord.</p><div class="adm-list">' + adminLinks.sort((a, c) => a.wv - c.wv).map(l => '<div class="adm-row"><span class="adm-n"><b>' + esc(l.name || 'Unnamed') + '</b> wants to be <b>' + esc(l.wl) + '</b><small>' + (commander(l.wl) ? warBadge(l.wl) : 'Not on the war ladder right now') + (l.wv ? ' &middot; <span class="online">Verified</span>' : ' &middot; Waiting') + '</small></span>' + (l.wv ? '' : '<button class="btn small" data-lok="' + l.id + '">Approve</button>') + '<button class="btn small ghost" data-lno="' + l.id + '">' + (l.wv ? 'Remove' : 'Reject') + '</button></div>').join('') + '</div>' : '<p class="note">No players have asked to link a Grand War commander yet.</p>') +
       '<h3 class="sub">Admin log</h3>' + (adminLog.length ? '<div class="adm-list">' + adminLog.map(l => '<div class="adm-row"><span class="adm-n"><b>' + (l.act === 'wipe' ? 'Server wiped' : 'Reset ' + esc(l.name || 'a player') + (l.self ? ' (their own account)' : '')) + '</b><small>' + esc(l.by) + ' &middot; ' + new Date(l.at).toLocaleString() + (l.act === 'reset' ? ' &middot; ' + (l.sigils ? 'Sigils and purchases wiped too' : 'Sigils and purchases kept') : '') + '</small></span></div>').join('') + '</div>' : '<p class="note">No player resets or server wipes yet.</p>') +
@@ -4461,6 +4477,8 @@
       catch (x) { toast('lock', 'That did not work', x.message, 'warn'); }
       adminBusy = false; loadAdmin(); return;
     }
+    const lg = e.target.closest('[data-log]');
+    if (lg) { const p = adminList.players.find(x => x.id === lg.dataset.log); if (p) openPlayerLog(p); return; }
     const gr = e.target.closest('[data-grant]');
     if (gr) {
       const p = adminList.players.find(x => x.id === gr.dataset.grant); if (!p) return;
@@ -4531,6 +4549,75 @@
     }
   });
   document.querySelector('.tabs [data-tab="admin"]').addEventListener('click', () => { paintSpawner(); loadAdmin(); });
+  // Player activity log (John, 25 Nov 2026: "each player should have a View Log in the admin panel so I can open their
+  // log in a popup window ... flag potential errors and warnings for potential cheating"). Rows come from the save
+  // Lambda (one per cloud sync, kept 30 days); audit.js (loaded only here) works out the changes and the flags.
+  const PLOG = { p: null, rows: [], more: '', view: 'all', busy: false };
+  function auditLib() {
+    if (window.LHAudit) return Promise.resolve(window.LHAudit);
+    return new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'audit.js?v=' + (window.LH_BUILD || Date.now()); sc.onload = () => ok(window.LHAudit); sc.onerror = () => no(new Error('The audit tools did not load.')); document.head.appendChild(sc); });
+  }
+  async function openPlayerLog(p) {
+    Object.assign(PLOG, { p, rows: [], more: '', view: 'all' });
+    modal('<div class="plog"><h2>Activity log: ' + esc(p.name || 'Unnamed') + '</h2><p class="note">Loading…</p></div>');
+    $('modalbody').classList.add('logsheet');
+    try { await auditLib(); await plogFetch(); } catch (x) { if (PLOG.p === p) $('modalbody').innerHTML = '<div class="plog"><h2>Activity log: ' + esc(p.name || 'Unnamed') + '</h2><p class="note">' + esc(/\(40[34]\)/.test(x.message) ? 'Activity logs start once the v125 server update is deployed (save and admin Lambdas plus the GET /admin/log route).' : x.message) + '</p><div class="row"><button class="btn ghost" data-plx="1">Close</button></div></div>'; }
+  }
+  async function plogFetch() {
+    const p = PLOG.p, r = await adminApi('GET', '/admin/log?id=' + p.id + (PLOG.more ? '&before=' + encodeURIComponent(PLOG.more) : ''));
+    if (PLOG.p !== p) return;
+    PLOG.rows = PLOG.rows.concat(r.rows || []); PLOG.more = r.more || '';
+    paintPlayerLog();
+  }
+  function paintPlayerLog() {
+    const A = window.LHAudit, p = PLOG.p, an = A.analyze(PLOG.rows), rows = an.rows, big = A.big, span = A.span;
+    const first = rows[0], last = rows[rows.length - 1];
+    const sum = k => rows.reduce((a, r) => a + (r.d && r.d[k] > 0 ? r.d[k] : 0), 0);
+    const FL = { bad: ['Likely cheating', 'skull'], warn: ['Warning', 'lock'], info: ['Note', 'star'] };
+    const head = '<h2>Activity log: ' + esc(p.name || 'Unnamed') + (p.cls ? ' ' + classTag(p.cls) : '') + '</h2>' +
+      '<p class="note">Every cloud sync (about once a minute while they play) with what changed, plus what their game reported doing. Kept 30 days. ' + (p.banned ? 'This player is banned.' : 'Power level ' + p.level + ', floor ' + p.floor + '.') + '</p>';
+    if (!rows.length) { $('modalbody').innerHTML = '<div class="plog">' + head + '<p class="note">No activity yet. Logging started with v125, and only signed-in players who have played since then appear here.</p><div class="row"><button class="btn ghost" data-plx="1">Close</button></div></div>'; return; }
+    const verdict = an.verdict === 'bad' ? '<div class="plog-v bad">' + icon('skull') + '<span><b>' + an.n.bad + ' likely cheat' + (an.n.bad === 1 ? '' : 's') + '</b>' + (an.n.warn ? ' and ' + an.n.warn + ' warning' + (an.n.warn === 1 ? '' : 's') : '') + '. Read the red rows below before acting; a ban or reset is still your call.</span></div>'
+      : an.verdict === 'warn' ? '<div class="plog-v warn">' + icon('lock') + '<span><b>' + an.n.warn + ' warning' + (an.n.warn === 1 ? '' : 's') + '</b>. Worth a look, usually explained by the actions on the same row.</span></div>'
+      : '<div class="plog-v ok">' + icon('star') + '<span><b>Nothing suspicious</b> in this stretch.</span></div>';
+    const stats = '<div class="adm-stats"><div><small>Covers</small><b>' + span((last.at - first.at) / 1000) + '</b></div><div><small>Syncs</small><b>' + rows.length + '</b></div><div><small>Gold earned</small><b>' + big(sum('ge')) + '</b></div><div><small>Floors / hero levels</small><b>+' + sum('f') + ' / +' + sum('lv') + '</b></div></div>' +
+      '<p class="note small">Now: ' + big(last.s.g) + ' gold, ' + big(last.s.d) + ' Dust, hero level ' + last.lv + ', deepest floor ' + last.s.f + ', ' + last.s.b + ' items in the bag' + (last.s.np ? ', NP+' + last.s.np : '') + '. ' + an.devs + ' device' + (an.devs === 1 ? '' : 's') + '.</p>';
+    const views = '<div class="plog-views">' + [['all', 'Everything'], ['flags', 'Flags only (' + (an.n.bad + an.n.warn + an.n.info) + ')'], ['acts', 'Actions only']].map(v => '<button class="btn small' + (PLOG.view === v[0] ? '' : ' ghost') + '" data-plv="' + v[0] + '">' + v[1] + '</button>').join('') + '</div>';
+    const chg = r => { const d = r.d; if (!d) return 'First sync in this stretch: ' + big(r.s.g) + ' gold, deepest floor ' + r.s.f + ', hero level ' + r.lv;
+      const o = []; const sg = (v, w) => (v > 0 ? '+' : '') + big(v) + ' ' + w;
+      if (d.ge) o.push(sg(d.ge, 'gold earned')); const og = Math.round(d.g - Math.max(0, d.ge)); if (og) o.push(og < 0 ? big(-og) + ' gold spent' : sg(og, 'gold from other sources')); if (d.f) o.push(sg(d.f, 'floor' + (Math.abs(d.f) === 1 ? '' : 's')) + ' (' + r.s.f + ')'); if (d.lv) o.push(sg(d.lv, 'hero level' + (Math.abs(d.lv) === 1 ? '' : 's')) + ' (' + r.lv + ')');
+      if (d.ki) o.push(sg(d.ki, 'kills')); if (d.b) o.push(sg(d.b, 'items')); if (d.d) o.push(sg(d.d, 'Dust')); if (d.tk) o.push(sg(d.tk, 'Rift tokens')); if (d.sh) o.push(sg(d.sh, 'shards')); if (d.wp > 0) o.push(big(d.wp) + ' wages paid');
+      return o.join(' &middot; ') || 'No change'; };
+    const actLine = a => a[1] === 'away' ? '<li class="away">Came back after ' + span(a[2]) + ' away: +' + big(a[3]) + ' gold</li>'
+      : '<li class="' + esc(String(a[1] || '').split(' ')[0]) + '">' + esc(a[2] || '') + (a[3] ? '<small>Gained: ' + esc(a[3].join(', ')) + '</small>' : '') + (a[4] ? '<small>Lost: ' + esc(a[4].join(', ')) + '</small>' : '') + '</li>';
+    const tm = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const day = t => new Date(t).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    // newest first; runs of quiet syncs (no flags, no actions) fold into one line
+    const out = []; let quiet = null, lastDay = '';
+    const flush = () => { if (!quiet) return; const q = quiet, a = q[q.length - 1], b = q[0], d = k => q.reduce((x, r) => x + (r.d ? r.d[k] : 0), 0);
+      out.push('<div class="plog-r quiet"><span class="plog-t">' + tm(a.at) + (q.length > 1 ? '–' + tm(b.at) : '') + '</span><span class="plog-c">' + q.length + ' quiet sync' + (q.length === 1 ? '' : 's') + ': +' + big(d('ge')) + ' gold earned' + (d('f') ? ', +' + d('f') + ' floors' : '') + (d('lv') ? ', +' + d('lv') + ' hero levels' : '') + (d('ki') ? ', ' + big(d('ki')) + ' kills' : '') + '</span></div>'); quiet = null; };
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i], fl = r.flags.filter(f => PLOG.view !== 'acts' || f.lv !== 'info'), hasA = r.a.length > 0;
+      if (PLOG.view === 'flags' && !r.flags.length) continue;
+      if (PLOG.view === 'acts' && !hasA) continue;
+      const dy = day(r.at); if (dy !== lastDay) { flush(); out.push('<h4 class="plog-day">' + dy + '</h4>'); lastDay = dy; }
+      if (!fl.length && !hasA && PLOG.view === 'all') { (quiet = quiet || []).push(r); continue; }
+      flush();
+      const worst = fl.some(f => f.lv === 'bad') ? ' bad' : fl.some(f => f.lv === 'warn') ? ' warn' : '';
+      out.push('<div class="plog-r' + worst + '"><span class="plog-t">' + tm(r.at) + '</span><div class="plog-c"><div>' + chg(r) + (r.dt > 300 ? ' <small>(' + span(r.dt) + ' since the last sync)</small>' : '') + '</div>' +
+        fl.map(f => '<div class="plog-f ' + f.lv + '">' + icon(FL[f.lv][1]) + '<span><b>' + FL[f.lv][0] + ':</b> ' + esc(f.t) + '</span></div>').join('') +
+        (hasA ? '<ul class="plog-a">' + r.a.slice().reverse().map(actLine).join('') + '</ul>' : '') + '</div></div>');
+    }
+    flush();
+    $('modalbody').innerHTML = '<div class="plog">' + head + verdict + stats + views + '<div class="plog-list">' + (out.length ? out.join('') : '<p class="note">Nothing in this view.</p>') + '</div>' +
+      '<div class="row">' + (PLOG.more ? '<button class="btn small ghost" data-plmore="1">Load older</button>' : '<span class="note small">This is everything kept (30 days).</span>') + '<button class="btn ghost" data-plx="1">Close</button></div></div>';
+  }
+  $('modal').addEventListener('click', async e => {
+    if (!PLOG.p || !$('modalbody').classList.contains('logsheet')) return;
+    if (e.target.closest('[data-plx]')) { PLOG.p = null; closeModal(); return; }
+    const v = e.target.closest('[data-plv]'); if (v) { PLOG.view = v.dataset.plv; paintPlayerLog(); return; }
+    if (e.target.closest('[data-plmore]') && !PLOG.busy) { PLOG.busy = true; e.target.closest('[data-plmore]').textContent = 'Loading…'; try { await plogFetch(); } catch (x) { toast('lock', 'Could not load more', x.message, 'warn'); } PLOG.busy = false; }
+  });
   // Event spawner (John, 2026-11-24): force a random event into your own fight to test it. Only your own save changes.
   let spawnSp = 'slam';
   function paintSpawner() {

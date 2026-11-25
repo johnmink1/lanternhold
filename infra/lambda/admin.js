@@ -49,6 +49,15 @@ exports.handler = async (e) => {
     })).sort((a, c) => c.seen - a.seen);
     return res(200, { players: list, epoch: await getEpoch() });
   }
+  // Player activity log (v125): the rows save.js writes on every cloud sync, newest first, 200 a page (?before=<sk>).
+  if (rk === 'GET /admin/log') {
+    const q = e.queryStringParameters || {}, id = String(q.id), bf = q.before, v = { ':p': S('alog#' + id) };
+    if (!/^[0-9a-f]{16}$/.test(id)) return res(400, { error: 'id' });
+    if (bf) v[':b'] = S(bf);
+    const r = await db.send(new D.QueryCommand({ TableName: TRADE, KeyConditionExpression: 'pk = :p' + (bf ? ' AND sk < :b' : ''), ExpressionAttributeValues: v, ScanIndexForward: false, Limit: 200 }));
+    // s and a are JSON strings; the game parses them
+    return res(200, { rows: (r.Items || []).map(i => ({ sk: i.sk.S, at: +i.at.N, s: i.s.S, a: i.a && i.a.S, dv: i.dv && i.dv.S })), more: r.LastEvaluatedKey && r.LastEvaluatedKey.sk.S });
+  }
   if (rk === 'POST /admin/ban' || rk === 'POST /admin/unban') {
     const id = String(b.id || '');
     if (!/^[0-9a-f]{16}$/.test(id)) return res(400, { error: 'id' });

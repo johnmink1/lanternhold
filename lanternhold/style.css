@@ -2487,3 +2487,30 @@ body.atench .achips{display:none}
 .pill.ok{padding:3px 10px;border-radius:999px;background:#1f5c3c;color:#c8f7d4;font-size:12px;font-weight:700}
 /* v125: with Pip and Gulp the shop header has six buttons; let them wrap on narrow screens */
 @media (max-width:720px){.shophead .shopbtns{flex:1 1 100%;flex-wrap:wrap;gap:6px}.shophead .shopbtns .btn{padding:5px 9px}}
+/* v125 admin activity log (View Log) */
+.modal .sheet.logsheet{max-width:880px;width:calc(100vw - 32px)}
+.plog h2{margin-bottom:4px}
+.plog-v{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;margin:8px 0 10px;border:1px solid var(--line);font-size:14px}
+.plog-v svg{width:18px;height:18px;flex:none}
+.plog-v.ok{background:rgba(110,190,110,.12);border-color:rgba(110,190,110,.5)}
+.plog-v.warn{background:rgba(240,180,60,.13);border-color:rgba(240,180,60,.55)}
+.plog-v.bad{background:rgba(230,80,70,.15);border-color:rgba(230,80,70,.6)}
+.plog-views{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px}
+.plog-list{display:flex;flex-direction:column;gap:4px;max-height:min(56vh,620px);overflow:auto;padding-right:2px}
+.plog-day{margin:8px 0 2px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.plog-r{display:flex;gap:10px;padding:7px 10px;border-radius:9px;background:#0e121a;border:1px solid var(--line);font-size:13px;line-height:1.4}
+.plog-r.quiet{background:transparent;border-style:dashed;color:var(--muted);font-size:12px;padding:4px 10px}
+.plog-r.warn{border-color:rgba(240,180,60,.6);background:rgba(240,180,60,.07)}
+.plog-r.bad{border-color:rgba(230,80,70,.75);background:rgba(230,80,70,.09)}
+.plog-t{flex:none;width:118px;color:var(--muted);font-variant-numeric:tabular-nums}
+.plog-c{flex:1;min-width:0;overflow-wrap:anywhere}
+.plog-c small{color:var(--muted)}
+.plog-f{margin-top:4px;display:flex;gap:6px;align-items:flex-start}
+.plog-f svg{width:14px;height:14px;flex:none;margin-top:2px}
+.plog-f.bad{color:#ff8f84}.plog-f.warn{color:#f3c460}.plog-f.info{color:#9fc6e8}
+.plog-a{margin:4px 0 0;padding-left:16px;color:#cfc6b0;font-size:12px}
+.plog-a li{margin:1px 0}
+.plog-a li small{display:block;color:var(--muted)}
+.plog-a li.away{color:#9fc6e8}
+.plog .row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px}
+@media (max-width:560px){.plog-r{flex-direction:column;gap:2px}.plog-t{width:auto}.modal .sheet.logsheet{width:calc(100vw - 16px);padding:16px}}
