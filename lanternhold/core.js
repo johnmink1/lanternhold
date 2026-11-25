@@ -1,4 +1,4 @@
-/* lh-build 202611242128 */
+/* lh-build 202611250157 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -728,9 +728,31 @@
   }
   const shortHire = (s, id) => !!(s.hires && s.hires[id] && s.hires[id].kind === 'short');
   const npcRarOf = (s, id) => (s.hires && s.hires[id] && s.hires[id].rar) || (LEGENDS.includes(id) ? 'legendary' : null);
-  // Gold income per minute, the yardstick for hire costs and wages (cached for a couple of seconds).
-  let incAt = 0, incVal = 0;
-  function npcIncomeMin(s, now) { now = now || Date.now(); if (now - incAt > 2000 || now < incAt) { incAt = now; incVal = Math.max(5, offlineGoldPerSec(s) * 60); } return incVal; }
+  // Gold income per minute, the yardstick for hire costs and wages (cached per save for a couple of seconds).
+  // It uses steady damage from your best five (no timed buffs, no one down, empty seats filled from the Campfire),
+  // so the price can't be lowered by unseating companions and doesn't swing mid-fight (v119 fix, John 25 Nov 2026).
+  function steadyDps(s, id) {
+    if (!id || !lvl(s, id)) return 0;
+    const m = memberById(id); if (!m) return 0;
+    let d = CLASSES[m.cls].dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps');
+    if (id === 'you') d *= (HERO_DPS[m.cls] || 1) * (1 + sk(s, 'dps'));
+    return d * (1 + wearVal(s, id, 'crit') + (m.cls === 'healer' ? 0 : wearVal(s, id, 'power')));
+  }
+  function npcIncomeBase(s) {
+    const ids = [...new Set(s.unlocked.concat(s.party.filter(Boolean)))].filter(id => !shortHire(s, id));
+    const d = ids.map(id => steadyDps(s, id)).sort((a, b) => b - a).slice(0, PARTY_SIZE).reduce((a, x) => a + x, 0);
+    if (d <= 0) return 0;
+    let f = Math.max(1, s.maxFloor - 1);
+    if (isBossFloor(f)) f = Math.max(1, f - 1);
+    return Math.min(4, d / foeHp(f, false)) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
+  }
+  const incCache = new WeakMap();
+  function npcIncomeMin(s, now) {
+    now = now || Date.now();
+    const c = incCache.get(s);
+    if (c && now - c.at <= 2000 && now >= c.at) return c.v;
+    const v = Math.max(5, npcIncomeBase(s) * 60); incCache.set(s, { at: now, v }); return v;
+  }
   const npcDust = (s, base) => base ? Math.round(base * (1 + (s.maxFloorEver || 1) / 25)) : 0;
   function npcCost(s, rar, kind) {
     const r = npcRar(rar), inc = npcIncomeMin(s), gold = Math.round(inc * r.hireMin);
@@ -841,13 +863,15 @@
     return true;
   }
   // Wages every second, offline too (dt in seconds). Short contracts end on time.
-  function payWages(s, dt, now, events) {
+  // Away from the game wages run at half rate, so they stay the same share of the (smaller) away income (John, 25 Nov 2026).
+  const NPC_AWAY_WAGE = 0.5;
+  function payWages(s, dt, now, events, away) {
     if (!s.hires) return;
     for (const id of Object.keys(s.hires)) if (s.hires[id].kind === 'short' && s.hires[id].until <= now) { const nm = (memberById(id) || {}).name; npcRelease(s, id, 'short', now); events && events.push({ type: 'npcleft', id, name: nm, why: 'short' }); }
     // Unpaid wages run up as a debt; past one hour's worth, the priciest hire walks off and takes their share of it.
     const per = wagesPerHour(s);
     if (per <= 0) { s.owed = 0; return; }
-    s.owed = (s.owed || 0) + per * dt / 3600;
+    s.owed = (s.owed || 0) + per * (away ? NPC_AWAY_WAGE : 1) * dt / 3600;
     const pay = Math.min(s.owed, Math.max(0, s.gold)); s.gold -= pay; s.owed -= pay; s.wagesPaid = (s.wagesPaid || 0) + pay;
     while (s.owed > wagesPerHour(s) && Object.keys(s.hires).some(id => s.hires[id].kind !== 'short')) {
       const id = Object.keys(s.hires).filter(x => s.hires[x].kind !== 'short').sort((a, b) => wagePerHour(s, b) - wagePerHour(s, a))[0];
@@ -2972,7 +2996,7 @@
   }
 
   const api = {
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcIncomeMin, payWages,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
