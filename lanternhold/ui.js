@@ -1,4 +1,4 @@
-/* lh-build 202611250431 */
+/* lh-build 202611250432 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5798,7 +5798,7 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 120, date: 'November 25, 2026', title: 'World boss: real damage', items: [
+    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate and a crafting log', items: [
       'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
       'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
       'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
