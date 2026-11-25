@@ -27,7 +27,7 @@ exports.handler = async (e) => {
   if (rk === 'GET /chat') {
     const pk = await room(me, q); if (!pk) return res(403, { error: 'room' });
     const r = await db.send(new D.QueryCommand({ TableName: T, KeyConditionExpression: 'pk = :p AND sk > :s', ExpressionAttributeValues: { ':p': S(pk), ':s': S(q.since || '0') }, ScanIndexForward: false, Limit: 60 }));
-    return res(200, { me, msgs: (r.Items || []).filter(i => !i.hid).reverse().map(i => Object.assign({ id: i.sk.S, from: i.from.S, name: i.name.S, cls: i.cls.S, text: i.text.S }, i.to ? { to: i.to.S, toName: i.toName ? i.toName.S : '' } : {})) });
+    return res(200, { me, msgs: (r.Items || []).filter(i => !i.hid).reverse().map(i => Object.assign({ id: i.sk.S, from: i.from.S, name: i.name.S, cls: i.cls.S, text: i.text.S }, i.np ? { np: +i.np.N } : {}, i.to ? { to: i.to.S, toName: i.toName ? i.toName.S : '' } : {})) });
   }
   if (rk === 'POST /chat') {
     const pk = await room(me, b); if (!pk) return res(403, { error: 'room' });
@@ -50,6 +50,7 @@ exports.handler = async (e) => {
     catch (x) { if (x.name === 'ConditionalCheckFailedException') return res(429, { error: 'slow' }); throw x; }
     const sk = now.toString(36).padStart(9, '0') + crypto.randomBytes(3).toString('hex');
     const item = { sk: S(sk), from: S(me), name: S(name), cls: S(/^(tank|healer|rogue|mage|necro)$/.test(b.cls) ? b.cls : 'rogue'), text: S(text), ttl: N(Math.floor(now / 1000) + 7 * 86400) };
+    if (b.np >= 1 && b.np <= 10) item.np = N(b.np | 0); // NP+ tier badge (cosmetic, client-sent)
     if (to) {
       // one copy in each inbox, so both sides see the conversation
       Object.assign(item, { to: S(to.pid), toName: S(to.name) });

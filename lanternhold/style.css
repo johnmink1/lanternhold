@@ -1,4 +1,4 @@
-/* lh-build 202611250506 */
+/* lh-build 202611250540 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2434,3 +2434,18 @@ body.atench .achips{display:none}
 .rgrow .btn{display:inline-flex;align-items:center;gap:6px}.rgrow .btn svg{width:15px;height:15px;flex:none}
 /* v120: region trial shown on the goal line while the party waits at a guardian */
 .goal.trial b{color:#ffcf6a}
+
+/* NP+ (v122) */
+.npb{display:inline-block;margin:0 4px;padding:0 6px;border-radius:9px;font:700 11px/17px var(--ui,inherit);letter-spacing:.3px;color:#1b1206;background:linear-gradient(180deg,#f3d58a,#c9953c);box-shadow:0 0 6px rgba(240,190,90,.45);vertical-align:middle;white-space:nowrap}
+.rekindle h2 .npb{font-size:13px;line-height:20px}
+#tab-rekindle .npbox{border-top:1px solid var(--line);margin-top:14px}
+.npcols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+.npcols h3{margin:0 0 4px;font-size:15px}
+.npcols ul{margin:0;padding-left:18px;color:var(--muted);line-height:1.45;font-size:13.5px}
+@media (max-width:520px){.npcols{grid-template-columns:1fr}}
+.pfava.npring{outline:2px solid #e6bf63;outline-offset:2px;box-shadow:0 0 calc(4px + var(--npg,1) * 2px) rgba(240,190,90,calc(.25 + var(--npg,1) * .06))}
+.pfava.npring::after{content:'NP+' attr(data-np);position:absolute;right:-8px;bottom:-8px;padding:0 4px;height:16px;border-radius:8px;background:linear-gradient(180deg,#f3d58a,#c9953c);color:#1b1206;font:700 10px/16px var(--ui,inherit);white-space:nowrap;box-shadow:0 0 0 1.5px #1b1206}
+.pfava.np1{--npg:1}.pfava.np2{--npg:2}.pfava.np3{--npg:3}.pfava.np4{--npg:4}.pfava.np5{--npg:5}.pfava.np6{--npg:6}
+.pfava.np7{--npg:7}.pfava.np8{--npg:8}.pfava.np9{--npg:9}
+.pfava.np10{--npg:10;animation:npglow 3s ease-in-out infinite}
+@keyframes npglow{50%{box-shadow:0 0 40px rgba(255,220,130,1)}}

@@ -22,3 +22,9 @@ John approved this design on 25 Nov 2026 ("Yes, as designed"). Build it in one b
 ## Baselines to track after ship
 
 Players reaching floor 150, NP+ starts per tier, market listing volume and median prices per tier before vs after.
+
+## As built (v122, 25 Nov 2026)
+
+- Safeguard 1 is done by clearing instead of paying 0: when NP+ starts, `infra/lambda/np.js` deletes the player's listings, sent offers and every inbox letter (so no old sale or payment gold can be claimed) and returns offers from other players to them.
+- The 25 Sigils also need the hero board to show floor 151+ (`fl`), which the game publishes right before asking.
+- Extra, from Chipplin's Discord idea: a gold portrait ring with the tier on profile cards.
