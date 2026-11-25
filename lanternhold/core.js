@@ -1,4 +1,4 @@
-/* lh-build 202611250157 */
+/* lh-build 202611250323 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -760,6 +760,20 @@
     if (kind === 'bench') return { gold: Math.round(gold * NPC_REHIRE), dust: 0, dustAlt: 0 };
     return { gold, dust: npcDust(s, r.dust), dustAlt: npcDust(s, r.dustAlt) };
   }
+  // Prices are set when a face appears at the Hall (or walks to the bench) and hold until the next rotation, so a
+  // price no longer creeps up while you save for it (v119 fix, Tim/John 25 Nov 2026). Anyone who went to the bench
+  // before prices were locked (entries not priced at release) comes back free: the full-rate away wages were our bug.
+  function npcLock(s, o, bench) {
+    if (bench || o.until) {
+      if (!o.cr) { o.c = { gold: 0, dust: 0, dustAlt: 0, free: 1 }; o.cr = 1; }
+    } else if (!o.c || o.ca !== (s.hall && s.hall.at)) { o.c = npcCost(s, o.rar, 'sign'); o.ca = s.hall && s.hall.at; }
+    return o.c;
+  }
+  function npcPrice(s, o, kind, bench) {
+    const c = npcLock(s, o, bench);
+    if (!bench && !o.until && kind === 'short') return { gold: Math.round(c.gold * NPC_SHORT_PART), dust: 0, dustAlt: 0 };
+    return c;
+  }
   const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return npcRar(h.rar).wage * npcIncomeMin(s) * 60; };
   const wagesPerHour = s => Object.keys(s.hires || {}).reduce((a, id) => a + wagePerHour(s, id), 0);
   const legendBeat = id => STORY.find(b => b.join === id);
@@ -828,7 +842,7 @@
     const why = !bench && npcReq(s, o); if (why) return { ok: false, why };
     if (kind === 'short') { if (Object.keys(s.hires || {}).filter(id => shortHire(s, id)).length >= NPC_SHORT_MAX) return { ok: false, why: 'You already have ' + NPC_SHORT_MAX + ' on short contracts' }; }
     else if (companions(s).length >= rosterCap(s)) return { ok: false, why: 'No free spot. Send someone back to the Hall, or take a short contract' };
-    const c = npcCost(s, o.rar, bench ? 'bench' : kind);
+    const c = npcPrice(s, o, kind, !!bench);
     if (pay === 'dust') { if (!c.dustAlt || (s.dust || 0) < c.dustAlt) return { ok: false, why: 'Not enough Dust' }; s.dust -= c.dustAlt; s.npcDust = (s.npcDust || 0) + c.dustAlt; }
     else { if (s.gold < c.gold || (s.dust || 0) < c.dust) return { ok: false, why: s.gold < c.gold ? 'Not enough gold' : 'Not enough Dust' }; s.gold -= c.gold; s.dust = (s.dust || 0) - c.dust; s.npcDust = (s.npcDust || 0) + c.dust; s.npcGold = (s.npcGold || 0) + c.gold; }
     s.hires = s.hires || {};
@@ -852,7 +866,7 @@
     const hr = s.hires && s.hires[id]; if (!hr) return false;
     const h = hallState(s, now);
     h.bench = h.bench.filter(b => b.id !== id);
-    if (why !== 'short') h.bench.push(Object.assign({ id, rar: hr.rar, kind: 'sign', lv: lvl(s, id), traits: s.traits && s.traits[id], until: now + NPC_BENCH_MS, why }, hr.m ? { name: hr.m.name, cls: hr.m.cls, side: hr.m.side, hue: hr.m.hue } : {}));
+    if (why !== 'short') h.bench.push(Object.assign({ id, rar: hr.rar, kind: 'sign', lv: lvl(s, id), traits: s.traits && s.traits[id], until: now + NPC_BENCH_MS, why, c: npcCost(s, hr.rar, 'bench'), cr: 1 }, hr.m ? { name: hr.m.name, cls: hr.m.cls, side: hr.m.side, hue: hr.m.hue } : {}));
     s.unlocked = s.unlocked.filter(x => x !== id);
     s.party = s.party.map(x => x === id ? null : x);
     if (s.jobs) for (const k in s.jobs) if (s.jobs[k] === id) delete s.jobs[k];
@@ -2996,7 +3010,7 @@
   }
 
   const api = {
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
