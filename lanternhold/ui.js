@@ -1159,7 +1159,7 @@
         bragSack(e.item);
       } else if (e.type === 'sigil') {
         sfx.relic(); floatText('+' + e.n + ' Sigils', 'skill', FOE_X, 0.15);
-        toast('star', 'Sigils found!', (e.lock ? 'The locked ' + e.lock : e.chest ? 'A chest' : 'The guardian') + ' held ' + e.n + (e.n === 1 ? ' Sigil' : ' Sigils') + '. ' + (signedIn() ? 'They go straight to your wallet.' : 'Sign in to keep them in your wallet.'), 'relic');
+        toast('star', 'Sigils found!', (e.lock ? 'The locked ' + e.lock : e.chest ? 'A chest' : 'The guardian') + ' held ' + e.n + (e.n === 1 ? ' Sigil' : ' Sigils') + '. ' + (!signedIn() ? 'Sign in to keep them in your wallet.' : sigCapped() ? 'Today\u2019s find limit is reached, so they are saved for tomorrow.' : 'They go straight to your wallet.'), 'relic');
         claimFound();
       } else if (e.type === 'lore') {
         const lo = L.LORE.find(x => x.id === e.id); toast('book', 'New journal entry', lo.title, 'feat');
@@ -4110,13 +4110,25 @@
   }
   // ---------- Sigils earned in play: rare finds and daily quests ----------
   let claiming = false;
+  // v125 (Kyvia, Discord 25 Nov 2026): once the server's daily cap was hit, the 5 s timer re-sent the claim and
+  // re-toasted "Daily find limit reached" every time. Now the capped UTC day is remembered (lh_sigcap): no more
+  // claims or toasts until the next UTC day, when the saved Sigils bank as usual.
+  function sigUtcDay() { return new Date().toISOString().slice(0, 10); }
+  var sigCap; // set lazily: sigCapped() can run from the event handler before this line has run
+  function sigCapped() {
+    if (sigCap === undefined) { sigCap = ''; try { sigCap = localStorage.getItem('lh_sigcap') || ''; } catch (e) {} }
+    return sigCap === sigUtcDay();
+  }
   async function claimFound() {
-    if (claiming || !(S.sigPend > 0) || !CL || !signedIn()) return;
+    if (claiming || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped()) return;
     claiming = true;
     try {
       const n = S.sigPend, r = await papi('POST', '/sigils/earn', { kind: 'drop', n });
       S.sigPend = Math.max(0, (S.sigPend || 0) - n) + (n - r.add); if (prof) prof.bal = r.bal; save();
-      if (r.add < n) toast('star', 'Daily find limit reached', 'You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day. The rest are saved for tomorrow.', '');
+      if (r.add < n) {
+        sigCap = sigUtcDay(); try { localStorage.setItem('lh_sigcap', sigCap); } catch (e) {}
+        toast('star', 'Daily find limit reached', 'You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day. The rest are saved for tomorrow.', '');
+      }
     } catch (e) {}
     claiming = false;
   }
@@ -5945,6 +5957,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 125, date: 'November 2026', title: 'Fixes from Discord', items: [
+      'Fixed: after you banked the day\u2019s 15 found Sigils, the game kept popping up \u201cDaily find limit reached\u201d every few seconds. It now tells you once, keeps any extra Sigils for the next day (UTC), and a new find says they are saved for tomorrow (thanks for the report, Kyvia).',
+    ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Fixed: past about 97 levels of the Moth-wing Charm every fight turned into a Treasure Chest, so some heroes got stuck opening chests at the bottom of Act One. The charm now tops out at +20% (treasure chests at most 25% of fights), and re-beating the Lampmother no longer counts as a first clear for relic finds.',
       'Nine new feats for the long haul, each worth the usual +1% damage and healing: Lone Lantern (defeat the Lampmother with only your own hero in the party), Masterwork (+10 gear in every open slot on your hero), Forged Company (all five heroes in +10 gear), Ash and Ember (rekindle 5 times), The Undying Flame (rekindle 25 times), Jailbreaker (defeat 500 guardians), Reliquary (find every relic), Again, and Deeper (reach NP+3) and Lantern Eternal (reach NP+10).',
