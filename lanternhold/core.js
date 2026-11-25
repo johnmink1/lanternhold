@@ -1,4 +1,4 @@
-/* lh-build 202611250205 */
+/* lh-build 202611250222 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -761,11 +761,11 @@
     return { gold, dust: npcDust(s, r.dust), dustAlt: npcDust(s, r.dustAlt) };
   }
   // Prices are set when a face appears at the Hall (or walks to the bench) and hold until the next rotation, so a
-  // price no longer creeps up while you save for it (v119 fix, Tim/John 25 Nov 2026). Hires who walked off unpaid
-  // before this build (bench entries without a locked price) come back for free: the full-rate away wages were our bug.
+  // price no longer creeps up while you save for it (v119 fix, Tim/John 25 Nov 2026). Anyone who went to the bench
+  // before prices were locked (entries not priced at release) comes back free: the full-rate away wages were our bug.
   function npcLock(s, o, bench) {
     if (bench || o.until) {
-      if (!o.c) o.c = o.why === 'unpaid' ? { gold: 0, dust: 0, dustAlt: 0, free: 1 } : npcCost(s, o.rar, 'bench');
+      if (!o.cr) { o.c = { gold: 0, dust: 0, dustAlt: 0, free: 1 }; o.cr = 1; }
     } else if (!o.c || o.ca !== (s.hall && s.hall.at)) { o.c = npcCost(s, o.rar, 'sign'); o.ca = s.hall && s.hall.at; }
     return o.c;
   }
@@ -866,7 +866,7 @@
     const hr = s.hires && s.hires[id]; if (!hr) return false;
     const h = hallState(s, now);
     h.bench = h.bench.filter(b => b.id !== id);
-    if (why !== 'short') h.bench.push(Object.assign({ id, rar: hr.rar, kind: 'sign', lv: lvl(s, id), traits: s.traits && s.traits[id], until: now + NPC_BENCH_MS, why, c: npcCost(s, hr.rar, 'bench') }, hr.m ? { name: hr.m.name, cls: hr.m.cls, side: hr.m.side, hue: hr.m.hue } : {}));
+    if (why !== 'short') h.bench.push(Object.assign({ id, rar: hr.rar, kind: 'sign', lv: lvl(s, id), traits: s.traits && s.traits[id], until: now + NPC_BENCH_MS, why, c: npcCost(s, hr.rar, 'bench'), cr: 1 }, hr.m ? { name: hr.m.name, cls: hr.m.cls, side: hr.m.side, hue: hr.m.hue } : {}));
     s.unlocked = s.unlocked.filter(x => x !== id);
     s.party = s.party.map(x => x === id ? null : x);
     if (s.jobs) for (const k in s.jobs) if (s.jobs[k] === id) delete s.jobs[k];

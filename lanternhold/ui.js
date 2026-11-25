@@ -1,4 +1,4 @@
-/* lh-build 202611250205 */
+/* lh-build 202611250222 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1610,7 +1610,7 @@
     const side = L.SIDES[m.side];
     let acts = '';
     if (why) acts = '<span class="npclock">' + icon('lock') + esc(why) + '</span>';
-    else if (bench) acts = '<button class="btn small" data-hire="b:' + o.id + '|' + (o.kind || 'sign') + '|gold"' + (can(c) && (o.kind === 'short' || !full) ? '' : ' disabled') + (c.free ? ' data-tip="They left over a wage bug of ours, so they come back free.">Hire back · free' : '>Hire back · ' + price(c)) + '</button>';
+    else if (bench) acts = '<button class="btn small" data-hire="b:' + o.id + '|' + (o.kind || 'sign') + '|gold"' + (can(c) && (o.kind === 'short' || !full) ? '' : ' disabled') + (c.free ? ' data-tip="They left during a wage bug of ours, so they come back free.">Hire back · free' : '>Hire back · ' + price(c)) + '</button>';
     else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour.">Sign on · ' + price(c) + '</button>' +
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
@@ -5529,7 +5529,7 @@
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
       'NPC Guild prices are now set when a hire appears at the Hall or walks to the bench, and hold until the next new faces. They no longer creep up while you save for them.',
-      'Sorry: hires who walked off unpaid overnight because of the old full-rate wages come back for free from the bench.',
+      'Sorry: everyone who went to the bench before this fix (walked off unpaid or let go while the old full-rate wages ran) comes back for free.',
       'Fixed: NPC Guild hire prices and wages no longer jump around. They used to count a mage\u2019s spell as always on (prices up to 70% too high) and drop when a companion was down or sent to the Campfire. Prices now follow your best five companions at full strength, so the price you see is the price you pay.',
       'Wages are now half rate while you are away, so they take the same share of your smaller away income. Before, a big roster could cost more than the party brought home overnight and hires walked off.',
       'The gold hover and the NPC Guild now show your away income (what your party brings home while you are gone) and your wages while away.',
