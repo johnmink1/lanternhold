@@ -1,4 +1,4 @@
-/* lh-build 202611250307 */
+/* lh-build 202611250315 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1596,7 +1596,7 @@
   function rarTag(id) {
     const r = L.npcRarOf(S, id); if (!r) return '';
     const R = L.npcRar(r), h = (S.hires || {})[id], w = h ? L.wagePerHour(S, id) : 0;
-    const tip = R.name + ' hire. ' + (h && h.kind === 'short' ? 'Short contract: ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) + ' left, already paid.' : 'Wage ' + fmt(w) + ' gold' + (L.dustWagePerHour(S, id) ? ' + ' + fmt(L.dustWagePerHour(S, id)) + ' Dust' : '') + ' an hour, half that while you are away (' + L.npcWageParts(S, id).map(p => p[0] + ' ' + fmt(p[1]) + (p[2] ? ' Dust' : '')).join(', ') + ').');
+    const tip = R.name + ' hire. ' + (h && h.kind === 'short' ? 'Short contract: ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) + ' left, already paid.' : 'Wage ' + fmt(w) + ' gold an hour, half that while you are away (' + L.npcWageParts(S, id).map(p => p[0] + ' ' + fmt(p[1])).join(', ') + ').');
     return '<span class="rartag" style="--rc:' + R.color + '" data-tip="' + esc(tip) + '" tabindex="0">' + R.name + (h && h.kind === 'short' ? ' · ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) : '') + '</span>';
   }
   function npcCard(o, bench) {
@@ -1604,7 +1604,7 @@
     const why = bench ? null : L.npcReq(S, o), full = L.companions(S).length >= L.rosterCap(S);
     const nShort = Object.keys(S.hires || {}).filter(id => L.shortHire(S, id)).length;
     const c = L.npcPrice(S, o, 'sign', bench), cs = bench ? c : L.npcPrice(S, o, 'short', false);
-    const wage = L.npcOfferWage(S, o), dwage = L.npcOfferDust(S, o);
+    const wage = L.npcOfferWage(S, o);
     const price = x => coin + fmt(x.gold) + (x.dust ? ' + ' + fmt(x.dust) + ' Dust' : '');
     const can = x => S.gold >= x.gold && (S.dust || 0) >= (x.dust || 0);
     const side = L.SIDES[m.side];
@@ -1615,7 +1615,7 @@
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
     return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
-      '<div class="lv">' + (m.title ? esc(m.title) : (side ? side.name + (o.need === 'banner' ? ' only' : '') : '')) + ' &middot; wage ' + fmt(wage) + ' gold' + (dwage ? ' + ' + fmt(dwage) + ' Dust' : '') + '/h' + (bench ? ' &middot; power level ' + o.lv + ' &middot; leaves in ' + fmtTime(Math.max(0, (o.until - Date.now()) / 1000)) : '') + '</div>' +
+      '<div class="lv">' + (m.title ? esc(m.title) : (side ? side.name + (o.need === 'banner' ? ' only' : '') : '')) + ' &middot; wage ' + fmt(wage) + ' gold/h' + (bench ? ' &middot; power level ' + o.lv + ' &middot; leaves in ' + fmtTime(Math.max(0, (o.until - Date.now()) / 1000)) : '') + '</div>' +
       '<div class="npcacts">' + acts + '</div></div></div>';
   }
   function npcGuildHtml() {
@@ -1624,7 +1624,7 @@
     const next = Math.max(0, (h.at + L.NPC_ROTATE - now) / 1000), rr = L.npcRerollCost(S), full = L.companions(S).length >= L.rosterCap(S);
     let x = '<h3 class="sub" id="npcg">NPC Guild</h3><div class="growcard npcg">' +
       '<p>Hire companions for gold or Dust. Rarer ones fight harder and work camp jobs better, but cost more and draw a bigger wage every hour, even while you are away. Legendaries are the lore companions of the story. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p>' +
-      '<div class="npcstat"><span data-tip="Half that while you are away. Mages, necromancers and healers also draw Dust.">Wages <b>' + fmt(wph) + ' gold' + (L.dustWagesPerHour(S) ? ' + ' + fmt(L.dustWagesPerHour(S)) + ' Dust' : '') + '/h</b></span><span data-tip="What your party brings home each hour while you are away. You earn more while you play.">Away income <b>' + fmt(away) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
+      '<div class="npcstat"><span data-tip="Half that while you are away.">Wages <b>' + fmt(wph) + ' gold/h</b></span><span data-tip="What your party brings home each hour while you are away. You earn more while you play.">Away income <b>' + fmt(away) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
       '<button class="btn small ghost" data-npcreroll' + ((S.dust || 0) >= rr ? '' : ' disabled') + '>New faces now · ' + fmt(rr) + ' Dust</button></div>' +
       (full ? '<p class="note">Every companion spot is taken. Let someone go from the Campfire, or take a 2 hour contract.</p>' : '') +
       '<div class="board npcoffers">' + h.offers.map(o => npcCard(o, false)).join('') + '</div>';
@@ -2812,10 +2812,7 @@
       if (g.dataset.tiph !== h) { g.dataset.tiph = h; g.dataset.tip = 'Gold'; if (tipFor === g) showTip(g); }
     }
     if (d) {
-      const dw = L.dustWagesPerHour(S);
-      let h = '<div class="mtip"><b>Dust</b><table>' + row('NPC wages', dw > 0 ? sg(-dw, 'neg') + ' /h' : '<b class="mut">0</b> /h');
-      if ((S.owedDust || 0) >= 1) h += row('Owed', sg(-S.owedDust, 'neg'));
-      if ((S.dustWagesPaid || 0) >= 1) h += row('Dust wages paid so far', sg(-S.dustWagesPaid, 'neg'));
+      let h = '<div class="mtip"><b>Dust</b><table>' + row('NPC wages', '<b class="mut">0</b> /h');
       if ((S.npcDust || 0) > 0) h += row('Spent on hires', sg(-S.npcDust, 'neg'));
       h += '</table><small>From scrapping gear. Pays for enchants, Rare and better hires, and new faces at the Guild Hall.</small></div>';
       if (d.dataset.tiph !== h) { d.dataset.tiph = h; d.dataset.tip = 'Dust'; if (tipFor === d) showTip(d); }
@@ -5545,7 +5542,7 @@
   const PATCH_NOTES = [
     { v: 120, date: 'November 25, 2026', title: 'Wages follow the hire', items: [
       'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
-      'Mages, necromancers and healers you hire also draw Dust every hour, on top of gold. If your Dust runs out for an hour, the priciest of them walks off to the bench.',
+      'Mages, necromancers and healers now cost Dust when they sign on, on top of gold. Wages are still gold only.',
     ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
