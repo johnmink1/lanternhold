@@ -1,6 +1,6 @@
 // World boss loot (John, 2026-11-24): after an event, a seeded draw decides who gets the boss's Legendary (if one
-// drops) and who gets each of its boss shards. Tickets = whole points of boss score (monsters' worth of damage, so
-// every depth counts), at least one for anyone who hit. The seed is the event id, so every claim sees the same draw.
+// drops) and who gets each of its boss shards. Tickets = whole points of boss score (real damage from v120; the
+// preview counted monsters' worth), at least one for anyone who hit. The seed is the event id, so every claim sees the same draw.
 // Boss shards trade on their own market (pk sh# for listings, ss#<seller> for the seller's pointers); the gold
 // goes to the seller's mailbox as a 'sale' letter, like the gear market.
 const D = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
@@ -10,7 +10,7 @@ const S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
 const pid = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
 const rnd = (id, k) => parseInt(crypto.createHash('sha256').update(id + '#' + k).digest('hex').slice(0, 8), 16) / 4294967296;
 const LEG = 0.12, LEGMAX = 0.75, SH0 = 5, SH1 = 3, WEEK = 6048e5;
-const phases = t => { let k = 0, n = 1e3; while (t >= n && k < 30) { t -= n; n *= 2; k++; } return k; };
+const phases = (t, id) => { let k = 0, n = id === '2026-11-23' ? 1e3 : 1e9; while (t >= n && k < 30) { t -= n; n *= 2; k++; } return k; };
 const end = id => Date.parse(id + 'T00:00:00Z') + (id === '2026-11-23' ? 4 : 3) * 864e5;
 const boss = id => Math.floor(Date.parse(id + 'T00:00:00Z') / WEEK) % 4;
 const ok = n => /^[A-Za-z][A-Za-z '-]{1,15}$/.test(n);
@@ -22,7 +22,7 @@ function draw(id, rows) {
   const g = rows.find(i => i.s.S === '#'), ps = rows.filter(i => i.s.S !== '#' && +i.score.N > 0).sort((a, b) => a.s.S < b.s.S ? -1 : 1);
   const tk = {}; let all = 0; for (const p of ps) all += tk[p.s.S] = Math.max(1, Math.floor(+p.score.N));
   const pick = r => { let x = r * all; for (const p of ps) if ((x -= tk[p.s.S]) < 0) return p.s.S; return ps.length ? ps[ps.length - 1].s.S : ''; };
-  const ph = phases(g ? +g.total.N : 0), sh = {};
+  const ph = phases(g ? +g.total.N : 0, id), sh = {};
   const leg = all && rnd(id, 'leg') < Math.min(LEGMAX, LEG * ph) ? pick(rnd(id, 'who')) : '';
   if (all) for (let i = 0; i < SH0 + SH1 * Math.min(ph, 10); i++) { const w = pick(rnd(id, 's' + i)); sh[w] = (sh[w] || 0) + 1; }
   return { leg, sh, tk, all, ph };

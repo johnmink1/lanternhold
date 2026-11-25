@@ -1,4 +1,4 @@
-/* lh-build 202611250355 */
+/* lh-build 202611250415 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -2882,9 +2882,9 @@
       const tag = $('foetag'); tag.textContent = f.wounded || f.rescue ? 'Mercy Corps' : f.world ? 'World boss' : f.goblin ? 'Thief' : f.pack ? 'Ambush ×' + f.pack + ' · XP ×' + f.pack * L.PACK_XP : f.boss ? 'Guardian' : f.chest ? 'Treasure' : f.elite ? L.SIDES[f.side].name : ''; if (f.pack) tag.dataset.tip = f.pack + ' foes at once: ' + f.pack * L.PACK_XP + '× hero XP and ' + f.pack * L.PACK_GOLD + '× gold.'; else if (f.wounded) tag.dataset.tip = 'A wounded Mercy Corps companion. Nobody fights: your healers mend them, Lantern Hymn helps a lot, and every tap is a bandage. Heal them to full for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.'; else if (f.rescue) tag.dataset.tip = 'This monster holds ' + f.rescue + ' of the Mercy Corps captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.'; else delete tag.dataset.tip; tag.className = 'tag' + (f.wounded || f.rescue ? ' mercy' : '') + (f.world ? ' world' : '') + (f.goblin ? ' thief' : '') + (f.chest ? ' chest' : '') + (f.pack ? ' ambush' : f.elite ? ' war w-' + f.side : '');
       { const sp = f.sp && L.SPECIALS[f.sp], mk = (f.mods || []).join(',') + '|' + (f.sp || ''); if (mk !== lastModKey) { lastModKey = mk; $('foemods').innerHTML = (sp ? '<span class="mod m-sp' + (sp.dot ? ' m-' + sp.dot : '') + '" title="' + esc(sp.desc + (sp.dot ? '. ' + (sp.dot === 'burn' ? 'Burns' : 'Poison') + ' last ' + L.DOT_FIGHTS + ' fights.' : '.')) + '">' + esc(sp.name) + '</span>' : '') + (f.mods || []).map(m => '<span class="mod m-' + m + '" title="' + esc(L.MODS[m].desc) + '">' + esc(L.MODS[m].name) + '</span>').join(''); } }
       if (f.world && S.wb) {
-        const ph = L.wbPhase(wbState().total + S.wb.score), pct = ph.into / ph.need * 100;
+        const ph = L.wbPhase(wbState().total + S.wb.score, wbState().w.id), pct = ph.into / ph.need * 100;
         $('hpbar').style.width = Math.max(0, 100 - pct) + '%'; $('wardbar').style.width = '0%';
-        $('hptext').textContent = 'Phase ' + (ph.broken + 1) + ' · ' + Math.floor(100 - pct) + '% left · your damage ' + (Math.floor(S.wb.score * 10) / 10);
+        $('hptext').textContent = 'Phase ' + (ph.broken + 1) + ' · ' + Math.floor(100 - pct) + '% left · your damage ' + wbNum(S.wb.score, S.wb.old);
       } else {
         $('hpbar').style.width = Math.max(0, f.hp / f.max * 100) + '%';
         $('wardbar').style.width = Math.min(100, (f.ward || 0) / f.max * 100) + '%';
@@ -5399,7 +5399,9 @@
         'Slow down for about three seconds and it withdraws. You lose nothing but the time.']],
       ['World boss weekends', 's:colossus', 'One giant Rift boss every weekend that all signed-in players fight together.', [
         'Runs Friday to Sunday (UTC). A purple bar on the stage shows it; tap it to join a <b>two-minute assault</b>, once every 15 minutes.',
-        'Your damage counts at the strength of your deepest floor, so new and veteran delvers matter just as much.',
+        'Every point of <b>real damage</b> counts, so the stronger your party, the more you chip off. Going deeper never lowers it.',
+        'Each boss resists two classes (−30%) and is weak to one (+30%); the boss window shows which. It hits hard and uses a special attack.',
+        'Hired and story companions deal half damage to the boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
         'Everyone fills one shared health bar. Each phase broken makes the next one twice as tough.',
         'After the weekend tap <b>Claim</b>: 3 Sigils for taking part, 1 more per phase broken (up to 5), 5 more for the top three, and a purse of gold.']],
       ['Abilities', 'i:star', 'Each party member has one ability; your hero can learn more.', [
@@ -5643,6 +5645,12 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 120, date: 'November 25, 2026', title: 'World boss: real damage', items: [
+      'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
+      'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
+      'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
+      'This week\'s preview boss keeps its scores until it ends on Friday.',
+    ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
       'Fixed: very big saves (thousands of items) could not sync to your account, so the account save fell behind. Big saves are now packed down to about a tenth of the size.',
@@ -6609,10 +6617,10 @@
   function paintBoss() {
     const el = $('wbbar'), x = wbState(), inA = S.wb && S.wb.until > x.now;
     let h = '';
-    if (inA) h = icon('skull') + '<span><b>Assault on ' + esc(S.wb.name) + '</b> · ' + wbDur(S.wb.until - x.now) + ' left · your damage <b>' + Math.floor(S.wb.score * 10) / 10 + '</b></span>';
+    if (inA) h = icon('skull') + '<span><b>Assault on ' + esc(S.wb.name) + '</b> · ' + wbDur(S.wb.until - x.now) + ' left · your damage <b>' + wbNum(S.wb.score, S.wb.old) + '</b></span>';
     else if (x.claim) h = icon('crown') + '<span><b>The world boss has fallen back.</b> Your reward is waiting.</span><em>Claim</em>';
     else if (x.live) {
-      const ph = L.wbPhase(x.total);
+      const ph = L.wbPhase(x.total, x.w.id);
       h = icon('skull') + '<i class="cb">' + Math.floor(ph.into / ph.need * 100) + '%</i><span><b>World boss: ' + esc(x.name) + '</b> · phase ' + (ph.broken + 1) + ' · ' + Math.floor(ph.into / ph.need * 100) + '% · ends in ' + wbDur(x.w.end - x.now) + '</span>' +
         (!CL || !signedIn() ? '<em>Sign in to fight</em>' : x.ready > 0 ? '<em class="wait">Next assault ' + wbDur(x.ready) + '</em>' : '<em>Join the assault</em>');
     } else if (x.next - x.now < 2 * 864e5) h = icon('skull') + '<span><b>' + esc(L.wbName(L.wbWindow(x.next).id)) + '</b> attacks the Hold in ' + wbDur(x.next - x.now) + '</span><em class="wait">Details</em>';
@@ -6620,19 +6628,23 @@
   }
   function openBoss() {
     if (!gateUse('boss')) return;
-    const x = wbState(), st = wb.st, ph = L.wbPhase(x.total), pct = Math.floor(ph.into / ph.need * 100);
+    const x = wbState(), st = wb.st, ph = L.wbPhase(x.total, x.w.id), pct = Math.floor(ph.into / ph.need * 100), old = L.wbOld(x.w.id), tr = L.WB_TRAITS[L.wbBoss(x.w.id)];
+    const cn = c => L.CLASSES[c].name.toLowerCase() + 's';
     const top = st && st.w.id === x.w.id ? st.top : [];
     const rank = x.me && x.me.score > 0 ? top.findIndex(t => t.score <= x.me.score) + 1 : 0;
     modal('<div class="maphead"><div><h2>' + esc(x.name) + '</h2><small>World boss · ' + (x.live ? 'ends in ' + wbDur(x.w.end - x.now) : 'next attack in ' + wbDur(x.next - x.now)) + '</small></div><button class="iconbtn" id="wb-x" aria-label="Close">&times;</button></div>' +
       '<div class="wbhero"><img src="' + SP.spriteURL('colossus', 3, 0) + '" alt=""><div>' +
       '<p>A giant of void crystal has torn through the Nyx Rift beneath the Hold. Every delver fights the same monster: each assault you make chips at one shared health bar.</p>' +
       '<div class="wbphase"><div class="wbph"><b>Phase ' + (ph.broken + 1) + '</b><span>' + pct + '%</span></div><div class="bar wbbar2"><i style="width:' + pct + '%"></i></div><small>' + ph.broken + (ph.broken === 1 ? ' phase' : ' phases') + ' broken so far · ' + (st ? st.n : 0) + (st && st.n === 1 ? ' delver has' : ' delvers have') + ' joined</small></div></div></div>' +
-      '<ul class="passfx"><li><b>Assaults</b><span>Two minutes against the boss at the strength of your deepest floor. One every 15 minutes. Strike and use your abilities for more damage.</span></li>' +
+      '<ul class="passfx">' + (old ? '<li><b>Assaults</b><span>Two minutes against the boss at the strength of your deepest floor. One every 15 minutes. Strike and use your abilities for more damage.</span></li>' :
+        '<li><b>Assaults</b><span>Two minutes against the boss. One every 15 minutes. Every point of real damage you deal chips the shared health bar, so the stronger your party, the more you deal. It hits hard and uses ' + esc(L.SPECIALS[tr.sp].name) + ': if your party falls, the assault ends.</span></li>' +
+        '<li><b>' + esc(tr.trait) + '</b><span>' + esc(tr.line) + ' Weak to ' + cn(tr.weak) + ' (+' + Math.round(L.WB_WEAK * 100) + '% damage), resists ' + tr.resist.map(cn).join(' and ') + ' (−' + Math.round(L.WB_RESIST * 100) + '%).</span></li>' +
+        '<li><b>Fight beside players</b><span>Hired and story companions deal half damage to the boss. Your hero and other players\' heroes in your party deal full damage.</span></li>') +
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
       '<li><b>Legendary loot</b><span>' + (() => { const k = Math.floor(Date.parse(x.w.id + 'T00:00:00Z') / 6048e5) % 4, s2 = L.WB_SETS[k]; return 'Each phase broken adds a 12% chance (up to 75%) that ' + esc(x.name) + ' drops a piece of <b>' + esc(s2.name) + '</b>. One winner is drawn from everyone who fought: every whole point of your damage is one ticket. ' + esc(s2.word) + ' shards (5, plus 3 per phase) are drawn the same way. They upgrade the set and trade in the Market.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
-      (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + Math.floor(t.score).toLocaleString('en-US') + '</b></li>').join('') + '</ol>' : '') +
-      (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + Math.floor(x.me.score).toLocaleString('en-US') + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
+      (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
+      (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
       '<div class="row">' + (x.claim ? '<button class="btn" id="wb-claim">Claim your reward</button>' : !CL || !signedIn() ? '<button class="btn" id="wb-in">Sign in to fight</button>' : x.live ? (x.ready > 0 ? '<button class="btn" disabled>Next assault in ' + wbDur(x.ready) + '</button>' : '<button class="btn" id="wb-go">Join the assault</button>') : '') + '<button class="btn ghost" id="wb-no">Close</button></div>', md => {
       md.querySelector('#wb-x').onclick = closeModal; md.querySelector('#wb-no').onclick = closeModal;
       const go = md.querySelector('#wb-go'); if (go) go.onclick = () => { closeModal(); joinAssault(); };
@@ -6649,12 +6661,15 @@
     sfx.boss(); toast('skull', 'Assault!', 'Two minutes against ' + x.name + '. Strike and use your abilities!', 'feat');
     updateStage && updateStage(); paintBoss();
   }
+  // Event damage: the preview counted monsters' worth (one decimal), weekend bosses count real damage (v120).
+  function wbNum(v, old) { return old ? (Math.floor(v * 10) / 10).toLocaleString('en-US') : fmt(Math.floor(v)); }
+  function wbOld() { return L.wbOld(L.wbWindow(Date.now()).id); }
   async function sendAssault(score, fell, ck, iv) {
     if (!(score > 0)) { toast('skull', 'Assault over', fell ? 'Your party fell before landing a blow.' : 'No damage this time.', ''); return; }
     try {
       const r = await api('POST', { score, ck: ck || 0, iv: iv || [] }, '/boss/hit');
       if (wb.st && r) { wb.st.total = r.total; wb.st.me.score += r.add; wb.st.me.last = Date.now(); }
-      toast('skull', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + score + ' damage to ' + wbState().name + '. Every assault counts toward the next phase.', 'feat');
+      toast('skull', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + wbNum(score, wbOld()) + ' damage to ' + wbState().name + '. Every assault counts toward the next phase.', 'feat');
     } catch (e) { toast('lock', 'The assault did not count', 'The server could not record it. Try again in a moment.', 'warn'); }
     loadBoss().then(paintBoss);
   }

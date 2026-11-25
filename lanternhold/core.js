@@ -1,4 +1,4 @@
-/* lh-build 202611250355 */
+/* lh-build 202611250415 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -481,7 +481,7 @@
     if (m.cls === 'mage' && abilityActive(s, id, now)) d *= (setBonus(s, id) >= 3 ? 6 : 4) * (id === 'you' ? 1 + sk(s, 'power') : 1);
     d *= (1 + wearVal(s, id, 'crit') + (m.cls === 'healer' ? 0 : wearVal(s, id, 'power'))) * (s.foe && (s.foe.boss || s.foe.world) ? 1 + wearVal(s, id, 'boss') : 1);
     const cc = s.cc && ccOf(s, id, now); if (cc) d *= cc.k === 'stun' ? 0 : CC.disarm.dmg;
-    return d * (1 - ghostSap(s, 'dps', now));
+    return d * (1 - ghostSap(s, 'dps', now)) * wbMult(s, id);
   }
   function minionDps(s, now) {
     const live = s.minions.filter(x => x.until > now && x.hp > 0);
@@ -1116,7 +1116,7 @@
     if (fx.cleanse) { s.poison = {}; s.dots = {}; s.cc = {}; }
     if (fx.strip && s.foe) s.foe.ward = 0;
     let d = 0;
-    if (fx.burst) { const c = CLASSES[heroCls(s)]; d = Math.max(c.dps, 1) * scale(s, 'you') * partyMult(s) * gearMult(s, 'you', 'dps') * (1 + sk(s, 'dps')) * fx.burst; }
+    if (fx.burst) { const c = CLASSES[heroCls(s)]; d = Math.max(c.dps, 1) * scale(s, 'you') * partyMult(s) * gearMult(s, 'you', 'dps') * (1 + sk(s, 'dps')) * fx.burst * wbMult(s, 'you'); }
     events && events.push({ type: 'ability', id: 'you', cls: heroCls(s), name: ab.name, dmg: d || undefined });
     if (d) damageFoe(s, d, now, null, events);
     return true;
@@ -2187,32 +2187,55 @@
   // Damage counts in "monsters' worth" at your deepest floor, so every delver's assault weighs the same.
   const WB_TIME = 120, WB_COOL = 15 * 60, WB_HP1 = 1000, WB_CAP = 400, WB_PREVIEW = [Date.parse('2026-11-23T00:00:00Z'), Date.parse('2026-11-27T00:00:00Z')];
   const WB_NAMES = ['The Rift Colossus', 'The Hollow Sovereign', 'Maw of the Nyx', 'The Ashen Leviathan'];
+  // v120 (John, 25 Nov 2026): from the first weekend boss on, assaults count real damage against one shared health
+  // bar (phase 1 = WB_HP1R, each phase doubles), so going deeper never lowers your score. Hired and story companions
+  // deal WB_NPC of their damage to the boss (other players' heroes deal full), each boss resists two classes and is
+  // weak to one (WB_TRAITS, index = wbBoss(id), same order as WB_NAMES and loot.js), and it hits harder and uses a
+  // special attack. One assault counts at most WB_CEIL monsters' worth of your deepest floor (the server checks the
+  // same against your hero's floor). The preview event (2026-11-23) keeps the old monsters'-worth scoring.
+  const WB_HP1R = 1e9, WB_CEIL = 150, WB_NPC = 0.5, WB_WEAK = 0.3, WB_RESIST = 0.3, WB_ATK = 1.3;
+  const WB_TRAITS = [
+    { weak: 'mage', resist: ['tank', 'rogue'], sp: 'shards', trait: 'Crystal hide', line: 'Blades skid off its void crystal, but spells crack it.' },
+    { weak: 'healer', resist: ['necro', 'mage'], sp: 'void', trait: 'Hollow crown', line: 'Dark arts feed it and spells sink into its hollow, but holy light burns it.' },
+    { weak: 'rogue', resist: ['healer', 'tank'], sp: 'gorge', trait: 'Endless maw', line: 'It swallows blows and light alike, but a quick blade finds the soft spots.' },
+    { weak: 'necro', resist: ['rogue', 'mage'], sp: 'tidal', trait: 'Ashen scales', line: 'Fire and daggers barely mark its scales, but curses rot them.' },
+  ];
+  const wbOld = id => id === '2026-11-23';
+  const wbBoss = id => Math.floor(Date.parse(id + 'T00:00:00Z') / 6048e5) % WB_TRAITS.length;
+  // How much of a party member's damage reaches the boss: class trait, then half for hired and story companions.
+  function wbMult(s, id) {
+    if (!s.wb || s.wb.old || !s.foe || !s.foe.world) return 1;
+    const t = WB_TRAITS[s.wb.k || 0], c = memberById(id) && memberById(id).cls;
+    return (c === t.weak ? 1 + WB_WEAK : t.resist.includes(c) ? 1 - WB_RESIST : 1) * (id === 'you' || isGuest(s, id) ? 1 : WB_NPC);
+  }
   function wbWindow(t) {
     if (t >= WB_PREVIEW[0] && t < WB_PREVIEW[1]) return { id: '2026-11-23', start: WB_PREVIEW[0], end: WB_PREVIEW[1] };
     const d = new Date(t), mid = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()), fri = mid - ((d.getUTCDay() + 2) % 7) * 864e5;
     return { id: new Date(fri).toISOString().slice(0, 10), start: fri, end: fri + 3 * 864e5 };
   }
   const wbName = id => WB_NAMES[Math.floor(Date.parse(id + 'T00:00:00Z') / 6048e5) % WB_NAMES.length];
-  // Which phase the server's total has reached, and how far into it.
-  function wbPhase(total) { let k = 0, need = WB_HP1, t = total; while (t >= need && k < 30) { t -= need; need *= 2; k++; } return { broken: k, into: t, need }; }
+  // Which phase the server's total has reached, and how far into it (id: the event, for its phase size).
+  function wbPhase(total, id) { let k = 0, need = id && !wbOld(id) ? WB_HP1R : WB_HP1, t = total; while (t >= need && k < 30) { t -= need; need *= 2; k++; } return { broken: k, into: t, need }; }
   function startAssault(s, now, name) {
     if (resting(s, now) || !alive(s).length || (s.wb && s.wb.until > now)) return false;
-    s.wb = { until: now + WB_TIME * 1000, score: 0, unit: foeHp(Math.max(1, s.maxFloorEver), false), name };
+    const id = wbWindow(now).id, old = wbOld(id), unit = foeHp(Math.max(1, s.maxFloorEver), false);
+    s.wb = old ? { until: now + WB_TIME * 1000, score: 0, unit, name, old: true } : { until: now + WB_TIME * 1000, score: 0, name, id, k: wbBoss(id), cap: WB_CEIL * unit };
     s.foe = null; s.foeSwing = 0;
     return true;
   }
   function endAssault(s, events, fell) {
     if (!s.wb) return;
-    const score = Math.min(WB_CAP, Math.floor(s.wb.score * 10) / 10), wb = s.wb;
+    const wb = s.wb, cut = x => wb.old || !wb.cap ? Math.floor(x * 10) / 10 : Math.floor(x), score = Math.min(wb.old || !wb.cap ? WB_CAP : wb.cap, cut(wb.score));
     s.wb = null; if (s.foe && s.foe.world) { s.foe = null; s.foeSwing = 0; }
     s.stats.wbAssaults = (s.stats.wbAssaults || 0) + 1;
     // ck = the part of the score from the player's own strikes, iv = gaps between those strikes (ms). The server
     // re-runs the rhythm check on iv and drops ck from a machine-even assault (worldboss.js).
-    events && events.push({ type: 'wbend', score, fell: !!fell, ck: Math.min(score, Math.floor((wb.ck || 0) * 10) / 10), iv: (wb.iv || []).slice(0, 3000) });
+    events && events.push({ type: 'wbend', score, fell: !!fell, ck: Math.min(score, cut(wb.ck || 0)), iv: (wb.iv || []).slice(0, 3000) });
   }
   function wbFoe(s) {
     const f = Math.max(1, s.maxFloorEver);
-    return { name: s.wb.name, sprite: 'colossus', world: true, boss: false, chest: false, elite: false, side: null, ambush: 0, pack: 0, hp: 1e300, max: 1e300, hue: 0, atk: foeDps(f, true) * FOE_SWING * 0.8, mods: [], ward: 0, wardAt: 0 };
+    const nu = !s.wb.old && s.wb.cap, t = WB_TRAITS[s.wb.k || 0];
+    return { name: s.wb.name, sprite: 'colossus', world: true, boss: false, chest: false, elite: false, side: null, ambush: 0, pack: 0, hp: 1e300, max: 1e300, hue: 0, atk: foeDps(f, true) * FOE_SWING * (nu ? WB_ATK : 0.8), mods: [], ward: 0, wardAt: 0, sp: nu ? t.sp : null, spAt: 0, spWind: null };
   }
   function rollMods(f, boss, elite, b, r) {
     let n = boss ? (f >= 20 ? 1 : 0) + (f >= 60 ? 1 : 0) + (f >= 110 ? 1 : 0) : elite ? (f >= 30 ? 1 : 0) + (f >= 100 ? 1 : 0) : (f >= 40 && r() < Math.min(0.4, 0.08 + (f - 40) / 300) ? 1 : 0);
@@ -2229,7 +2252,7 @@
       if (!s.foe) s.foe = makeFoe(s, rng);
       const foe = s.foe, mult = (foe.boss ? 1 + relicVal(s, 'lens') : 1) * (1 + fxOn(s, 'vuln', now || Date.now())) * (1 + beastBonus(s, foe));
       let dmg = amount * mult;
-      if (foe.world) { s.wb.score += dmg / s.wb.unit; drain(s, dmg); return; }
+      if (foe.world) { s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); return; }
       if (foe.shield > 0) dmg *= 1 - SHIELD_CUT;
       if (foe.ward > 0) { const soak = Math.min(foe.ward, dmg); foe.ward -= soak; dmg -= soak; amount = dmg / mult; if (dmg <= 0) return; }
       if (dmg < foe.hp) { foe.hp -= dmg; drain(s, dmg); return; }
@@ -2510,11 +2533,11 @@
     s.dots[t] = { k, dps: Math.max(dps, d && d.k === k ? d.dps : 0), n: DOT_FIGHTS };
     events && events.push({ type: 'dot', id: t, k });
   }
-  const specialEvery = foe => (foe.boss ? 10 : 12) * 1000;
+  const specialEvery = foe => (foe.boss || foe.world ? 10 : 12) * 1000;
   // Wind up (telegraph), then unleash the foe's special. Called every tick while a foe with a special is up.
   function specialTick(s, now, rng, events) {
     const foe = s.foe, sp = foe && foe.sp && SPECIALS[foe.sp];
-    if (!sp || !foe.atk || foe.world) return;
+    if (!sp || !foe.atk || (foe.world && (!s.wb || s.wb.old))) return;
     if (!foe.spAt) { foe.spAt = now + (foe.boss ? 7000 : 5000); return; }
     const live = s.party.filter(id => id && !s.down[id]);
     if (!live.length) return;
@@ -2617,12 +2640,12 @@
       const fallen = s.party.filter(x => x && s.down[x]).slice(0, (sb >= 3 ? 5 : 1) + (me ? sk(s, 'revive') : 0));
       for (const f of fallen) { delete s.down[f]; s.hp[f] = maxHpOf(s, f) * 0.5; s.stats.revives++; events && events.push({ type: 'revive', id: f }); }
     } else if (m.cls === 'rogue') {
-      const d = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 12 * pw;
+      const d = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 12 * pw * wbMult(s, id);
       events && events.push({ type: 'ability', id, cls: m.cls, dmg: d });
       damageFoe(s, d, now, null, events);
       return true;
     } else if (m.cls === 'necro') {
-      const each = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 0.6 * (sb >= 2 ? 1.3 : 1) * pw;
+      const each = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 0.6 * (sb >= 2 ? 1.3 : 1) * pw * wbMult(s, id);
       const hp = maxHpOf(s, id) * 0.5;
       s.minions = Array.from({ length: (sb >= 3 ? 5 : 3) + (me ? sk(s, 'minion') : 0) }, () => ({ dps: each, hp, max: hp, until: st.until }));
     }
@@ -3018,7 +3041,7 @@
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
     newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, memberById, trainCost, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
     clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
-    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
+    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LH = api;
