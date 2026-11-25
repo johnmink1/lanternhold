@@ -1,4 +1,4 @@
-/* lh-build 202611252317 */
+/* lh-build 202611252347 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -544,23 +544,71 @@
     g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, fy, W, 1.2);
     for (let i = 0; i < 70; i++) { const gx = r() * W, gy = fy + r() * 4; g.strokeStyle = r() < 0.5 ? '#3f6a2e' : '#2f5224'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(gx, gy + 2); g.lineTo(gx + (r() - 0.5) * 2, gy - 2 - r() * 3); g.stroke(); }
     // a signpost by the path
-    const sx = ex - 58, sy = fy - 26; g.fillStyle = '#4a2f1c'; g.fillRect(sx - 1, sy, 2.4, 26);
+    const sx = ex - 58, sy = Math.max(13, fy - 58); g.fillStyle = '#4a2f1c'; g.fillRect(sx - 1, sy, 2.4, fy - sy);
     if (kind === 'dicer') buildWagon(g, ex, fy); else if (kind === 'gulp') buildGulpYard(g, ex, fy);
     g.font = '700 6px Inter, system-ui, sans-serif'; const text = kind === 'dicer' ? 'PIP’S LUCKY CRATES' : kind === 'gulp' ? 'GULP THE HOARD MIMIC' : 'THE RIFT GATE', tw = g.measureText(text).width + 8;
     g.fillStyle = '#5a3a22'; g.beginPath(); g.moveTo(sx - tw / 2, sy - 9); g.lineTo(sx + tw / 2, sy - 9); g.lineTo(sx + tw / 2 + 4, sy - 4.5); g.lineTo(sx + tw / 2, sy); g.lineTo(sx - tw / 2, sy); g.fill();
     g.strokeStyle = '#a8742e'; g.lineWidth = 0.6; g.stroke(); g.fillStyle = '#e9d5ff'; g.textAlign = 'center'; g.fillText(text, sx, sy - 2.6); g.textAlign = 'left';
     return c;
   }
-  // v126 Pip's wagon: a striped carnival wagon with bunting behind Pip, and a stack of crates for a counter.
+  // v126 Pip's wagon (redrawn at John's ask): a dark wooden caravan with a barrel roof, carved gold-trimmed panels, a lit
+  // window, a brass lantern on the eave and a string of small lanterns running back over the yard.
   function buildWagon(g, ex, fy) {
-    const wx = ex + 6, wy = fy - 46, ww = 64, wh = 36;
-    for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#f5e6c8' : '#c0392b'; g.fillRect(wx + i * ww / 8, wy, ww / 8 + 0.3, wh); }
-    g.fillStyle = '#2a1a0e'; g.beginPath(); g.moveTo(wx - 4, wy); g.quadraticCurveTo(wx + ww / 2, wy - 20, wx + ww + 4, wy); g.lineTo(wx + ww + 4, wy + 3); g.quadraticCurveTo(wx + ww / 2, wy - 16, wx - 4, wy + 3); g.fill();
-    g.fillStyle = '#6a2a8a'; g.beginPath(); g.moveTo(wx - 2, wy); g.quadraticCurveTo(wx + ww / 2, wy - 18, wx + ww + 2, wy); g.lineTo(wx + ww + 2, wy - 1); g.quadraticCurveTo(wx + ww / 2, wy - 21, wx - 2, wy - 1); g.fill();
-    g.fillStyle = '#f5c242'; g.fillRect(wx, wy + wh - 3, ww, 3);
-    for (const cx of [wx + 10, wx + ww - 10]) { g.fillStyle = '#3a2614'; g.beginPath(); g.arc(cx, fy - 6, 7, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#a8742e'; g.lineWidth = 1; g.stroke(); g.beginPath(); for (let a = 0; a < 6; a++) { g.moveTo(cx, fy - 6); g.lineTo(cx + Math.cos(a) * 7, fy - 6 + Math.sin(a) * 7); } g.stroke(); }
-    const cols = ['#f5c242', '#c0392b', '#2f9e63', '#3b82f6']; g.strokeStyle = '#2a1a0e'; g.lineWidth = 0.5; g.beginPath(); g.moveTo(ex - 90, fy - 56); g.quadraticCurveTo(ex - 40, fy - 44, wx, wy - 8); g.stroke();
-    for (let i = 0; i < 9; i++) { const t = i / 9, x = ex - 90 + (wx - ex + 90) * t, y = fy - 56 + 12 * Math.sin(t * Math.PI) - 4 * t; g.fillStyle = cols[i % 4]; g.beginPath(); g.moveTo(x - 2, y); g.lineTo(x + 2, y); g.lineTo(x, y + 4); g.fill(); }
+    const wx = ex + 4, ww = 70, wh = 34, wy = fy - 14 - wh;
+    // the string of lanterns, from a pole behind the party to the wagon's eave
+    const lx0 = ex - 110, ly0 = fy - 60;
+    g.fillStyle = '#2a1a0e'; g.fillRect(lx0 - 1, ly0, 2, fy - ly0);
+    g.strokeStyle = 'rgba(20,12,6,.9)'; g.lineWidth = 0.5; g.beginPath(); g.moveTo(lx0, ly0); g.quadraticCurveTo((lx0 + wx) / 2, ly0 + 16, wx - 2, wy - 6); g.stroke();
+    for (let i = 1; i < 10; i++) {
+      const t = i / 10, x = (1 - t) * (1 - t) * lx0 + 2 * (1 - t) * t * (lx0 + wx) / 2 + t * t * (wx - 2), y = (1 - t) * (1 - t) * ly0 + 2 * (1 - t) * t * (ly0 + 16) + t * t * (wy - 6);
+      shopGlow(g, x, y + 3, 7, '255,190,110', 0.35);
+      g.fillStyle = i % 3 === 1 ? '#c2563a' : '#e0a040'; g.beginPath(); g.ellipse(x, y + 3, 1.5, 2, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#2a1a0e'; g.fillRect(x - 0.8, y + 0.6, 1.6, 0.7);
+    }
+    // undercarriage and shafts resting on the ground
+    g.fillStyle = '#1e120a'; g.fillRect(wx + 4, fy - 15, ww - 8, 3);
+    g.strokeStyle = '#3a2416'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(wx + 4, fy - 13); g.lineTo(wx - 20, fy - 1); g.stroke();
+    // the body: dark planks with carved, gold-edged panels
+    let lg = g.createLinearGradient(wx, 0, wx + ww, 0); lg.addColorStop(0, '#5a3620'); lg.addColorStop(0.6, '#3e2414'); lg.addColorStop(1, '#24140a');
+    g.fillStyle = lg; g.fillRect(wx, wy, ww, wh);
+    g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 0.4; for (let x = wx + 5; x < wx + ww; x += 5) { g.beginPath(); g.moveTo(x, wy); g.lineTo(x, wy + wh); g.stroke(); }
+    g.strokeStyle = '#c9a040'; g.lineWidth = 0.6;
+    const panel = (x, w) => { g.strokeRect(x, wy + 6, w, wh - 12); g.beginPath(); g.moveTo(x + 2, wy + 8); g.quadraticCurveTo(x + w / 2, wy + 5, x + w - 2, wy + 8); g.stroke(); };
+    panel(wx + 4, 20); panel(wx + ww - 22, 18);
+    // painted gold die on the first panel
+    g.save(); g.translate(wx + 14, wy + wh / 2 + 1); g.rotate(0.25); g.fillStyle = '#d9a83a'; g.fillRect(-4.5, -4.5, 9, 9); g.strokeStyle = '#3a2408'; g.lineWidth = 0.5; g.strokeRect(-4.5, -4.5, 9, 9);
+    g.fillStyle = '#3a2408'; for (const [a, b] of [[-2, -2], [0, 0], [2, 2]]) { g.beginPath(); g.arc(a, b, 0.8, 0, Math.PI * 2); g.fill(); } g.restore();
+    // the lit window with a little shutter on each side
+    const wnx = wx + 32, wny = wy + 8, wnw = 12, wnh = 13;
+    g.fillStyle = '#1a0e06'; g.fillRect(wnx - 1, wny - 1, wnw + 2, wnh + 2);
+    lg = g.createLinearGradient(0, wny, 0, wny + wnh); lg.addColorStop(0, '#ffe2a0'); lg.addColorStop(1, '#d9822e'); g.fillStyle = lg;
+    g.beginPath(); g.moveTo(wnx, wny + wnh); g.lineTo(wnx, wny + 4); g.quadraticCurveTo(wnx + wnw / 2, wny - 3, wnx + wnw, wny + 4); g.lineTo(wnx + wnw, wny + wnh); g.fill();
+    g.fillStyle = '#3a2210'; g.fillRect(wnx + wnw / 2 - 0.4, wny, 0.8, wnh); g.fillRect(wnx, wny + 7, wnw, 0.8);
+    g.fillStyle = '#2a5a4e'; g.fillRect(wnx - 5, wny + 1, 4, wnh - 1); g.fillRect(wnx + wnw + 1, wny + 1, 4, wnh - 1);
+    shopGlow(g, wnx + wnw / 2, wny + wnh / 2, 22, '255,180,90', 0.35);
+    // gold rail along the bottom and the eave
+    g.fillStyle = '#c9a040'; g.fillRect(wx - 1, wy + wh - 2, ww + 2, 1.4); g.fillRect(wx - 3, wy - 1, ww + 6, 1.4);
+    // barrel roof in dark green canvas, with ribs and a chimney pipe
+    lg = g.createLinearGradient(0, wy - 18, 0, wy); lg.addColorStop(0, '#2f5a4a'); lg.addColorStop(1, '#14302a'); g.fillStyle = lg;
+    g.beginPath(); g.moveTo(wx - 5, wy); g.bezierCurveTo(wx - 2, wy - 20, wx + ww + 2, wy - 20, wx + ww + 5, wy); g.closePath(); g.fill();
+    g.strokeStyle = '#0c1a16'; g.lineWidth = 0.8; g.stroke();
+    g.strokeStyle = 'rgba(201,160,64,.55)'; g.lineWidth = 0.5; for (let i = 1; i < 6; i++) { const x = wx - 5 + (ww + 10) * i / 6; g.beginPath(); g.moveTo(x, wy); g.lineTo(x + (i - 3) * 0.6, wy - 14 + Math.abs(i - 3) * 1.4); g.stroke(); }
+    g.fillStyle = '#1e1e24'; g.fillRect(wx + ww - 16, wy - 24, 3.5, 10); g.fillRect(wx + ww - 17, wy - 25, 5.5, 2);
+    g.fillStyle = 'rgba(180,180,200,.18)'; for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(wx + ww - 14 + i * 2.5, wy - 29 - i * 5, 2 + i, 0, Math.PI * 2); g.fill(); }
+    // brass lantern hanging from the front eave
+    const hx = wx - 2, hy = wy + 6; g.strokeStyle = '#1a0e06'; g.lineWidth = 0.5; g.beginPath(); g.moveTo(hx, wy); g.lineTo(hx, hy - 3); g.stroke();
+    shopGlow(g, hx, hy, 18, '255,200,110', 0.45); g.fillStyle = '#a8742e'; g.fillRect(hx - 2.2, hy - 3.2, 4.4, 1.2); g.fillRect(hx - 2.2, hy + 2.6, 4.4, 1.2);
+    g.fillStyle = '#ffd890'; g.fillRect(hx - 1.6, hy - 2, 3.2, 4.6);
+    // wooden steps up to the door
+    g.fillStyle = '#3a2416'; g.fillRect(wx - 6, fy - 12, 7, 2); g.fillRect(wx - 9, fy - 6, 8, 2);
+    // spoked wheels, red-brown with gold hubs
+    for (const cx of [wx + 13, wx + ww - 13]) {
+      const cy = fy - 10, R = 10;
+      g.strokeStyle = '#1a0e06'; g.lineWidth = 2.6; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = '#7a3a22'; g.lineWidth = 1.6; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+      g.lineWidth = 0.9; g.beginPath(); for (let a = 0; a < 10; a++) { const q = a / 10 * Math.PI * 2; g.moveTo(cx, cy); g.lineTo(cx + Math.cos(q) * R, cy + Math.sin(q) * R); } g.stroke();
+      g.fillStyle = '#c9a040'; g.beginPath(); g.arc(cx, cy, 2, 0, Math.PI * 2); g.fill();
+    }
   }
   // v126 Gulp's corner of the yard: a post he is chained to, and coins scattered on the flagstones.
   function buildGulpYard(g, ex, fy) {
@@ -608,10 +656,27 @@
     if (kind === 'portal') return drawPortalChest(ex, fy);
     if (kind === 'gulp') return fy - 2;
     if (kind === 'dicer') {
-      // three crates stacked as Pip's counter, one lid ajar with a glint inside
-      const crate = (x, y, w, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, w * 0.7); ctx.strokeStyle = '#2a1a0e'; ctx.lineWidth = 0.7; ctx.strokeRect(x, y, w, w * 0.7); ctx.fillStyle = '#f5c242'; ctx.fillRect(x, y + w * 0.3, w, 1.2); };
-      crate(ex - 26, fy - 13, 18, '#7a5530'); crate(ex - 7, fy - 13, 18, '#5a3a8a'); crate(ex + 12, fy - 13, 18, '#7a5530');
-      shopGlow(ctx, ex + 2, fy - 14, 14, '245,194,66', 0.25 + 0.08 * Math.sin(tAnim * 3));
+      // a gaming table in green felt with a gold fringe; on it a leather pouch, an iron-bound coffer and a gilded casket
+      const tw = 56, top = fy - 13, tx = ex - tw / 2;
+      ctx.fillStyle = '#2a180c'; ctx.fillRect(tx + 4, top + 2, 2.5, fy - top - 2); ctx.fillRect(tx + tw - 6.5, top + 2, 2.5, fy - top - 2);
+      let lg = ctx.createLinearGradient(0, top, 0, top + 9); lg.addColorStop(0, '#2f6a58'); lg.addColorStop(1, '#173a30'); ctx.fillStyle = lg;
+      ctx.beginPath(); ctx.moveTo(tx - 2, top); ctx.lineTo(tx + tw + 2, top); ctx.lineTo(tx + tw + 3, top + 8); ctx.quadraticCurveTo(ex, top + 10, tx - 3, top + 8); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#0c1a16'; ctx.lineWidth = 0.6; ctx.stroke();
+      ctx.fillStyle = '#c9a040'; for (let x = tx - 2; x < tx + tw + 2; x += 2.2) { const y = top + 8 + Math.sin((x - tx) / tw * Math.PI) * 1.2; ctx.fillRect(x, y, 0.8, 1.8); }
+      ctx.fillRect(tx - 2.5, top + 7.4, tw + 5, 0.7);
+      // pouch
+      ctx.fillStyle = '#7a4a26'; ctx.beginPath(); ctx.moveTo(ex - 22, top); ctx.quadraticCurveTo(ex - 25, top - 6, ex - 19, top - 7); ctx.quadraticCurveTo(ex - 13, top - 6, ex - 16, top); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#c9a040'; ctx.fillRect(ex - 21, top - 6.2, 4, 0.8);
+      // coffer
+      ctx.fillStyle = '#5a3418'; ctx.fillRect(ex - 9, top - 7, 12, 7); ctx.fillStyle = '#6a4020'; ctx.beginPath(); ctx.moveTo(ex - 9, top - 7); ctx.quadraticCurveTo(ex - 3, top - 11, ex + 3, top - 7); ctx.fill();
+      ctx.fillStyle = '#7a808c'; ctx.fillRect(ex - 9, top - 4.5, 12, 0.9); ctx.fillRect(ex - 7, top - 9, 0.9, 9); ctx.fillRect(ex + 1, top - 9, 0.9, 9); ctx.fillStyle = '#c9a040'; ctx.fillRect(ex - 3.8, top - 5, 1.6, 2);
+      // casket, lid ajar with a golden glint
+      shopGlow(ctx, ex + 15, top - 8, 14, '245,194,66', 0.3 + 0.08 * Math.sin(tAnim * 3));
+      lg = ctx.createLinearGradient(0, top - 7, 0, top); lg.addColorStop(0, '#3a1626'); lg.addColorStop(1, '#1e0810'); ctx.fillStyle = lg; ctx.fillRect(ex + 8, top - 7, 14, 7);
+      ctx.fillStyle = '#4a1c30'; ctx.beginPath(); ctx.moveTo(ex + 8, top - 7); ctx.lineTo(ex + 9, top - 12); ctx.lineTo(ex + 23, top - 11); ctx.lineTo(ex + 22, top - 7); ctx.fill();
+      ctx.fillStyle = '#ffe08a'; ctx.fillRect(ex + 9, top - 7.6, 12, 0.8);
+      ctx.fillStyle = '#c9a040'; ctx.fillRect(ex + 8, top - 7, 14, 0.8); ctx.fillRect(ex + 8, top - 0.8, 14, 0.8); ctx.fillRect(ex + 14.3, top - 5, 1.6, 2.4);
+      if (Math.random() < 0.05) particles.push({ x: ex + 15 + (Math.random() - 0.5) * 10, y: top - 8, vx: 0, vy: -7, life: 0.8, age: 0, c: '#fff3c0', s: 1 });
       return fy - 13;
     }
     const cw = 54, top = fy - 13, ench = kind !== 'arm';
@@ -5289,7 +5354,7 @@
     ['portal', 'Rift Gate', 'riftkeeper', '#7c3aed', 'Rift tokens for Legendaries'],
   ];
   // v126: NP+ heroes also find Pip's wagon and Gulp in the yard.
-  const HOLD_NP = [['dicer', 'Pip’s wagon', 'dicer', '#c0392b', 'Lucky Crates and Curios'], ['gulp', 'Gulp', 'gulp', '#f5c242', 'Feed the Hoard Mimic']];
+  const HOLD_NP = [['dicer', 'Pip’s wagon', 'dicer', '#c9a040', 'Lucky Crates and Curios'], ['gulp', 'Gulp', 'gulp', '#f5c242', 'Feed the Hoard Mimic']];
   const holdTents = () => L.npPlus(S) ? HOLD_TENTS.concat(HOLD_NP) : HOLD_TENTS;
   const HOLD_X = i => { const n = holdTents().length; return n > 5 ? 26 + i * 308 / (n - 1) : 36 + i * 72; };
   function drawHold(cv) {
@@ -5309,7 +5374,13 @@
     holdTents().forEach(([id, n, who, col], i) => {
       const tx = HOLD_X(i);
       if (id === 'dicer' || id === 'gulp') {
-        if (id === 'dicer') { for (let q = 0; q < 6; q++) { x.fillStyle = q % 2 ? '#f5e6c8' : '#c0392b'; x.fillRect(tx - 20 + q * 6.6, ty - 30, 6.8, 26); } x.fillStyle = '#6a2a8a'; x.beginPath(); x.moveTo(tx - 23, ty - 30); x.quadraticCurveTo(tx, ty - 44, tx + 23, ty - 30); x.fill(); x.fillStyle = '#3a2614'; x.beginPath(); x.arc(tx - 13, ty - 3, 4, 0, Math.PI * 2); x.arc(tx + 13, ty - 3, 4, 0, Math.PI * 2); x.fill(); }
+        if (id === 'dicer') {
+          x.fillStyle = '#4a2c18'; x.fillRect(tx - 20, ty - 30, 40, 24); x.fillStyle = '#c9a040'; x.fillRect(tx - 21, ty - 31, 42, 1.2); x.fillRect(tx - 20, ty - 7.5, 40, 1);
+          x.fillStyle = '#ffcf80'; x.fillRect(tx + 2, ty - 25, 8, 9); x.fillStyle = '#3a2210'; x.fillRect(tx + 5.6, ty - 25, 0.8, 9);
+          x.fillStyle = '#d9a83a'; x.fillRect(tx - 14, ty - 23, 7, 7);
+          x.fillStyle = '#1f4a3e'; x.beginPath(); x.moveTo(tx - 23, ty - 30); x.bezierCurveTo(tx - 20, ty - 44, tx + 20, ty - 44, tx + 23, ty - 30); x.fill();
+          x.strokeStyle = '#7a3a22'; x.lineWidth = 1.6; x.beginPath(); x.arc(tx - 12, ty - 4, 4.5, 0, Math.PI * 2); x.stroke(); x.beginPath(); x.arc(tx + 12, ty - 4, 4.5, 0, Math.PI * 2); x.stroke();
+        }
         const s = sprite(who, 0, false), k2 = id === 'gulp' ? 1.6 : 2, sw = s.lw * k2, sh = s.lh * k2; x.save(); x.translate(id === 'gulp' ? tx : tx + 18, 0); x.scale(-1, 1); x.drawImage(s, -sw / 2, ty + 3 - sh, sw, sh); x.restore();
         return;
       }
@@ -7140,7 +7211,7 @@
       return '<div class="rgrow"><div><b>' + c.name + '</b><small>' + hrs(c.h) + ' of your income · ' + odds + (c.cu ? ' · Curio ' + Math.round(c.cu * 1000) / 10 + '%' : '') + '</small></div><button class="btn small" data-crate="' + c.id + '"' + (S.gold < cost ? ' disabled title="Not enough gold"' : '') + '>' + icon('coin') + fmt(cost) + '</button></div>'; };
     const shelf = L.CURIOS.map(q => { const has = own[q.id], held = has && L.curioHeld(S, q.id);
       return '<div class="cuitem' + (has ? ' own' : '') + '"><b>' + (has ? esc(q.name) : '???') + '</b><small>' + (has ? esc(q.fx) : 'Not found yet') + '</small>' + (has && !held ? '<button class="btn ghost small" data-curetake="' + q.id + '">Take it again</button>' : '') + '</div>'; }).join('');
-    return head + '<h3 class="ewq">“Step right up! Which crate calls to you?”</h3>' +
+    return head + '<h3 class="ewq">“Fortune favours the bold, friend. Pick a crate.”</h3>' +
       '<p class="ewhint">Every crate holds one piece of gear at your depth, never Common. Bigger crates hold rarer things, and only Pip has Curios: eight odd trinkets with powers of their own.</p>' +
       '<div class="rglist">' + L.CRATES.map(crate).join('') + '</div>' +
       '<h3 class="sub">The Curio shelf (' + n + ' of ' + L.CURIOS.length + ')</h3><p class="note small">Each Curio you own adds +' + Math.round(L.CURIO_PER * 100) + '% party damage, +' + Math.round((L.CURIOS.length * L.CURIO_PER + L.CURIO_ALL) * 100) + '% with all ' + L.CURIOS.length + '. You never find one you already own, and a Gilded Casket brings one at least every ' + L.CURIO_PITY + ' (' + (pip.n || 0) + ' since your last). Curios stay yours through New Playthroughs: take them again here for free.</p>' +

@@ -1,4 +1,4 @@
-/* lh-build 202611252317 */
+/* lh-build 202611252347 */
 /* Lanternhold illustrated sprites. Each sprite is drawn as layered SVG (outline, shading, rim light, detail),
    tinted per companion or biome, rendered once to an image and then drawn on the arena canvas. */
 (function (root) {
@@ -365,42 +365,69 @@
       C(60, 66, 3, trim, ' stroke-width="1"'),
     ].join('');
   } };
-  // Pip the Dicer (v126, NP+ gold sinks): a cheerful halfling showman in a tall striped hat with dice on the band,
-  // a red waistcoat with gold buttons, and a big die held up in one hand. Sells Lucky Crates for gold.
+  // Pip the Dicer (v126, NP+ gold sinks; redrawn at John's ask): a lean travelling gambler in a wide-brimmed hat with a
+  // long feather, an oxblood greatcoat with gold filigree, a teal waistcoat and watch chain, a monocle and a sly smile.
+  // A golden die hovers over his open palm. Sells Lucky Crates for gold.
   ART.dicer = { w: 120, h: 160, draw(c) {
-    const coat = c.lg(['#e04848', '#b02a2a', '#6e1414'], 0, 0, 1, 1), coatD = '#5a1010', shirt = c.lg(['#fffaf0', '#e8dcc0'], 0, 0, 0, 1);
-    const pants = c.lg(['#3a4a7a', '#24305a'], 0, 0, 0, 1), boot = c.lg(['#6a4426', '#3a2614'], 0, 0, 0, 1), skin = c.lg([SK.light, SK.mid], 0, 0, 1, 1);
-    const hat = c.lg(['#2a2a3a', '#14141e'], 0, 0, 1, 1), gold = c.lg(['#fff0b8', '#f5c242', '#a87418'], 0, 0, 1, 1), hair = c.lg(['#c87a2a', '#8a4a14']);
-    const die = (x, y, s) => [P('M' + (x - s) + ' ' + (y - s) + ' H' + (x + s) + ' V' + (y + s) + ' H' + (x - s) + 'Z', '#fffaf0', ' stroke-width="1.4"'), C(x - s / 2, y - s / 2, s / 5, '#1a1a24'), C(x, y, s / 5, '#1a1a24'), C(x + s / 2, y + s / 2, s / 5, '#1a1a24')].join('');
+    const coat = c.lg(['#7a2a40', '#4a1626', '#260a14'], 0, 0, 1, 1), coatD = '#1a060e', lining = c.lg(['#2a7a6e', '#164a44'], 0, 0, 1, 1);
+    const vest = c.lg(['#2f7a6c', '#1a4a42', '#0e2a26'], 0, 0, 1, 1), shirt = c.lg(['#f4ead2', '#cdbf9c'], 0, 0, 0, 1);
+    const pants = c.lg(['#2a2a38', '#14141e'], 0, 0, 0, 1), boot = c.lg(['#4a3020', '#1e120a'], 0, 0, 0, 1), skin = c.lg([SK.light, SK.mid], 0, 0, 1, 1);
+    const hat = c.lg(['#33303e', '#1a1822', '#0c0b12'], 0, 0, 1, 1), gold = c.lg(['#fff0b8', '#f5c242', '#a87418'], 0, 0, 1, 1), hair = c.lg(['#4a3426', '#2a1a10']);
+    const feather = c.lg(['#e8c27a', '#b0532e', '#6a1e1e'], 0, 0, 1, 0);
     return [
-      E(60, 156, 34, 4, '#000', ' opacity=".35"'),
-      // boots and short legs
-      P('M44 128 L42 150 L32 152 L32 156 L50 156 L52 130Z', pants), P('M68 130 L70 150 L80 152 L80 156 L62 156 L60 130Z', pants),
-      P('M30 150 H52 V157 H30Z', boot, ' stroke-width="1.6"'), P('M60 150 H82 V157 H60Z', boot, ' stroke-width="1.6"'),
-      // round body: shirt, waistcoat, gold buttons, a coin purse
-      P('M34 96 Q30 132 44 134 Q60 138 76 134 Q90 132 86 96 Q60 84 34 96Z', shirt),
-      P('M34 96 Q30 132 44 134 L54 134 L58 96Z', coat), P('M86 96 Q90 132 76 134 L66 134 L62 96Z', coat),
-      Pn('M74 98 Q84 104 86 122 Q84 132 76 134 L68 134Z', coatD, ' opacity=".4"'),
-      ...[104, 114, 124].map(y => C(56, y, 1.8, gold, ' stroke="#6a4a10" stroke-width=".6"')),
-      P('M72 120 Q80 118 82 126 Q80 134 72 132 Q68 126 72 120Z', c.mat('#8a5a2a'), ' stroke-width="1.2"'), C(76, 119, 1.6, gold),
-      // left arm on the hip, right arm holding a big die up high
-      P('M36 98 Q24 106 26 118 L34 120 Q34 110 40 104Z', coat), Eo(30, 121, 5, 4.5, skin),
-      P('M84 98 Q98 90 100 76 L92 72 Q90 84 80 92Z', coat), Eo(96, 70, 5.5, 5, skin),
-      die(98, 56, 9),
-      // head: big grin, freckles, curly hair
-      ...[[42, 70], [78, 70], [44, 60], [76, 60]].map(([x, y]) => C(x, y, 6, hair)),
-      P('M42 70 Q42 50 60 48 Q78 50 78 70 Q78 88 60 90 Q42 88 42 70Z', skin),
-      E(53, 68, 2, 2.4, '#1a2440'), E(67, 68, 2, 2.4, '#1a2440'), C(53.7, 67.2, 0.8, '#ffffff'), C(67.7, 67.2, 0.8, '#ffffff'),
-      P('M50 77 Q60 87 70 77 Q60 81 50 77Z', '#7a2020', ' stroke-width="1.2"'), P('M52 77.5 Q60 80 68 77.5 L67 79 Q60 81 53 79Z', '#ffffff', ' stroke="none"'),
-      ...[[48, 74], [50, 76], [70, 74], [72, 76]].map(([x, y]) => C(x, y, 0.7, '#c86a3a')),
-      E(47, 75, 3, 1.8, '#ff8a7a', ' opacity=".35"'), E(73, 75, 3, 1.8, '#ff8a7a', ' opacity=".35"'),
-      L_('M49 62 Q53 60 57 62 M63 62 Q67 60 71 62', '#8a4a14', 1.4),
-      // tall striped hat with dice on the band
-      P('M36 52 Q60 44 84 52 L84 56 Q60 50 36 56Z', hat, ' stroke-width="1.8"'),
-      P('M44 50 L46 14 Q60 8 74 14 L76 50 Q60 46 44 50Z', hat),
-      ...[22, 32].map(y => P('M45.5 ' + y + ' Q60 ' + (y - 4) + ' 74.5 ' + y + ' L75 ' + (y + 4) + ' Q60 ' + y + ' 45 ' + (y + 4) + 'Z', '#e04848', ' stroke="none"')),
-      P('M44 42 Q60 38 76 42 L76 48 Q60 44 44 48Z', gold, ' stroke-width="1.2"'),
-      die(52, 45, 3), die(68, 45, 3),
+      E(60, 156, 30, 4, '#000', ' opacity=".4"'),
+      // boots and trousers under the coat
+      P('M48 126 L46 148 L54 148 L56 128Z', pants), P('M64 128 L66 148 L74 148 L72 126Z', pants),
+      P('M40 147 H56 V156 H38 Q38 150 40 147Z', boot, ' stroke-width="1.8"'), P('M64 147 H80 Q82 150 82 156 H64Z', boot, ' stroke-width="1.8"'),
+      P('M48 150 H52 V153 H48Z', gold, ' stroke-width=".6"'), P('M72 150 H76 V153 H72Z', gold, ' stroke-width=".6"'),
+      // the greatcoat: open at the front, long tails behind
+      P('M38 66 Q30 104 26 142 Q34 148 46 144 L54 92 L58 70Z', coat), P('M82 66 Q92 104 96 142 Q88 148 76 144 L66 92 L62 70Z', coat),
+      Pn('M82 66 Q92 104 96 142 Q90 146 84 146 Q86 104 76 72Z', coatD, ' opacity=".45"'),
+      Pn('M54 92 L46 144 Q42 145 40 144 L50 96Z', lining), Pn('M66 92 L76 144 Q80 145 82 144 L70 96Z', lining),
+      L_('M26 142 Q34 148 46 144 M96 142 Q88 148 76 144', '#e0b04a', 1.4),
+      L_('M38 66 Q30 104 26 142 M82 66 Q92 104 96 142', '#e0b04a', 1, ' opacity=".55"'),
+      ...[[34, 128], [88, 128]].map(([x, y]) => L_('M' + (x - 4) + ' ' + y + ' q4 -6 8 0 q-4 6 -8 0', '#e0b04a', 0.9, ' opacity=".8"')),
+      // waistcoat, buttons and the watch chain
+      P('M50 72 Q60 68 70 72 L70 120 Q60 126 50 120Z', vest),
+      ...[82, 94, 106].map(y => C(60, y, 1.6, gold, ' stroke="#5a3a08" stroke-width=".5"')),
+      L_('M52 100 Q58 108 66 100', '#f5c242', 1.1), C(66.5, 100, 1.8, gold, ' stroke="#5a3a08" stroke-width=".5"'),
+      P('M50 116 Q60 120 70 116 L70 121 Q60 125 50 121Z', c.mat('#3a2414'), ' stroke-width="1"'), P('M57 116 H63 V122 H57Z', gold, ' stroke-width=".7"'),
+      // cravat
+      P('M54 66 Q60 64 66 66 L64 74 Q60 82 56 74Z', shirt, ' stroke-width="1.2"'), C(60, 72, 1.5, '#b33a3a', ' stroke="#3a0a0a" stroke-width=".5"'),
+      // back arm: hand resting on a coin purse at the hip
+      P('M40 68 Q30 84 32 104 L40 106 Q40 90 46 78Z', coat), P('M30 102 L42 102 L42 106 L30 106Z', '#e0b04a', ' stroke-width=".8"'),
+      P('M36 108 Q44 106 46 114 Q44 122 36 120 Q32 114 36 108Z', c.mat('#6a4426'), ' stroke-width="1.2"'), C(41, 107, 1.4, gold),
+      Eo(36, 110, 5, 4.5, skin),
+      // front arm: forearm out, palm up, the golden die floating above it
+      P('M80 68 Q92 78 90 92 L98 96 L96 102 L84 100 Q78 88 74 78Z', coat), P('M94 94 L100 96 L98 103 L92 101Z', '#e0b04a', ' stroke-width=".8"'),
+      P('M98 98 Q108 96 110 100 Q108 104 98 104Z', skin, ' stroke-width="1.4"'),
+      C(104, 82, 14, c.rg([['#fff3c0', 0.75], ['#f5c242', 0.3], ['#f5c242', 0]]), ''),
+      G([P('M-6 -6 H6 V6 H-6Z', gold, ' stroke-width="1.4"'), C(-3, -3, 1.1, '#5a3a08'), C(0, 0, 1.1, '#5a3a08'), C(3, 3, 1.1, '#5a3a08'), L_('M-4.5 -4.5 H2', '#ffffff', 0.8, ' opacity=".8"')].join(''), 'translate(104 82) rotate(18)'),
+      ...[[96, 76], [112, 88], [100, 92]].map(([x, y]) => C(x, y, 0.9, '#fff3c0', ' opacity=".9"')),
+      // high collar behind the head
+      P('M42 70 Q38 54 46 50 L52 66Z', coat), P('M78 70 Q82 54 74 50 L68 66Z', coat),
+      // head: lean face, dark hair at the temples, sly half-smile, curled moustache and a small pointed beard
+      P('M48 44 Q48 30 60 29 Q72 30 72 44 Q72 58 60 64 Q48 58 48 44Z', skin),
+      P('M47 40 Q46 32 52 30 L52 44 Q48 44 47 40Z', hair, ' stroke-width="1"'), P('M73 40 Q74 32 68 30 L68 44 Q72 44 73 40Z', hair, ' stroke-width="1"'),
+      E(55, 44, 1.8, 1.3, '#1a2440'), P('M52.5 42.6 Q55 41.4 57.5 42.6', 'none', ' stroke-width="1"'),
+      E(66, 44, 1.9, 2.1, '#1a2440'), C(66.6, 43.4, 0.6, '#ffffff'),
+      C(66, 44, 4, 'rgba(220,240,255,.25)', ' stroke="#f5c242" stroke-width="1.1"'), L_('M70 45 Q74 56 70 64', '#f5c242', 0.6),
+      L_('M51.5 39.5 Q55 38.4 58 40 M63 38 Q66.5 36.4 70 38.6', '#2a1a10', 1.3),
+      L_('M59 46 Q60 50 58.5 52', '#a8684a', 0.9),
+      P('M53 54 Q57 52 60 54 Q63 52 67 54 Q69 51 70 52 Q68 56 64 55.5 Q60 55 56 55.5 Q52 56 50 52 Q51 51 53 54Z', hair, ' stroke-width=".8"'),
+      L_('M55 57.5 Q60 59.5 66 56.5', '#7a3a2a', 1.1),
+      P('M58 60 Q60 59 62 60 L60 67Z', hair, ' stroke-width=".8"'),
+      E(53, 50, 2.4, 1.3, '#ff8a7a', ' opacity=".22"'), E(68, 50, 2.4, 1.3, '#ff8a7a', ' opacity=".22"'),
+      // wide-brimmed hat, tipped at a rakish angle, gold band with a tiny die and a long feather
+      G([
+        P('M-15 -4 Q-16 -20 -8 -22 Q0 -19 8 -22 Q16 -20 15 -4Z', hat),
+        P('M-36 0 Q-20 -10 0 -8 Q20 -10 36 0 Q20 6 0 4 Q-20 6 -36 0Z', hat, ' stroke-width="2"'),
+        Pn('M8 -21 Q15 -19 15 -4 L8 -5Z', '#000', ' opacity=".3"'),
+        P('M-15.5 -10 Q0 -14 15.5 -10 L16 -5 Q0 -9 -16 -5Z', gold, ' stroke-width="1"'),
+        P('M-3 -11.5 H2 V-6.5 H-3Z', '#fffaf0', ' stroke-width=".6"'), C(-0.5, -9, 0.7, '#1a1a24'),
+        P('M-12 -10 Q-30 -34 -46 -30 Q-34 -24 -26 -18 Q-20 -12 -12 -8Z', feather, ' stroke-width="1.2"'),
+        L_('M-12 -9 Q-28 -26 -44 -29', '#fff0d0', 0.7, ' opacity=".7"'),
+      ].join(''), 'translate(60 31) rotate(-5)'),
     ].join('');
   } };
   // Gulp the Hoard Mimic (v126, NP+ only): a fat treasure chest with too many teeth, googly eyes on the lid, a long pink
