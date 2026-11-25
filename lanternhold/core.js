@@ -1,4 +1,4 @@
-/* lh-build 202611250432 */
+/* lh-build 202611250506 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -1386,7 +1386,10 @@
     return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls: heroCls(s) || (s.party.filter(Boolean).map(id => memberById(id).cls)[0]) || 'rogue', slot: 'neck', rar: 'goblin', gob: 1, ilvl: f, up: 0 }, r);
   }
   // Region set drop odds, before Loot bonuses.
-  const RSET_DROP = { boss: 0.025, chest: 0.006, elite: 0.0015, pack: 0.0004, foe: 0.00005 };
+  // Set pieces are rarer since v121 (John, 2026-11-25: "they are dropping pretty easily"): every set chance is halved.
+  const SET_RATE = 0.5;
+  const RSET_DROP = { boss: 0.025 * SET_RATE, chest: 0.006 * SET_RATE, elite: 0.0015 * SET_RATE, pack: 0.0004 * SET_RATE, foe: 0.00005 * SET_RATE };
+  const JSET_BOSS = 0.03 * SET_RATE, JSET_CHEST = 0.008 * SET_RATE, CSET_BOSS = 0.06 * SET_RATE;
   function rollJobSet(s, f, r) {
     const classes = Array.from(new Set(s.party.filter(Boolean).map(id => memberById(id).cls)));
     const cls = classes.length ? classes[Math.floor(r() * classes.length)] : CLASS_ORDER[Math.floor(r() * 5)];
@@ -1405,9 +1408,9 @@
     const rk = foe.boss ? 'boss' : foe.chest ? 'chest' : foe.elite ? 'elite' : foe.pack ? 'pack' : 'foe';
     if (!foe.goblin && r() < RSET_DROP[rk] * loot) it = rollRegionSet(s, f, r);
     if (it) { s.lore['rset_' + it.rset] = Date.now(); if (it.rset < REGIONS) masteryMark(s, it.rset, 4, events); }
-    else if (f >= 20 && canUse(s, 'jset') && (foe.boss ? r() < 0.03 * loot : foe.chest ? r() < 0.008 * loot : false)) it = rollJobSet(s, f, r);
+    else if (f >= 20 && canUse(s, 'jset') && (foe.boss ? r() < JSET_BOSS * loot : foe.chest ? r() < JSET_CHEST * loot : false)) it = rollJobSet(s, f, r);
     else if (foe.boss) {
-      if (f >= 15 && r() < 0.06 * loot) it = rollGear(s, f, { set: true }, r);
+      if (f >= 15 && r() < CSET_BOSS * loot) it = rollGear(s, f, { set: true }, r);
       else if (r() < 0.6 * loot) it = rollGear(s, f, { boost: 1 }, r);
     } else if (foe.chest) { if (r() < 0.4 * loot) it = rollGear(s, f, { boost: 0.5 }, r); }
     else if (foe.pack) { if (r() < (foe.elite ? 0.4 : 0.25) * loot) it = rollGear(s, f, { boost: 0.5 }, r); }
@@ -1460,11 +1463,11 @@
     const top = first + 9, mid = first + 4, lb = lootBonus(s), m = lb.total, c = p => Math.min(1, Math.max(0, p));
     const ri = regionSetAt(first), rs = {};
     for (const k in RSET_DROP) rs[k] = ri < 0 ? 0 : c(RSET_DROP[k] * m);
-    const jsOn = canUse(s, 'jset'), jsB = jsOn && top >= 20 ? c(0.03 * m) : 0, jsC = jsOn && mid >= 20 ? c(0.008 * m) : 0;
-    const csB = top >= 15 ? (1 - rs.boss) * (1 - jsB) * c(0.06 * m) : 0;
+    const jsOn = canUse(s, 'jset'), jsB = jsOn && top >= 20 ? c(JSET_BOSS * m) : 0, jsC = jsOn && mid >= 20 ? c(JSET_CHEST * m) : 0;
+    const csB = top >= 15 ? (1 - rs.boss) * (1 - jsB) * c(CSET_BOSS * m) : 0;
     // Plain gear per kind of kill: what is left after the rarer rolls above, times the gear roll and the rarity split.
     const gear = {
-      boss: [(1 - rs.boss) * (1 - jsB) * (1 - (top >= 15 ? c(0.06 * m) : 0)) * c(0.6 * m), rarOdds(top, 1)],
+      boss: [(1 - rs.boss) * (1 - jsB) * (1 - (top >= 15 ? c(CSET_BOSS * m) : 0)) * c(0.6 * m), rarOdds(top, 1)],
       chest: [(1 - rs.chest) * (1 - jsC) * c(0.4 * m), rarOdds(mid, 0.5)],
       elite: [(1 - rs.elite) * c(0.15 * m), rarOdds(mid, 0.5)],
       pack: [(1 - rs.pack) * c(0.25 * m), rarOdds(mid, 0.5)],
