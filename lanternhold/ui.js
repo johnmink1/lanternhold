@@ -1,4 +1,4 @@
-/* lh-build 202611250415 */
+/* lh-build 202611250418 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5649,7 +5649,9 @@
       'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
       'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
       'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
-      'This week\'s preview boss keeps its scores until it ends on Friday.',
+      'New Legendary loot: when a world boss ends, everyone who fought rolls their own chance at a Legendary (2% to 20%, higher with more damage, full odds once 3 phases break). Several delvers can win.',
+      'You also get boss shards and Rift tokens for your damage. Trade 40 Rift tokens for a Legendary piece of any boss set in Market > Boss shards.',
+      'This week\'s preview boss keeps its scores until it ends on Friday, and pays out under the new loot rules.',
     ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
@@ -6273,7 +6275,7 @@
     }
     return h + '</div>';
   }
-  // Boss shards (v105): each world boss drops a few shards of its own, drawn by lottery among everyone who fought.
+  // Boss shards (v105): each world boss drops shards of its own (v120: for your damage, plus Rift tokens for the token shop below).
   // They upgrade that boss's Legendary set and trade here for gold. Listed shards leave your stash until sold or taken down.
   async function loadShards() {
     trade.sh = null; trade.msg = 'Opening the shard stall…'; paintTrade();
@@ -6284,7 +6286,9 @@
   function shardsView() {
     const have = L.shardsOf(S);
     let h = '<div class="sigex"><div class="shhave">' + L.WB_SETS.map((b, k) => '<span class="shchip sh' + k + '">' + icon('relic') + '<b>' + (have[k] || 0) + '</b> ' + b.word + '</span>').join('') + '</div>' +
-      '<p class="note small">Boss shards drop from world bosses, drawn by lottery among everyone who fought. Each boss’s shards upgrade its own Legendary set.</p>';
+      '<p class="note small">Every world boss gives you boss shards for your damage. Each boss’s shards upgrade its own Legendary set.</p>' +
+      '<h3 class="sub">Rift tokens</h3><p class="note small">You have <b>' + fmt(S.wbTok || 0) + '</b> Rift tokens. World bosses give them for your damage. Trade ' + L.WB_TOKEN_COST + ' for a Legendary piece (a random slot) of any boss set.</p><div class="row">' +
+      L.WB_SETS.map((b, k) => '<button class="btn small" data-tokbuy="' + k + '"' + ((S.wbTok || 0) < L.WB_TOKEN_COST ? ' disabled' : '') + '>' + esc(b.name) + '</button>').join('') + '</div>';
     if (trade.msg) h += '<p class="note">' + esc(trade.msg) + '</p>';
     const x = trade.sh; if (!x) return h + '</div>';
     const others = x.l.filter(l => l.seller !== x.me).sort((a, b) => a.price / a.n - b.price / b.n);
@@ -6464,6 +6468,11 @@
       S.gold -= r.price; L.shardsOf(S)[r.k] = (L.shardsOf(S)[r.k] || 0) + r.n; afterTrade(); sfx.coin();
       toast('relic', 'Shards bought', '+' + shName(r.k, r.n) + ' for ' + fmt(r.price) + ' gold.', 'feat'); loadShards();
     });
+    if (d.tokbuy != null) {
+      const k = +d.tokbuy, it = L.buyLegend(S, k); if (!it) return;
+      save(); try { pushCloud(true); } catch (e) {} updateGear(true); sfx.boss && sfx.boss();
+      toast('crown', 'LEGENDARY: ' + L.gearName(it), L.WB_TOKEN_COST + ' Rift tokens traded for a piece of ' + L.WB_SETS[k].name + '. ' + fmt(S.wbTok) + ' tokens left.', 'feat'); paintTrade(); return;
+    }
     if (d.hcancel) tradeAct(async () => {
       const r = await chatCall('POST', '/shards/cancel', { id: d.hcancel });
       L.shardsOf(S)[r.k] = (L.shardsOf(S)[r.k] || 0) + r.n; afterTrade(); toast('relic', 'Listing taken down', shName(r.k, r.n) + ' are back in your stash.', ''); loadShards();
@@ -6641,7 +6650,7 @@
         '<li><b>' + esc(tr.trait) + '</b><span>' + esc(tr.line) + ' Weak to ' + cn(tr.weak) + ' (+' + Math.round(L.WB_WEAK * 100) + '% damage), resists ' + tr.resist.map(cn).join(' and ') + ' (−' + Math.round(L.WB_RESIST * 100) + '%).</span></li>' +
         '<li><b>Fight beside players</b><span>Hired and story companions deal half damage to the boss. Your hero and other players\' heroes in your party deal full damage.</span></li>') +
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
-      '<li><b>Legendary loot</b><span>' + (() => { const k = Math.floor(Date.parse(x.w.id + 'T00:00:00Z') / 6048e5) % 4, s2 = L.WB_SETS[k]; return 'Each phase broken adds a 12% chance (up to 75%) that ' + esc(x.name) + ' drops a piece of <b>' + esc(s2.name) + '</b>. One winner is drawn from everyone who fought: every whole point of your damage is one ticket. ' + esc(s2.word) + ' shards (5, plus 3 per phase) are drawn the same way. They upgrade the set and trade in the Market.'; })() + '</span></li>' +
+      '<li><b>Legendary loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a piece of <b>' + esc(s2.name) + '</b>: 2% to 20%, higher the more damage you dealt, and full odds once the server breaks 3 phases. Several delvers can win. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set in the Market.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
       (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
       (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
@@ -6694,9 +6703,10 @@
     sh[b] = (sh[b] || 0) + (r.sh || 0);
     let it = null; if (r.leg) { it = L.makeLegend(S, b); S.bag.push(it); S.stats.legends = (S.stats.legends || 0) + 1; }
     save(); try { pushCloud(true); } catch (e) {} updateGear(true);
-    const odds = Math.round(r.tk / Math.max(1, r.all) * 1000) / 10;
-    if (it) { sfx.boss && sfx.boss(); toast('crown', 'LEGENDARY: ' + L.gearName(it), 'You won the draw for ' + set.name + ' with ' + fmt(r.tk) + ' of ' + fmt(r.all) + ' tickets (' + odds + '%).' + (r.sh ? ' Plus ' + shName(b, r.sh) + '.' : ''), 'feat'); }
-    else toast('relic', set.word + ' loot', (r.sh ? 'You drew ' + shName(b, r.sh) + '. ' : 'No shards this time. ') + (r.who ? r.who + ' won the Legendary.' : 'No Legendary dropped this time.') + ' Your tickets: ' + fmt(r.tk) + ' of ' + fmt(r.all) + ' (' + odds + '%).', '');
+    S.wbTok = (S.wbTok || 0) + (r.tok || 0); save();
+    const odds = Math.round((r.p || 0) * 1000) / 10, got = (r.sh ? shName(b, r.sh) : 'no shards') + (r.tok ? ' and ' + r.tok + ' Rift tokens (' + fmt(S.wbTok) + ' saved)' : '');
+    if (it) { sfx.boss && sfx.boss(); toast('crown', 'LEGENDARY: ' + L.gearName(it), 'Your ' + odds + '% roll for ' + set.name + ' came up! Plus ' + got + '.', 'feat'); }
+    else toast('relic', set.word + ' loot', 'No Legendary this time (your roll was ' + odds + '%). You got ' + got + '. ' + L.WB_TOKEN_COST + ' tokens buy a piece in the Market.', '');
   }
   $('wbbar').addEventListener('click', () => {
     const x = wbState();
