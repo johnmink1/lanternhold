@@ -1,4 +1,4 @@
-/* lh-build 202611250125 */
+/* lh-build 202611250203 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1024,7 +1024,12 @@
       } else if (e.type === 'ward') {
         floatText('Ward', 'skill', FOE_X, 0.3); burst(foeAnim.cx, foeAnim.cy, 18, ['#bfe6ff', '#ffffff', '#7fb8e8'], 35);
       } else if (e.type === 'regionlock') {
-        { const t = L.trialOf(S, e.need - 1), key = e.floor + ':' + t.elites; if (lockToast !== key) { lockToast = key; toast('lock', 'Region trial: ' + trialName(e.need - 1), 'To go past floor ' + (e.floor - 1) + ', defeat ' + L.TRIAL_ELITES + ' alliance elites in this region (' + t.elites + '/' + L.TRIAL_ELITES + ' so far) and beat its guardian. Elites are the bannered warband foes.', 'feat'); } }
+        // Say why every time the party is sent back from a guardian, not just the first time (v120: players beat floor
+        // 50 again and again with no reason on screen, because the first toast was pushed out by feat and loot toasts).
+        // It waits a moment so the loot and feat toasts from the same kill can't push it off.
+        { const t = L.trialOf(S, e.need - 1), left = Math.max(0, L.TRIAL_ELITES - t.elites);
+          floatText('Region trial ' + t.elites + '/' + L.TRIAL_ELITES + ' elites', 'skill', FOE_X, 0.3);
+          if (Date.now() - lockToast > 20000) { lockToast = Date.now(); setTimeout(() => toast('lock', 'Back to floor ' + S.floor + ': region trial not done', 'To go past floor ' + (e.floor - 1) + ', defeat ' + L.TRIAL_ELITES + ' alliance elites in ' + trialName(e.need - 1) + ' (' + t.elites + '/' + L.TRIAL_ELITES + ' so far, ' + left + ' to go)' + (t.guardian ? '' : ' and beat its guardian') + '. Elites are the bannered warband foes and show up on the floors before the guardian. Your party farms the floor below until then.', 'feat'), 1200); } }
       } else if (e.type === 'trial') {
         if (e.elites >= L.TRIAL_ELITES) { sfx.relic(); toast('map', 'Region trial complete', e.guardian ? 'Beat ' + trialName(e.region) + '\u2019s guardian once more and the way down opens.' : 'Now beat ' + trialName(e.region) + '\u2019s guardian to open the way down.', 'feat'); }
         else floatText('Trial ' + e.elites + '/' + L.TRIAL_ELITES, 'skill', FOE_X, 0.22);
@@ -2851,6 +2856,16 @@
   }
 
   let lastPipKey = '', lastModKey = null;
+  // At a region's guardian with its trial not done: the goal line says what is holding the party back (v120).
+  function trialGoal() {
+    const top = S.maxFloorEver || 1, r = L.regionNo(top);
+    const at = top === (r + 1) * 10 && r < L.REGIONS - 1 && L.regionNeed(S, top + 1);
+    $('goal').classList.toggle('trial', !!at);
+    if (!at) { delete $('goal').dataset.tip; return ''; }
+    const t = L.trialOf(S, r);
+    $('goal').dataset.tip = 'Region trial: to go past floor ' + top + ', defeat ' + L.TRIAL_ELITES + ' alliance elites (the bannered warband foes) on floors ' + (r * 10 + 1) + ' to ' + (top - 1) + (t.guardian ? '' : ' and beat the guardian on floor ' + top) + '. Until then, beating the guardian sends your party back to farm floor ' + (top - 1) + '.';
+    return t.elites + '/' + L.TRIAL_ELITES + ' elites' + (t.guardian ? '' : ' + guardian') + ' to pass floor ' + top;
+  }
   function updateStage() {
     const b = L.biomeOf(S.floor), cyc = L.depthCycle(S.floor);
     $('floor').textContent = S.floor;
@@ -2865,7 +2880,7 @@
       $('pips').innerHTML = boss ? '<i class="boss now"></i>' : Array.from({ length: L.FOES_PER_FLOOR }, (_, i) => '<i class="' + (i < S.foeIdx ? 'done' : i === S.foeIdx ? 'now' : '') + '"></i>').join('');
     }
     $('goalch').textContent = 'Chapter ' + L.chapterOf(S);
-    { let g = L.currentGoal(S); if (S.maxFloorEver > L.ACT_ONE_END && !L.actTwoOpen()) { const d = Math.max(0, L.ACT_TWO_AT - Date.now()), dd = Math.floor(d / 864e5), hh = Math.floor(d / 36e5) % 24; g = 'Act Two opens with Season 2, in ' + (dd ? dd + 'd ' : '') + hh + 'h'; } if ($('goaltext').textContent !== g) $('goaltext').textContent = g; }
+    { let g = L.currentGoal(S), trial = trialGoal(); if (trial) g = trial; if (S.maxFloorEver > L.ACT_ONE_END && !L.actTwoOpen()) { const d = Math.max(0, L.ACT_TWO_AT - Date.now()), dd = Math.floor(d / 864e5), hh = Math.floor(d / 36e5) % 24; g = 'Act Two opens with Season 2, in ' + (dd ? dd + 'd ' : '') + hh + 'h'; } if ($('goaltext').textContent !== g) $('goaltext').textContent = g; }
     paintGoblinHunt();
     const f = S.foe;
     if (f) {
@@ -5526,6 +5541,10 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 120, date: 'November 25, 2026', title: 'Region trials made clear', items: [
+      'Fixed: beating a region guardian (like floor 50) before its region trial is done sent your party back a floor with no reason on screen after the first time. Now every time it happens you see why: a toast and a "Region trial 3/10 elites" note in the arena.',
+      'While you wait at a guardian, the goal line under the floor shows the trial: how many alliance elites you have (out of 10) and the floor they open. Hover it for the full rule.',
+    ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
       'Fixed: NPC Guild hire prices and wages no longer jump around. They used to count a mage\u2019s spell as always on (prices up to 70% too high) and drop when a companion was down or sent to the Campfire. Prices now follow your best five companions at full strength, so the price you see is the price you pay.',

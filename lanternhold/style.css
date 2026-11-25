@@ -1,4 +1,4 @@
-/* lh-build 202611250125 */
+/* lh-build 202611250203 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2362,3 +2362,6 @@ body.atench .achips{display:none}
 .mtip tr:has(.tot) td{border-top:1px solid rgba(255,255,255,.18);padding-top:4px}
 .mtip .pos{color:#8fdc6a}.mtip .neg{color:#ff7b6b}.mtip .mut{color:var(--muted)}
 .mtip small{display:block;margin-top:6px;color:var(--muted);font-size:11.5px;line-height:1.35}
+
+/* v120: region trial shown on the goal line while the party waits at a guardian */
+.goal.trial b{color:#ffcf6a}
