@@ -1,4 +1,4 @@
-/* lh-build 202611250432 */
+/* lh-build 202611250444 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -1240,6 +1240,7 @@
     if (it.slot === 'weapon') it.slot = 'main';
     else if (it.slot === 'armor') it.slot = CLOTH[it.cls] && !it.set ? 'robe' : 'chest';
     else if (it.slot === 'trinket') it.slot = 'neck';
+    if (it.wb != null && it.rar === 'legend') it.rar = 'mythic'; // v121: world boss gear is Mythic, above Legendary
     if (!it.ty || !ITYPES[it.ty]) it.ty = tyOf(Object.assign({}, it, { ty: null }));
     if (typeof it.en !== 'string') { if (it.uid) rollEnch(it, seeded(it.uid)); else it.en = ''; }
     else if (enchList(it).length > sockets(it) || !/^([a-l][1-9])*$/.test(it.en)) it.en = enchStr(enchList(it).slice(0, sockets(it)));
@@ -1253,6 +1254,7 @@
     { id: 'set',    name: 'Set',    pct: 0.18, w: 0,  prefix: '' },
     { id: 'goblin', name: 'Goblin', pct: 0.26, w: 0,  prefix: '' },
     { id: 'legend', name: 'Legendary', pct: 0.34, w: 0, prefix: '' },
+    { id: 'mythic', name: 'Mythic', pct: 0.5, w: 0, prefix: '' },
   ];
   // Region sets (John, 2026-11-23): every region of the Deep drops its own four-piece armor set, for any class.
   // Pieces only drop on that region's floors and only rarely (guardians are the best bet), so a full set is a long
@@ -1288,8 +1290,10 @@
     { word: 'Leviathan', name: 'Ashen Leviathan’s Hoard',        k: 'gold', piece: { main: 'Harpoon',       chest: 'Scaleguard',   ring: 'Band',    neck: 'Pearl' }, lore: 'Treasure from the belly of the ash-whale, still warm, still smelling of smoke.' },
   ];
   const WB_SLOTS = ['main', 'chest', 'ring', 'neck'];
-  const WB_PCT = 0.34, WB_TWO = { hp: 0.15, dps: 0.15, heal: 0.15, gold: 0.25 }, WB_FOUR = 0.3;
-  const wbUpCost = it => (it.up || 0) + 1; // boss shards of that boss to raise a Legendary one level
+  // v121 (John, 25 Nov 2026): boss gear is Mythic, above Legendary: rare, slow to finish and much stronger than anything
+  // else. Upgrades cost twice the shards (110 to reach +10), and each boss only comes round every fourth weekend.
+  const WB_PCT = 0.5, WB_TWO = { hp: 0.2, dps: 0.2, heal: 0.2, gold: 0.3 }, WB_FOUR = 0.45;
+  const wbUpCost = it => 2 * ((it.up || 0) + 1); // boss shards of that boss to raise a Mythic one level
   const RSET_PIECE = {
     plate:   { head: 'Helm', chest: 'Hauberk',  legs: 'Greaves',   feet: 'Sabatons' },
     leather: { head: 'Hood', chest: 'Jerkin',   legs: 'Breeches',  feet: 'Boots' },
@@ -1574,7 +1578,7 @@
   }
   const salvageValue = it => foeGold(Math.max(1, it.ilvl), false) * 3 * (1 + RARITY.findIndex(r => r.id === it.rar)) * (1 + it.up);
   // Dust (John, 2026-11-23): scrapping gear also gives Dust, more for rarer and deeper pieces. Moving an enchant costs Dust.
-  const DUST = { common: 1, fine: 3, rare: 8, epic: 20, set: 15, goblin: 60, legend: 100 };
+  const DUST = { common: 1, fine: 3, rare: 8, epic: 20, set: 15, goblin: 60, legend: 100, mythic: 160 };
   const dustValue = it => Math.max(1, Math.round((DUST[it.rar] || 1) * (1 + it.ilvl / 25) * (1 + 0.25 * (it.up || 0))));
   const enchCost = x => 5 * x.t * x.t;
   function salvage(s, uid) {
@@ -1606,11 +1610,11 @@
   const ENCH_KEYS = Object.keys(ENCH), ENCH_MAX = 4;
   // Rings and trinkets lean toward regen and life steal; armor leans toward block and defense; weapons toward life steal.
   const ENCH_BIAS = { ring: ['i', 'i', 'j'], neck: ['i', 'j', 'j'], main: ['j', 'j'], off: ['k', 'k', 'l'], chest: ['l', 'l', 'k'], robe: ['l', 'i'], head: ['l', 'k'], legs: ['l', 'k'], feet: ['k', 'i'] };
-  const SOCK_BASE = { common: 0, fine: 1, rare: 2, epic: 3, set: 2, goblin: 3, legend: 3 }, ENCH_FILL = { common: 0.3, fine: 0.4, rare: 0.5, epic: 0.7, set: 0.5, goblin: 0.8, legend: 0.9 };
+  const SOCK_BASE = { common: 0, fine: 1, rare: 2, epic: 3, set: 2, goblin: 3, legend: 3, mythic: 4 }, ENCH_FILL = { common: 0.3, fine: 0.4, rare: 0.5, epic: 0.7, set: 0.5, goblin: 0.8, legend: 0.9, mythic: 1 };
   const sockets = it => Math.min(ENCH_MAX, (SOCK_BASE[it.rar] || 0) + (it.ilvl >= 30 ? 1 : 0) + (it.ilvl >= 80 ? 1 : 0));
   const enchList = it => { const o = [], e = it && it.en || ''; for (let i = 0; i + 1 < e.length; i += 2) if (ENCH[e[i]]) o.push({ id: e[i], t: +e[i + 1] }); return o; };
   const enchStr = l => l.map(x => x.id + x.t).join('');
-  const enchTierMax = it => Math.min(9, 1 + Math.floor(it.ilvl / 12) + (it.rar === 'epic' || it.rar === 'set' || it.rar === 'goblin' || it.rar === 'legend' ? 1 : 0));
+  const enchTierMax = it => Math.min(9, 1 + Math.floor(it.ilvl / 12) + (it.rar === 'epic' || it.rar === 'set' || it.rar === 'goblin' || it.rar === 'legend' ? 1 : it.rar === 'mythic' ? 2 : 0));
   function rollEnch(it, r) {
     let e = ''; const n = sockets(it), tm = enchTierMax(it);
     const pool = ENCH_KEYS.concat(ENCH_BIAS[it.slot] || []);
@@ -1786,11 +1790,11 @@
   // The winner can always wear it: item level follows their deepest floor, capped by the hero's level.
   function makeLegend(s, b, rng) {
     const r = rng || Math.random, cls = heroCls(s) || 'tank', slot = WB_SLOTS[Math.floor(r() * WB_SLOTS.length)];
-    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: slot === 'chest' && CLOTH[cls] ? 'robe' : slot, rar: 'legend', wb: b, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0 }, r);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: slot === 'chest' && CLOTH[cls] ? 'robe' : slot, rar: 'mythic', wb: b, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0 }, r);
   }
   // Rift tokens (v120, John): every world boss pays tokens for your damage (loot.js); WB_TOKEN_COST buys a Legendary
   // piece of any boss set, so every delver gets there in the end and stronger parties get there sooner.
-  const WB_TOKEN_COST = 40;
+  const WB_TOKEN_COST = 150; // v121: was 40. A long grind on purpose (John)
   function buyLegend(s, b, rng) {
     if (!s.hero || !WB_SETS[b] || (s.wbTok || 0) < WB_TOKEN_COST) return null;
     s.wbTok -= WB_TOKEN_COST; const it = makeLegend(s, b, rng); s.bag.push(it); s.stats.legends = (s.stats.legends || 0) + 1;
