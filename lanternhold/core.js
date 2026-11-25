@@ -216,7 +216,7 @@
     { id: 'whet',     name: 'Grim Whetstone',          desc: '+25% strike damage per level',           per: 0.25 },
     { id: 'hourglass',name: 'Cracked Hourglass',       desc: '+10% ability duration per level',        per: 0.10 },
     { id: 'lamp',     name: 'Lamp of the First Delve', desc: '+3s lantern time per level',             per: 3 },
-    { id: 'moth',     name: 'Moth-wing Charm',         desc: '+1% treasure chest chance per level (max 20%)', per: 0.01 },
+    { id: 'moth',     name: 'Moth-wing Charm',         desc: '+0.1% treasure chest chance per level (max 2%)', per: 0.001 },
     { id: 'ledger',   name: 'Ledger of Old Debts',     desc: '-1% training costs per level (max 25%)', per: 0.01 },
     { id: 'dice',     name: 'Bone Dice',               desc: '+2% critical strike chance per level',   per: 0.02 },
     { id: 'lens',     name: 'Deepglass Lens',          desc: '+6% damage to guardians per level',     per: 0.06 },
@@ -543,8 +543,20 @@
   function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern') + (fxOnW(s, 'glass') ? 10 : 0); }
   // Capped (v124 fix): the Moth-wing Charm had no cap, so a hero who kept re-beating the Lampmother stacked it past
   // 97 levels and every fight became a Treasure Chest (Chipplin, 25 Nov 2026: +380M gold a second at floor 149/150).
-  const MOTH_MAX = 0.2, CHEST_MAX = 0.25;
-  function chestChance(s) { return Math.min(CHEST_MAX, 0.03 + Math.min(MOTH_MAX, relicVal(s, 'moth')) + sk(s, 'chest')); }
+  // v125 (John, 25 Nov 2026: "Chests should have a really low spawn rate... All events should have a low spawn rate.
+  // Even a percentage a day cap would be good on top of it"): base 3% -> 1%, charm +2% max, 4% total, plus EV_DAY caps.
+  const CHEST_BASE = 0.01, MOTH_MAX = 0.02, CHEST_MAX = 0.04;
+  function chestChance(s) { return Math.min(CHEST_MAX, CHEST_BASE + Math.min(MOTH_MAX, relicVal(s, 'moth')) + sk(s, 'chest')); }
+  // Daily caps on random events, per hero, reset at UTC midnight like the daily quests. Once a cap is hit that event
+  // stops showing up until tomorrow (a normal foe takes its place). The Admin event spawner ignores the caps.
+  const EV_DAY = { chest: 40, pack: 60, lock: 20, goblin: 6, ghost: 12, merchant: 8, mercy: 6 };
+  function evDay(s, now) {
+    const d = new Date(now || s.clock || Date.now()).toISOString().slice(0, 10);
+    if (!s.evd || s.evd.d !== d) s.evd = { d, n: {} };
+    return s.evd;
+  }
+  const evOk = (s, k, now) => (evDay(s, now).n[k] || 0) < EV_DAY[k];
+  function evUse(s, k, now) { const e = evDay(s, now); e.n[k] = (e.n[k] || 0) + 1; }
   function abilityDuration(s, ab) { return ab.dur * (1 + relicVal(s, 'hourglass')); }
 
   // ---------- Skill trees ----------
@@ -566,7 +578,7 @@
     ],
     rogue: [
       { b: 'Shadow', s: [SK('Light Feet', 'dodge', 0.03, 3, '+{v} dodge chance for your hero'), SK('Quick Hands', 'dps', 0.15, 3, '+{v} damage for your hero'), SK('Vanish', 'cd', 0.35, 1, 'Backstab comes back 35% sooner')] },
-      { b: 'Fortune', s: [SK('Sticky Fingers', 'gold', 0.08, 3, '+{v} gold'), SK('Keen Eye', 'loot', 0.06, 3, '+{v} gear drop chance'), SK('Lockpick', 'chest', 0.02, 1, '+2% treasure chest chance')] },
+      { b: 'Fortune', s: [SK('Sticky Fingers', 'gold', 0.08, 3, '+{v} gold'), SK('Keen Eye', 'loot', 0.06, 3, '+{v} gear drop chance'), SK('Lockpick', 'chest', 0.01, 1, '+1% treasure chest chance')] },
       { b: 'Edge', s: [SK('Find the Gap', 'crit', 0.02, 3, '+{v} critical strike chance'), SK('Coordinated Strike', 'pdps', 0.04, 3, '+{v} party damage'), SK('Killing Blow', 'power', 1, 1, 'Backstab hits twice as hard')] },
     ],
     mage: [
@@ -2221,18 +2233,18 @@
   // Called when a new foe is due. Returns a Mercy Corps encounter, or null for a normal foe.
   function mercyFoe(s, now, rng) {
     const r = rng || Math.random, f = s.floor;
-    if (f < MERCY_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now) || now < (s.mercyNext || 0) || !mercyActive(s, now)) return null;
+    if (f < MERCY_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now) || now < (s.mercyNext || 0) || !mercyActive(s, now) || !evOk(s, 'mercy', now)) return null;
     if (s.goblin && s.goblin.item && f >= s.goblin.floor) return null;
     const who = MERCY_NAMES[Math.floor(r() * MERCY_NAMES.length)], roll = r(), heal = partyHeal(s);
     if (heal > 0 && roll < WOUNDED_CHANCE) {
       const max = Math.max(200, heal * AID_SEC / 0.9);
-      s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1;
+      s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1; evUse(s, 'mercy', now);
       return { name: who + ', wounded', who, wounded: 1, sprite: 'healer', boss: false, chest: false, elite: false, side: null, ambush: 0, pack: 0, hp: max * 0.1, max, hue: 0, atk: 0, mods: [], ward: 0, wardAt: 0, aidT: 0, sp: null };
     }
     if (roll >= WOUNDED_CHANCE && roll < WOUNDED_CHANCE + RESCUE_CHANCE) {
       const foe = makeFoe(s, r); if (foe.boss || foe.chest || foe.goblin || foe.pack || foe.world) return foe;
       foe.rescue = who; foe.hp *= 1.5; foe.max = foe.hp;
-      s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1;
+      s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1; evUse(s, 'mercy', now);
       return foe;
     }
     return null;
@@ -2253,10 +2265,11 @@
     if (s.wb && s.wb.until > (s.clock || Date.now())) return wbFoe(s);
     if (!boss) {
       if (s.goblin && s.goblin.item && f >= s.goblin.floor) return goblinFoe(s, true);
-      if (!s.goblin && f >= GOBLIN_FLOOR && r() < GOBLIN_CHANCE && s.bag.some(it => !it.lk && !wearer(s, it.uid))) return goblinFoe(s, false);
+      if (!s.goblin && f >= GOBLIN_FLOOR && r() < GOBLIN_CHANCE && evOk(s, 'goblin') && s.bag.some(it => !it.lk && !wearer(s, it.uid))) { evUse(s, 'goblin'); return goblinFoe(s, false); }
     }
-    if (!boss && f >= LOCK_FLOOR && r() < LOCK_CHANCE) return lockFoe(r);
-    const chest = !boss && r() < chestChance(s);
+    if (!boss && f >= LOCK_FLOOR && r() < LOCK_CHANCE && evOk(s, 'lock')) { evUse(s, 'lock'); return lockFoe(r); }
+    const chest = !boss && r() < chestChance(s) && evOk(s, 'chest');
+    if (chest) evUse(s, 'chest');
     const b = biomeOf(f);
     let sprite, name;
     if (boss) {
@@ -2272,7 +2285,8 @@
     // Some foes sneak up and hit the back of the line first.
     let ambush = !boss && !chest && f >= 6 && r() < (elite ? 0.3 : 0.1) ? 2 : 0;
     // Ambush encounter: now and then a few monsters team up and jump the party. Tougher, but the spoils are rich.
-    const pack = !boss && !chest && f >= PACK_FLOOR && r() < PACK_CHANCE ? 2 + Math.floor(r() * 3) : 0;
+    const pack = !boss && !chest && f >= PACK_FLOOR && r() < PACK_CHANCE && evOk(s, 'pack') ? 2 + Math.floor(r() * 3) : 0;
+    if (pack) evUse(s, 'pack');
     let hpx = hp;
     if (pack) { hpx = hp * pack * 0.85; ambush = 2; }
     const mods = chest ? [] : rollMods(f, boss, elite, b, r);
@@ -2284,7 +2298,7 @@
   // Rogue can pick it (LOCK_TIME seconds, faster with taps; a stunned or fallen Rogue pauses it). A door hides gold, a
   // chest hides Dust, and either has a LOCK_SIGIL chance of one Sigil, banked through the server's daily cap for found
   // Sigils like chests and guardians. Without a Rogue the party walks past after LOCK_SKIP seconds.
-  const LOCK_FLOOR = 10, LOCK_CHANCE = 0.02, LOCK_TIME = 5, LOCK_TAP = 0.35, LOCK_SKIP = 4, LOCK_SIGIL = 0.01, LOCK_GOLD = 8;
+  const LOCK_FLOOR = 10, LOCK_CHANCE = 0.01, LOCK_TIME = 5, LOCK_TAP = 0.35, LOCK_SKIP = 4, LOCK_SIGIL = 0.01, LOCK_GOLD = 8;
   const lockFoe = r => { const door = r() < 0.5; return { lock: door ? 'door' : 'chest', name: door ? 'Locked Door' : 'Locked Chest', sprite: door ? 'door' : 'lockbox', hp: 100, max: 100, atk: 0, mods: [], sp: null, pick: 0, wait: 0, hue: 0, ambush: 0, pack: 0, ward: 0, wardAt: 0 }; };
   const lockRogue = s => s.party.find(id => id && memberById(id).cls === 'rogue') || null;
   const lockDust = (s, f) => Math.round((10 + f * 1.2) * npBonus(s));
@@ -2316,7 +2330,7 @@
   }
   // Loot Goblin: a rare thief that fights back. Kill it before it flees, or it runs off with one unworn item from the pack
   // and hides a few floors deeper. Find it there and kill it to win the item back. Worn gear is never taken.
-  const GOBLIN_FLOOR = 8, GOBLIN_CHANCE = 0.006, GOBLIN_TIME = 20, GOBLIN_GOLD = 6;
+  const GOBLIN_FLOOR = 8, GOBLIN_CHANCE = 0.003, GOBLIN_TIME = 20, GOBLIN_GOLD = 6;
   const goblinHide = (s, r) => { const f = s.floor + 2 + Math.floor(r() * 4); return actTwoOpen() ? f : Math.min(ACT_ONE_END, f); };
   function goblinFoe(s, carrying) {
     // Tough enough that idle damage alone barely gets there in time: strikes and abilities make the difference.
@@ -2448,7 +2462,7 @@
   const QUESTS = [
     { id: 'kills',  stat: 'kills',     n: 400, text: 'Defeat {n} monsters' },
     { id: 'boss',   stat: 'bossKills', n: 12,  text: 'Defeat {n} guardians' },
-    { id: 'chests', stat: 'chests',    n: 10,  text: 'Open {n} treasure chests' },
+    { id: 'chests', stat: 'chests',    n: 5,   text: 'Open {n} treasure chests' },
     { id: 'crits',  stat: 'crits',     n: 150, text: 'Land {n} critical hits' },
     { id: 'clicks', stat: 'clicks',    n: 250, text: 'Strike {n} times with your lantern' },
   ];
@@ -2546,7 +2560,7 @@
   // ---------- Wandering merchant (John, 2026-11-24) ----------
   // Only while you are playing: now and then a merchant sets up beside the fight for MERCH_LIFE seconds with one deal
   // at MERCH_OFF off. Buy it or let it go; missing it costs nothing.
-  const MERCH_FLOOR = 5, MERCH_LIFE = 120, MERCH_EVERY = 1500, MERCH_COOL = 900, MERCH_OFF = 0.5;
+  const MERCH_FLOOR = 5, MERCH_LIFE = 120, MERCH_EVERY = 3000, MERCH_COOL = 900, MERCH_OFF = 0.5;
   function merchOffer(s, rng) {
     const r = rng || Math.random, opts = ['tonic', 'tonic', 'draught', 'dust'];
     if ((s.maxFloorEver || 0) >= 10) opts.push('oil');
@@ -2560,7 +2574,8 @@
     rng = rng || Math.random;
     if (s.merchant && now >= s.merchant.until) { s.merchant = null; s.merchNext = now + MERCH_COOL * 1000; events && events.push({ type: 'merchgone' }); return; }
     if (s.merchant || !active || (s.maxFloorEver || 0) < MERCH_FLOOR || resting(s, now) || visiting(s)) return;
-    if (now < (s.merchNext || 0) || rng() >= 1 / (MERCH_EVERY * 2)) return;
+    if (now < (s.merchNext || 0) || rng() >= 1 / (MERCH_EVERY * 2) || !evOk(s, 'merchant', now)) return;
+    evUse(s, 'merchant', now);
     s.merchant = { at: now, until: now + MERCH_LIFE * 1000, offer: merchOffer(s, rng) };
     events && events.push({ type: 'merchant' });
   }
@@ -2897,7 +2912,7 @@
   // Ghost Lantern (John, 2026-11-24): now and then, only while the player is actively playing, a ghost lantern drifts
   // into the fight and slowly saps party damage or healing, never more than GHOST_MAX. Tap it to shatter it for a small
   // reward. Left alone it fades after GHOST_LIFE seconds and the stat comes straight back: nothing lasting is lost.
-  const GHOST_FLOOR = 5, GHOST_LIFE = 30, GHOST_MAX = 0.1, GHOST_EVERY = 480, GHOST_COOL = 240;
+  const GHOST_FLOOR = 5, GHOST_LIFE = 30, GHOST_MAX = 0.1, GHOST_EVERY = 960, GHOST_COOL = 600;
   const GHOST_STATS = { dps: 'damage', heal: 'healing' };
   function ghostSap(s, k, now) {
     const g = s.ghost; if (!g || g.k !== k) return 0;
@@ -2909,7 +2924,8 @@
     rng = rng || Math.random;
     if (s.ghost && now >= s.ghost.until) { const k = s.ghost.k; s.ghost = null; s.ghostNext = now + GHOST_COOL * 1000; events && events.push({ type: 'ghostgone', k }); return; }
     if (s.ghost || !active || s.maxFloorEver < GHOST_FLOOR || resting(s, now) || visiting(s) || !s.foe || nexusOn(s)) return;
-    if (now < (s.ghostNext || 0) || rng() >= 1 / GHOST_EVERY) return;
+    if (now < (s.ghostNext || 0) || rng() >= 1 / GHOST_EVERY || !evOk(s, 'ghost', now)) return;
+    evUse(s, 'ghost', now);
     const hasHealer = s.party.some(id => id && healPerSec(s, id) > 0);
     const k = hasHealer && rng() < 0.35 ? 'heal' : 'dps';
     s.ghost = { at: now, until: now + GHOST_LIFE * 1000, k, x: 0.25 + rng() * 0.5 };
@@ -3464,7 +3480,7 @@
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
     newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, memberById, trainCost, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
     clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
-    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
+    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LH = api;

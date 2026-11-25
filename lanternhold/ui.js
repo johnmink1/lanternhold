@@ -6209,6 +6209,10 @@
       'World boss loot: your Rift tokens are saved to your account together with the rest of the claim.',
       'Set pieces are rarer again: region set pieces drop half as often as before, and class and job set pieces a quarter as often. One region piece still earns that region\u2019s mastery star.',
       'Fixed: after you banked the day\u2019s 15 found Sigils, the game kept popping up \u201cDaily find limit reached\u201d every few seconds. It now tells you once, keeps any extra Sigils for the next day (UTC), and a new find says they are saved for tomorrow (thanks for the report, Kyvia).',
+      'Treasure chests are much rarer: 1% of fights (was 3%). The Moth-wing Charm now adds +0.1% a level, up to +2%, and the Lockpick skill +1%, so chests top out at 4% of fights (was 25%). The daily quest asks for 5 chests instead of 10.',
+      'Other random events are rarer too: Loot Goblins and locked doors and chests come half as often, and Ghost Lanterns and the wandering merchant show up about half as often.',
+      'New daily limits per hero, reset at midnight UTC: 40 treasure chests, 60 ambushes, 20 locks, 6 Loot Goblins, 12 Ghost Lanterns, 8 merchants and 6 Mercy Corps encounters. After that, normal monsters take their place until tomorrow.',
+      'Alliance elites are not affected, so region trials (10 elites before you pass a region\u2019s guardian) go at the same pace as before.',
     ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Fixed: past about 97 levels of the Moth-wing Charm every fight turned into a Treasure Chest, so some heroes got stuck opening chests at the bottom of Act One. The charm now tops out at +20% (treasure chests at most 25% of fights), and re-beating the Lampmother no longer counts as a first clear for relic finds.',
