@@ -1,4 +1,4 @@
-/* lh-build 202611250506 */
+/* lh-build 202611250543 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2434,3 +2434,31 @@ body.atench .achips{display:none}
 .rgrow .btn{display:inline-flex;align-items:center;gap:6px}.rgrow .btn svg{width:15px;height:15px;flex:none}
 /* v120: region trial shown on the goal line while the party waits at a guardian */
 .goal.trial b{color:#ffcf6a}
+
+/* NP+ (v122) */
+.npb{display:inline-block;margin:0 4px;padding:0 6px;border-radius:9px;font:700 11px/17px var(--ui,inherit);letter-spacing:.3px;color:#1b1206;background:linear-gradient(180deg,#f3d58a,#c9953c);box-shadow:0 0 6px rgba(240,190,90,.45);vertical-align:middle;white-space:nowrap}
+.rekindle h2 .npb{font-size:13px;line-height:20px}
+#tab-rekindle .npbox{border-top:1px solid var(--line);margin-top:14px}
+.npcols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+.npcols h3{margin:0 0 4px;font-size:15px}
+.npcols ul{margin:0;padding-left:18px;color:var(--muted);line-height:1.45;font-size:13.5px}
+@media (max-width:520px){.npcols{grid-template-columns:1fr}}
+.pfava.npring{outline:2px solid #e6bf63;outline-offset:2px;box-shadow:0 0 calc(4px + var(--npg,1) * 2px) rgba(240,190,90,calc(.25 + var(--npg,1) * .06))}
+.pfava.npring::after{content:'NP+' attr(data-np);position:absolute;right:-8px;bottom:-8px;padding:0 4px;height:16px;border-radius:8px;background:linear-gradient(180deg,#f3d58a,#c9953c);color:#1b1206;font:700 10px/16px var(--ui,inherit);white-space:nowrap;box-shadow:0 0 0 1.5px #1b1206}
+.pfava.np1{--npg:1}.pfava.np2{--npg:2}.pfava.np3{--npg:3}.pfava.np4{--npg:4}.pfava.np5{--npg:5}.pfava.np6{--npg:6}
+.pfava.np7{--npg:7}.pfava.np8{--npg:8}.pfava.np9{--npg:9}
+.pfava.np10{--npg:10;animation:npglow 3s ease-in-out infinite}
+@keyframes npglow{50%{box-shadow:0 0 40px rgba(255,220,130,1)}}
+/* Training Grounds (v122) */
+.ttab{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+.ttab th{text-align:left;color:var(--muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
+.ttab td{padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbar{display:inline-block;width:56px;height:6px;border-radius:3px;background:var(--bg2);vertical-align:middle;overflow:hidden}
+.tbar i{display:block;height:100%;background:var(--ember)}
+.tsum{color:var(--muted);font-size:13px;margin:6px 0 10px}
+.tdummy{display:flex;gap:14px;align-items:center;margin:8px 0}
+.dummy{flex:none;width:92px;height:92px;border-radius:14px;border:2px solid #8a6a3a;background:radial-gradient(circle at 50% 40%,#5a4328,#2a1f14);color:#e9c98a;display:grid;place-items:center;cursor:pointer;font-weight:700}
+.dummy svg{width:34px;height:34px}.dummy:active{transform:scale(.95)}
+.tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
+#tr-rows{overflow-x:auto}
+@media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}

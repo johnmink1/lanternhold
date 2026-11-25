@@ -1,4 +1,4 @@
-/* lh-build 202611250506 */
+/* lh-build 202611250543 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1622,6 +1622,7 @@
     if (t.dataset.move) { const [i, d] = t.dataset.move.split(':').map(Number); if (L.moveMember(S, i, i + d)) { sfx.buy(); updateSeats(true); updateAbilities(true); } return; }
     if (t.dataset.autot && !L.passOn(S)) { openPass(); return; }
     if (t.dataset.autot) { const id = t.dataset.autot; S.autoTrain = S.autoTrain || {}; S.autoTrain[id] = !S.autoTrain[id]; if (!S.autoTrain[id]) delete S.autoTrain[id]; sfx.buy(); updateSeats(true); if (S.autoTrain[id]) toast('refresh', 'Auto-train on', L.memberById(id).name + ' will train whenever you have the gold' + (S.party.includes(id) ? '.' : ' and you are at camp.'), ''); return; }
+    if (t.id === 'f-train') { openTraining(); return; }
     if (t.id === 'f-auto') { L.autoFormation(S); S.formationManual = false; sfx.buy(); updateSeats(true); updateAbilities(true); toast('shield', 'Party arranged', 'Tank in front, rogue behind it, healers in the middle where they reach everyone, casters at the back.', ''); return; }
     if (t.dataset.rosterbuy != null) { buyRosterSpot().then(ok => { if (ok) { sfx.relic(); toast('flame', 'A new spot by the fire', 'Your campfire holds ' + L.fireCap(S) + ' companions now, plus your party.', 'feat'); } }); return; }
     if ((t.dataset.unseat || t.dataset.seat) && !gateUse('camp')) return;
@@ -1772,7 +1773,7 @@
       h += (open ? '<p class="note">' + open + (open === 1 ? ' seat is' : ' seats are') + ' open.</p>' : '<p class="note">Your party is full. When a player accepts your invite, you choose who steps out.</p>') +
         '<button class="btn small" id="b-find">' + (boardList ? 'Show other heroes' : 'Browse the guild') + '</button>';
       if (boardMsg) h += '<p class="note">' + esc(boardMsg) + '</p>';
-      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + '">' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + classTag(g.cls) + (pf.t ? ' <small class="pftitle">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + ' &middot; reached floor ' + g.floor + '</div></div>' +
+      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + ' &middot; reached floor ' + g.floor + '</div></div>' +
         ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
       if ((S.guests || []).length) h += '<p class="note">To let a player’s hero go, press Dismiss on their seat.</p>';
     }
@@ -2106,7 +2107,7 @@
     modal('<div class="icard r-' + it.rar + '">' +
       '<button class="iconbtn icx" id="i-close" aria-label="Close">&times;</button>' +
       '<div class="ihero"><div class="tile big r-' + it.rar + '"><img class="iimg" src="' + itemIco(it) + '" alt="">' + (it.up ? '<i class="upn">+' + it.up + '</i>' : '') + '</div>' +
-      '<div class="ititle"><span class="irar">' + rar.name + ' ' + esc(typeLine(it).split(' · ')[0].toLowerCase()) + ' &middot; ' + L.SLOT_NAME[it.slot] + '</span><h2>' + esc(L.gearName(it)) + '</h2>' + pips + '<small>Requires power level <b class="' + (fits && !w && !L.canWear(S, gearWho, it) ? 'bad' : '') + '">' + L.reqLevel(it) + '</b> &middot; found on floor ' + it.ilvl + '</small></div></div>' +
+      '<div class="ititle"><span class="irar">' + rar.name + ' ' + esc(typeLine(it).split(' · ')[0].toLowerCase()) + ' &middot; ' + L.SLOT_NAME[it.slot] + '</span><h2>' + esc(L.gearName(it)) + '</h2>' + pips + '<small>Requires power level <b class="' + (fits && !w && !L.canWear(S, gearWho, it) ? 'bad' : '') + '">' + L.reqLevel(it) + '</b> &middot; ' + (it.t ? 'item level ' + it.ilvl + ' ' + npBadge(it.t) : 'found on floor ' + it.ilvl) + '</small></div></div>' +
       typeBlock(it, m) + '<div class="istats">' + stats + '</div>' + typeFx(it) +
       (fits && !w ? '<p class="icmp">' + (ci ? 'Compared with ' + esc(m.name) + '’s ' + reps.map(r => esc(L.gearName(r)) + (r.up ? ' +' + r.up : '')).join(' and ') + '.' : esc(m.name) + ' has an open ' + L.SLOT_NAME[it.slot].toLowerCase() + ' slot.') + (it.slot === 'robe' ? ' A robe covers the chest and legs.' : '') + '</p>' : '') +
       enchBlock(it) +
@@ -2118,7 +2119,7 @@
       (it.rar === 'goblin' ? '<div class="iset gobset"><b>The Loot Goblin’s Sack</b><small>+' + pct100(L.GOBLIN_SACK_GOLD) + ' gold for the whole party while worn. Roughly one Loot Goblin in ' + Math.round(1 / L.GOBLIN_SACK_CHANCE).toLocaleString('en-US') + ' drops it.</small><small class="lore">Still lumpy with whatever he stole last. Nobody has been brave enough to empty it.</small></div>' : '') +
       (wearer ? '<div class="iworn"><img src="' + SP.spriteURL(wearer.cls, 2, lookHue(wearer)) + '" alt="">Worn by <b>' + esc(wearer.name) + '</b></div>' : '') +
       '<div class="iacts">' +
-      (w ? '<button class="btn ghost" id="i-off">Take off</button>' : fits ? (L.canWear(S, gearWho, it) ? '<button class="btn" id="i-on">Equip on ' + esc(m.name) + '</button>' : '<button class="btn" disabled>' + esc(m.name) + ' needs power level ' + L.reqLevel(it) + '</button>') : '<button class="btn" disabled>No ' + L.CLASSES[it.cls].name + ' in your roster yet</button>') +
+      (w ? '<button class="btn ghost" id="i-off">Take off</button>' : fits ? (L.canWear(S, gearWho, it) ? '<button class="btn" id="i-on">Equip on ' + esc(m.name) + '</button>' : '<button class="btn" disabled>' + (L.npOld(S, it) ? 'From an earlier playthrough tier' : esc(m.name) + ' needs power level ' + L.reqLevel(it)) + '</button>') : '<button class="btn" disabled>No ' + L.CLASSES[it.cls].name + ' in your roster yet</button>') +
       (maxed ? '<button class="btn ghost" disabled>Fully upgraded</button>' : '<button class="btn ghost iup" id="i-up"' + ((leg ? cost > shHave : cost > S.gold) ? ' disabled' : '') + '><span>Upgrade to +' + (it.up + 1) + '</span><small>' + (leg ? icon('relic') + cost + ' ' + leg.word + ' shard' + (cost === 1 ? '' : 's') + ' (you have ' + shHave + ')' : icon('coin') + fmt(cost)) + ' &middot; ' + Object.entries(nextStats).map(([k, v]) => k.toLowerCase() + ' ' + pc(v)).join(', ') + '</small></button>') +
       '</div><div class="itools">' +
       tool('i-lk', 'lock', it.lk ? 'Unlock' : 'Lock', it.lk ? 'on' : '') +
@@ -2631,7 +2632,7 @@
     modal('<div class="prof"><div class="profhead"><div class="profspr c-' + m.cls + '"></div><div><h2>' + esc(m.name) + '</h2><small>' + esc(m.title) + '</small><div class="tags">' + classTag(m.cls) + (sd ? '<span class="sidetag" style="--side:' + sd.color + '">' + sd.name + '</span>' : '') + (guest ? '<span class="you guest">Player</span>' : '') + '</div></div></div>' +
       '<p class="bio">' + esc(bio) + '</p>' + (m.line && !guest && id !== 'you' ? '<p class="quote">“' + esc(m.line) + '”</p>' : '') +
       (id === 'you' && L.warAura(S) ? '<h3 class="sub">Grand War aura</h3><div id="p-aura">' + auraBox() + '</div>' : id === 'you' && CL ? '<div id="p-aura"></div>' : '') +
-      (id === 'you' && CL ? '<h3 class="sub">Profile card</h3><p class="note">What other players see in the Players Guild.</p><div class="pfwrap" id="p-card">' + looksCard({ name: m.name, cls: m.cls, level: lv, floor: S.maxFloorEver, wd: S.wd, pf: prof && prof.pf, w: prof && prof.wv ? prof.wl : '' }) + '</div><div class="row left"><button class="btn small" id="p-looks">Customize profile</button>' + (wardOn() ? '<button class="btn small ghost" id="p-ward">Wardrobe</button>' : '') + '</div>' : '') +
+      (id === 'you' && CL ? '<h3 class="sub">Profile card</h3><p class="note">What other players see in the Players Guild.</p><div class="pfwrap" id="p-card">' + looksCard({ name: m.name, cls: m.cls, level: lv, floor: S.maxFloorEver, np: L.npTier(S), wd: S.wd, pf: prof && prof.pf, w: prof && prof.wv ? prof.wl : '' }) + '</div><div class="row left"><button class="btn small" id="p-looks">Customize profile</button>' + (wardOn() ? '<button class="btn small ghost" id="p-ward">Wardrobe</button>' : '') + '</div>' : '') +
       (guest && g0 && (g0.pf || g0.w) ? '<div class="pfwrap">' + looksCard(Object.assign({}, g0, { name: m.name, cls: m.cls })) + '</div>' : '') +
       '<h3 class="sub">' + c.name + '</h3><p class="note">' + esc(CLASS_BLURB[m.cls]) + '</p>' +
       '<div class="ability"><b>' + c.ability.name + '</b> <span>every ' + c.ability.cd + 's</span><small>' + esc(c.ability.desc) + '</small></div>' +
@@ -2644,7 +2645,7 @@
         const st = md.querySelector('#p-seat'); if (st) st.onclick = () => { closeModal(); if (campGate(true)) pickSeat(id); };
         md.querySelector('#p-close').onclick = closeModal;
         const lk = md.querySelector('#p-looks'); if (lk) lk.onclick = openProfileEditor; const pw = md.querySelector('#p-ward'); if (pw) pw.onclick = () => openWardrobe('k', id);
-        if (id === 'you' && CL && signedIn() && !prof) Promise.all([loadProfile(), loadWar()]).then(() => { const c = md.querySelector('#p-card'); if (c && prof) c.innerHTML = looksCard({ name: m.name, cls: m.cls, level: lv, floor: S.maxFloorEver, wd: S.wd, pf: prof.pf, w: prof.wv ? prof.wl : '' }); const au = md.querySelector('#p-aura'); if (au && !au.innerHTML && L.warAura(S)) au.innerHTML = '<h3 class="sub">Grand War aura</h3>' + auraBox(); });
+        if (id === 'you' && CL && signedIn() && !prof) Promise.all([loadProfile(), loadWar()]).then(() => { const c = md.querySelector('#p-card'); if (c && prof) c.innerHTML = looksCard({ name: m.name, cls: m.cls, level: lv, floor: S.maxFloorEver, np: L.npTier(S), wd: S.wd, pf: prof.pf, w: prof.wv ? prof.wl : '' }); const au = md.querySelector('#p-aura'); if (au && !au.innerHTML && L.warAura(S)) au.innerHTML = '<h3 class="sub">Grand War aura</h3>' + auraBox(); });
       });
   }
 
@@ -2831,7 +2832,64 @@
     $('rekindlenote').textContent = !rk ? 'Rekindling opens at hero level ' + L.unlockOf('rekindle').lv + ', from floor ' + L.REKINDLE_FLOOR + ' or deeper. ' + heroName() + ' is hero level ' + L.heroLv(S) + '.'
       : S.maxFloor < L.REKINDLE_FLOOR ? 'Reach floor ' + L.REKINDLE_FLOOR + ' on this descent to rekindle. You are on floor ' + S.maxFloor + '.'
       : 'Deeper floors give more Embers. Most delvers rekindle when progress slows down.';
+    paintNp();
   }
+  // ---------- New Playthrough (NP+, v122, John 25 Nov 2026) ----------
+  // The server grants the tier and its Sigils (POST /np) and owns the tier number; the game then resets itself.
+  let npSrv = null; // { np, npAt, next } from GET /np
+  function paintNp() {
+    const box = $('npbox'); if (!box) return;
+    const t = L.npTier(S), ready = L.npReady(S), next = npSrv && npSrv.next > Date.now() ? npSrv.next : 0;
+    const tb = $('nptier'); tb.hidden = !t; tb.textContent = 'NP+' + t;
+    $('npgain').innerHTML = t >= L.NP_MAX ? 'You have reached the last tier, <b>NP+' + L.NP_MAX + '</b>' : 'Next: <b>NP+' + (t + 1) + '</b> and <b>+' + L.NP_SIGILS + '</b> Sigils';
+    const now = t ? 'Now on NP+' + t + ': monsters +' + Math.round(L.NP_FOE * t * 100) + '% health and damage, gear +' + Math.round(L.NP_ILVL * t * 100) + '% item level, you +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. ' : '';
+    $('npnote').textContent = now + (t >= L.NP_MAX ? '' : !ready ? 'Beat the Lampmother, the floor ' + L.ACT_ONE_END + ' guardian, to open the next tier.'
+      : !CL || !signedIn() ? 'Sign in to start a New Playthrough. The server keeps your tier and pays the Sigils.'
+      : next ? 'The next tier opens ' + new Date(next).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (at most one tier a week).'
+      : 'Ready. This resets your whole adventure, so read the list first.');
+    $('btn-np').disabled = t >= L.NP_MAX || !ready || !!next;
+  }
+  // Server tier wins: a save behind the server's tier (another device, an old backup) starts over at that tier.
+  async function syncNp() {
+    if (!CL || !signedIn() || !S.hero) return;
+    try { npSrv = await papi('GET', '/np'); } catch (e) { return; }
+    const t = npSrv.np | 0;
+    if (t > L.npTier(S)) { L.startNP(S, t, npSrv.npAt, true); save(); try { await pushCloud(true); } catch (e) {} location.reload(); return; }
+    if (t < L.npTier(S)) { S.np = t; save(); }
+    paintNp();
+  }
+  $('btn-np').addEventListener('click', () => {
+    if (!L.npReady(S)) return;
+    if (!CL || !signedIn()) { toast('lock', 'Sign in first', 'A New Playthrough needs a free account, so the server can keep your tier and pay the Sigils.', 'warn'); authForm('in'); return; }
+    const t = L.npTier(S) + 1;
+    modal('<div class="center npconfirm"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-star"/></svg><h2>Start NP+' + t + '?</h2>' +
+      '<p>This starts the whole story over from floor 1. It can not be undone.</p></div>' +
+      '<div class="npcols"><div><h3>Resets</h3><ul><li>Gold and Dust</li><li>Floors, power levels, hero level, XP and stat points</li><li>Skills and Kindling</li><li>All gear and your pack</li><li>Embers and relics</li><li>Companions and Guild Hall hires</li><li>The story</li><li>Your market listings, offers and unclaimed mail</li></ul></div>' +
+      '<div><h3>Kept</h3><ul><li>Everything bought with Sigils: Wardrobe, Bag of Holding, campfire spots, Lanternholder, tonics</li><li>Your profile and looks</li><li>Journal lore and feats</li><li>Ember Ring rating and Rift tokens</li><li>Your hero’s name, class and alliance</li></ul></div></div>' +
+      '<p class="note">At NP+' + t + ': monsters +' + Math.round(L.NP_FOE * t * 100) + '% health and damage, gear drops +' + Math.round(L.NP_ILVL * t * 100) + '% item level, and you keep +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. You get <b>+' + L.NP_SIGILS + ' Sigils</b> and the NP+' + t + ' badge. Trading opens 24 hours after you start, with heroes on the same tier.</p>' +
+      '<label class="field">Type NP+' + t + ' to confirm<input id="np-type" autocomplete="off"></label>' +
+      '<div class="row"><button class="btn" id="m-yes" disabled>Start NP+' + t + '</button><button class="btn ghost" id="m-no">Not yet</button></div>', m => {
+      const inp = m.querySelector('#np-type'), yes = m.querySelector('#m-yes');
+      inp.oninput = () => { yes.disabled = inp.value.trim().toUpperCase() !== 'NP+' + t; };
+      m.querySelector('#m-no').onclick = closeModal;
+      yes.onclick = async () => {
+        yes.disabled = true; yes.textContent = 'Starting…';
+        try {
+          await publishHero();
+          const r = await papi('POST', '/np');
+          if (!L.startNP(S, r.np, r.npAt)) throw Object.assign(new Error('state'), { code: 'state' });
+          if (prof) prof.bal = r.bal; try { localStorage.setItem('lh_bal', String(r.bal)); } catch (e) {}
+          save(); await pushCloud(true); sfx.relic();
+          try { sessionStorage.setItem('lh_np_new', String(r.np)); } catch (e) {}
+          location.reload();
+        } catch (e) {
+          const c = e && e.code;
+          toast('lock', 'New Playthrough did not start', c === 'wait' ? 'One tier a week. Try again later.' : c === 'floor' ? 'The server has not seen your floor 150 clear yet. Play a moment, then try again.' : c === 'max' ? 'You are on the last tier already.' : 'The server could not be reached. Nothing was reset. Try again in a moment.', 'warn');
+          yes.disabled = false; yes.textContent = 'Start NP+' + t;
+        }
+      };
+    });
+  });
   $('btn-rekindle').addEventListener('click', () => {
     const e = L.embersFor(S); if (e <= 0 || !gateUse('rekindle')) return;
     modal('<div class="center"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-lantern"/></svg><h2>Rekindle now?</h2><p>Gold, floors and training reset to the start. You keep your companions, gear, relics, story and feats, and gain <b style="color:var(--ember)">' + fmt(e) + ' Embers</b> for +' + fmt(e * 4) + '% damage and gold.</p><div class="row" style="justify-content:center"><button class="btn ghost" id="m-no">Not yet</button><button class="btn" id="m-yes">Rekindle</button></div></div>', m => {
@@ -3637,6 +3695,7 @@
     if (!CL || !signedIn()) return null;
     try { prof = await papi('GET', '/profile'); } catch (e) { return prof; }
     try { localStorage.setItem('lh_bal', String(prof.bal)); } catch (e) {}
+    if (!npSrv) syncNp();
     if ((prof.pass || 0) !== (S.pass || 0) || (prof.sub || 0) !== (S.sub || 0)) { S.pass = prof.pass || 0; S.sub = prof.sub || 0; save(); updatePanel(true); updateSeats(true); }
     if (!!prof.boh !== !!S.boh) { S.boh = !!prof.boh; save(); updateGear(true); }
     if (prof.own) syncRoster(prof.own);
@@ -3673,7 +3732,7 @@
   function looksCard(o) {
     const pf = o.pf || {}, ok = o.wd && o.wd.k && o.wd.k.you, fr = cosOf('f', pf.f)[0], bn = cosOf('g', pf.g)[0], nc = cosOf('c', pf.c)[0], tt = pf.t ? cosOf('t', pf.t)[1] : '';
     const wb = o.wd && o.wd.b && BANNERS[o.wd.b] ? o.wd.b : '';
-    return '<div class="pfcard bn-' + bn + (wb ? ' hasban' : '') + '">' + (wb ? '<div class="pfban">' + bannerSVG(wb) + '</div>' : '') + '<div class="pfava fr-' + fr + '"><div class="ic c-' + o.cls + ' player' + (ok ? ' dressed' : '') + '">' + (ok ? '<img src="' + SP.spriteURL(o.cls, 2, outfitHue(ok)) + '" alt="">' : icon(CLASS_ICON[o.cls])) + '</div></div>' +
+    return '<div class="pfcard bn-' + bn + (wb ? ' hasban' : '') + '">' + (wb ? '<div class="pfban">' + bannerSVG(wb) + '</div>' : '') + '<div class="pfava fr-' + fr + npRing(o.np) + '><div class="ic c-' + o.cls + ' player' + (ok ? ' dressed' : '') + '">' + (ok ? '<img src="' + SP.spriteURL(o.cls, 2, outfitHue(ok)) + '" alt="">' : icon(CLASS_ICON[o.cls])) + '</div></div>' +
       '<div class="pfmain"><b class="pfname nc-' + nc + '">' + esc(o.name) + '</b>' + (tt ? '<small class="pftitle">' + esc(tt) + '</small>' : '') +
       '<div class="pftags">' + classTag(o.cls) + (o.level ? '<span class="pflv">Power level ' + o.level + (o.floor ? ' · floor ' + o.floor : '') + '</span>' : '') + '</div>' +
       ((pf.e || []).length ? '<div class="pfemb">' + pf.e.map(emblem).join('') + '</div>' : '') + '</div></div>' +
@@ -3699,7 +3758,7 @@
   }
   const owns = (k, id, price) => !price || prof.own.includes(k + '.' + id);
   function paintEditor() {
-    const me = { name: S.hero ? S.hero.name : 'You', cls: S.hero ? S.hero.cls : 'tank', level: L.lvl(S, 'you'), floor: S.maxFloorEver, pf: draft, wd: S.wd, w: prof.wv ? prof.wl : '' };
+    const me = { name: S.hero ? S.hero.name : 'You', cls: S.hero ? S.hero.cls : 'tank', level: L.lvl(S, 'you'), floor: S.maxFloorEver, np: L.npTier(S), pf: draft, wd: S.wd, w: prof.wv ? prof.wl : '' };
     const tabs = Object.keys(COSMETICS).map(k => '<button class="' + (edTab === k ? 'on' : '') + '" data-et="' + k + '">' + COSMETICS[k].label + '</button>').join('') +
       '<button class="' + (edTab === 'b' ? 'on' : '') + '" data-et="b">Bio</button><button class="' + (edTab === 'w' ? 'on' : '') + '" data-et="w">Grand War</button>';
     let body = '';
@@ -3970,6 +4029,8 @@
   setTimeout(loadMercy, 2500); setInterval(loadMercy, 3e5); setInterval(paintMercy, 3e4);
   // ---------- Lantern Pass: 30 days of convenience for 500 Sigils (auto-train, +10 bag slots, +4 h offline) ----------
   if (!S.passTrialGiven) { S.passTrialGiven = 1; S.passTrial = Date.now() + 3 * 864e5; save(); }
+  // NP+ (v122): welcome back after the reload that starts a New Playthrough
+  try { const nn = sessionStorage.getItem('lh_np_new'); if (nn) { sessionStorage.removeItem('lh_np_new'); setTimeout(() => toast('star', 'NP+' + nn + ' begins', 'The story starts again. Monsters are tougher, gear is better, and +' + L.NP_SIGILS + ' Sigils are in your wallet. Trading opens in 24 hours.', 'feat'), 1200); } } catch (e) {}
   const passLeft = () => { const ms = Math.max(S.pass || 0, S.passTrial || 0) - Date.now(); if (ms <= 0) return ''; const d = Math.floor(ms / 864e5); return d >= 1 ? d + (d === 1 ? ' day' : ' days') : Math.max(1, Math.ceil(ms / 36e5)) + ' h'; };
   async function openPass(back) {
     back = typeof back === 'function' ? back : null;
@@ -4465,7 +4526,7 @@
   // A Loot Goblin's Sack is rare enough to tell everyone: post it to Global chat with a link (signed-in players only).
   async function bragSack(it) {
     if (!CL || !signedIn() || !S.hero) return;
-    try { await chatCall('POST', '/chat', { ch: 'global', text: 'just pulled the Loot Goblin’s Sack off a Loot Goblin! ' + tokenOf(it), name: S.hero.name, cls: S.hero.cls }); } catch (e) {}
+    try { await chatCall('POST', '/chat', { ch: 'global', text: 'just pulled the Loot Goblin’s Sack off a Loot Goblin! ' + tokenOf(it), name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined }); } catch (e) {}
   }
   function linkItem(it) {
     if (!it || !CL) return false;
@@ -4506,11 +4567,43 @@
       (set ? '<div class="setinfo on"><b>' + set.name + '</b><small>2 pieces: ' + set.two + '. 3 pieces: ' + set.three + '.</small><small class="lore">' + esc(set.lore) + '</small></div>' : '') +
       '<p class="note">A preview of an item linked in chat. Viewing it does not add it to your pack.</p><div class="row"><button class="btn ghost" id="lp-x">Close</button></div>', md => { md.querySelector('#lp-x').onclick = closeModal; });
   }
+  // ---------- Training Grounds (v122, John 25 Nov 2026: a damage dummy) ----------
+  // Steady numbers for the seated party (no timed buffs), plus a 10 s live test on a dummy you can strike.
+  // Nothing here costs or earns anything, and the real fight keeps going while the window is open.
+  let trainRun = null;
+  function trainRows() {
+    const ids = S.party.filter(Boolean), d = ids.map(id => L.steadyDps(S, id)), tot = d.reduce((a, b) => a + b, 0) || 1;
+    return '<table class="ttab"><thead><tr><th>Member</th><th>Damage/s</th><th>vs guardians</th><th>Share</th><th>Heal/s</th><th>Health</th></tr></thead><tbody>' +
+      ids.map((id, i) => { const m = L.memberById(id), pct = Math.round(d[i] / tot * 100), hl = L.healPerSec(S, id);
+        return '<tr><td><b>' + esc(m.name) + '</b> ' + classTag(m.cls) + '</td><td>' + fmt(d[i]) + '</td><td>' + fmt(d[i] * (1 + L.wearVal(S, id, 'boss'))) + '</td><td><span class="tbar"><i style="width:' + pct + '%"></i></span> ' + pct + '%</td><td>' + (hl ? fmt(hl) : '-') + '</td><td>' + fmt(L.maxHpOf(S, id)) + '</td></tr>'; }).join('') +
+      '</tbody></table><p class="tsum">Party <b>' + fmt(tot) + '</b> damage/s steady &middot; strike <b>' + fmt(L.clickDamage(S, Date.now())) + '</b> &middot; critical chance <b>' + Math.round(L.critChance(S) * 100) + '%</b> (x5)</p>';
+  }
+  function openTraining() {
+    trainRun = null;
+    modal('<div class="center"><h2>Training Grounds</h2><p class="note">A practice dummy for comparing gear, seats and skills. Steady numbers leave out timed buffs and anyone who is down.</p></div>' +
+      '<div id="tr-rows">' + trainRows() + '</div>' +
+      '<div class="tdummy"><button class="dummy" id="tr-hit" title="Strike the dummy">' + icon('shield') + '<span>Dummy</span></button><div id="tr-live"><p>Press <b>Start 10 s test</b>, then strike the dummy as fast as you like. The test counts your party as it is right now, buffs and all.</p></div></div>' +
+      '<div class="row"><button class="btn" id="tr-go">Start 10 s test</button><button class="btn ghost" id="tr-x">Close</button></div>', md => {
+      const live = md.querySelector('#tr-live'), go = md.querySelector('#tr-go');
+      const paint = () => { const r = trainRun; if (!r) return; const t = Math.min(10, (Date.now() - r.at) / 1000), all = r.party + r.taps;
+        live.innerHTML = '<p><b>' + t.toFixed(1) + ' s</b> &middot; party ' + fmt(r.party) + ' &middot; strikes ' + fmt(r.taps) + ' (' + r.n + (r.crit ? ', ' + r.crit + ' critical' : '') + ')</p><p class="tbig">' + fmt(all / Math.max(0.1, t)) + ' <small>damage/s</small></p>' + (r.done ? '<p class="note">Done. Change gear or seats and run it again to compare.</p>' : ''); };
+      const step = () => { const r = trainRun; if (!r || r.done || !document.body.contains(live)) return; const now = Date.now(), dt = Math.min(0.5, (now - r.last) / 1000); r.last = now; r.party += L.totalDps(S, now) * dt;
+        if (now - r.at >= 10000) { r.done = true; go.disabled = false; go.textContent = 'Run again'; } paint(); if (!r.done) setTimeout(step, 100); };
+      go.onclick = () => { trainRun = { at: Date.now(), last: Date.now(), party: 0, taps: 0, n: 0, crit: 0 }; go.disabled = true; md.querySelector('#tr-rows').innerHTML = trainRows(); step(); };
+      md.querySelector('#tr-hit').onclick = () => { const r = trainRun; if (!r || r.done) return; const c = Math.random() < L.critChance(S); r.taps += L.clickDamage(S, Date.now()) * (c ? 5 : 1); r.n++; if (c) r.crit++; try { sfx.hit && sfx.hit(); } catch (e) {} paint(); };
+      md.querySelector('#tr-x').onclick = () => { trainRun = null; closeModal(); };
+    });
+  }
+  // NP+ tier badge (v122): shown on the profile card, the Players Guild board and in chat.
+  function npBadge(n) { n = n | 0; return n > 0 ? '<span class="npb" title="New Playthrough tier ' + n + '">NP+' + Math.min(10, n) + '</span>' : ''; }
+  // NP+ portrait ring (Chipplin's idea, 25 Nov 2026): a gold ring around the profile picture that grows brighter each tier.
+  // Returns the end of a class attribute plus a data-np attribute, e.g. ' npring np3" data-np="3"'.
+  function npRing(n) { n = Math.min(10, n | 0); return n > 0 ? ' npring np' + n + '" data-np="' + n + '"' : '"'; }
   // A sender's name in their Wardrobe name color, with their title, once their looks are known.
   function chatName(m) {
     const lk = looksCache[m.from], c = lk && lk.c && lk.c !== 'none' ? lk.c : '', t = lk && lk.t ? (COSMETICS.t.items.find(x => x[0] === lk.t) || [])[1] : '';
     const bn = lk && lk.b && BANNERS[lk.b] ? lk.b : '';
-    return (bn ? bannerSVG(bn, 'chatban') : '') + (c ? '<span class="nc-' + esc(c) + '">' + esc(m.name) + '</span>' : esc(m.name)) + (t ? '<small class="ctitle">' + esc(t) + '</small>' : '');
+    return (bn ? bannerSVG(bn, 'chatban') : '') + (c ? '<span class="nc-' + esc(c) + '">' + esc(m.name) + '</span>' : esc(m.name)) + (t ? '<small class="ctitle">' + esc(t) + '</small>' : '') + npBadge(m.np);
   }
   const msgLine = m => m.from === 'sys' ? '<div class="msg sys ' + esc(m.cls) + '">' + icon('flame') + '<span>' + esc(m.text) + '</span></div>' : '<div class="msg' + (m.from === chat.me ? ' mine' : '') + (mentionsMe(m) ? ' ment' + (chat.flash && chat.flash.has(m.id) ? ' flash' : '') : '') + '"><button class="who c-' + esc(m.cls) + '" data-from="' + esc(m.from) + '" data-id="' + esc(m.id) + '" data-name="' + esc(m.name) + '">' + chatName(m) + '</button><span>' + renderText(m.text) + '</span></div>';
   function paintChat() {
@@ -4718,7 +4811,7 @@
       if (chat.ch === 'dm' && !chat.dmTo) { chatNote('Pick who to whisper first: tap a player’s name in Global, Banner, Trade or Party and choose Whisper.', true); return; }
       inp.disabled = true;
       try {
-        await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls });
+        await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined });
         inp.value = ''; chat.links = []; chatNote(); pollChat();
       } catch (err) {
         chatNote({ slow: 'Easy there. One message every few seconds.', links: 'Links aren’t allowed in chat.', name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
@@ -4843,7 +4936,7 @@
       const inp = el.querySelector('input'), nt = el.querySelector('.cpnote'); let text = inp.value.trim(); if (!text) return;
       for (const l of chat.links) text = text.replace(l.label, l.token); text = text.replace(/\[\[(?!i:)/g, '[');
       inp.disabled = true;
-      try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
+      try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
       catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: 'Links aren’t allowed in chat.', name: 'Your hero’s name can’t be used in chat.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
       inp.disabled = false; inp.focus();
     });
@@ -5655,6 +5748,15 @@
         'Companions, gear, relics and your character stay; levels reset.',
         'Embers count from floor 60, so a deeper descent pays far more. Your hero keeps their level.',
         'Rekindle when progress slows down.']],
+      ['Training Grounds', 'i:sword', 'A practice dummy on the Party tab for comparing setups.', [
+        'Shows each seated member’s steady damage per second (no timed buffs), damage against guardians, share of the party’s damage, healing and health.',
+        'Press <b>Start 10 s test</b> and strike the dummy: it measures your party as it is right now, buffs included, plus your strikes. Nothing there costs or earns anything.']],
+      ['New Playthrough (NP+)', 'i:star', 'After the floor 150 guardian, start the whole story again at a harder tier for Sigils and a badge.', [
+        'Open it from <b>Skills</b>, Rekindle view, once the Lampmother on floor 150 falls. Tiers go from <b>NP+1</b> to <b>NP+10</b>, at most one a week.',
+        'Each start pays <b>+25 Sigils</b> and shows your tier as a badge on your profile, the Players Guild board and in chat.',
+        'Per tier: monsters <b>+25%</b> health and damage, gear drops at <b>+10%</b> item level, and you keep <b>+2%</b> damage, health and gold for good.',
+        '<b>Resets</b>: gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story. <b>Kept</b>: everything bought with Sigils, your profile, journal lore, feats, Ember Ring rating and Rift tokens.',
+        'Trading is per tier: you see and buy only your tier’s market, mail only goes to heroes on your tier, trading opens 24 hours after you start, and gear from an earlier tier can not be worn. Your old listings, offers and unclaimed mail are cleared when you start.']],
       ['Story, journal and map', 'i:book', 'The story unfolds as you descend.', [
         'Replay scenes in the <b>Journal</b>.',
         'The <b>Map of the Deep</b> shows every region and lets you travel to floors you have reached. Each region’s dossier lists its <b>possible loot</b> with your real odds per kill, after your drop bonuses.']],
@@ -5803,6 +5905,14 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 122, date: 'November 25, 2026', title: 'New Playthrough (NP+)', items: [
+      'Beat the Lampmother on floor 150 and you can start a New Playthrough from the Skills tab (Rekindle view). The whole story starts again at the next tier, NP+1 up to NP+10, and you get +25 Sigils and a tier badge on your profile, the Players Guild and in chat.',
+      'Each tier: monsters have +25% health and damage, gear drops at +10% item level, and you keep +2% damage, health and gold for good (up to +20% at NP+10).',
+      'Resets: gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story. Kept: everything bought with Sigils (Wardrobe, Bag of Holding, campfire spots, Lanternholder, tonics), your profile, journal lore, feats, Ember Ring rating and Rift tokens.',
+      'Fair trading: each tier has its own market, mail only goes between heroes on the same tier, trading opens 24 hours after you start, gear from an earlier tier can not be worn, and your old listings, offers and unclaimed mail are cleared when you start. One tier a week at most.',
+      'Your tier also shows as a gold ring around your profile picture, brighter at every tier (thanks for the idea, Chipplin).',
+      'New: <b>Training Grounds</b> on the Party tab. See each seated member’s steady damage, damage against guardians, share, healing and health, then run a 10 second test on a practice dummy (strike it too) to compare gear, seats and skills.',
+    ] },
     { v: 121, date: 'November 25, 2026', title: 'Rarer set pieces and steadier filters', items: [
       'Set pieces are rarer: every chance to find a region, class or job set piece is halved. A guardian now drops a set piece about 1 time in 18 (was about 1 in 9). The map’s drop chances show the new odds.',
       'The Sort, Rarity and Who dropdowns in your inventory (and on the Armorer and Enchanter counters) no longer snap shut while gold ticks in.',
@@ -6386,7 +6496,7 @@
   // Items and gold live in each player's save, so the client moves them; the server keeps
   // listings, offers and letters so both sides see the same thing.
   const trade = { view: 'market', cls: null, mine: false, list: null, mail: null, msg: '', busy: false, slot: 'all', rar: 'all', sort: 'cheap' };
-  const tradeItem = it => L.normItem({ cls: it.cls, slot: it.slot, rar: it.rar, set: it.set || undefined, jset: it.jset || undefined, aff: it.aff || undefined, en: typeof it.en === 'string' ? it.en : '', ty: it.ty || undefined, ilvl: it.ilvl, up: it.up || 0 });
+  const tradeItem = it => L.normItem({ cls: it.cls, slot: it.slot, rar: it.rar, set: it.set || undefined, jset: it.jset || undefined, aff: it.aff || undefined, en: typeof it.en === 'string' ? it.en : '', ty: it.ty || undefined, t: it.t || undefined, ilvl: it.ilvl, up: it.up || 0 });
   const fromServer = it => Object.assign(tradeItem(it), { uid: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) });
   // Letters and listings from before the gold rescale are shown and paid in today's gold.
   const nowGold = (g, at) => at && at < L.ECON_AT ? Math.max(1, Math.round(L.regold(g, L.lvl(S, 'you')))) : g;
@@ -6398,6 +6508,9 @@
   const tradeSub = it => (L.normItem(it), 0) || L.RARITY.find(r => r.id === it.rar).name + ' ' + L.CLASSES[it.cls].name.toLowerCase() + ' ' + L.SLOT_NAME[it.slot].toLowerCase() + ' &middot; ' + itemEffect(it);
   const tradeErr = (e, what) => {
     const c = e && e.code;
+    // NP+ (v122): the 24 h trade lock after a new playthrough, and mail only between heroes of the same tier
+    if (c === 'lock') return 'Trading opens 24 hours after you start a New Playthrough' + (S.npAt ? ' (at ' + new Date(S.npAt + L.NP_LOCK).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + ')' : '') + '.';
+    if (what === 'send' && e && e.status === 409) return 'Mail only goes between heroes on the same New Playthrough tier, and not in the first 24 hours after either of you starts one.';
     if (what === 'send' && e && e.status === 404) return 'That player could not be found. They may need to sign in again.';
     if (what === 'send' && e && e.status === 400) return 'That offer could not be sent. You may have 20 offers waiting already.';
     if (what === 'sig') return c === 'full' ? 'You have 5 Sigil listings already. Take one down first.' : c === 'state' ? 'You do not have that many Sigils.' : c === 'gone' || (e && e.status === 404) ? 'Someone else bought those Sigils first.' : e && e.status === 401 ? 'Sign in again to trade.' : 'The Sigil exchange could not be reached. Try again in a moment.';
@@ -6563,7 +6676,7 @@
     const om = owner && L.memberById(owner);
     const set = it.set && L.SETS.find(x => x.id === it.set), js = it.jset && L.JOB_SETS[it.jset];
     modal('<div class="icard r-' + it.rar + '"><button class="iconbtn icx" id="l-x" aria-label="Close">&times;</button>' +
-      '<div class="ihero">' + tradeTile(it).replace('class="tile', 'class="tile big') + '<div class="ititle"><span class="irar">' + rar.name + ' ' + esc(typeLine(it).split(' · ')[0].toLowerCase()) + ' &middot; ' + L.SLOT_NAME[it.slot] + '</span><h2>' + tradeName(it) + '</h2><small>Requires power level <b class="' + (om && !L.canWear(S, owner, it) ? 'bad' : '') + '">' + L.reqLevel(it) + '</b> &middot; found on floor ' + it.ilvl + '</small></div></div>' +
+      '<div class="ihero">' + tradeTile(it).replace('class="tile', 'class="tile big') + '<div class="ititle"><span class="irar">' + rar.name + ' ' + esc(typeLine(it).split(' · ')[0].toLowerCase()) + ' &middot; ' + L.SLOT_NAME[it.slot] + '</span><h2>' + tradeName(it) + '</h2><small>Requires power level <b class="' + (om && !L.canWear(S, owner, it) ? 'bad' : '') + '">' + L.reqLevel(it) + '</b> &middot; ' + (it.t ? 'item level ' + it.ilvl + ' ' + npBadge(it.t) : 'found on floor ' + it.ilvl) + '</small></div></div>' +
       typeBlock(it, om) + '<div class="istats">' + stats + '</div>' + typeFx(it) +
       (om ? '<p class="icmp">' + (reps.length ? 'Compared with ' + esc(om.name) + '’s ' + reps.map(r => esc(L.gearName(r))).join(' and ') + '.' : esc(om.name) + ' has an open ' + L.SLOT_NAME[it.slot].toLowerCase() + ' slot.') + '</p>' : '<p class="icmp">You have no ' + L.CLASSES[it.cls].name.toLowerCase() + ' yet to wear this.</p>') +
       (it.aff ? '<div class="iaff">' + icon('flame') + '<span><b>+' + Math.round(it.aff.v * (1 + 0.1 * it.up) * 100) + '% ' + (L.JOBS.find(j => j.id === it.aff.j) || {}).name + ' job</b><small>Counts while the wearer works that job at the campfire.</small></span></div>' : '') +

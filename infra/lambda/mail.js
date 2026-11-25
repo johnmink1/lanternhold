@@ -16,9 +16,11 @@ function item(i) {
   if (set ? SET[set] !== i.cls || i.rar !== 'set' : js ? !JOB.includes(js) || i.rar !== 'set' : i.rar === 'set') return null;
   const ilvl = Math.floor(+i.ilvl), up = Math.floor(+i.up || 0);
   if (!(ilvl >= 1 && ilvl <= 1e6 && up >= 0 && up <= 10)) return null;
-  return { cls: i.cls, slot: i.slot, rar: i.rar, set: set || undefined, jset: js || undefined, aff: JOB.includes(a.j) && a.v > 0 && a.v <= 0.5 ? { j: a.j, v: +a.v } : undefined, en: /^([a-l][1-9]){0,4}$/.test(i.en) ? i.en : undefined, ty: /^\w{3,11}$/.test(i.ty) ? i.ty : undefined, ilvl, up };
+  return { cls: i.cls, slot: i.slot, rar: i.rar, set: set || undefined, jset: js || undefined, aff: JOB.includes(a.j) && a.v > 0 && a.v <= 0.5 ? { j: a.j, v: +a.v } : undefined, en: /^([a-l][1-9]){0,4}$/.test(i.en) ? i.en : undefined, ty: /^\w{3,11}$/.test(i.ty) ? i.ty : undefined, t: i.t >= 1 && i.t <= 10 ? i.t | 0 : undefined, ilvl, up };
 }
-const hero = p => db.send(new GetItemCommand({ TableName: H, Key: { pid: S(p) } })).then(r => r.Item && r.Item.name && r.Item.name.S);
+const hero = p => db.send(new GetItemCommand({ TableName: H, Key: { pid: S(p) } })).then(r => r.Item || {});
+// NP+ tier and whether the 24 h post-reset trade lock is on (docs/NP-PLUS.md)
+const tier = h => (h.np || {}).N | 0, locked = h => (h.npAt || {}).N > Date.now() - 864e5;
 const newId = () => Date.now().toString(36).padStart(9, '0') + crypto.randomBytes(3).toString('hex');
 const row = i => {
   const o = { id: i.sk.S, gold: 0, price: 0 };
@@ -26,43 +28,45 @@ const row = i => {
   o.gold = +o.gold; o.price = +o.price; if (o.item) o.item = JSON.parse(o.item);
   return o;
 };
+const K = (pk, id) => ({ pk: S(pk), sk: S(id) }), del = (pk, id) => ({ Delete: { TableName: T, Key: K(pk, id), ConditionExpression: 'attribute_exists(sk)' } });
 const q = pk => db.send(new QueryCommand({ TableName: T, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': S(pk) }}));
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, E);
-  const me = pidOf(cl.sub), rk = e.routeKey;
+  const me = pidOf(cl.sub), rk = e.routeKey.split('/').pop(), now = Date.now();
   let b = {}; if (e.body) { try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body, 'base64').toString() : e.body); } catch (x) { return res(400, E); } }
-  if (rk === 'GET /mail') {
+  if (rk === 'mail') {
     const [i, o] = await Promise.all([q('inbox#' + me), q('out#' + me)]);
     return res(200, { inbox: (i.Items || []).map(row), outbox: (o.Items || []).map(row) });
   }
-  if (rk === 'POST /mail/send') {
+  if (rk === 'send') {
     const it = item(b.item), to = String(b.to || ''), p = Math.max(0, Math.floor(+b.price || 0));
     if (!it || !/^[0-9a-f]{16}$/.test(to) || to === me || !(p < 1e60)) return res(400, E);
-    const [toName, myName] = await Promise.all([hero(to), hero(me)]);
+    const [th, mh] = await Promise.all([hero(to), hero(me)]), toName = th.name && th.name.S, myName = mh.name && mh.name.S;
     if (!toName || !myName) return res(404, E);
+    if (tier(th) !== tier(mh) || (it.t | 0) < tier(mh) || locked(th) || locked(mh)) return res(409, E); // 409 = different NP+ tier, an old-tier item, or the 24 h lock
     if (((await q('out#' + me)).Items || []).length >= 20) return res(400, E);
     BAD.lastIndex = 0;
     const note = String(b.note || '').slice(0, 80).replace(BAD, w => '*'.repeat(w.length));
-    const id = newId(), base = { type: S('offer'), from: S(me), fromName: S(myName), to: S(to), toName: S(toName), item: S(JSON.stringify(it)), price: S(p), note: S(note), at: N(Date.now()) };
+    const id = newId(), base = { type: S('offer'), from: S(me), fromName: S(myName), to: S(to), toName: S(toName), item: S(JSON.stringify(it)), price: S(p), note: S(note), at: N(now) };
     await db.send(new TransactWriteItemsCommand({ TransactItems: [
-      { Put: { TableName: T, Item: Object.assign({ pk: S('inbox#' + to), sk: S(id) }, base) } },
-      { Put: { TableName: T, Item: Object.assign({ pk: S('out#' + me), sk: S(id) }, base) } }] }));
+      { Put: { TableName: T, Item: Object.assign(K('inbox#' + to, id), base) } },
+      { Put: { TableName: T, Item: Object.assign(K('out#' + me, id), base) } }] }));
     return res(200, { ok: true, id, toName });
   }
   const id = String(b.id || ''); if (!/^[0-9a-z]{15}$/.test(id)) return res(400, E);
-  const mine = rk === 'POST /mail/recall' ? 'out#' + me : 'inbox#' + me;
-  const g = await db.send(new GetItemCommand({ TableName: T, Key: { pk: S(mine), sk: S(id) } }));
+  const mine = rk === 'recall' ? 'out#' + me : 'inbox#' + me;
+  const g = await db.send(new GetItemCommand({ TableName: T, Key: K(mine, id) }));
   if (!g.Item) return res(404, E);
-  const L = row(g.Item), ops = [{ Delete: { TableName: T, Key: { pk: S(mine), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } }];
-  if (rk === 'POST /mail/claim') { if (L.type === 'offer') return res(400, E); }
+  const L = row(g.Item), ops = [del(mine, id)];
+  if (rk === 'claim') { if (L.type === 'offer') return res(400, E); }
   else if (L.type !== 'offer') return res(400, E);
-  else if (rk === 'POST /mail/recall') ops.push({ Delete: { TableName: T, Key: { pk: S('inbox#' + L.to), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } });
+  else if (rk === 'recall') ops.push(del('inbox#' + L.to, id));
   else {
-    ops.push({ Delete: { TableName: T, Key: { pk: S('out#' + L.from), sk: S(id) } } });
-    const acc = rk === 'POST /mail/accept';
-    if (!acc && rk !== 'POST /mail/decline') return res(404, E);
-    if (!acc || L.price > 0) ops.push({ Put: { TableName: T, Item: { pk: S('inbox#' + L.from), sk: S(newId()), type: S(acc ? 'payment' : 'return'), from: S(me), fromName: S(L.toName), item: S(JSON.stringify(L.item)), gold: S(acc ? L.price : 0), at: N(Date.now()), ttl: N(Math.floor(Date.now() / 1000) + 5184000) } } });
+    ops.push({ Delete: { TableName: T, Key: K('out#' + L.from, id) } });
+    const acc = rk === 'accept';
+    if (!acc && rk !== 'decline') return res(404, E);
+    if (!acc || L.price > 0) ops.push({ Put: { TableName: T, Item: { ...K('inbox#' + L.from, newId()), type: S(acc ? 'payment' : 'return'), from: S(me), fromName: S(L.toName), item: S(JSON.stringify(L.item)), gold: S(acc ? L.price : 0), at: N(now), ttl: N(Math.floor(now / 1000) + 5184000) } } });
   }
   try { await db.send(new TransactWriteItemsCommand({ TransactItems: ops })); }
   catch (x) { if (x.name === 'TransactionCanceledException') return res(404, E); throw x; }

@@ -67,12 +67,12 @@ exports.handler = async (e) => {
   if (!name || String(b.name || '').trim().toLowerCase() !== name.toLowerCase()) return res(400, { error: 'name' });
   // 1. the save: an empty row stamped with the reset time
   await send(new D.PutItemCommand({ TableName: SAVES, Item: { userId: S(sub), data: S(''), updated: N(now), floor: N(0), rst: N(now) } }));
-  // 2. the guild board hero: keep only the account link, the name for the admin list, a ban marker and the Grand War link
+  // 2. the guild board hero: keep only the account link, the name for the admin list, a ban marker, the Grand War link and the NP+ tier
   const keep = { pid: S(id), u: h.u, bn: S(name) };
-  for (const k of ['ban', 'wl', 'wv']) if (h[k]) keep[k] = h[k];
+  for (const k of ['ban', 'wl', 'wv', 'np', 'npAt']) if (h[k]) keep[k] = h[k];
   await send(new D.PutItemCommand({ TableName: HEROES, Item: keep }));
   // 3. market listings and letters
-  const n = { listings: await dropAll('sell#' + id, it => it.cls && 'mkt#' + it.cls.S), letters: (await dropAll('inbox#' + id)) + (await dropAll('out#' + id)) };
+  const n = { listings: await dropAll('sell#' + id, it => it.cls && 'mkt#' + it.cls.S + (h.np ? '#' + h.np.N : '')), letters: (await dropAll('inbox#' + id)) + (await dropAll('out#' + id)) };
   // 4. Ember Ring standing and world boss scores
   await del(ARENA, { pid: S(id) });
   let k;
@@ -87,7 +87,7 @@ exports.handler = async (e) => {
     const w = (await send(new D.GetItemCommand({ TableName: WALLETS, Key: { userId: S(sub) } }))).Item;
     if (w) {
       const wk = { userId: S(sub) };
-      for (const f of ['wl', 'wv']) if (w[f]) wk[f] = w[f];
+      for (const f of ['wl', 'wv', 'np', 'npAt']) if (w[f]) wk[f] = w[f];
       await send(new D.PutItemCommand({ TableName: WALLETS, Item: wk }));
     }
   }

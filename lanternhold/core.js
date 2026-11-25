@@ -1,4 +1,4 @@
-/* lh-build 202611250506 */
+/* lh-build 202611250543 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -458,19 +458,31 @@
 
   function featCount(s) { return Object.keys(s.feats).length; }
   function emberMult(s) { return 1 + EMBER_PER * s.embers; }
+  // ---------- New Playthrough (NP+, John 25 Nov 2026, docs/NP-PLUS.md) ----------
+  // After the floor 150 guardian a hero can start over at the next tier, NP+1 to NP+10. Each tier makes foes
+  // NP_FOE x tier tougher, gear drops NP_ILVL x tier higher, and gives +NP_PER x tier damage, health and gold.
+  // The server (infra/lambda/np.js) grants NP_SIGILS once per tier, at least NP_GAP apart, and owns the tier.
+  const NP_MAX = 10, NP_FOE = 0.25, NP_ILVL = 0.1, NP_PER = 0.02, NP_SIGILS = 25, NP_GAP = 7 * 864e5, NP_LOCK = 864e5;
+  function npTier(s) { return Math.max(0, Math.min(NP_MAX, (s && s.np) | 0)); }
+  function npT(s) { return npTier(s) || undefined; }
+  function npFoe(s) { return 1 + NP_FOE * npTier(s); }
+  function npBonus(s) { return 1 + NP_PER * npTier(s); }
+  function npIlvl(s, f) { return npTier(s) ? Math.round(f * (1 + NP_ILVL * npTier(s))) : f; }
+  // Gear from an earlier tier can't be worn (no stashing gear on an alt before starting over).
+  function npOld(s, it) { return !!it && ((it.t | 0) < npTier(s)); }
   function abilityActive(s, id, now) { const a = s.abil[id]; return !!(a && a.until > now); }
   const scale = (s, id) => { const m = memberById(id), L = lvl(s, id); return Math.pow(L * milestoneMult(L) * TIER[m.tier].stat * (m.player ? 1 : (m.pow || NPC_POWER)), POW); };
 
   function maxHpOf(s, id) {
     const m = memberById(id);
-    return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)));
+    return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * npBonus(s) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)));
   }
   // The Lantern Keeper (John, 2026-11-24): while the store owner's verified account is online, every hero gets
   // +KEEPER to damage, healing, gold, hero XP and gear finds. The page learns it from the server (s.keeper.until).
   const KEEPER = 0.25;
   const keeperOn = s => !!(s.keeper && s.keeper.until > (s.clock || Date.now()));
   const keeperMult = s => keeperOn(s) ? 1 + KEEPER : 1;
-  function partyMult(s) { return keeperMult(s) * emberMult(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')); }
+  function partyMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')); }
   // Your own hero hits harder as a tank or healer, so every class can carry a run at a similar pace.
   const HERO_DPS = { tank: 3, healer: 5 };
   function memberDps(s, id, now) {
@@ -507,7 +519,7 @@
   function spendRes(s, id, n) { const v = resOf(s, id); if (v < n) return false; s.res[id] = v - n; return true; }
   const oom = (s, id) => !!(s.oom && s.oom[id]);
   function clickDamage(s, now) { return (1 + totalDps(s, now) * 0.05) * (1 + relicVal(s, 'whet')); }
-  function goldMult(s) { return keeperMult(s) * emberMult(s) * (1 + masteryVal(s, 'gold')) * (1 + gearGold(s)) * (1 + kup(s, 'purse')) * (1 + relicVal(s, 'locket')) * sidePerk(s, 'gold') * (1 + campBonus(s, 'gold')) * (1 + sk(s, 'gold')); }
+  function goldMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'gold')) * (1 + gearGold(s)) * (1 + kup(s, 'purse')) * (1 + relicVal(s, 'locket')) * sidePerk(s, 'gold') * (1 + campBonus(s, 'gold')) * (1 + sk(s, 'gold')); }
   function critChance(s) { return 0.04 + relicVal(s, 'dice') + sk(s, 'crit'); }
   function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern'); }
   function chestChance(s) { return 0.03 + relicVal(s, 'moth') + sk(s, 'chest'); }
@@ -744,7 +756,7 @@
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    return Math.min(4, d / foeHp(f, false)) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
+    return Math.min(4, d / (foeHp(f, false) * npFoe(s))) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
   const incCache = new WeakMap();
   function npcIncomeMin(s, now) {
@@ -1363,14 +1375,14 @@
     let rar;
     if (opts && opts.set) {
       const set = SETS.find(x => x.cls === cls);
-      return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: ['main', 'chest', 'neck'][Math.floor(r() * 3)], rar: 'set', set: set.id, ilvl: f, up: 0 }, r);
+      return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: ['main', 'chest', 'neck'][Math.floor(r() * 3)], rar: 'set', set: set.id, ilvl: npIlvl(s, f), up: 0, t: npT(s) }, r);
     }
     const slot = rollSlot(cls, r);
     // Rarity odds start stingy and open up with depth (d reaches 1 at floor 80).
     const boost = (opts && opts.boost) || 0, d = Math.min(1, f / 80);
     const p = r() + boost * 0.15 * d;
     rar = p > 0.995 - 0.03 * d ? 'epic' : p > 0.94 - 0.08 * d ? 'rare' : p > 0.7 - 0.12 * d ? 'fine' : 'common';
-    const it = { uid: Date.now().toString(36) + (uidSeq++), cls, slot, rar, ilvl: f, up: 0 };
+    const it = { uid: Date.now().toString(36) + (uidSeq++), cls, slot, rar, ilvl: npIlvl(s, f), up: 0, t: npT(s) };
     if (slot === 'main') { const l = TY_MAIN[cls] || ['sword']; it.ty = r() < 0.5 ? l[0] : l[Math.floor(r() * l.length)]; }
     if (r() < (AFFIX_CHANCE[rar] || 0)) it.aff = { j: JOB_KEYS[Math.floor(r() * JOB_KEYS.length)], v: Math.round((0.1 + r() * 0.2) * (rar === 'epic' ? 1.5 : 1) * 100) / 100 };
     return rollEnch(it, r);
@@ -1380,10 +1392,10 @@
     const i = regionSetAt(f); if (i < 0) return null;
     const classes = Array.from(new Set(s.party.filter(Boolean).map(id => memberById(id).cls)));
     const cls = classes.length ? classes[Math.floor(r() * classes.length)] : CLASS_ORDER[Math.floor(r() * 5)];
-    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: RSET_SLOTS[Math.floor(r() * 4)], rar: 'set', rset: i, ilvl: f, up: 0 }, r);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: RSET_SLOTS[Math.floor(r() * 4)], rar: 'set', rset: i, ilvl: npIlvl(s, f), up: 0, t: npT(s) }, r);
   }
   function rollGoblinSack(s, f, r) {
-    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls: heroCls(s) || (s.party.filter(Boolean).map(id => memberById(id).cls)[0]) || 'rogue', slot: 'neck', rar: 'goblin', gob: 1, ilvl: f, up: 0 }, r);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls: heroCls(s) || (s.party.filter(Boolean).map(id => memberById(id).cls)[0]) || 'rogue', slot: 'neck', rar: 'goblin', gob: 1, ilvl: npIlvl(s, f), up: 0, t: npT(s) }, r);
   }
   // Region set drop odds, before Loot bonuses.
   // Set pieces are rarer since v121 (John, 2026-11-25: "they are dropping pretty easily"): every set chance is halved.
@@ -1393,7 +1405,7 @@
   function rollJobSet(s, f, r) {
     const classes = Array.from(new Set(s.party.filter(Boolean).map(id => memberById(id).cls)));
     const cls = classes.length ? classes[Math.floor(r() * classes.length)] : CLASS_ORDER[Math.floor(r() * 5)];
-    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: ['head', 'feet', 'ring'][Math.floor(r() * 3)], rar: 'set', jset: JOB_KEYS[Math.floor(r() * JOB_KEYS.length)], ilvl: f, up: 0 }, r);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: ['head', 'feet', 'ring'][Math.floor(r() * 3)], rar: 'set', jset: JOB_KEYS[Math.floor(r() * JOB_KEYS.length)], ilvl: npIlvl(s, f), up: 0, t: npT(s) }, r);
   }
   // Lantern Pass: a 30-day convenience pass bought with Sigils. Auto-train, +10 bag slots, +4 hours of offline time. No power.
   const PASS_COST = 500, PASS_DAYS = 30, PASS_BAG = 10, PASS_OFFLINE = 4 * 3600;
@@ -1525,7 +1537,7 @@
   function wearer(s, uid) { const w = wornAt(s, uid); return w ? w[0] : null; }
   const wornPos = (s, uid) => { const w = wornAt(s, uid); return w ? w[1] : null; };
   const reqLevel = it => Math.max(1, Math.floor(it.ilvl * 1.5));
-  const canWear = (s, id, it) => lvl(s, id) >= reqLevel(it);
+  const canWear = (s, id, it) => lvl(s, id) >= reqLevel(it) && !npOld(s, it);
   // Kindling unlocks, per character.
   const unlocksOf = (s, id) => (s.unlocks && s.unlocks[id]) || { rings: 0, neck2: 0 };
   function openPos(s, id) {
@@ -1789,7 +1801,7 @@
   // The winner can always wear it: item level follows their deepest floor, capped by the hero's level.
   function makeLegend(s, b, rng) {
     const r = rng || Math.random, cls = heroCls(s) || 'tank', slot = WB_SLOTS[Math.floor(r() * WB_SLOTS.length)];
-    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: slot === 'chest' && CLOTH[cls] ? 'robe' : slot, rar: 'legend', wb: b, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0 }, r);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: slot === 'chest' && CLOTH[cls] ? 'robe' : slot, rar: 'legend', wb: b, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0, t: npT(s) }, r);
   }
   // Rift tokens (v120, John): every world boss pays tokens for your damage (loot.js); WB_TOKEN_COST buys a Legendary
   // piece of any boss set, so every delver gets there in the end and stronger parties get there sooner.
@@ -2158,7 +2170,13 @@
     s.mercyAid = Math.max(now, s.mercyAid || 0) + MERCY_MIN * 60000; s.stats.aided = (s.stats.aided || 0) + 1;
     s.foe = null; s.foeGap = now + 900; events && events.push({ type: 'aided', who: f.who }); return true;
   }
+  // NP+: every foe outside the shared world boss fight is NP_FOE x tier tougher and hits that much harder.
   function makeFoe(s, rng) {
+    const foe = makeFoe0(s, rng), m = npFoe(s);
+    if (m > 1 && foe && !foe.world && !foe.wounded) { foe.hp *= m; foe.max *= m; foe.atk *= m; }
+    return foe;
+  }
+  function makeFoe0(s, rng) {
     const f = s.floor, boss = isBossFloor(f), r = rng || Math.random;
     if (s.wb && s.wb.until > (s.clock || Date.now())) return wbFoe(s);
     if (!boss) {
@@ -2974,6 +2992,35 @@
     return e;
   }
 
+  // NP+ opens once the floor 150 guardian is beaten (the 'act1' story beat or a deeper floor).
+  function npReady(s) { return !!(s && s.hero) && npTier(s) < NP_MAX && ((s.story && s.story.seen && s.story.seen.act1) || (s.maxFloorEver || 1) > ACT_ONE_END); }
+  // What a new playthrough keeps: the hero (name, class, alliance), Sigil buys (Bag of Holding, campfire spots, pass,
+  // subscription, tonics and draughts), journal lore, feats, Rift tokens, settings, lifetime stats and account flags.
+  // Everything else (gold, Dust, floors, levels, XP, stat points, skills, Kindling, gear, Embers, relics, companions,
+  // hires, story) starts fresh.
+  const NP_KEEP = ['hero', 'mode', 'lore', 'feats', 'settings', 'stats', 'boh', 'rosterUps', 'pass', 'passTrial', 'passTrialGiven', 'sub', 'keeper', 'created', 'econ', 'wd', 'ref', 'npLog',
+    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv'];
+  // Applies the reset in place once the server has granted tier `tier` at time `at`. Returns false if not allowed.
+  // force: the server says this account is already on `tier` (another device started it), so reset to it anyway.
+  function startNP(s, tier, at, force) {
+    tier = Math.min(NP_MAX, tier | 0);
+    if (force ? !(s && s.hero) || tier <= npTier(s) : !npReady(s) || tier !== npTier(s) + 1) return false;
+    const keep = {}; for (const k of NP_KEEP) if (s[k] !== undefined) keep[k] = s[k];
+    for (const k of Object.keys(s)) delete s[k];
+    Object.assign(s, newState(), keep);
+    s.np = tier; s.npAt = at || Date.now();
+    s.npLog = (keep.npLog || []).concat([{ t: tier, at: s.npAt }]);
+    s.stats = Object.assign(newState().stats, keep.stats || {}); s.stats.np = (s.stats.np || 0) + 1;
+    s.story = { seen: {}, queue: [] };
+    s.hxp = 0; s.attr = {};
+    s.grand = {};
+    s.mode = 'multi'; registerHero(s);
+    s.levels.you = 1; s.party[0] = 'you'; if (!s.unlocked.includes('you')) s.unlocked.unshift('you');
+    npcMigrate(s); registerHero(s);
+    s.hp.you = maxHpOf(s, 'you');
+    return true;
+  }
+
   // Story: returns the next beat to show (and applies it), or null.
   function nextStory(s) {
     if (s.pendingJoin) return null; // the story waits while a recruit stands at a full campfire
@@ -3025,7 +3072,7 @@
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    const killsPerSec = Math.min(4, d / foeHp(f, false));
+    const killsPerSec = Math.min(4, d / (foeHp(f, false) * npFoe(s)));
     return killsPerSec * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
 
@@ -3059,6 +3106,7 @@
     const OLD = { weapon: 'main', armor: 'chest', trinket: 'neck' };
     for (const id in s.gear) for (const k in OLD) if (s.gear[id][k]) { s.gear[id][OLD[k]] = s.gear[id][k]; delete s.gear[id][k]; } s.lore = Object.assign({ hold: 1 }, o.lore || {});
     registerHero(s);
+    s.np = Math.max(0, Math.min(NP_MAX, o.np | 0)); s.npAt = o.npAt || 0; s.npLog = Array.isArray(o.npLog) ? o.npLog : [];
     s.pace = o.pace || 0; s.grand = o.grand || {}; s.mast = o.mast || {}; s.mastE = o.mastE || {}; s.gone = o.gone || {}; s.rosterUps = o.rosterUps || 0;
     paceMigrate(s); trialMigrate(s);
     npcMigrate(s); registerHero(s);
@@ -3067,6 +3115,7 @@
   }
 
   const api = {
+    steadyDps, NP_MAX, NP_FOE, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
     NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
