@@ -1,4 +1,4 @@
-/* lh-build 202611250432 */
+/* lh-build 202611250436 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2205,10 +2205,22 @@ body.atench #ghostlamp,body.atench #merchant,body.atench #spwarn,body.atench .fl
 .holdsheet{max-width:760px}
 .holdview{position:relative;border:1px solid var(--line2);border-radius:12px;overflow:hidden;margin:10px 0}
 .holdview canvas{display:block;width:100%;aspect-ratio:2.2/1}
-.holdtents{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px;background:#0b0f18;border-top:1px solid var(--line)}
+.holdtents{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:8px;background:#0b0f18;border-top:1px solid var(--line)}
 .holdtents button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:10px;border:1px solid var(--line2);background:#121a2a;color:var(--text);font:600 13px Inter,system-ui,sans-serif;cursor:pointer;text-align:center}
 .holdtents button:hover{border-color:var(--gold)}.holdtents small{color:var(--muted);font-weight:500;font-size:11px}
-@media (max-width:520px){.holdtents{grid-template-columns:1fr 1fr}.holdtents button:last-child{grid-column:1/-1}}
+@media (max-width:520px){.holdtents{grid-template-columns:1fr 1fr}}
+.trview{cursor:pointer;touch-action:manipulation}
+.trview canvas{aspect-ratio:2.4/1}
+.trstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 10px}
+.trstats div{background:#141018;border:1px solid var(--line);border-radius:10px;padding:6px 12px;min-width:0}
+.trstats small{display:block;font-size:11px;color:var(--dim)}
+.trstats b{display:block;font-size:20px;color:var(--gold);font-variant-numeric:tabular-nums}
+.trstats em{display:block;font-style:normal;font-size:11px;color:var(--muted)}
+.trstats div:nth-child(2) b,.trstats div:nth-child(4) b{color:#6ff0a0}
+.trrow{flex-wrap:wrap;gap:8px}
+#tr-bite.on{border-color:#e05050;color:#ffb0a0}
+.trnote{font-size:12px;margin:8px 0 0}
+@media (max-width:520px){.trstats{grid-template-columns:1fr 1fr}.trstats b{font-size:17px}}
 /* the Armorer's tabs (v102) */
 .ewtabs.forge button.on{background:linear-gradient(180deg,#e0702a,#b04a14);color:#fff}
 .ewcost.gold{color:var(--gold)}

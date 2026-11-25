@@ -1,4 +1,4 @@
-/* lh-build 202611250432 */
+/* lh-build 202611250436 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5101,8 +5101,9 @@
     ['arm', 'Armorer', 'armorer', '#9aa3b2', 'Upgrade, merge, melt'],
     ['store', 'Store', 'healer', '#2f9e63', 'Tonics, oil, draughts'],
     ['portal', 'Rift Gate', 'riftkeeper', '#7c3aed', 'Rift tokens for Legendaries'],
+    ['train', 'Training Ground', 'dummy', '#b08a52', 'Test your damage and heals'],
   ];
-  const HOLD_X = i => 36 + i * 72;
+  const HOLD_X = i => 32 + i * 59;
   function drawHold(cv) {
     const cw = cv.clientWidth || 600, ch = cv.clientHeight || 280, dpr = window.devicePixelRatio || 1, W2 = 360, H2 = Math.round(W2 * ch / cw), k = cw * dpr / W2;
     cv.width = Math.round(W2 * k); cv.height = Math.round(H2 * k); const x = cv.getContext('2d'); x.setTransform(k, 0, 0, k, 0, 0); x.imageSmoothingQuality = 'high';
@@ -5121,6 +5122,15 @@
         const pg = x.createRadialGradient(tx, ty - 20, 1, tx, ty - 20, 22); pg.addColorStop(0, '#f5e8ff'); pg.addColorStop(0.4, '#a855f7'); pg.addColorStop(1, 'rgba(76,29,149,0)'); x.fillStyle = pg; x.beginPath(); x.ellipse(tx, ty - 20, 12, 19, 0, 0, Math.PI * 2); x.fill();
         x.strokeStyle = '#4a4458'; x.lineWidth = 5; x.beginPath(); x.ellipse(tx, ty - 20, 14, 21, 0, Math.PI, Math.PI * 2); x.stroke(); x.fillStyle = '#4a4458'; x.fillRect(tx - 16.5, ty - 20, 5, 20); x.fillRect(tx + 11.5, ty - 20, 5, 20);
         const s = sprite(who, 0, false), sw = s.lw * 2, sh = s.lh * 2; x.save(); x.translate(tx + 24, 0); x.scale(-1, 1); x.drawImage(s, -sw / 2, ty + 3 - sh, sw, sh); x.restore();
+        return;
+      }
+      if (id === 'train') {
+        // a sanded practice yard: a low fence and a straw dummy on a post
+        x.fillStyle = '#6a5436'; x.beginPath(); x.ellipse(tx, ty - 1, 24, 6, 0, 0, Math.PI * 2); x.fill();
+        x.fillStyle = '#5a3a1a'; for (const fx of [-24, -12, 12, 24]) x.fillRect(tx + fx - 1, ty - 14, 2.4, 14); x.fillRect(tx - 25, ty - 11, 50, 2); x.fillRect(tx - 25, ty - 5, 50, 2);
+        x.fillStyle = '#4a3018'; x.fillRect(tx - 1.5, ty - 40, 3, 40); x.fillRect(tx - 12, ty - 30, 24, 3);
+        x.fillStyle = '#d8b25a'; x.beginPath(); x.ellipse(tx, ty - 25, 7, 10, 0, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(tx, ty - 40, 5.5, 0, Math.PI * 2); x.fill();
+        x.strokeStyle = '#b02020'; x.lineWidth = 1.2; x.beginPath(); x.arc(tx, ty - 25, 4, 0, Math.PI * 2); x.stroke(); x.beginPath(); x.arc(tx, ty - 25, 1.4, 0, Math.PI * 2); x.stroke();
         return;
       }
       if (id === 'camp') { x.fillStyle = '#3a2618'; x.fillRect(tx - 10, ty - 2, 20, 3); for (let q = 0; q < 4; q++) flame(x, tx - 6 + q * 4, ty - 2, 10 + (q % 2) * 4, 0); const gg = x.createRadialGradient(tx, ty - 8, 0, tx, ty - 8, 40); gg.addColorStop(0, 'rgba(255,150,60,.4)'); gg.addColorStop(1, 'rgba(255,150,60,0)'); x.fillStyle = gg; x.fillRect(tx - 40, ty - 48, 80, 80); return; }
@@ -5143,8 +5153,128 @@
         md.querySelector('#hold-x').onclick = closeModal; md.querySelector('#hold-map').onclick = openMap;
         md.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => {
           const k = b.dataset.hold; closeModal();
-          if (k === 'camp') { if (S.floor > L.CAMP_FLOOR) campModal(); } else if (k === 'ench') enchanterModal(); else if (k === 'arm') armorerModal(); else if (k === 'portal') visitEnch('portal'); else openStore();
+          if (k === 'camp') { if (S.floor > L.CAMP_FLOOR) campModal(); } else if (k === 'ench') enchanterModal(); else if (k === 'arm') armorerModal(); else if (k === 'portal') visitEnch('portal'); else if (k === 'train') openTraining(); else openStore();
         });
+      });
+  }
+  // ---------- Training Ground (v120, John 25 Nov 2026) ----------
+  // Reached from Map > the Hold. The hero alone strikes a harmless Practice Mimic to read real damage and healing.
+  // Core trainSandbox/trainTick run the normal fight rules on a throwaway copy of the save: no loot, gold or hero XP,
+  // and the real party keeps delving meanwhile. Readouts: whole-session and last-5-second rates, totals, biggest hit.
+  const TR = { t: null, bite: false };
+  function trainReset() {
+    const now = Date.now();
+    TR.t = L.trainSandbox(S, now); TR.at = now; TR.last = now; TR.dmg = 0; TR.heal = 0; TR.taps = 0; TR.tapDmg = 0; TR.big = 0; TR.win = [];
+    TR.fl = []; TR.lunge = 0; TR.hurt = 0; TR.chomp = 0; TR.acc = 0; TR.hacc = 0;
+  }
+  function trainFloat(txt, cls, side) { TR.fl.push({ txt, cls, side, t: performance.now(), dx: (Math.random() - 0.5) * 0.08 }); if (TR.fl.length > 24) TR.fl.shift(); }
+  function trainStep() {
+    if (!TR.t || !$('trcv')) return false;
+    const now = Date.now(), gap = now - TR.last, dt = Math.min(0.5, gap / 1000); TR.last = now;
+    if (gap > 1000) TR.at += gap - 500; // a hidden tab pauses practice instead of dragging the averages down
+    if (dt <= 0) return true;
+    const ev = [], r = L.trainTick(TR.t, dt, now, TR.bite, ev);
+    TR.dmg += r.dmg; TR.heal += r.heal; TR.acc += r.dmg; TR.hacc += r.heal;
+    TR.win.push([now, r.dmg, r.heal]); while (TR.win.length && TR.win[0][0] < now - 5000) TR.win.shift();
+    for (const e of ev) if (e.type === 'ability') { trainFloat(e.dmg ? fmt(e.dmg) : 'Ability!', 'ab', 1); if (e.dmg) TR.big = Math.max(TR.big, e.dmg); TR.lunge = performance.now(); }
+    if (TR.acc > 0 && now - (TR.flAt || 0) > 600) { trainFloat(fmt(TR.acc), '', 1); TR.big = Math.max(TR.big, TR.acc); TR.acc = 0; TR.flAt = now; TR.lunge = performance.now(); }
+    if (TR.hacc > 0 && now - (TR.hlAt || 0) > 800) { trainFloat('+' + fmt(TR.hacc), 'heal', 0); TR.hacc = 0; TR.hlAt = now; }
+    if (TR.bite && now - (TR.biteAt || 0) > 900) { TR.biteAt = now; TR.chomp = performance.now(); TR.hurt = performance.now(); }
+    return true;
+  }
+  function trainTap() {
+    if (!TR.t) return;
+    const r = L.trainStrike(TR.t, Date.now(), []);
+    if (!r) return;
+    TR.dmg += r.dmg; TR.taps++; TR.tapDmg += r.dmg; TR.big = Math.max(TR.big, r.dmg);
+    TR.win.push([Date.now(), r.dmg, 0]);
+    trainFloat(fmt(r.dmg) + (r.crit ? '!' : ''), r.crit ? 'crit' : 'tap', 1); TR.lunge = performance.now();
+    sfx.hit(r.crit);
+  }
+  function trainStats() {
+    const now = Date.now(), sec = Math.max(1, (now - TR.at) / 1000), w = TR.win, ws = Math.min(5, sec);
+    const wd = w.reduce((a, x) => a + x[1], 0), wh = w.reduce((a, x) => a + x[2], 0);
+    const tile = (k, v, sub) => '<div><small>' + k + '</small><b>' + v + '</b>' + (sub ? '<em>' + sub + '</em>' : '') + '</div>';
+    return tile('Damage per second', fmt(TR.dmg / sec), 'last 5 s: ' + fmt(wd / ws)) +
+      tile('Healing per second', fmt(TR.heal / sec), TR.bite ? 'last 5 s: ' + fmt(wh / ws) : 'turn on bites to test heals') +
+      tile('Total damage', fmt(TR.dmg), 'biggest hit ' + fmt(TR.big)) +
+      tile('Total healed', fmt(TR.heal), '') +
+      tile('Your taps', fmt(TR.taps), fmt(TR.tapDmg) + ' damage') +
+      tile('Time', fmtTime(sec), '');
+  }
+  function drawTraining(cv) {
+    const cw = cv.clientWidth || 600, ch = cv.clientHeight || 280, dpr = window.devicePixelRatio || 1, W2 = 360, H2 = Math.round(W2 * ch / cw), k = cw * dpr / W2;
+    if (cv.width !== Math.round(W2 * k) || cv.height !== Math.round(H2 * k)) { cv.width = Math.round(W2 * k); cv.height = Math.round(H2 * k); }
+    const x = cv.getContext('2d'); x.setTransform(k, 0, 0, k, 0, 0); x.imageSmoothingEnabled = false;
+    const pn = performance.now(), gy = H2 * 0.5;
+    let g = x.createLinearGradient(0, 0, 0, gy); g.addColorStop(0, '#0b1230'); g.addColorStop(1, '#1d1a2c'); x.fillStyle = g; x.fillRect(0, 0, W2, gy);
+    for (let i = 0; i < 40; i++) { x.fillStyle = 'rgba(255,255,255,' + (0.25 + (i % 5) / 12) + ')'; x.fillRect((i * 97) % W2, (i * 53) % (gy * 0.6), 0.8, 0.8); }
+    x.fillStyle = '#1e2030'; x.fillRect(0, gy - 30, W2, 32); for (let i = 0; i < W2; i += 14) x.fillRect(i, gy - 36, 8, 8);
+    g = x.createLinearGradient(0, gy, 0, H2); g.addColorStop(0, '#7a6242'); g.addColorStop(1, '#3a2c1c'); x.fillStyle = g; x.fillRect(0, gy, W2, H2 - gy);
+    // fence along the back of the yard, racks of practice weapons, a target on the left
+    x.fillStyle = '#4a3018'; for (let i = 6; i < W2; i += 22) x.fillRect(i, gy - 14, 3, 16); x.fillRect(0, gy - 10, W2, 2.5); x.fillRect(0, gy - 4, W2, 2.5);
+    x.fillStyle = '#3a2410'; x.fillRect(22, gy - 26, 26, 3); x.strokeStyle = '#9aa3b2'; x.lineWidth = 1.4; for (let i = 0; i < 4; i++) { x.beginPath(); x.moveTo(26 + i * 6, gy - 30); x.lineTo(26 + i * 6, gy - 4); x.stroke(); }
+    for (const [cx, rr] of [[318, 13]]) { x.fillStyle = '#e8dcc0'; x.beginPath(); x.arc(cx, gy - 18, rr, 0, Math.PI * 2); x.fill(); x.fillStyle = '#b02020'; x.beginPath(); x.arc(cx, gy - 18, rr * 0.66, 0, Math.PI * 2); x.fill(); x.fillStyle = '#e8dcc0'; x.beginPath(); x.arc(cx, gy - 18, rr * 0.36, 0, Math.PI * 2); x.fill(); }
+    const fy = gy + (H2 - gy) * 0.62;
+    // the hero
+    const m = L.memberById('you');
+    const lu = Math.max(0, 1 - (pn - (TR.lunge || 0)) / 220), hx = W2 * 0.33 + Math.sin(lu * Math.PI) * 18;
+    if (m) {
+      const sp = sprite(m.cls, lookHue(m), pn - (TR.hurt || 0) < 140), sw = sp.lw * 4, sh = sp.lh * 4;
+      x.fillStyle = 'rgba(0,0,0,.3)'; x.beginPath(); x.ellipse(hx, fy, sw * 0.4, 4, 0, 0, Math.PI * 2); x.fill();
+      x.drawImage(sp, hx - sw / 2, fy - sh, sw, sh);
+      if (TR.bite && TR.t) { const mx = L.maxHpOf(TR.t, 'you'), f = Math.max(0, Math.min(1, (TR.t.hp.you || 0) / mx)); x.fillStyle = '#111'; x.fillRect(hx - 18, fy - sh - 8, 36, 4); x.fillStyle = f > 0.5 ? '#3ecf7a' : f > 0.25 ? '#e9c04a' : '#e05050'; x.fillRect(hx - 18, fy - sh - 8, 36 * f, 4); }
+    }
+    // the Practice Mimic: a chest on a post with teeth and a wagging tongue; it snaps when biting is on
+    const mxp = W2 * 0.68, bob = Math.sin(pn / 380) * 1.5, ch2 = Math.max(0, 1 - (pn - (TR.chomp || 0)) / 260), hit = Math.max(0, 1 - (pn - (TR.lunge || 0)) / 160);
+    x.fillStyle = 'rgba(0,0,0,.3)'; x.beginPath(); x.ellipse(mxp, fy, 26, 5, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#4a3018'; x.fillRect(mxp - 2, fy - 16, 4, 16);
+    const cs = sprite('chest', 0, hit > 0.7), cw2 = cs.lw * 4.4, chh = cs.lh * 4.4, cx0 = mxp - cw2 / 2 + hit * 4, cy0 = fy - 14 - chh + bob;
+    x.drawImage(cs, cx0, cy0, cw2, chh);
+    const open = 3 + ch2 * 9 + Math.sin(pn / 300) * 1, my = cy0 + chh * 0.5;
+    x.fillStyle = '#2a0a10'; x.fillRect(cx0 + 3, my - open / 2, cw2 - 6, open);
+    x.fillStyle = '#c0405a'; x.beginPath(); x.ellipse(cx0 + cw2 * 0.55, my + open / 2 - 1, 6, 2 + ch2 * 2, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#fff7e8'; for (let i = 0; i < 6; i++) { const tx = cx0 + 5 + i * (cw2 - 10) / 6; x.beginPath(); x.moveTo(tx, my - open / 2); x.lineTo(tx + 2.5, my - open / 2 + 3.5); x.lineTo(tx + 5, my - open / 2); x.fill(); x.beginPath(); x.moveTo(tx, my + open / 2); x.lineTo(tx + 2.5, my + open / 2 - 3.5); x.lineTo(tx + 5, my + open / 2); x.fill(); }
+    x.fillStyle = '#ffe36a'; x.beginPath(); x.arc(cx0 + cw2 * 0.3, cy0 + chh * 0.3, 2.6, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(cx0 + cw2 * 0.7, cy0 + chh * 0.3, 2.6, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#111'; x.fillRect(cx0 + cw2 * 0.3 - 0.6, cy0 + chh * 0.3 - 1.6, 1.2, 3.2); x.fillRect(cx0 + cw2 * 0.7 - 0.6, cy0 + chh * 0.3 - 1.6, 1.2, 3.2);
+    // floating numbers
+    x.textAlign = 'center'; x.font = '700 10px Inter,system-ui,sans-serif';
+    TR.fl = TR.fl.filter(f => pn - f.t < 1400);
+    for (const f of TR.fl) {
+      const a = (pn - f.t) / 1400, px = (f.side ? mxp : hx) + f.dx * W2, py = (f.side ? cy0 - 4 : fy - 74) - a * 26;
+      x.globalAlpha = 1 - a * a; x.font = (f.cls === 'crit' || f.cls === 'ab' ? '800 13px' : '700 10px') + ' Inter,system-ui,sans-serif';
+      x.fillStyle = '#000'; x.fillText(f.txt, px + 0.7, py + 0.7);
+      x.fillStyle = f.cls === 'heal' ? '#6ff0a0' : f.cls === 'crit' ? '#ffcf4a' : f.cls === 'ab' ? '#c9a6ff' : f.cls === 'tap' ? '#ffffff' : '#ffb27a'; x.fillText(f.txt, px, py);
+    }
+    x.globalAlpha = 1;
+    x.font = '600 8px Inter,system-ui,sans-serif'; x.fillStyle = 'rgba(255,240,210,.75)'; x.fillText('Practice Mimic', mxp, fy + 11);
+    if (m) x.fillText(String(S.hero.name || 'You').slice(0, 24), hx, fy + 11);
+  }
+  function openTraining() {
+    if (!S.hero) return;
+    trainReset();
+    if (!TR.t) { toast('lantern', 'The Training Ground is closed', 'Your hero needs to be on their feet to train.', 'warn'); return; }
+    modal('<div class="maphead"><div><h2>Training Ground</h2><small>Your hero alone against a Practice Mimic. Tap it to strike too. Nothing here drops loot or gives hero XP, and your party keeps delving on floor ' + S.floor + ' meanwhile.</small></div><button class="iconbtn" id="tr-x" aria-label="Close">&times;</button></div>' +
+      '<div class="holdview trview"><canvas id="trcv" aria-label="Your hero striking the Practice Mimic"></canvas></div>' +
+      '<div class="trstats" id="trstats">' + trainStats() + '</div>' +
+      '<div class="row trrow"><button class="btn small ghost" id="tr-bite" aria-pressed="false"></button><button class="btn small ghost" id="tr-reset">Reset</button><button class="btn small ghost" id="tr-hold">&larr; The Hold</button></div>' +
+      '<p class="muted trnote">Rates use your current gear, skills and buffs. Abilities cast on their own. With bites on, the mimic nibbles your hero so heals and life steal show; it can never knock you down.</p>', md => {
+        md.classList.add('holdsheet', 'trsheet');
+        const cv = $('trcv'), bite = md.querySelector('#tr-bite');
+        const paintBite = () => { bite.textContent = 'Mimic bites back: ' + (TR.bite ? 'On' : 'Off'); bite.setAttribute('aria-pressed', TR.bite); bite.classList.toggle('on', TR.bite); };
+        paintBite();
+        bite.onclick = () => { TR.bite = !TR.bite; paintBite(); trainReset(); $('trstats').innerHTML = trainStats(); };
+        md.querySelector('#tr-reset').onclick = () => { trainReset(); $('trstats').innerHTML = trainStats(); };
+        md.querySelector('#tr-x').onclick = closeModal; md.querySelector('#tr-hold').onclick = openHold;
+        cv.addEventListener('pointerdown', e => { e.preventDefault(); trainTap(); });
+        let lastStats = 0;
+        const loop = () => {
+          if (!trainStep()) { TR.t = null; return; }
+          drawTraining(cv);
+          const n = performance.now(); if (n - lastStats > 250) { lastStats = n; const st = $('trstats'); if (st) st.innerHTML = trainStats(); }
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
       });
   }
   function openMap() {
@@ -5571,6 +5701,11 @@
         '<b>Mass merge</b> in the Gear tab pairs up spare copies (never worn or locked ones) up to the level you pick, and shows the expected losses first.',
         'If the merge fails, <b>both pieces are destroyed</b>. Risk starts at 8% for +1 and climbs about 6% per level.',
         'Each point of <b>Luck</b> and <b>Intelligence</b> cuts that risk, up to half. Locked items cannot be merged.']],
+      ['Training Ground', 'i:star', 'Test your hero\'s damage and healing against a Practice Mimic.', [
+        'Open the <b>Map</b>, tap <b>The Hold</b>, then <b>Training Ground</b>. Your hero alone strikes a Practice Mimic using your real gear, skills and buffs. Abilities cast on their own, and you can tap the mimic to strike too.',
+        'The board shows <b>damage per second</b> and <b>healing per second</b> for the whole session and the last 5 seconds, plus totals and your biggest hit. <b>Reset</b> starts the count again, so you can swap gear and compare.',
+        'Turn on <b>Mimic bites back</b> to test heals and life steal: the mimic nibbles your hero, who can never be knocked down.',
+        'Nothing at the Training Ground drops loot or gives hero XP, and your party keeps delving while you practice.']],
       ['Enchantments', 'i:star', 'Sockets hold enchants that help your party or the hero who wears them.', [
         'Fine items have 1 socket, rare 2, epic 3 and set pieces 2. Items from floor 30 and floor 80 on get one more each, up to 4. Common items get sockets from floor 30.',
         'Enchants: <b>Might</b> (damage), <b>Vigor</b> (health), <b>Keen</b> (crits), <b>Fortune</b> (gold), <b>Finder</b> (gear drops), <b>Mending</b> (healing), <b>Warding</b> (less damage taken) and <b>Wick</b> (lantern time) help the whole party. Tiers run I to IX, higher from deeper floors.',
@@ -5798,7 +5933,7 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate and a crafting log', items: [
+    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate, a Training Ground and a crafting log', items: [
       'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
       'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
       'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
@@ -5811,6 +5946,8 @@
       'While you wait at a guardian, the goal line under the floor shows the trial: how many alliance elites you have (out of 10) and the floor they open. Hover it for the full rule.',
       'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
       'Mages, necromancers and healers now cost Dust when they sign on, on top of gold. Wages are still gold only.',
+      'New: the Training Ground (Map > The Hold). Your hero alone strikes a Practice Mimic so you can see your real damage per second and healing per second, live, with totals, your biggest hit and a Reset button. Tap the mimic to add your own strikes.',
+      'Turn on "Mimic bites back" to test heals: the mimic nibbles your hero so healing and life steal show up. It can never knock you down. Nothing at the Training Ground drops loot or gives hero XP, and your party keeps delving while you practice.',
     ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',

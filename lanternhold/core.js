@@ -1,4 +1,4 @@
-/* lh-build 202611250432 */
+/* lh-build 202611250436 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -2707,6 +2707,51 @@
   // or 'portal' (the Rift Gate outside the walls, v120: Rift tokens for world boss Legendaries). s.enchAt and s.shopK are never saved.
   function visitEnchanter(s, now, kind) { if (!s.hero || s.enchAt) return false; s.enchAt = now || Date.now(); s.shopK = kind === 'arm' || kind === 'store' || kind === 'portal' ? kind : 'ench'; return true; }
   function leaveEnchanter(s) { if (!s.enchAt) return false; s.enchAt = 0; s.shopK = null; return true; }
+  // Training Ground (v120, John 25 Nov 2026): reached from the Hold. The hero alone hits a harmless practice mimic so the
+  // player can read their real damage and healing. It runs the normal tick on a throwaway copy of the save, so nothing
+  // there (gold, loot, hero XP, kills, quests, cooldowns, mana) ever reaches the real save, and the dive keeps going.
+  // With bites on, the mimic nibbles TRAIN_BITE of the hero's max health a second so heals and life steal have work;
+  // the hero never drops below 1 health. The mimic never falls and never strikes back for real: its health is topped up
+  // before every step to a million times what the hero could deal, small enough that every hit still shows in the sum.
+  const TRAIN_BITE = 0.2;
+  const trainDummy = () => ({ name: 'Practice Mimic', sprite: 'dummy', hue: 0, hp: 1, max: 1, atk: 0, mods: [], train: true });
+  function trainFill(t, now) {
+    if (!t.foe || !t.foe.train) t.foe = trainDummy();
+    t.foe.hp = t.foe.max = 1e6 * (1 + totalDps(t, now) + clickDamage(t, now));
+  }
+  function trainSandbox(s, now) {
+    if (!s || !s.hero || !lvl(s, 'you')) return null;
+    const o = Object.assign({}, s); delete o.foe;
+    const t = JSON.parse(JSON.stringify(o));
+    t.party = ['you'].concat(Array(Math.max(0, (s.party.length || PARTY_SIZE) - 1)).fill(null));
+    t.down = {}; t.abil = {}; t.res = {}; t.oom = {}; t.cc = {}; t.dots = {}; t.poison = {}; t.minions = [];
+    t.wb = null; t.ghost = null; t.nx = null; t.enchAt = 0; t.shopK = null; t.campReturn = 0; t.campUntil = 0;
+    t.foeGap = 0; t.lantern = 0; t.retryAt = 0; t.autoAdvance = false; t.autoCast = true; t.hires = {}; t.owed = 0;
+    t.foe = trainDummy(); t.clock = now || Date.now(); trainFill(t, t.clock);
+    t.hp = { you: maxHpOf(t, 'you') };
+    return t;
+  }
+  // One step of practice. Returns { dmg, heal } done in this step (heal counts only health actually mended).
+  function trainTick(t, dt, now, bite, events) {
+    if (!t || !t.foe) return { dmg: 0, heal: 0 };
+    const mx = maxHpOf(t, 'you');
+    if (bite) t.hp.you = Math.max(1, (t.hp.you || mx) - mx * TRAIN_BITE * dt);
+    delete t.down.you;
+    trainFill(t, now);
+    const hp0 = t.hp.you, f0 = t.foe.hp;
+    tick(t, dt, now, null, events);
+    const dmg = t.foe && t.foe.train ? Math.max(0, f0 - t.foe.hp) : 0;
+    trainFill(t, now);
+    delete t.down.you; t.hp.you = Math.max(1, Math.min(mx, t.hp.you || 0));
+    return { dmg, heal: Math.max(0, t.hp.you - hp0) };
+  }
+  function trainStrike(t, now, events) {
+    if (!t || !t.foe) return null;
+    trainFill(t, now);
+    const f0 = t.foe.hp, r = strike(t, now, null, events);
+    const dmg = t.foe && t.foe.train ? Math.max(0, f0 - t.foe.hp) : 0; trainFill(t, now);
+    return { dmg, crit: !!(r && r.crit) };
+  }
   // The Armorer's forge melts spare gear for SMELT_MULT x the scrap gold, but gives no Dust.
   const SMELT_MULT = 2;
   const smeltValue = it => salvageValue(it) * SMELT_MULT;
@@ -3071,7 +3116,7 @@
     STATS, STAT_CLASS, STAT_BASE, STAT_AFFINITY, STAT_MAX, RESPEC_COST, statSpent, xpNeed, heroLevel, pointsFor, heroPoints, statScore, addStat, resetStats, statVal, PACK_CHANCE, PACK_GOLD,
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
     newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, memberById, trainCost, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
-    clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
+    clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, TRAIN_BITE, trainSandbox, trainTick, trainStrike, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
     offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
