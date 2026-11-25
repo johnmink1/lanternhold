@@ -11,7 +11,7 @@ const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) }), CF = 'Condit
 const S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
 const pidOf = sub => crypto.createHash('sha256').update('lh:' + sub).digest('hex').slice(0, 16);
 const DAY = 864e5, P = Date.parse('2026-11-23T00:00:00Z'), PE = Date.parse('2026-11-27T00:00:00Z');
-const CAP = 400, COOL = 15 * 6e4, HP1 = 1000, HR = 1e9, CEIL = 150, old = id => id === '2026-11-23';
+const CAP = 400, COOL = 15 * 6e4, HP1 = 1000, HR = 1e9, CEIL = 600, old = id => id === '2026-11-23';
 const M = Math.max, mn = Math.min, fh = f => 10 * (1.22 ** (f - 1) * 1.03 ** M(0, f - 60) * 1.04 ** M(0, f - 140)) ** .4 * 1.0108 ** (M(0, f - 15) + M(0, f - 40));
 // The event window that contains (or most recently started before) time t.
 function win(t) {

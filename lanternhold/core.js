@@ -1,4 +1,4 @@
-/* lh-build 202611251228 */
+/* lh-build 202611251251 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -2300,7 +2300,7 @@
   // weak to one (WB_TRAITS, index = wbBoss(id), same order as WB_NAMES and loot.js), and it hits harder and uses a
   // special attack. One assault counts at most WB_CEIL monsters' worth of your deepest floor (the server checks the
   // same against your hero's floor). The preview event (2026-11-23) keeps the old monsters'-worth scoring.
-  const WB_HP1R = 1e9, WB_CEIL = 150, WB_NPC = 0.5, WB_WEAK = 0.3, WB_RESIST = 0.3, WB_ATK = 1.3;
+  const WB_HP1R = 1e9, WB_CEIL = 600, WB_NPC = 0.5, WB_WEAK = 0.3, WB_RESIST = 0.3, WB_ATK = 1.3;
   const WB_TRAITS = [
     { weak: 'mage', resist: ['tank', 'rogue'], sp: 'shards', trait: 'Crystal hide', line: 'Blades skid off its void crystal, but spells crack it.' },
     { weak: 'healer', resist: ['necro', 'mage'], sp: 'void', trait: 'Hollow crown', line: 'Dark arts feed it and spells sink into its hollow, but holy light burns it.' },

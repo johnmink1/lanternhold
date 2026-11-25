@@ -1,4 +1,4 @@
-/* lh-build 202611251228 */
+/* lh-build 202611251251 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5951,6 +5951,7 @@
       'Mythic sets are stronger: +20% with 2 pieces (+30% gold for the Leviathan set) and +45% damage and health with all 4.',
       'They are meant to be a long grind. A Mythic drop after a world boss is rare: under 3% a weekend even for the strongest delvers, and full odds still need 3 phases broken.',
       'Warden Sable at the Rift Gate now asks 150 Rift tokens for a piece, and upgrading a Mythic costs twice the boss shards it did.',
+      'A strong party now keeps scoring its real damage in a world boss assault (the per-assault limit is four times higher), so boss weaknesses and half-damage hires count for everyone.',
     ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Nine new feats for the long haul, each worth the usual +1% damage and healing: Lone Lantern (defeat the Lampmother with only your own hero in the party), Masterwork (+10 gear in every open slot on your hero), Forged Company (all five heroes in +10 gear), Ash and Ember (rekindle 5 times), The Undying Flame (rekindle 25 times), Jailbreaker (defeat 500 guardians), Reliquary (find every relic), Again, and Deeper (reach NP+3) and Lantern Eternal (reach NP+10).',
