@@ -381,7 +381,7 @@ ref({
 // ---- Camp and jobs ----
 ref({
   slug: 'camp-and-jobs', title: 'Camp and jobs', nav: 'Camp and jobs', icon: 'flame',
-  desc: 'Lanternhold camp: the main camp, Campfire Draughts, and all six camp jobs with their bonuses and best classes.',
+  desc: 'Lanternhold camp: the main camp, Campfire Draughts, and all seven camp jobs with their bonuses and best classes.',
   lede: 'Companions resting at camp can work a job that helps the whole party. Output grows with their power level and is 50% higher when the job suits their class.',
   body: () => '<div class="grid3">' + L.JOBS.map(j => card('job-' + j.id, esc(j.name), { pic: '<div class="gicon">' + icon(j.icon) + '</div>', sub: esc(j.desc),
       body: kv([['Gives', esc(j.fmt)], ['Best class', clsName(j.aff)], ['Job set', L.JOB_SETS[j.id] ? '<a href="/wiki/sets/#job-' + j.id + '">' + esc(L.JOB_SETS[j.id].name) + '</a>' : '–']]) })).join('') + '</div>' +
