@@ -1191,7 +1191,7 @@
   }
 
   // ---------- toasts / modals ----------
-  function toast(ic, title, sub, cls) {
+  function toast(ic, title, sub, cls, det) {
     const t = document.createElement('div');
     t.className = 'toast ' + (cls || '');
     t.innerHTML = icon(ic) + '<div><b></b><small></small></div>';
@@ -1204,14 +1204,16 @@
     const go = () => { timer = setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, left); at = Date.now(); };
     t.onmouseenter = () => { clearTimeout(timer); left = Math.max(1500, left - (Date.now() - at)); };
     t.onmouseleave = go; go();
-    noteLog(ic, title, sub, cls);
+    noteLog(ic, title, sub, cls, det);
   }
   // ---------- notifications: the last 50 pop-ups, kept on this device ----------
   var NOTE_KEY = 'lh_notes', notes = [];
   try { notes = JSON.parse(localStorage.getItem(NOTE_KEY) || '[]'); if (!Array.isArray(notes)) notes = []; } catch (e) {}
-  function noteLog(ic, title, sub, cls) {
+  function noteLog(ic, title, sub, cls, det) {
     if (!notes) notes = [];
-    notes.push({ ic, title: String(title || ''), sub: String(sub || ''), cls: cls || '', t: Date.now(), n: 1 });
+    const x = { ic, title: String(title || ''), sub: String(sub || ''), cls: cls || '', t: Date.now(), n: 1 };
+    if (det) { const cut = l => { const m = new Map(); for (const v of l || []) m.set(v, (m.get(v) || 0) + 1); l = [...m].map(([v, n]) => n > 1 ? n + '× ' + v : v); return l.length > 14 ? l.slice(0, 13).concat(['and ' + (l.length - 13) + ' more']) : l; }; x.g = cut(det.g); x.l = cut(det.l); }
+    notes.push(x);
     if (notes.length > 120) notes = notes.slice(-120);
     try { localStorage.setItem(NOTE_KEY, JSON.stringify(notes)); } catch (e) {}
     paintNoteDot();
@@ -1221,18 +1223,45 @@
     const n = notes.filter(x => x.n).length; d.hidden = !n; d.textContent = n > 9 ? '9+' : n || '';
     $('btn-notes').setAttribute('aria-label', n ? 'Notifications, ' + n + ' new' : 'Notifications');
   }
+  // Crafting log (John, 2026-11-25: "when I do the armorer and enchanter ... I want to see a log of what happened,
+  // what I gained and what I lost"). Every merge, upgrade, scrap, smelt and enchant writes a bell entry with a
+  // gained list (g) and a lost list (l). Item lines are taken before the action, so a lost piece shows as it was.
+  const craftItem = it => { const en = L.enchList(it).map(x => L.ENCH[x.id].name + ' ' + ROMAN9[x.t]).join(', ');
+    return L.gearName(it) + (it.up ? ' +' + it.up : '') + ' (' + L.RARITY.find(r => r.id === it.rar).name + ', floor ' + it.ilvl + '): ' + (itemEffect(it) || 'no stats') + (en ? '; ' + en : ''); };
+  const craftCost = (n, unit) => fmt(n) + ' ' + unit;
+  // Shop actions already say what happened on the counter, so by default they go straight to the bell (no pop-up).
+  function craftLog(ic, title, sub, g, l, pop) { if (pop) toast(ic, title, sub, pop === true ? 'craft' : 'craft ' + pop, { g, l }); else noteLog(ic, title, sub, 'craft', { g, l }); }
+  function logMerge(res, la, lb, where, pop) {
+    if (!res) return;
+    if (res.ok) return craftLog('relic', 'Merge succeeded' + where, L.gearName(res.item) + ' is now +' + res.item.up + '.', [craftItem(res.item), '+' + fmt(res.xp) + ' hero XP'], [la, lb], pop);
+    craftLog('skull', 'Merge failed' + where, 'Both pieces were destroyed.', ['+' + fmt(res.xp) + ' hero XP for trying'], [la, lb], pop && 'warn');
+  }
+  // Runs a mass merge plan and logs it as one entry: each result gained, every piece that went in lost.
+  function runMass(plan, where, pop) {
+    let ok = 0, bad = 0, mxp = 0; const g = [], l = [];
+    for (const p of plan) { const la = craftItem(p.a), lb = craftItem(p.b), r = L.mergeItems(S, p.a.uid, p.b.uid, null, events); if (!r) continue;
+      mxp += r.xp || 0; l.push(la, lb); if (r.ok) { ok++; g.push(craftItem(r.item)); } else bad++; }
+    if (ok || bad) craftLog('relic', 'Mass merge' + where, ok + ' merged' + (bad ? ', ' + bad + ' failed (' + bad * 2 + ' items lost)' : '') + '.', g.concat(['+' + fmt(mxp) + ' hero XP']), l, pop && (bad ? 'warn' : 'feat'));
+    return { ok, bad, mxp };
+  }
+  // What one upgrade costs: gold, or that boss's shards for a Legendary.
+  const upPaid = it => it.wb != null && L.WB_SETS[it.wb] ? craftCost(L.wbUpCost(it), L.WB_SETS[it.wb].word + ' shard' + (L.wbUpCost(it) === 1 ? '' : 's')) : craftCost(L.upgradeCost(it), 'gold');
+  function logUp(it, was, paid, where) { craftLog('hammer', 'Upgraded' + where, L.gearName(it) + ' is now +' + it.up + '.', ['Now: ' + craftItem(it)], [paid, 'Was: ' + was]); }
+  function logScrap(title, items, g, d, pop) { craftLog('coin', title, items.length + (items.length === 1 ? ' piece' : ' pieces') + ' broken down.', ['+' + craftCost(g, 'gold')].concat(d ? ['+' + craftCost(d, 'Dust')] : []), items, pop); }
   const agoText = t => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : s < 86400 ? Math.floor(s / 3600) + ' h ago' : Math.floor(s / 86400) + ' d ago'; };
   // Bell categories (John, 2026-11-24): tabs so players can read just the log they want. Worked out from the
   // pop-up's icon, style and title, so notes saved before this change sort into tabs too.
-  const NOTE_CATS = [['all', 'All'], ['loot', 'Loot'], ['fight', 'Fights'], ['prog', 'Progress'], ['players', 'Players'], ['other', 'Other']];
+  const NOTE_CATS = [['all', 'All'], ['loot', 'Loot'], ['craft', 'Crafting'], ['fight', 'Fights'], ['prog', 'Progress'], ['players', 'Players'], ['other', 'Other']];
   function noteCat(x) {
     const ic = x.ic || '', c = x.cls || '', t = (x.title + ' ' + x.sub).toLowerCase();
+    if (x.g || x.l || /craft/.test(c)) return 'craft';
     if (/loot|relic/.test(c) || /^(bag|gear-|relic)/.test(ic) || /sigils? found|loot goblin|sack/.test(t)) return 'loot';
     if (/^(user|users|chat|coin)$/.test(ic) || /whisper|guild|market|trade|sold|bought|listing|duel|ember ring|pvp|recruit|friend|player/.test(t)) return 'players';
     if (/^(sword|crown|skull|shield|cross|oil|lamp|flare)$/.test(ic) || /fell|fallen|ambush|guardian|defeated|special attack|lantern|wipe|retreat|nexus|back to the stair/.test(t)) return 'fight';
     if (/feat/.test(c) || /^(star|map|flame|hammer|book)$/.test(ic) || /level|unlocked|journal|trial|mastery|chapter|campfire|camp job/.test(t)) return 'prog';
     return 'other';
   }
+  const noteDet = x => (x.g || x.l) ? '<div class="notedet">' + (x.g && x.g.length ? '<div class="ng"><em>Gained</em><ul>' + x.g.map(v => '<li>' + esc(v) + '</li>').join('') + '</ul></div>' : '') + (x.l && x.l.length ? '<div class="nl"><em>Lost</em><ul>' + x.l.map(v => '<li>' + esc(v) + '</li>').join('') + '</ul></div>' : '') + '</div>' : '';
   let noteTab = 'all';
   try { noteTab = localStorage.getItem('lh_notetab') || 'all'; } catch (e) {}
   function openBell() {
@@ -1240,7 +1269,7 @@
     const count = k => k === 'all' ? all.length : all.filter(x => x.cat === k).length;
     if (noteTab !== 'all' && !count(noteTab)) noteTab = 'all';
     const tabs = () => '<div class="notetabs" role="tablist">' + NOTE_CATS.filter(([k]) => k === 'all' || count(k)).map(([k, n]) => '<button role="tab" data-ntab="' + k + '" aria-selected="' + (k === noteTab) + '" class="' + (k === noteTab ? 'on' : '') + '">' + n + ' <i>' + count(k) + '</i>' + (all.some(x => x.n && (k === 'all' || x.cat === k)) ? '<em></em>' : '') + '</button>').join('') + '</div>';
-    const rows = () => { const list = all.filter(x => noteTab === 'all' || x.cat === noteTab); return list.length ? '<ul class="notelist">' + list.map(x => '<li class="toast ' + esc(x.cls) + (x.n ? ' new' : '') + '">' + icon(x.ic) + '<div><b>' + esc(x.title) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + '<time>' + agoText(x.t) + '</time></div></li>').join('') + '</ul>' : '<p>Nothing yet. Pop-ups from the corner of the screen are kept here so you can read them again.</p>'; };
+    const rows = () => { const list = all.filter(x => noteTab === 'all' || x.cat === noteTab); return list.length ? '<ul class="notelist">' + list.map(x => '<li class="toast ' + esc(x.cls) + (x.n ? ' new' : '') + '">' + icon(x.ic) + '<div><b>' + esc(x.title) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + noteDet(x) + '<time>' + agoText(x.t) + '</time></div></li>').join('') + '</ul>' : '<p>Nothing yet. Pop-ups from the corner of the screen are kept here so you can read them again.</p>'; };
     modal('<h2>Notifications</h2>' + (all.length ? tabs() : '') + '<div id="nt-rows">' + rows() + '</div>' +
       '<div class="row">' + (all.length ? '<button class="btn ghost" id="nt-clear">Clear all</button>' : '') + '<button class="btn" id="nt-x">Close</button></div>', md => {
       md.querySelector('#nt-x').onclick = closeModal;
@@ -2102,12 +2131,12 @@
         const re = () => { updateGear(true); updateSeats(true); itemModal(uid); };
         const on = md.querySelector('#i-on'); if (on) on.onclick = () => { if (!campGate()) return; if (!L.equip(S, gearWho, uid)) return toast('lock', 'Slot is locked', 'Every slot this fits holds a locked piece, or this piece is locked on someone else. Unlock it first.', 'warn'); sfx.buy(); re(); };
         const off = md.querySelector('#i-off'); if (off) off.onclick = () => { if (!campGate()) return; L.unequip(S, w, L.wornPos(S, uid)); re(); };
-        const up = md.querySelector('#i-up'); if (up) up.onclick = () => { if (!campGate()) return; if (L.upgrade(S, uid)) { sfx.relic(); re(); } };
+        const up = md.querySelector('#i-up'); if (up) up.onclick = () => { if (!campGate()) return; const was = craftItem(it), paid = upPaid(it); if (L.upgrade(S, uid)) { logUp(it, was, paid, ''); sfx.relic(); re(); } };
         const sv = md.querySelector('#i-sell');
         sv.onclick = () => {
           if (it.lk) return locked();
           if (!sv.classList.contains('confirm') && (it.rar === 'epic' || it.rar === 'set' || it.up || w)) { sv.classList.add('confirm'); sv.querySelector('span').textContent = 'Tap again to salvage'; return; }
-          const v = L.salvage(S, uid); sfx.coin(); closeModal(); updateGear(true); updateSeats(true); toast('coin', 'Salvaged', '+' + fmt(v) + ' gold, +' + L.dustValue(it) + ' Dust', '');
+          const was = craftItem(it), dv = L.dustValue(it), v = L.salvage(S, uid); sfx.coin(); closeModal(); updateGear(true); updateSeats(true); logScrap('Salvaged', [was], v, dv, true);
         };
         md.querySelector('#i-close').onclick = closeModal;
       });
@@ -2394,8 +2423,7 @@
     if (d.awmode) { awReset(d.awmode); return paintEnchPanel(true); }
     if (d.awcap) { mmCap = +d.awcap; AW.done = null; return paintEnchPanel(true); }
     if (d.awgo === 'mass') {
-      let ok = 0, bad = 0, mxp = 0;
-      for (const p of shopMass()) { const r = L.mergeItems(S, p.a.uid, p.b.uid, null, events); if (!r) continue; mxp += r.xp || 0; if (r.ok) ok++; else bad++; }
+      const { ok, bad, mxp } = runMass(shopMass(), ' at the Armorer');
       if (!ok && !bad) return;
       save(); updateGear(true); updateSeats(true); ok ? (sfx.relic(), shopBurst()) : sfx.coin();
       AW.done = ok + ' merged' + (bad ? ', ' + bad + ' failed (' + bad * 2 + ' items lost)' : '') + '. +' + fmt(mxp) + ' hero XP.'; return paintEnchPanel(true);
@@ -2405,19 +2433,23 @@
     if (d.awb) { Object.assign(AW, { b: d.awb, done: null }); return paintEnchPanel(true); }
     if (d.ewundo && shopKind() === 'arm') { if (d.ewundo === 'a') Object.assign(AW, { a: null, b: null }); else AW.b = null; AW.done = null; return paintEnchPanel(true); }
     if (d.awgo === 'up') {
-      const it = L.itemOf(S, AW.a); if (!it || !L.upgrade(S, it.uid)) return;
+      const it = L.itemOf(S, AW.a); if (!it) return; const was = craftItem(it), paid = upPaid(it); if (!L.upgrade(S, it.uid)) return;
+      logUp(it, was, paid, ' at the Armorer');
       save(); updateGear(true); updateSeats(true); sfx.relic(); shopBurst();
       AW.done = esc(L.gearName(it)) + ' is now +' + it.up + '.'; return paintEnchPanel(true);
     }
     if (d.awgo === 'merge') {
+      const ia = L.itemOf(S, AW.a), ib = L.itemOf(S, AW.b), la = ia && craftItem(ia), lb = ib && craftItem(ib);
       const res = L.mergeItems(S, AW.a, AW.b, null, events); if (!res) return;
+      logMerge(res, la, lb, ' at the Armorer');
       save(); updateGear(true); updateSeats(true);
       if (res.ok) { sfx.relic(); shopBurst(); awReset('merge'); AW.done = esc(L.gearName(res.item)) + ' is now +' + res.item.up + '. +' + fmt(res.xp) + ' hero XP.'; }
       else { sfx.coin(); awReset('merge'); AW.done = 'The merge failed and both ' + esc(L.gearName(res.a)) + ' pieces were lost. +' + fmt(res.xp) + ' hero XP for trying.'; }
       return paintEnchPanel(true);
     }
     if (d.awgo === 'smelt') {
-      const l = shopScrap(); if (!l.length) return; let g = 0; for (const it of l) g += L.smelt(S, it.uid);
+      const l = shopScrap(); if (!l.length) return; let g = 0; const was = l.map(craftItem); for (const it of l) g += L.smelt(S, it.uid);
+      logScrap('Melted at the Armorer', was, g, 0);
       sfx.coin(); updateGear(true); save(); shopBurst();
       AW.done = 'Melted ' + l.length + (l.length === 1 ? ' piece' : ' pieces') + ' for ' + fmt(g) + ' gold.'; return paintEnchPanel(true);
     }
@@ -2436,14 +2468,19 @@
     }
     if (d.ewrar) { scrapOpts[d.ewrar] = !scrapOpts[d.ewrar]; return paintEnchPanel(true); }
     if (d.ewgo === 'scrap') {
-      const l = shopScrap(); if (!l.length) return; let g = 0, dd = 0; for (const it of l) { dd += L.dustValue(it); g += L.salvage(S, it.uid); }
+      const l = shopScrap(); if (!l.length) return; let g = 0, dd = 0; const was = l.map(craftItem); for (const it of l) { dd += L.dustValue(it); g += L.salvage(S, it.uid); }
+      logScrap('Scrapped for Dust at the Enchanter', was, g, dd);
       sfx.coin(); updateGear(true); save(); shopBurst();
       EW.done = 'Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces') + ' for ' + fmt(dd) + ' Dust and ' + fmt(g) + ' gold.';
       return paintEnchPanel(true);
     }
     if (d.ewgo === 'move') {
       if (!L.visiting(S) && !campGate()) return;
+      const si = L.itemOf(S, EW.src), di = L.itemOf(S, EW.dst), ls = si && craftItem(si), ld = di && craftItem(di);
       const r = L.disenchant(S, EW.src, EW.idx, EW.dst, EW.slot, events); if (!r) return;
+      craftLog('flare', 'Enchanted' + (r.field ? ' in the field' : ' at the Enchanter'), enchName(r.moved) + ' moved onto ' + L.gearName(r.item) + (r.boost ? ', one tier stronger (the Enchanter’s touch)' : r.field && r.moved.t < r.from.t ? ', one tier lower (done in the field)' : '') + '.',
+        [enchName(r.moved) + ' (' + L.enchText(r.moved) + ')', 'Now: ' + craftItem(r.item), '+' + fmt(r.xp) + ' hero XP'],
+        [ls + ' (used up)', craftCost(r.cost, 'Dust')].concat(r.replaced ? [enchName(r.replaced) + ' on ' + L.gearName(r.item) + ' (overwritten)'] : []).concat(['Was: ' + ld]));
       save(); updateGear(true); updateSeats(true); sfx.relic(); if (!r.field) shopBurst();
       const msg = (r.boost ? 'The Enchanter’s touch! ' : '') + enchName(r.moved) + ' is now on ' + esc(L.gearName(r.item)) + (r.boost ? ' (one tier stronger)' : r.field && r.moved.t < r.from.t ? ' (one tier lower, done in the field)' : '') + '. ' + esc(L.gearName(r.lost)) + ' was used up. -' + fmt(r.cost) + ' Dust, +' + fmt(r.xp) + ' hero XP.';
       ewReset(EW.mode); EW.done = msg; paintEnchPanel(true); paintEnchOv();
@@ -2498,10 +2535,11 @@
           const ga = md.querySelector('#mg-arm'); if (ga) ga.onclick = () => { awReset('merge'); AW.a = uid; AW.b = pick; visitEnch('arm'); paintEnchPanel(true); };
           md.querySelector('#mg-go').onclick = () => {
             if (!campGate()) return;
+            const la = craftItem(it), lb = craftItem(L.itemOf(S, pick));
             const res = L.mergeItems(S, uid, pick, null, events); if (!res) return;
-            save(); updateGear(true); updateSeats(true);
-            if (res.ok) { sfx.relic(); toast('relic', 'Merge succeeded', L.gearName(res.item) + ' is now +' + res.item.up + '. +' + fmt(res.xp) + ' hero XP.', ''); itemModal(res.item.uid); }
-            else { sfx.coin(); closeModal(); toast('skull', 'The merge failed', 'Both ' + L.gearName(res.a) + ' pieces were destroyed. +' + fmt(res.xp) + ' hero XP for trying.', 'warn'); }
+            save(); updateGear(true); updateSeats(true); logMerge(res, la, lb, ' in the field', true);
+            if (res.ok) { sfx.relic(); itemModal(res.item.uid); }
+            else { sfx.coin(); closeModal(); }
           };
         });
     };
@@ -2661,9 +2699,9 @@
           md.querySelectorAll('[data-opt]').forEach(c => c.onchange = () => { scrapOpts[c.dataset.opt] = c.checked; draw(); });
           md.querySelector('#s-x').onclick = closeModal;
           md.querySelector('#s-go').onclick = () => {
-            const l = scrapList(); let g = 0, d = 0; for (const it of l) { d += L.dustValue(it); g += L.salvage(S, it.uid); }
+            const l = scrapList(), was = l.map(craftItem); let g = 0, d = 0; for (const it of l) { d += L.dustValue(it); g += L.salvage(S, it.uid); }
             closeModal(); sfx.coin(); updateGear(true); save();
-            toast('coin', 'Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces'), '+' + fmt(g) + ' gold, +' + fmt(d) + ' Dust', 'feat');
+            logScrap('Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces'), was, g, d, 'feat');
           };
         });
     };
@@ -2686,10 +2724,8 @@
           md.querySelector('#mm-x').onclick = closeModal;
           const ma = md.querySelector('#mm-arm'); if (ma) ma.onclick = () => { awReset('mass'); visitEnch('arm'); paintEnchPanel(true); };
           md.querySelector('#mm-go').onclick = () => {
-            let ok = 0, bad = 0, mxp = 0;
-            for (const p of L.massMergePlan(S, mmCap)) { const r = L.mergeItems(S, p.a.uid, p.b.uid, null, events); if (!r) continue; mxp += r.xp || 0; if (r.ok) ok++; else bad++; }
+            const { ok } = runMass(L.massMergePlan(S, mmCap), ' in the field', true);
             closeModal(); save(); updateGear(true); updateSeats(true); ok ? sfx.relic() : sfx.coin();
-            toast('relic', 'Mass merge done', ok + ' merged' + (bad ? ', ' + bad + ' failed (' + bad * 2 + ' items lost)' : '') + '. +' + fmt(mxp) + ' hero XP.', bad ? 'warn' : 'feat');
           };
         });
     };
@@ -2729,9 +2765,9 @@
         '<p class="asnote">Set pieces, job set pieces, region sets, locked and worn gear are always kept, and so is the best spare piece for each party member’s slot.</p>' +
         '<div class="row"><button class="btn" id="as-x">Done</button></div></div>', md => {
           const now = md.querySelector('#as-now'); if (now) now.onclick = () => {
-            const l = L.autoScrapPack(S); let g = 0, d = 0; for (const it of l) { d += L.dustValue(it); g += L.salvage(S, it.uid); }
+            const l = L.autoScrapPack(S), was = l.map(craftItem); let g = 0, d = 0; for (const it of l) { d += L.dustValue(it); g += L.salvage(S, it.uid); }
             sfx.coin(); updateGear(true); save(); draw();
-            toast('coin', 'Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces'), '+' + fmt(g) + ' gold, +' + fmt(d) + ' Dust', 'feat');
+            logScrap('Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces'), was, g, d, 'feat');
           };
           md.querySelector('#as-on').onchange = e => { a.on = e.target.checked; save(); paintPackCap(); draw(); };
           md.querySelector('#as-up').onchange = e => { a.up = e.target.checked; save(); };
@@ -5754,6 +5790,8 @@
       'New Legendary loot: when a world boss ends, everyone who fought rolls their own chance at a Legendary (2% to 20%, higher with more damage, full odds once 3 phases break). Several delvers can win.',
       'You also get boss shards and Rift tokens for your damage. Take 40 Rift tokens to Warden Sable at the new Rift Gate, a portal just outside the Hold (Map > The Hold, or the shop buttons), and trade them for a Legendary piece of any boss set.',
       'This week\'s preview boss keeps its scores until it ends on Friday, and pays out under the new loot rules.',
+      'The bell has a new Crafting tab. Every merge, upgrade, mass merge, scrap, smelt and enchant at the Armorer or the Enchanter (or in the field) writes an entry showing what happened, what you gained and what you lost.',
+      'Gained lists the finished item with its stats and enchants, plus gold, Dust and hero XP. Lost lists every piece that went in, as it was before, and the gold, Dust or shards spent.',
     ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',

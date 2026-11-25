@@ -1970,6 +1970,12 @@ body.resting .taptip{display:none}
 .notelist .toast{animation:none;box-shadow:none;font-size:14px;cursor:default}
 .notelist .toast.new{border-color:var(--gold)}
 .notelist time{display:block;font-size:11px;color:var(--muted);opacity:.8;margin-top:2px}
+.notedet{display:grid;gap:4px;margin-top:5px;font-size:12.5px}
+.notedet em{font-style:normal;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.notedet ul{margin:1px 0 0;padding-left:16px}
+.notedet li{line-height:1.35;overflow-wrap:anywhere}
+.notedet .ng em,.notedet .ng li::marker{color:var(--good,#6fcf7f)}
+.notedet .nl em,.notedet .nl li::marker{color:var(--bad,#e26a6a)}
 
 /* another tab is playing: this one is stopped */
 #tablock{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:16px;background:rgba(5,8,14,.86);backdrop-filter:blur(3px)}
