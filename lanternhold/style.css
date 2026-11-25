@@ -1,4 +1,4 @@
-/* lh-build 202611250355 */
+/* lh-build 202611250432 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -940,6 +940,9 @@ body.resting .arena{cursor:default}
 .adm-row.banned{opacity:.65}
 .adm-n{flex:1;min-width:0}
 .adm-n small{display:block;color:var(--muted);font-size:12px}
+.adm-rc{flex:none;font-size:13px;color:var(--muted)}
+.adm-rc b{color:var(--text)}
+.adm-refs{max-height:260px;margin-bottom:12px}
 .adm-conf.wide{width:min(260px,100%);letter-spacing:.04em}
 .adm-chk{display:flex;gap:10px;align-items:flex-start;text-align:left;margin:10px 0;padding:10px 12px;border:1px solid #5a2a2a;border-radius:10px;background:#1a0f10;font-size:13px;line-height:1.4;cursor:pointer}
 .adm-chk input{margin-top:2px;flex:none;accent-color:#d9534f}
@@ -1967,6 +1970,12 @@ body.resting .taptip{display:none}
 .notelist .toast{animation:none;box-shadow:none;font-size:14px;cursor:default}
 .notelist .toast.new{border-color:var(--gold)}
 .notelist time{display:block;font-size:11px;color:var(--muted);opacity:.8;margin-top:2px}
+.notedet{display:grid;gap:4px;margin-top:5px;font-size:12.5px}
+.notedet em{font-style:normal;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.notedet ul{margin:1px 0 0;padding-left:16px}
+.notedet li{line-height:1.35;overflow-wrap:anywhere}
+.notedet .ng em,.notedet .ng li::marker{color:var(--good,#6fcf7f)}
+.notedet .nl em,.notedet .nl li::marker{color:var(--bad,#e26a6a)}
 
 /* another tab is playing: this one is stopped */
 #tablock{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:16px;background:rgba(5,8,14,.86);backdrop-filter:blur(3px)}
@@ -2196,10 +2205,10 @@ body.atench #ghostlamp,body.atench #merchant,body.atench #spwarn,body.atench .fl
 .holdsheet{max-width:760px}
 .holdview{position:relative;border:1px solid var(--line2);border-radius:12px;overflow:hidden;margin:10px 0}
 .holdview canvas{display:block;width:100%;aspect-ratio:2.2/1}
-.holdtents{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px;background:#0b0f18;border-top:1px solid var(--line)}
+.holdtents{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px;background:#0b0f18;border-top:1px solid var(--line)}
 .holdtents button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:10px;border:1px solid var(--line2);background:#121a2a;color:var(--text);font:600 13px Inter,system-ui,sans-serif;cursor:pointer;text-align:center}
 .holdtents button:hover{border-color:var(--gold)}.holdtents small{color:var(--muted);font-weight:500;font-size:11px}
-@media (max-width:520px){.holdtents{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.holdtents{grid-template-columns:1fr 1fr}.holdtents button:last-child{grid-column:1/-1}}
 /* the Armorer's tabs (v102) */
 .ewtabs.forge button.on{background:linear-gradient(180deg,#e0702a,#b04a14);color:#fff}
 .ewcost.gold{color:var(--gold)}
@@ -2416,3 +2425,12 @@ body.atench .achips{display:none}
  .rmends{grid-template-columns:1fr}.rmstop{flex:0 0 96px}
  .rmitem ul{padding-left:30px}.rmodds,.rmnote{margin-left:16px}
 }
+/* v120 Rift Gate counter: one row per Legendary set, the trade button on the right */
+.rglist{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.rgrow{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:color-mix(in srgb,#7c3aed 8%,transparent)}
+.rgrow>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.rgrow small{color:var(--muted,#9aa3b2);font-size:12px;line-height:1.35}
+.rgrow .btn{flex:none;white-space:nowrap}
+.rgrow .btn{display:inline-flex;align-items:center;gap:6px}.rgrow .btn svg{width:15px;height:15px;flex:none}
+/* v120: region trial shown on the goal line while the party waits at a guardian */
+.goal.trial b{color:#ffcf6a}

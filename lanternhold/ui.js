@@ -1,4 +1,4 @@
-/* lh-build 202611250355 */
+/* lh-build 202611250432 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -472,7 +472,7 @@
     const k = Math.min(W / 198, H / 74), vw = W / k, vh = H / k;
     return (SG = { k, vw, vh, ex: Math.round(vw / 2 + 48), fy: Math.round(64 + (vh - 74) * 0.8) });
   }
-  const shopKind = () => S.shopK === 'arm' || S.shopK === 'store' ? S.shopK : 'ench';
+  const shopKind = () => S.shopK === 'arm' || S.shopK === 'store' || S.shopK === 'portal' ? S.shopK : 'ench';
   function shopGlow(g, cx, cy, r, rgb, a) { const q = g.createRadialGradient(cx, cy, 0, cx, cy, r); q.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); q.addColorStop(1, 'rgba(' + rgb + ',0)'); g.globalCompositeOperation = 'lighter'; g.fillStyle = q; g.fillRect(cx - r, cy - r, r * 2, r * 2); g.globalCompositeOperation = 'source-over'; }
   function shopShelf(g, sx, y, w, seed) {
     let s = seed; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
@@ -485,6 +485,7 @@
   function buildShop(kind) {
     const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height;
     const g = c.getContext('2d'); g.scale(R * SG.k, R * SG.k);
+    if (kind === 'portal') return buildPortal(c, g);
     const W = SG.vw, H = SG.vh, fy = SG.fy, ench = kind === 'ench', store = kind === 'store', warm = !!(ench || store), ex = SG.ex;
     let lg = g.createLinearGradient(0, 0, 0, fy);
     if (ench) { lg.addColorStop(0, '#1a1128'); lg.addColorStop(1, '#352350'); } else if (store) { lg.addColorStop(0, '#1d140c'); lg.addColorStop(1, '#43301d'); } else { lg.addColorStop(0, '#17130f'); lg.addColorStop(1, '#3a2a20'); }
@@ -523,7 +524,67 @@
     g.fillStyle = ench ? '#e9d5ff' : store ? '#c8f7d4' : '#ffd9a8'; g.textAlign = 'center'; g.fillText(text, ex, sy + 8); g.textAlign = 'left';
     return c;
   }
+  // The Rift Gate (v120, John: "a portal style location, not in a house: an outside portal with a guy next to it and a
+  // chest"). Night sky over the Hold's walls, flagstones and grass, a signpost; the arch and the chest are drawn live.
+  function buildPortal(c, g) {
+    const W = SG.vw, H = SG.vh, fy = SG.fy, ex = SG.ex;
+    let lg = g.createLinearGradient(0, 0, 0, fy); lg.addColorStop(0, '#070a1e'); lg.addColorStop(0.6, '#1a1238'); lg.addColorStop(1, '#2e1d4a'); g.fillStyle = lg; g.fillRect(0, 0, W, fy);
+    let sd = 5; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 90; i++) { g.fillStyle = 'rgba(255,255,255,' + (0.25 + r() * 0.6) + ')'; const sz = r() < 0.1 ? 1 : 0.5; g.fillRect(r() * W, r() * (fy - 30), sz, sz); }
+    g.fillStyle = 'rgba(233,213,255,.85)'; g.beginPath(); g.arc(W * 0.12, 14, 6, 0, Math.PI * 2); g.fill(); g.fillStyle = '#0b0f26'; g.beginPath(); g.arc(W * 0.12 + 2.5, 12.5, 5.2, 0, Math.PI * 2); g.fill();
+    // far hills, then the Hold's wall and towers behind the party
+    g.fillStyle = '#161230'; g.beginPath(); g.moveTo(0, fy - 22); for (let x = 0; x <= W; x += 12) g.lineTo(x, fy - 26 - Math.sin(x * 0.03) * 6 - Math.sin(x * 0.011) * 8); g.lineTo(W, fy); g.lineTo(0, fy); g.fill();
+    g.fillStyle = '#1e1a30'; const wx = ex - 70; g.fillRect(0, fy - 34, wx, 34); for (let x = 0; x < wx; x += 10) g.fillRect(x, fy - 39, 6, 5);
+    [[wx - 30, 14], [Math.max(10, wx - 120), 12]].forEach(([tx, tw]) => { g.fillRect(tx, fy - 56, tw, 56); for (let i = 0; i < tw; i += 6) g.fillRect(tx + i, fy - 60, 4, 4); g.fillStyle = 'rgba(255,200,110,.7)'; g.fillRect(tx + tw / 2 - 1.5, fy - 48, 3, 4); g.fillStyle = '#1e1a30'; });
+    // the ground: grass at the edges, a flagstone path to the gate
+    lg = g.createLinearGradient(0, fy, 0, H); lg.addColorStop(0, '#24331f'); lg.addColorStop(1, '#0e140c'); g.fillStyle = lg; g.fillRect(0, fy, W, H - fy);
+    g.fillStyle = '#3a3446'; for (let y = fy + 1, k = 0; y < H; y += 4 + k * 1.6, k++) for (let x = (k % 2) * 6 - 6; x < W; x += 13 + k) { g.fillRect(x, y, 11 + k, 3 + k * 1.2); }
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, fy, W, 1.2);
+    for (let i = 0; i < 70; i++) { const gx = r() * W, gy = fy + r() * 4; g.strokeStyle = r() < 0.5 ? '#3f6a2e' : '#2f5224'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(gx, gy + 2); g.lineTo(gx + (r() - 0.5) * 2, gy - 2 - r() * 3); g.stroke(); }
+    // a signpost by the path
+    const sx = ex - 58, sy = fy - 26; g.fillStyle = '#4a2f1c'; g.fillRect(sx - 1, sy, 2.4, 26);
+    g.font = '700 6px Inter, system-ui, sans-serif'; const text = 'THE RIFT GATE', tw = g.measureText(text).width + 8;
+    g.fillStyle = '#5a3a22'; g.beginPath(); g.moveTo(sx - tw / 2, sy - 9); g.lineTo(sx + tw / 2, sy - 9); g.lineTo(sx + tw / 2 + 4, sy - 4.5); g.lineTo(sx + tw / 2, sy); g.lineTo(sx - tw / 2, sy); g.fill();
+    g.strokeStyle = '#a8742e'; g.lineWidth = 0.6; g.stroke(); g.fillStyle = '#e9d5ff'; g.textAlign = 'center'; g.fillText(text, sx, sy - 2.6); g.textAlign = 'left';
+    return c;
+  }
+  // The gate itself (behind the keeper), swirling, and the token chest where a counter would be.
+  function drawPortalRoom(W, fy, ex) {
+    const px = ex + 36, py = fy - 34, rw = 22, rh = 32;
+    shopGlow(ctx, px, py, 70, '168,85,247', 0.22 + 0.05 * Math.sin(tAnim * 2));
+    ctx.save(); ctx.translate(px, py);
+    ctx.beginPath(); ctx.ellipse(0, 0, rw - 4, rh - 4, 0, 0, Math.PI * 2); ctx.clip();
+    const vg = ctx.createRadialGradient(0, 0, 1, 0, 0, rh); vg.addColorStop(0, '#f5e8ff'); vg.addColorStop(0.25, '#c084fc'); vg.addColorStop(0.7, '#5b21b6'); vg.addColorStop(1, '#1e0b3a'); ctx.fillStyle = vg; ctx.fillRect(-rw, -rh, rw * 2, rh * 2);
+    ctx.rotate(tAnim * 0.8); ctx.strokeStyle = 'rgba(245,232,255,.55)'; ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) { ctx.beginPath(); for (let t = 0; t < 1; t += 0.05) { const a = i / 5 * Math.PI * 2 + t * 5, d = 2 + t * rh; ctx.lineTo(Math.cos(a) * d * 0.7, Math.sin(a) * d); } ctx.stroke(); }
+    ctx.restore();
+    // standing stones of the arch
+    ctx.fillStyle = '#4a4458'; ctx.strokeStyle = '#1a1626'; ctx.lineWidth = 1;
+    for (let i = 0; i < 11; i++) { const a = Math.PI + i / 10 * Math.PI, sx = px + Math.cos(a) * (rw + 1), sy = py + Math.sin(a) * (rh + 1) * (i === 0 || i === 10 ? 0 : 1); ctx.save(); ctx.translate(sx, sy); ctx.rotate(a + Math.PI / 2); ctx.fillRect(-3.5, -3, 7, 6); ctx.strokeRect(-3.5, -3, 7, 6); ctx.restore(); }
+    ctx.fillRect(px - rw - 5, py, 8, fy - py); ctx.strokeRect(px - rw - 5, py, 8, fy - py); ctx.fillRect(px + rw - 3, py, 8, fy - py); ctx.strokeRect(px + rw - 3, py, 8, fy - py);
+    ctx.fillStyle = 'rgba(192,132,252,.9)'; for (let i = 0; i < 3; i++) { const a = Math.PI * (1.2 + i * 0.3), rx = px + Math.cos(a) * (rw + 1), ry = py + Math.sin(a) * (rh + 1); ctx.fillRect(rx - 1, ry - 1, 2, 2); }
+    if (Math.random() < 0.2) particles.push({ x: px + (Math.random() - 0.5) * rw, y: py + (Math.random() - 0.5) * rh, vx: (Math.random() - 0.5) * 8, vy: -6 - Math.random() * 8, life: 1 + Math.random(), age: 0, c: Math.random() < 0.5 ? '#c084fc' : '#f5e8ff', s: 1 });
+    // two torches on the path
+    for (const tx of [ex - 30, ex + 66]) { ctx.fillStyle = '#3a2618'; ctx.fillRect(tx - 0.8, fy - 22, 1.6, 22); flame(ctx, tx, fy - 22, 5 + Math.sin(tAnim * 7 + tx) * 0.6, Math.sin(tAnim * 4 + tx)); shopGlow(ctx, tx, fy - 24, 22, '255,190,110', 0.25); }
+  }
+  // The token chest in front of the keeper: open, with Rift tokens glinting inside.
+  function drawPortalChest(ex, fy) {
+    const cx = ex - 2, cw = 30, ch = 14, top = fy - ch;
+    shopGlow(ctx, cx, top, 24, '245,194,66', 0.22 + 0.06 * Math.sin(tAnim * 3));
+    // lid tipped back
+    ctx.fillStyle = '#5a3418'; ctx.beginPath(); ctx.moveTo(cx - cw / 2, top); ctx.lineTo(cx + cw / 2, top); ctx.lineTo(cx + cw / 2 - 2, top - 10); ctx.quadraticCurveTo(cx, top - 15, cx - cw / 2 + 2, top - 10); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#1a0e06'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.fillStyle = '#c9a040'; ctx.fillRect(cx - 1.5, top - 13, 3, 13);
+    // the tokens: violet coins heaped up
+    for (let i = 0; i < 9; i++) { const tx = cx - 11 + (i % 5) * 5.5 + (i > 4 ? 2.5 : 0), ty = top - 1 - (i > 4 ? 2.2 : 0); ctx.fillStyle = i % 3 ? '#a855f7' : '#e9d5ff'; ctx.beginPath(); ctx.ellipse(tx, ty, 2.6, 1.2, 0, 0, Math.PI * 2); ctx.fill(); }
+    // the box
+    const lg = ctx.createLinearGradient(0, top, 0, fy); lg.addColorStop(0, '#7a4a22'); lg.addColorStop(1, '#3a2010'); ctx.fillStyle = lg; ctx.fillRect(cx - cw / 2, top, cw, ch);
+    ctx.strokeStyle = '#1a0e06'; ctx.strokeRect(cx - cw / 2, top, cw, ch);
+    ctx.fillStyle = '#c9a040'; ctx.fillRect(cx - cw / 2, top + 3, cw, 1.6); ctx.fillRect(cx - cw / 2 + 3, top, 1.6, ch); ctx.fillRect(cx + cw / 2 - 4.6, top, 1.6, ch); ctx.fillRect(cx - 2, top + 5, 4, 4);
+    if (Math.random() < 0.06) particles.push({ x: cx + (Math.random() - 0.5) * 20, y: top - 2, vx: 0, vy: -8, life: 0.7, age: 0, c: '#fff3c0', s: 1 });
+    return top;
+  }
   function drawShopCounter(ex, fy, kind) {
+    if (kind === 'portal') return drawPortalChest(ex, fy);
     const cw = 54, top = fy - 13, ench = kind !== 'arm';
     let lg = ctx.createLinearGradient(0, top, 0, fy); lg.addColorStop(0, ench ? '#6a4024' : '#3a3a42'); lg.addColorStop(1, ench ? '#2e1a0c' : '#1e1e24'); ctx.fillStyle = lg; ctx.fillRect(ex - cw / 2, top + 2, cw, fy - top);
     ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.6; for (let i = 0; i < 3; i++) ctx.strokeRect(ex - cw / 2 + 3 + i * 16, top + 5, 15, fy - top - 7);
@@ -552,16 +613,17 @@
   }
   function drawShopRoom(W, fy, ex, kind) {
     const ench = kind === 'ench';
-    // hanging lanterns and the room light
-    for (const lx of [ex - 120, ex - 72]) {
+    if (kind === 'portal') drawPortalRoom(W, fy, ex);
+    // hanging lanterns and the room light (indoors)
+    if (kind !== 'portal') for (const lx of [ex - 120, ex - 72]) {
       const ly = Math.max(13, fy - 70), s = Math.sin(tAnim * 1.1 + lx) * 0.6;
       ctx.strokeStyle = '#2a1a0e'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(lx, 6); ctx.lineTo(lx + s, ly - 4); ctx.stroke();
       shopGlow(ctx, lx + s, ly, 26, '255,200,110', 0.3);
       ctx.fillStyle = '#3a2618'; ctx.fillRect(lx + s - 3, ly - 4.5, 6, 1.5); ctx.fillRect(lx + s - 3, ly + 3.5, 6, 1.5);
       ctx.fillStyle = 'rgba(255,214,140,.9)'; ctx.fillRect(lx + s - 2.4, ly - 3, 4.8, 6.5); flame(ctx, lx + s, ly + 2.5, 4 + Math.sin(tAnim * 7 + lx) * 0.5, Math.sin(tAnim * 4 + lx));
     }
-    shopGlow(ctx, ex - 77, fy + 6, 108, '255,190,110', 0.16);
-    if (ench) {
+    shopGlow(ctx, ex - 77, fy + 6, 108, kind === 'portal' ? '168,140,255' : '255,190,110', kind === 'portal' ? 0.08 : 0.16);
+    if (kind === 'portal') { /* drawn above */ } else if (ench) {
       // a rune circle turning slowly behind the Enchanter
       ctx.save(); ctx.translate(ex, fy - 44); ctx.globalAlpha = 0.55 + 0.15 * Math.sin(tAnim * 1.5); ctx.strokeStyle = 'rgba(196,181,253,.8)'; ctx.lineWidth = 0.8;
       ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.stroke();
@@ -578,7 +640,7 @@
       if (Math.random() < 0.15) particles.push({ x: hx + (Math.random() - 0.5) * 14, y: fy - 22, vx: (Math.random() - 0.5) * 6, vy: -10 - Math.random() * 12, life: 1 + Math.random(), age: 0, c: Math.random() < 0.5 ? '#ffb347' : '#ff6a1f', s: 1 });
     }
     // the shopkeeper at monster size behind the counter, facing the party
-    const k = sprite(ench ? 'enchanter' : kind === 'store' ? 'quartermaster' : 'armorer', 0, false), kw = k.lw * 3, kh = k.lh * 3, br = Math.sin(tAnim * 1.4) * 0.5;
+    const k = sprite(ench ? 'enchanter' : kind === 'store' ? 'quartermaster' : kind === 'portal' ? 'riftkeeper' : 'armorer', 0, false), kw = k.lw * 3, kh = k.lh * 3, br = Math.sin(tAnim * 1.4) * 0.5;
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, fy - 11); ctx.clip(); ctx.translate(ex, 0); ctx.scale(-1, 1); ctx.drawImage(k, -kw / 2, fy - 4 - kh + br, kw, kh); ctx.restore();
     const top = drawShopCounter(ex, fy, kind);
     // what you picked sits on the counter
@@ -611,7 +673,7 @@
   }
   // A shower of sparks on the counter when something is made.
   function shopBurst() {
-    const ex = SG.ex, y = SG.fy - 18, cols = shopKind() === 'ench' ? ['#f5c242', '#c4b5fd', '#f0abfc', '#ffffff'] : shopKind() === 'store' ? ['#f5c242', '#86efac', '#fff3c0', '#ffffff'] : ['#ffb347', '#ff6a1f', '#fff3c0', '#ffffff'];
+    const ex = SG.ex, y = SG.fy - 18, cols = shopKind() === 'ench' ? ['#f5c242', '#c4b5fd', '#f0abfc', '#ffffff'] : shopKind() === 'store' ? ['#f5c242', '#86efac', '#fff3c0', '#ffffff'] : shopKind() === 'portal' ? ['#f5c242', '#c084fc', '#e9d5ff', '#ffffff'] : ['#ffb347', '#ff6a1f', '#fff3c0', '#ffffff'];
     for (let i = 0; i < 40; i++) { const a = Math.random() * Math.PI * 2, v = 10 + Math.random() * 30; particles.push({ x: ex - 8, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 15, g: 30, life: 0.8 + Math.random() * 0.6, age: 0, c: cols[i % 4], s: 2 }); }
   }
 
@@ -1024,7 +1086,12 @@
       } else if (e.type === 'ward') {
         floatText('Ward', 'skill', FOE_X, 0.3); burst(foeAnim.cx, foeAnim.cy, 18, ['#bfe6ff', '#ffffff', '#7fb8e8'], 35);
       } else if (e.type === 'regionlock') {
-        { const t = L.trialOf(S, e.need - 1), key = e.floor + ':' + t.elites; if (lockToast !== key) { lockToast = key; toast('lock', 'Region trial: ' + trialName(e.need - 1), 'To go past floor ' + (e.floor - 1) + ', defeat ' + L.TRIAL_ELITES + ' alliance elites in this region (' + t.elites + '/' + L.TRIAL_ELITES + ' so far) and beat its guardian. Elites are the bannered warband foes.', 'feat'); } }
+        // Say why every time the party is sent back from a guardian, not just the first time (v120: players beat floor
+        // 50 again and again with no reason on screen, because the first toast was pushed out by feat and loot toasts).
+        // It waits a moment so the loot and feat toasts from the same kill can't push it off.
+        { const t = L.trialOf(S, e.need - 1), left = Math.max(0, L.TRIAL_ELITES - t.elites);
+          floatText('Region trial ' + t.elites + '/' + L.TRIAL_ELITES + ' elites', 'skill', FOE_X, 0.3);
+          if (Date.now() - lockToast > 20000) { lockToast = Date.now(); setTimeout(() => toast('lock', 'Back to floor ' + S.floor + ': region trial not done', 'To go past floor ' + (e.floor - 1) + ', defeat ' + L.TRIAL_ELITES + ' alliance elites in ' + trialName(e.need - 1) + ' (' + t.elites + '/' + L.TRIAL_ELITES + ' so far, ' + left + ' to go)' + (t.guardian ? '' : ' and beat its guardian') + '. Elites are the bannered warband foes and show up on the floors before the guardian. Your party farms the floor below until then.', 'feat'), 1200); } }
       } else if (e.type === 'trial') {
         if (e.elites >= L.TRIAL_ELITES) { sfx.relic(); toast('map', 'Region trial complete', e.guardian ? 'Beat ' + trialName(e.region) + '\u2019s guardian once more and the way down opens.' : 'Now beat ' + trialName(e.region) + '\u2019s guardian to open the way down.', 'feat'); }
         else floatText('Trial ' + e.elites + '/' + L.TRIAL_ELITES, 'skill', FOE_X, 0.22);
@@ -1129,7 +1196,7 @@
   }
 
   // ---------- toasts / modals ----------
-  function toast(ic, title, sub, cls) {
+  function toast(ic, title, sub, cls, det) {
     const t = document.createElement('div');
     t.className = 'toast ' + (cls || '');
     t.innerHTML = icon(ic) + '<div><b></b><small></small></div>';
@@ -1142,14 +1209,16 @@
     const go = () => { timer = setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, left); at = Date.now(); };
     t.onmouseenter = () => { clearTimeout(timer); left = Math.max(1500, left - (Date.now() - at)); };
     t.onmouseleave = go; go();
-    noteLog(ic, title, sub, cls);
+    noteLog(ic, title, sub, cls, det);
   }
   // ---------- notifications: the last 50 pop-ups, kept on this device ----------
   var NOTE_KEY = 'lh_notes', notes = [];
   try { notes = JSON.parse(localStorage.getItem(NOTE_KEY) || '[]'); if (!Array.isArray(notes)) notes = []; } catch (e) {}
-  function noteLog(ic, title, sub, cls) {
+  function noteLog(ic, title, sub, cls, det) {
     if (!notes) notes = [];
-    notes.push({ ic, title: String(title || ''), sub: String(sub || ''), cls: cls || '', t: Date.now(), n: 1 });
+    const x = { ic, title: String(title || ''), sub: String(sub || ''), cls: cls || '', t: Date.now(), n: 1 };
+    if (det) { const cut = l => { const m = new Map(); for (const v of l || []) m.set(v, (m.get(v) || 0) + 1); l = [...m].map(([v, n]) => n > 1 ? n + '× ' + v : v); return l.length > 14 ? l.slice(0, 13).concat(['and ' + (l.length - 13) + ' more']) : l; }; x.g = cut(det.g); x.l = cut(det.l); }
+    notes.push(x);
     if (notes.length > 120) notes = notes.slice(-120);
     try { localStorage.setItem(NOTE_KEY, JSON.stringify(notes)); } catch (e) {}
     paintNoteDot();
@@ -1159,18 +1228,45 @@
     const n = notes.filter(x => x.n).length; d.hidden = !n; d.textContent = n > 9 ? '9+' : n || '';
     $('btn-notes').setAttribute('aria-label', n ? 'Notifications, ' + n + ' new' : 'Notifications');
   }
+  // Crafting log (John, 2026-11-25: "when I do the armorer and enchanter ... I want to see a log of what happened,
+  // what I gained and what I lost"). Every merge, upgrade, scrap, smelt and enchant writes a bell entry with a
+  // gained list (g) and a lost list (l). Item lines are taken before the action, so a lost piece shows as it was.
+  const craftItem = it => { const en = L.enchList(it).map(x => L.ENCH[x.id].name + ' ' + ROMAN9[x.t]).join(', ');
+    return L.gearName(it) + (it.up ? ' +' + it.up : '') + ' (' + L.RARITY.find(r => r.id === it.rar).name + ', floor ' + it.ilvl + '): ' + (itemEffect(it) || 'no stats') + (en ? '; ' + en : ''); };
+  const craftCost = (n, unit) => fmt(n) + ' ' + unit;
+  // Shop actions already say what happened on the counter, so by default they go straight to the bell (no pop-up).
+  function craftLog(ic, title, sub, g, l, pop) { if (pop) toast(ic, title, sub, pop === true ? 'craft' : 'craft ' + pop, { g, l }); else noteLog(ic, title, sub, 'craft', { g, l }); }
+  function logMerge(res, la, lb, where, pop) {
+    if (!res) return;
+    if (res.ok) return craftLog('relic', 'Merge succeeded' + where, L.gearName(res.item) + ' is now +' + res.item.up + '.', [craftItem(res.item), '+' + fmt(res.xp) + ' hero XP'], [la, lb], pop);
+    craftLog('skull', 'Merge failed' + where, 'Both pieces were destroyed.', ['+' + fmt(res.xp) + ' hero XP for trying'], [la, lb], pop && 'warn');
+  }
+  // Runs a mass merge plan and logs it as one entry: each result gained, every piece that went in lost.
+  function runMass(plan, where, pop) {
+    let ok = 0, bad = 0, mxp = 0; const g = [], l = [];
+    for (const p of plan) { const la = craftItem(p.a), lb = craftItem(p.b), r = L.mergeItems(S, p.a.uid, p.b.uid, null, events); if (!r) continue;
+      mxp += r.xp || 0; l.push(la, lb); if (r.ok) { ok++; g.push(craftItem(r.item)); } else bad++; }
+    if (ok || bad) craftLog('relic', 'Mass merge' + where, ok + ' merged' + (bad ? ', ' + bad + ' failed (' + bad * 2 + ' items lost)' : '') + '.', g.concat(['+' + fmt(mxp) + ' hero XP']), l, pop && (bad ? 'warn' : 'feat'));
+    return { ok, bad, mxp };
+  }
+  // What one upgrade costs: gold, or that boss's shards for a Legendary.
+  const upPaid = it => it.wb != null && L.WB_SETS[it.wb] ? craftCost(L.wbUpCost(it), L.WB_SETS[it.wb].word + ' shard' + (L.wbUpCost(it) === 1 ? '' : 's')) : craftCost(L.upgradeCost(it), 'gold');
+  function logUp(it, was, paid, where) { craftLog('hammer', 'Upgraded' + where, L.gearName(it) + ' is now +' + it.up + '.', ['Now: ' + craftItem(it)], [paid, 'Was: ' + was]); }
+  function logScrap(title, items, g, d, pop) { craftLog('coin', title, items.length + (items.length === 1 ? ' piece' : ' pieces') + ' broken down.', ['+' + craftCost(g, 'gold')].concat(d ? ['+' + craftCost(d, 'Dust')] : []), items, pop); }
   const agoText = t => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : s < 86400 ? Math.floor(s / 3600) + ' h ago' : Math.floor(s / 86400) + ' d ago'; };
   // Bell categories (John, 2026-11-24): tabs so players can read just the log they want. Worked out from the
   // pop-up's icon, style and title, so notes saved before this change sort into tabs too.
-  const NOTE_CATS = [['all', 'All'], ['loot', 'Loot'], ['fight', 'Fights'], ['prog', 'Progress'], ['players', 'Players'], ['other', 'Other']];
+  const NOTE_CATS = [['all', 'All'], ['loot', 'Loot'], ['craft', 'Crafting'], ['fight', 'Fights'], ['prog', 'Progress'], ['players', 'Players'], ['other', 'Other']];
   function noteCat(x) {
     const ic = x.ic || '', c = x.cls || '', t = (x.title + ' ' + x.sub).toLowerCase();
+    if (x.g || x.l || /craft/.test(c)) return 'craft';
     if (/loot|relic/.test(c) || /^(bag|gear-|relic)/.test(ic) || /sigils? found|loot goblin|sack/.test(t)) return 'loot';
     if (/^(user|users|chat|coin)$/.test(ic) || /whisper|guild|market|trade|sold|bought|listing|duel|ember ring|pvp|recruit|friend|player/.test(t)) return 'players';
     if (/^(sword|crown|skull|shield|cross|oil|lamp|flare)$/.test(ic) || /fell|fallen|ambush|guardian|defeated|special attack|lantern|wipe|retreat|nexus|back to the stair/.test(t)) return 'fight';
     if (/feat/.test(c) || /^(star|map|flame|hammer|book)$/.test(ic) || /level|unlocked|journal|trial|mastery|chapter|campfire|camp job/.test(t)) return 'prog';
     return 'other';
   }
+  const noteDet = x => (x.g || x.l) ? '<div class="notedet">' + (x.g && x.g.length ? '<div class="ng"><em>Gained</em><ul>' + x.g.map(v => '<li>' + esc(v) + '</li>').join('') + '</ul></div>' : '') + (x.l && x.l.length ? '<div class="nl"><em>Lost</em><ul>' + x.l.map(v => '<li>' + esc(v) + '</li>').join('') + '</ul></div>' : '') + '</div>' : '';
   let noteTab = 'all';
   try { noteTab = localStorage.getItem('lh_notetab') || 'all'; } catch (e) {}
   function openBell() {
@@ -1178,7 +1274,7 @@
     const count = k => k === 'all' ? all.length : all.filter(x => x.cat === k).length;
     if (noteTab !== 'all' && !count(noteTab)) noteTab = 'all';
     const tabs = () => '<div class="notetabs" role="tablist">' + NOTE_CATS.filter(([k]) => k === 'all' || count(k)).map(([k, n]) => '<button role="tab" data-ntab="' + k + '" aria-selected="' + (k === noteTab) + '" class="' + (k === noteTab ? 'on' : '') + '">' + n + ' <i>' + count(k) + '</i>' + (all.some(x => x.n && (k === 'all' || x.cat === k)) ? '<em></em>' : '') + '</button>').join('') + '</div>';
-    const rows = () => { const list = all.filter(x => noteTab === 'all' || x.cat === noteTab); return list.length ? '<ul class="notelist">' + list.map(x => '<li class="toast ' + esc(x.cls) + (x.n ? ' new' : '') + '">' + icon(x.ic) + '<div><b>' + esc(x.title) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + '<time>' + agoText(x.t) + '</time></div></li>').join('') + '</ul>' : '<p>Nothing yet. Pop-ups from the corner of the screen are kept here so you can read them again.</p>'; };
+    const rows = () => { const list = all.filter(x => noteTab === 'all' || x.cat === noteTab); return list.length ? '<ul class="notelist">' + list.map(x => '<li class="toast ' + esc(x.cls) + (x.n ? ' new' : '') + '">' + icon(x.ic) + '<div><b>' + esc(x.title) + '</b>' + (x.sub ? '<small>' + esc(x.sub) + '</small>' : '') + noteDet(x) + '<time>' + agoText(x.t) + '</time></div></li>').join('') + '</ul>' : '<p>Nothing yet. Pop-ups from the corner of the screen are kept here so you can read them again.</p>'; };
     modal('<h2>Notifications</h2>' + (all.length ? tabs() : '') + '<div id="nt-rows">' + rows() + '</div>' +
       '<div class="row">' + (all.length ? '<button class="btn ghost" id="nt-clear">Clear all</button>' : '') + '<button class="btn" id="nt-x">Close</button></div>', md => {
       md.querySelector('#nt-x').onclick = closeModal;
@@ -1596,7 +1692,7 @@
   function rarTag(id) {
     const r = L.npcRarOf(S, id); if (!r) return '';
     const R = L.npcRar(r), h = (S.hires || {})[id], w = h ? L.wagePerHour(S, id) : 0;
-    const tip = R.name + ' hire. ' + (h && h.kind === 'short' ? 'Short contract: ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) + ' left, already paid.' : 'Wage ' + fmt(w) + ' gold an hour, half that while you are away.');
+    const tip = R.name + ' hire. ' + (h && h.kind === 'short' ? 'Short contract: ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) + ' left, already paid.' : 'Wage ' + fmt(w) + ' gold an hour, half that while you are away (' + L.npcWageParts(S, id).map(p => p[0] + ' ' + fmt(p[1])).join(', ') + ').');
     return '<span class="rartag" style="--rc:' + R.color + '" data-tip="' + esc(tip) + '" tabindex="0">' + R.name + (h && h.kind === 'short' ? ' · ' + fmtTime(Math.max(0, (h.until - Date.now()) / 1000)) : '') + '</span>';
   }
   function npcCard(o, bench) {
@@ -1604,14 +1700,14 @@
     const why = bench ? null : L.npcReq(S, o), full = L.companions(S).length >= L.rosterCap(S);
     const nShort = Object.keys(S.hires || {}).filter(id => L.shortHire(S, id)).length;
     const c = L.npcPrice(S, o, 'sign', bench), cs = bench ? c : L.npcPrice(S, o, 'short', false);
-    const wage = R.wage * L.npcIncomeMin(S) * 60;
+    const wage = L.npcOfferWage(S, o);
     const price = x => coin + fmt(x.gold) + (x.dust ? ' + ' + fmt(x.dust) + ' Dust' : '');
     const can = x => S.gold >= x.gold && (S.dust || 0) >= (x.dust || 0);
     const side = L.SIDES[m.side];
     let acts = '';
     if (why) acts = '<span class="npclock">' + icon('lock') + esc(why) + '</span>';
     else if (bench) acts = '<button class="btn small" data-hire="b:' + o.id + '|' + (o.kind || 'sign') + '|gold"' + (can(c) && (o.kind === 'short' || !full) ? '' : ' disabled') + (c.free ? ' data-tip="They left during a wage bug of ours, so they come back free.">Hire back · free' : '>Hire back · ' + price(c)) + '</button>';
-    else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour.">Sign on · ' + price(c) + '</button>' +
+    else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour: a ' + R.name + ' base fee of ' + fmt(L.NPC_FEE[o.rar]) + ', more for each power level and their gear.">Sign on · ' + price(c) + '</button>' +
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
     return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
@@ -2040,12 +2136,12 @@
         const re = () => { updateGear(true); updateSeats(true); itemModal(uid); };
         const on = md.querySelector('#i-on'); if (on) on.onclick = () => { if (!campGate()) return; if (!L.equip(S, gearWho, uid)) return toast('lock', 'Slot is locked', 'Every slot this fits holds a locked piece, or this piece is locked on someone else. Unlock it first.', 'warn'); sfx.buy(); re(); };
         const off = md.querySelector('#i-off'); if (off) off.onclick = () => { if (!campGate()) return; L.unequip(S, w, L.wornPos(S, uid)); re(); };
-        const up = md.querySelector('#i-up'); if (up) up.onclick = () => { if (!campGate()) return; if (L.upgrade(S, uid)) { sfx.relic(); re(); } };
+        const up = md.querySelector('#i-up'); if (up) up.onclick = () => { if (!campGate()) return; const was = craftItem(it), paid = upPaid(it); if (L.upgrade(S, uid)) { logUp(it, was, paid, ''); sfx.relic(); re(); } };
         const sv = md.querySelector('#i-sell');
         sv.onclick = () => {
           if (it.lk) return locked();
           if (!sv.classList.contains('confirm') && (it.rar === 'epic' || it.rar === 'set' || it.up || w)) { sv.classList.add('confirm'); sv.querySelector('span').textContent = 'Tap again to salvage'; return; }
-          const v = L.salvage(S, uid); sfx.coin(); closeModal(); updateGear(true); updateSeats(true); toast('coin', 'Salvaged', '+' + fmt(v) + ' gold, +' + L.dustValue(it) + ' Dust', '');
+          const was = craftItem(it), dv = L.dustValue(it), v = L.salvage(S, uid); sfx.coin(); closeModal(); updateGear(true); updateSeats(true); logScrap('Salvaged', [was], v, dv, true);
         };
         md.querySelector('#i-close').onclick = closeModal;
       });
@@ -2087,7 +2183,7 @@
     modal('<div class="enchpanel picker fieldench" id="fieldench"></div>', md => { md.querySelector('#fieldench').addEventListener('click', shopClick); paintEnchPanel(true); });
   }
   function visitEnch(kind) {
-    kind = kind === 'arm' || kind === 'store' ? kind : 'ench';
+    kind = kind === 'arm' || kind === 'store' || kind === 'portal' ? kind : 'ench';
     if (L.visiting(S)) S.shopK = kind; else if (!L.visitEnchanter(S, Date.now(), kind)) return false;
     closeModal(); sfx.relic(); particles.length = 0; paintEnchOv(); updatePanel(true);
     const a = document.querySelector('.stagehead') || $('arena'); if (a && a.scrollIntoView && innerWidth < 900) a.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -2122,6 +2218,25 @@
       (wardOn() ? '<button class="btn ghost small stward" data-swward="1">' + icon('star') + 'Open the Wardrobe</button>' : '') +
       '<p class="note small">Gold prices follow how much gold you earn. Speed-ups can also be bought with ' + TOKEN + '.</p>';
   }
+  // The Rift Gate's counter (v120): Warden Sable trades Rift tokens for a world boss Legendary of any set.
+  const PW = { done: null };
+  function portalPanelHtml() {
+    const tok = S.wbTok || 0, cost = L.WB_TOKEN_COST, sh = L.shardsOf(S);
+    const head = '<div class="ephead"><b>Warden Sable’s chest</b><span class="epdust">' + icon('relic') + '<b>' + fmt(tok) + '</b> Rift tokens</span></div>';
+    const bonus = b => (b.k === 'gold' ? '+' + Math.round(L.WB_TWO.gold * 100) + '% gold' : '+' + Math.round(L.WB_TWO[b.k] * 100) + '% ' + (b.k === 'hp' ? 'health' : b.k === 'dps' ? 'damage' : 'healing')) + ' with 2 pieces, +' + Math.round(L.WB_FOUR * 100) + '% damage and health with 4';
+    return head + (PW.done ? '<div class="ewdone">' + PW.done + '</div>' : '') + '<h3 class="ewq">Which Legendary set calls to you?</h3>' +
+      '<p class="ewhint">“Every world boss you fight pays tokens for the damage you dealt. Bring me ' + cost + ' and the Rift gives up a piece (a random slot) of any set it has swallowed.”</p>' +
+      '<div class="rglist">' + L.WB_SETS.map((b, k) => '<div class="rgrow"><div><b>' + esc(b.name) + '</b><small>' + bonus(b) + ' · ' + fmt(sh[k] || 0) + ' ' + esc(b.word) + ' shards for upgrades</small></div><button class="btn small" data-tokbuy="' + k + '"' + (tok < cost ? ' disabled title="Not enough Rift tokens"' : '') + '>' + icon('relic') + cost + ' tokens</button></div>').join('') + '</div>' +
+      '<p class="note small">Legendaries are bound to you and can’t be merged. Upgrade them at the Armorer with that boss’s shards.</p>';
+  }
+  $('enchpanel') && $('enchpanel').addEventListener('click', e => {
+    if (shopKind() !== 'portal') return;
+    const t = e.target.closest('[data-tokbuy]'); if (!t || t.disabled) return;
+    const k = +t.dataset.tokbuy, it = L.buyLegend(S, k); if (!it) return;
+    save(); try { pushCloud(true); } catch (x) {} updateGear(true); sfx.boss && sfx.boss(); shopBurst();
+    PW.done = 'The gate flares and gives up <b>' + esc(L.gearName(it)) + '</b>. It’s in your bag. ' + fmt(S.wbTok) + ' tokens left.';
+    toast('crown', 'LEGENDARY: ' + L.gearName(it), L.WB_TOKEN_COST + ' Rift tokens traded at the Rift Gate.', 'feat'); paintEnchPanel(true);
+  });
   $('enchpanel') && $('enchpanel').addEventListener('click', async e => {
     if (shopKind() !== 'store') return;
     const t = e.target.closest('[data-swmode],[data-buy],[data-drink],[data-sbuy],[data-swward]'); if (!t) return;
@@ -2295,8 +2410,8 @@
     el.hidden = !on; if (!on) { el.dataset.h = ''; return; }
     // A timed redraw (gold ticking) between press and release would swap the button out and lose the tap, so wait for the release.
     if (!force && panelHeld) return;
-    const kind = shopKind(), arm = kind === 'arm', h = kind === 'store' ? storePanelHtml() : arm ? armPanelHtml() : enchPanelHtml(); if (!force && el.dataset.h === h) return;
-    const step = kind === 'store' ? 's' + SW.mode : arm ? 'a' + AW.mode + !!AW.a + !!AW.b : EW.mode + !!EW.dst + !!EW.src + EW.idx;
+    const kind = shopKind(), arm = kind === 'arm', h = kind === 'store' ? storePanelHtml() : kind === 'portal' ? portalPanelHtml() : arm ? armPanelHtml() : enchPanelHtml(); if (!force && el.dataset.h === h) return;
+    const step = kind === 'store' ? 's' + SW.mode : kind === 'portal' ? 'p' : arm ? 'a' + AW.mode + !!AW.a + !!AW.b : EW.mode + !!EW.dst + !!EW.src + EW.idx;
     const sc = el.querySelector('.ewlist'), top = sc ? sc.scrollTop : 0, same = el.dataset.step === step;
     el.innerHTML = h; el.dataset.h = h; el.dataset.step = step;
     if (!same) el.scrollTop = 0;
@@ -2313,8 +2428,7 @@
     if (d.awmode) { awReset(d.awmode); return paintEnchPanel(true); }
     if (d.awcap) { mmCap = +d.awcap; AW.done = null; return paintEnchPanel(true); }
     if (d.awgo === 'mass') {
-      let ok = 0, bad = 0, mxp = 0;
-      for (const p of shopMass()) { const r = L.mergeItems(S, p.a.uid, p.b.uid, null, events); if (!r) continue; mxp += r.xp || 0; if (r.ok) ok++; else bad++; }
+      const { ok, bad, mxp } = runMass(shopMass(), ' at the Armorer');
       if (!ok && !bad) return;
       save(); updateGear(true); updateSeats(true); ok ? (sfx.relic(), shopBurst()) : sfx.coin();
       AW.done = ok + ' merged' + (bad ? ', ' + bad + ' failed (' + bad * 2 + ' items lost)' : '') + '. +' + fmt(mxp) + ' hero XP.'; return paintEnchPanel(true);
@@ -2324,19 +2438,23 @@
     if (d.awb) { Object.assign(AW, { b: d.awb, done: null }); return paintEnchPanel(true); }
     if (d.ewundo && shopKind() === 'arm') { if (d.ewundo === 'a') Object.assign(AW, { a: null, b: null }); else AW.b = null; AW.done = null; return paintEnchPanel(true); }
     if (d.awgo === 'up') {
-      const it = L.itemOf(S, AW.a); if (!it || !L.upgrade(S, it.uid)) return;
+      const it = L.itemOf(S, AW.a); if (!it) return; const was = craftItem(it), paid = upPaid(it); if (!L.upgrade(S, it.uid)) return;
+      logUp(it, was, paid, ' at the Armorer');
       save(); updateGear(true); updateSeats(true); sfx.relic(); shopBurst();
       AW.done = esc(L.gearName(it)) + ' is now +' + it.up + '.'; return paintEnchPanel(true);
     }
     if (d.awgo === 'merge') {
+      const ia = L.itemOf(S, AW.a), ib = L.itemOf(S, AW.b), la = ia && craftItem(ia), lb = ib && craftItem(ib);
       const res = L.mergeItems(S, AW.a, AW.b, null, events); if (!res) return;
+      logMerge(res, la, lb, ' at the Armorer');
       save(); updateGear(true); updateSeats(true);
       if (res.ok) { sfx.relic(); shopBurst(); awReset('merge'); AW.done = esc(L.gearName(res.item)) + ' is now +' + res.item.up + '. +' + fmt(res.xp) + ' hero XP.'; }
       else { sfx.coin(); awReset('merge'); AW.done = 'The merge failed and both ' + esc(L.gearName(res.a)) + ' pieces were lost. +' + fmt(res.xp) + ' hero XP for trying.'; }
       return paintEnchPanel(true);
     }
     if (d.awgo === 'smelt') {
-      const l = shopScrap(); if (!l.length) return; let g = 0; for (const it of l) g += L.smelt(S, it.uid);
+      const l = shopScrap(); if (!l.length) return; let g = 0; const was = l.map(craftItem); for (const it of l) g += L.smelt(S, it.uid);
+      logScrap('Melted at the Armorer', was, g, 0);
       sfx.coin(); updateGear(true); save(); shopBurst();
       AW.done = 'Melted ' + l.length + (l.length === 1 ? ' piece' : ' pieces') + ' for ' + fmt(g) + ' gold.'; return paintEnchPanel(true);
     }
@@ -2355,14 +2473,19 @@
     }
     if (d.ewrar) { scrapOpts[d.ewrar] = !scrapOpts[d.ewrar]; return paintEnchPanel(true); }
     if (d.ewgo === 'scrap') {
-      const l = shopScrap(); if (!l.length) return; let g = 0, dd = 0; for (const it of l) { dd += L.dustValue(it); g += L.salvage(S, it.uid); }
+      const l = shopScrap(); if (!l.length) return; let g = 0, dd = 0; const was = l.map(craftItem); for (const it of l) { dd += L.dustValue(it); g += L.salvage(S, it.uid); }
+      logScrap('Scrapped for Dust at the Enchanter', was, g, dd);
       sfx.coin(); updateGear(true); save(); shopBurst();
       EW.done = 'Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces') + ' for ' + fmt(dd) + ' Dust and ' + fmt(g) + ' gold.';
       return paintEnchPanel(true);
     }
     if (d.ewgo === 'move') {
       if (!L.visiting(S) && !campGate()) return;
+      const si = L.itemOf(S, EW.src), di = L.itemOf(S, EW.dst), ls = si && craftItem(si), ld = di && craftItem(di);
       const r = L.disenchant(S, EW.src, EW.idx, EW.dst, EW.slot, events); if (!r) return;
+      craftLog('flare', 'Enchanted' + (r.field ? ' in the field' : ' at the Enchanter'), enchName(r.moved) + ' moved onto ' + L.gearName(r.item) + (r.boost ? ', one tier stronger (the Enchanter’s touch)' : r.field && r.moved.t < r.from.t ? ', one tier lower (done in the field)' : '') + '.',
+        [enchName(r.moved) + ' (' + L.enchText(r.moved) + ')', 'Now: ' + craftItem(r.item), '+' + fmt(r.xp) + ' hero XP'],
+        [ls + ' (used up)', craftCost(r.cost, 'Dust')].concat(r.replaced ? [enchName(r.replaced) + ' on ' + L.gearName(r.item) + ' (overwritten)'] : []).concat(['Was: ' + ld]));
       save(); updateGear(true); updateSeats(true); sfx.relic(); if (!r.field) shopBurst();
       const msg = (r.boost ? 'The Enchanter’s touch! ' : '') + enchName(r.moved) + ' is now on ' + esc(L.gearName(r.item)) + (r.boost ? ' (one tier stronger)' : r.field && r.moved.t < r.from.t ? ' (one tier lower, done in the field)' : '') + '. ' + esc(L.gearName(r.lost)) + ' was used up. -' + fmt(r.cost) + ' Dust, +' + fmt(r.xp) + ' hero XP.';
       ewReset(EW.mode); EW.done = msg; paintEnchPanel(true); paintEnchOv();
@@ -2372,7 +2495,7 @@
   // In the shop the stage header names the shop and holds the way out. Everything else is in the counter panel.
   function paintEnchOv() {
     const on = L.visiting(S), kind = shopKind(), arm = on && kind === 'arm';
-    const SHOPS = { ench: ['enchanter', 'The Enchanter', 'Enchanter'], arm: ['armorer', 'The Armorer', 'Armorer'], store: ['quartermaster', 'The Store', 'Store'] };
+    const SHOPS = { ench: ['enchanter', 'The Enchanter', 'Enchanter'], arm: ['armorer', 'The Armorer', 'Armorer'], store: ['quartermaster', 'The Store', 'Store'], portal: ['riftkeeper', 'The Rift Gate', 'Rift Gate'] };
     document.body.classList.toggle('atench', on);
     let hd = $('shophead');
     if (!hd && on) {
@@ -2417,10 +2540,11 @@
           const ga = md.querySelector('#mg-arm'); if (ga) ga.onclick = () => { awReset('merge'); AW.a = uid; AW.b = pick; visitEnch('arm'); paintEnchPanel(true); };
           md.querySelector('#mg-go').onclick = () => {
             if (!campGate()) return;
+            const la = craftItem(it), lb = craftItem(L.itemOf(S, pick));
             const res = L.mergeItems(S, uid, pick, null, events); if (!res) return;
-            save(); updateGear(true); updateSeats(true);
-            if (res.ok) { sfx.relic(); toast('relic', 'Merge succeeded', L.gearName(res.item) + ' is now +' + res.item.up + '. +' + fmt(res.xp) + ' hero XP.', ''); itemModal(res.item.uid); }
-            else { sfx.coin(); closeModal(); toast('skull', 'The merge failed', 'Both ' + L.gearName(res.a) + ' pieces were destroyed. +' + fmt(res.xp) + ' hero XP for trying.', 'warn'); }
+            save(); updateGear(true); updateSeats(true); logMerge(res, la, lb, ' in the field', true);
+            if (res.ok) { sfx.relic(); itemModal(res.item.uid); }
+            else { sfx.coin(); closeModal(); }
           };
         });
     };
@@ -2580,9 +2704,9 @@
           md.querySelectorAll('[data-opt]').forEach(c => c.onchange = () => { scrapOpts[c.dataset.opt] = c.checked; draw(); });
           md.querySelector('#s-x').onclick = closeModal;
           md.querySelector('#s-go').onclick = () => {
-            const l = scrapList(); let g = 0, d = 0; for (const it of l) { d += L.dustValue(it); g += L.salvage(S, it.uid); }
+            const l = scrapList(), was = l.map(craftItem); let g = 0, d = 0; for (const it of l) { d += L.dustValue(it); g += L.salvage(S, it.uid); }
             closeModal(); sfx.coin(); updateGear(true); save();
-            toast('coin', 'Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces'), '+' + fmt(g) + ' gold, +' + fmt(d) + ' Dust', 'feat');
+            logScrap('Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces'), was, g, d, 'feat');
           };
         });
     };
@@ -2605,10 +2729,8 @@
           md.querySelector('#mm-x').onclick = closeModal;
           const ma = md.querySelector('#mm-arm'); if (ma) ma.onclick = () => { awReset('mass'); visitEnch('arm'); paintEnchPanel(true); };
           md.querySelector('#mm-go').onclick = () => {
-            let ok = 0, bad = 0, mxp = 0;
-            for (const p of L.massMergePlan(S, mmCap)) { const r = L.mergeItems(S, p.a.uid, p.b.uid, null, events); if (!r) continue; mxp += r.xp || 0; if (r.ok) ok++; else bad++; }
+            const { ok } = runMass(L.massMergePlan(S, mmCap), ' in the field', true);
             closeModal(); save(); updateGear(true); updateSeats(true); ok ? sfx.relic() : sfx.coin();
-            toast('relic', 'Mass merge done', ok + ' merged' + (bad ? ', ' + bad + ' failed (' + bad * 2 + ' items lost)' : '') + '. +' + fmt(mxp) + ' hero XP.', bad ? 'warn' : 'feat');
           };
         });
     };
@@ -2648,9 +2770,9 @@
         '<p class="asnote">Set pieces, job set pieces, region sets, locked and worn gear are always kept, and so is the best spare piece for each party member’s slot.</p>' +
         '<div class="row"><button class="btn" id="as-x">Done</button></div></div>', md => {
           const now = md.querySelector('#as-now'); if (now) now.onclick = () => {
-            const l = L.autoScrapPack(S); let g = 0, d = 0; for (const it of l) { d += L.dustValue(it); g += L.salvage(S, it.uid); }
+            const l = L.autoScrapPack(S), was = l.map(craftItem); let g = 0, d = 0; for (const it of l) { d += L.dustValue(it); g += L.salvage(S, it.uid); }
             sfx.coin(); updateGear(true); save(); draw();
-            toast('coin', 'Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces'), '+' + fmt(g) + ' gold, +' + fmt(d) + ' Dust', 'feat');
+            logScrap('Scrapped ' + l.length + (l.length === 1 ? ' piece' : ' pieces'), was, g, d, 'feat');
           };
           md.querySelector('#as-on').onchange = e => { a.on = e.target.checked; save(); paintPackCap(); draw(); };
           md.querySelector('#as-up').onchange = e => { a.up = e.target.checked; save(); };
@@ -2859,6 +2981,16 @@
   }
 
   let lastPipKey = '', lastModKey = null;
+  // At a region's guardian with its trial not done: the goal line says what is holding the party back (v120).
+  function trialGoal() {
+    const top = S.maxFloorEver || 1, r = L.regionNo(top);
+    const at = top === (r + 1) * 10 && r < L.REGIONS - 1 && L.regionNeed(S, top + 1);
+    $('goal').classList.toggle('trial', !!at);
+    if (!at) { delete $('goal').dataset.tip; return ''; }
+    const t = L.trialOf(S, r);
+    $('goal').dataset.tip = 'Region trial: to go past floor ' + top + ', defeat ' + L.TRIAL_ELITES + ' alliance elites (the bannered warband foes) on floors ' + (r * 10 + 1) + ' to ' + (top - 1) + (t.guardian ? '' : ' and beat the guardian on floor ' + top) + '. Until then, beating the guardian sends your party back to farm floor ' + (top - 1) + '.';
+    return t.elites + '/' + L.TRIAL_ELITES + ' elites' + (t.guardian ? '' : ' + guardian') + ' to pass floor ' + top;
+  }
   function updateStage() {
     const b = L.biomeOf(S.floor), cyc = L.depthCycle(S.floor);
     $('floor').textContent = S.floor;
@@ -2873,7 +3005,7 @@
       $('pips').innerHTML = boss ? '<i class="boss now"></i>' : Array.from({ length: L.FOES_PER_FLOOR }, (_, i) => '<i class="' + (i < S.foeIdx ? 'done' : i === S.foeIdx ? 'now' : '') + '"></i>').join('');
     }
     $('goalch').textContent = 'Chapter ' + L.chapterOf(S);
-    { let g = L.currentGoal(S); if (S.maxFloorEver > L.ACT_ONE_END && !L.actTwoOpen()) { const d = Math.max(0, L.ACT_TWO_AT - Date.now()), dd = Math.floor(d / 864e5), hh = Math.floor(d / 36e5) % 24; g = 'Act Two opens with Season 2, in ' + (dd ? dd + 'd ' : '') + hh + 'h'; } if ($('goaltext').textContent !== g) $('goaltext').textContent = g; }
+    { let g = L.currentGoal(S), trial = trialGoal(); if (trial) g = trial; if (S.maxFloorEver > L.ACT_ONE_END && !L.actTwoOpen()) { const d = Math.max(0, L.ACT_TWO_AT - Date.now()), dd = Math.floor(d / 864e5), hh = Math.floor(d / 36e5) % 24; g = 'Act Two opens with Season 2, in ' + (dd ? dd + 'd ' : '') + hh + 'h'; } if ($('goaltext').textContent !== g) $('goaltext').textContent = g; }
     paintGoblinHunt();
     const f = S.foe;
     if (f) {
@@ -2882,9 +3014,9 @@
       const tag = $('foetag'); tag.textContent = f.wounded || f.rescue ? 'Mercy Corps' : f.world ? 'World boss' : f.goblin ? 'Thief' : f.pack ? 'Ambush ×' + f.pack + ' · XP ×' + f.pack * L.PACK_XP : f.boss ? 'Guardian' : f.chest ? 'Treasure' : f.elite ? L.SIDES[f.side].name : ''; if (f.pack) tag.dataset.tip = f.pack + ' foes at once: ' + f.pack * L.PACK_XP + '× hero XP and ' + f.pack * L.PACK_GOLD + '× gold.'; else if (f.wounded) tag.dataset.tip = 'A wounded Mercy Corps companion. Nobody fights: your healers mend them, Lantern Hymn helps a lot, and every tap is a bandage. Heal them to full for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.'; else if (f.rescue) tag.dataset.tip = 'This monster holds ' + f.rescue + ' of the Mercy Corps captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.'; else delete tag.dataset.tip; tag.className = 'tag' + (f.wounded || f.rescue ? ' mercy' : '') + (f.world ? ' world' : '') + (f.goblin ? ' thief' : '') + (f.chest ? ' chest' : '') + (f.pack ? ' ambush' : f.elite ? ' war w-' + f.side : '');
       { const sp = f.sp && L.SPECIALS[f.sp], mk = (f.mods || []).join(',') + '|' + (f.sp || ''); if (mk !== lastModKey) { lastModKey = mk; $('foemods').innerHTML = (sp ? '<span class="mod m-sp' + (sp.dot ? ' m-' + sp.dot : '') + '" title="' + esc(sp.desc + (sp.dot ? '. ' + (sp.dot === 'burn' ? 'Burns' : 'Poison') + ' last ' + L.DOT_FIGHTS + ' fights.' : '.')) + '">' + esc(sp.name) + '</span>' : '') + (f.mods || []).map(m => '<span class="mod m-' + m + '" title="' + esc(L.MODS[m].desc) + '">' + esc(L.MODS[m].name) + '</span>').join(''); } }
       if (f.world && S.wb) {
-        const ph = L.wbPhase(wbState().total + S.wb.score), pct = ph.into / ph.need * 100;
+        const ph = L.wbPhase(wbState().total + S.wb.score, wbState().w.id), pct = ph.into / ph.need * 100;
         $('hpbar').style.width = Math.max(0, 100 - pct) + '%'; $('wardbar').style.width = '0%';
-        $('hptext').textContent = 'Phase ' + (ph.broken + 1) + ' · ' + Math.floor(100 - pct) + '% left · your damage ' + (Math.floor(S.wb.score * 10) / 10);
+        $('hptext').textContent = 'Phase ' + (ph.broken + 1) + ' · ' + Math.floor(100 - pct) + '% left · your damage ' + wbNum(S.wb.score, S.wb.old);
       } else {
         $('hpbar').style.width = Math.max(0, f.hp / f.max * 100) + '%';
         $('wardbar').style.width = Math.min(100, (f.ward || 0) / f.max * 100) + '%';
@@ -4073,6 +4205,17 @@
     try { adminLog = (await adminApi('GET', '/admin/audit')).log || []; } catch (e) { adminLog = []; }
     paintAdmin();
   }
+  // Where players came from: the first ?ref= tag (or referring site) each signed-in hero arrived with (server field rf).
+  // "-" means the hero signed up before tracking, or came straight to the game. Needs the v120 admin Lambda.
+  const REF_NAME = { '-': 'Direct or before tracking', reddit: 'Reddit', itch: 'itch.io', newgrounds: 'Newgrounds', gamejolt: 'Game Jolt', crazygames: 'CrazyGames', facebook: 'Facebook', instagram: 'Instagram', discord: 'Discord', google: 'Google', website: 'Store website', war: 'Grand War site', store: 'In-store QR sign', email: 'Customer email', linktree: 'Linktree', story: 'Instagram/Facebook Story', x: 'X (Twitter)', tiktok: 'TikTok', youtube: 'YouTube' };
+  function refTally(players) {
+    if (!players.some(p => 'ref' in p)) return '';
+    const wk = Date.now() - 7 * 864e5, t = {};
+    players.forEach(p => { const k = p.ref || '-'; t[k] = t[k] || { n: 0, wk: 0 }; t[k].n++; if (p.seen > wk) t[k].wk++; });
+    const rows = Object.keys(t).sort((a, c) => t[c].n - t[a].n);
+    return '<h3 class="sub">Where players came from</h3><p class="note">Each signed-in hero, by the link or site they first arrived from. Active = seen in the last 7 days.</p>' +
+      '<div class="adm-list adm-refs">' + rows.map(k => '<div class="adm-row"><span class="adm-n"><b>' + esc(REF_NAME[k] || k) + '</b><small>' + esc(k) + '</small></span><span class="adm-rc"><b>' + t[k].n + '</b> hero' + (t[k].n === 1 ? '' : 'es') + ' &middot; ' + t[k].wk + ' active</span></div>').join('') + '</div>';
+  }
   function paintAdmin() {
     if (!adminList) return;
     const ago = t => { if (!t) return 'never'; const m = Math.floor((Date.now() - t) / 6e4); return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.floor(m / 60) + ' h ago' : Math.floor(m / 1440) + ' d ago'; };
@@ -4080,6 +4223,7 @@
     const on = adminList.players.filter(p => p.on).length, banned = adminList.players.filter(p => p.banned).length;
     $('adminbox').innerHTML =
       '<div class="adm-stats"><div><small>Players</small><b>' + adminList.players.length + '</b></div><div><small>Online now</small><b>' + on + '</b></div><div><small>Banned</small><b>' + banned + '</b></div><div><small>Last wipe</small><b>' + (adminList.epoch ? new Date(adminList.epoch).toLocaleDateString() : 'never') + '</b></div></div>' +
+      refTally(adminList.players) +
       '<div class="adm-bar"><input id="adm-q" type="search" placeholder="Find a player by name" value="' + esc(adminQ) + '"><button class="btn small ghost" id="adm-re">Refresh</button></div>' +
       '<div class="adm-list">' + (list.length ? list.map(p => '<div class="adm-row' + (p.banned ? ' banned' : '') + '"><span class="adm-n"><b>' + esc(p.name || 'Unnamed') + '</b>' + (p.cls ? ' ' + classTag(p.cls) : '') + '<small>' + (p.banned ? 'Banned' : (p.on ? '<span class="online">Online now</span> &middot; ' : 'Seen ' + ago(p.seen) + ' &middot; ') + 'power level ' + p.level + ', floor ' + p.floor) + '</small></span>' +
         (p.canBan ? '<button class="btn small ghost" data-grant="' + p.id + '">Sigils</button><button class="btn small ghost" data-reset="' + p.id + '">Reset</button>' : '') + (p.banned ? '<button class="btn small ghost" data-unban="' + p.id + '">Unban</button>' : '<button class="btn small danger" data-ban="' + p.id + '"' + (p.canBan ? '' : ' disabled title="They need to play once more before they can be banned"') + '>Ban</button>') + '</div>').join('') : '<p class="note">No players match.</p>') + '</div>' +
@@ -4956,7 +5100,9 @@
     ['ench', 'Enchanter', 'enchanter', '#7c4dea', 'Enchant and disenchant'],
     ['arm', 'Armorer', 'armorer', '#9aa3b2', 'Upgrade, merge, melt'],
     ['store', 'Store', 'healer', '#2f9e63', 'Tonics, oil, draughts'],
+    ['portal', 'Rift Gate', 'riftkeeper', '#7c3aed', 'Rift tokens for Legendaries'],
   ];
+  const HOLD_X = i => 36 + i * 72;
   function drawHold(cv) {
     const cw = cv.clientWidth || 600, ch = cv.clientHeight || 280, dpr = window.devicePixelRatio || 1, W2 = 360, H2 = Math.round(W2 * ch / cw), k = cw * dpr / W2;
     cv.width = Math.round(W2 * k); cv.height = Math.round(H2 * k); const x = cv.getContext('2d'); x.setTransform(k, 0, 0, k, 0, 0); x.imageSmoothingQuality = 'high';
@@ -4969,7 +5115,14 @@
     const ty = gy + (H2 - gy) * 0.42;
     x.fillStyle = '#5a4a36'; x.beginPath(); x.ellipse(W2 / 2, ty + 20, 160, 12, 0, 0, Math.PI * 2); x.fill();
     HOLD_TENTS.forEach(([id, n, who, col], i) => {
-      const tx = 48 + i * 88;
+      const tx = HOLD_X(i);
+      if (id === 'portal') {
+        // a small standing-stone gate outside the tents, swirling violet, the warden beside it
+        const pg = x.createRadialGradient(tx, ty - 20, 1, tx, ty - 20, 22); pg.addColorStop(0, '#f5e8ff'); pg.addColorStop(0.4, '#a855f7'); pg.addColorStop(1, 'rgba(76,29,149,0)'); x.fillStyle = pg; x.beginPath(); x.ellipse(tx, ty - 20, 12, 19, 0, 0, Math.PI * 2); x.fill();
+        x.strokeStyle = '#4a4458'; x.lineWidth = 5; x.beginPath(); x.ellipse(tx, ty - 20, 14, 21, 0, Math.PI, Math.PI * 2); x.stroke(); x.fillStyle = '#4a4458'; x.fillRect(tx - 16.5, ty - 20, 5, 20); x.fillRect(tx + 11.5, ty - 20, 5, 20);
+        const s = sprite(who, 0, false), sw = s.lw * 2, sh = s.lh * 2; x.save(); x.translate(tx + 24, 0); x.scale(-1, 1); x.drawImage(s, -sw / 2, ty + 3 - sh, sw, sh); x.restore();
+        return;
+      }
       if (id === 'camp') { x.fillStyle = '#3a2618'; x.fillRect(tx - 10, ty - 2, 20, 3); for (let q = 0; q < 4; q++) flame(x, tx - 6 + q * 4, ty - 2, 10 + (q % 2) * 4, 0); const gg = x.createRadialGradient(tx, ty - 8, 0, tx, ty - 8, 40); gg.addColorStop(0, 'rgba(255,150,60,.4)'); gg.addColorStop(1, 'rgba(255,150,60,0)'); x.fillStyle = gg; x.fillRect(tx - 40, ty - 48, 80, 80); return; }
       x.fillStyle = col; x.globalAlpha = 0.92; x.beginPath(); x.moveTo(tx - 28, ty); x.lineTo(tx, ty - 44); x.lineTo(tx + 28, ty); x.fill(); x.globalAlpha = 1;
       x.fillStyle = 'rgba(0,0,0,.35)'; x.beginPath(); x.moveTo(tx, ty - 44); x.lineTo(tx + 28, ty); x.lineTo(tx + 6, ty); x.fill();
@@ -4979,7 +5132,7 @@
     });
     const party = S.party.filter(Boolean);
     party.forEach((id, i) => { const m = L.memberById(id); if (!m) return; const s = sprite(m.cls, lookHue(m), false); x.drawImage(s, W2 / 2 - party.length * 9 + i * 18 - 3, ty + 4 - (i % 2) * 3, s.lw * 2, s.lh * 2); });
-    return { ty: ty / H2, xs: HOLD_TENTS.map((_, i) => (48 + i * 88) / W2) };
+    return { ty: ty / H2, xs: HOLD_TENTS.map((_, i) => HOLD_X(i) / W2) };
   }
   function openHold() {
     modal('<div class="maphead"><div><h2>The Hold</h2><small>Iron Covenant fortress above the tear. Tap a tent to go there. Your dive on floor ' + S.floor + ' waits for you.</small></div><button class="iconbtn" id="hold-x" aria-label="Close">&times;</button></div>' +
@@ -4990,7 +5143,7 @@
         md.querySelector('#hold-x').onclick = closeModal; md.querySelector('#hold-map').onclick = openMap;
         md.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => {
           const k = b.dataset.hold; closeModal();
-          if (k === 'camp') { if (S.floor > L.CAMP_FLOOR) campModal(); } else if (k === 'ench') enchanterModal(); else if (k === 'arm') armorerModal(); else openStore();
+          if (k === 'camp') { if (S.floor > L.CAMP_FLOOR) campModal(); } else if (k === 'ench') enchanterModal(); else if (k === 'arm') armorerModal(); else if (k === 'portal') visitEnch('portal'); else openStore();
         });
       });
   }
@@ -5399,7 +5552,9 @@
         'Slow down for about three seconds and it withdraws. You lose nothing but the time.']],
       ['World boss weekends', 's:colossus', 'One giant Rift boss every weekend that all signed-in players fight together.', [
         'Runs Friday to Sunday (UTC). A purple bar on the stage shows it; tap it to join a <b>two-minute assault</b>, once every 15 minutes.',
-        'Your damage counts at the strength of your deepest floor, so new and veteran delvers matter just as much.',
+        'Every point of <b>real damage</b> counts, so the stronger your party, the more you chip off. Going deeper never lowers it.',
+        'Each boss resists two classes (−30%) and is weak to one (+30%); the boss window shows which. It hits hard and uses a special attack.',
+        'Hired and story companions deal half damage to the boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
         'Everyone fills one shared health bar. Each phase broken makes the next one twice as tough.',
         'After the weekend tap <b>Claim</b>: 3 Sigils for taking part, 1 more per phase broken (up to 5), 5 more for the top three, and a purse of gold.']],
       ['Abilities', 'i:star', 'Each party member has one ability; your hero can learn more.', [
@@ -5643,6 +5798,20 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate and a crafting log', items: [
+      'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
+      'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
+      'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
+      'New Legendary loot: when a world boss ends, everyone who fought rolls their own chance at a Legendary (2% to 20%, higher with more damage, full odds once 3 phases break). Several delvers can win.',
+      'You also get boss shards and Rift tokens for your damage. Take 40 Rift tokens to Warden Sable at the new Rift Gate, a portal just outside the Hold (Map > The Hold, or the shop buttons), and trade them for a Legendary piece of any boss set.',
+      'This week\'s preview boss keeps its scores until it ends on Friday, and pays out under the new loot rules.',
+      'The bell has a new Crafting tab. Every merge, upgrade, mass merge, scrap, smelt and enchant at the Armorer or the Enchanter (or in the field) writes an entry showing what happened, what you gained and what you lost.',
+      'Gained lists the finished item with its stats and enchants, plus gold, Dust and hero XP. Lost lists every piece that went in, as it was before, and the gold, Dust or shards spent.',
+      'Fixed: beating a region guardian (like floor 50) before its region trial is done sent your party back a floor with no reason on screen after the first time. Now every time it happens you see why: a toast and a "Region trial 3/10 elites" note in the arena.',
+      'While you wait at a guardian, the goal line under the floor shows the trial: how many alliance elites you have (out of 10) and the floor they open. Hover it for the full rule.',
+      'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
+      'Mages, necromancers and healers now cost Dust when they sign on, on top of gold. Wages are still gold only.',
+    ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
       'Fixed: very big saves (thousands of items) could not sync to your account, so the account save fell behind. Big saves are now packed down to about a tenth of the size.',
@@ -6265,7 +6434,7 @@
     }
     return h + '</div>';
   }
-  // Boss shards (v105): each world boss drops a few shards of its own, drawn by lottery among everyone who fought.
+  // Boss shards (v105): each world boss drops shards of its own (v120: for your damage, plus Rift tokens for the token shop below).
   // They upgrade that boss's Legendary set and trade here for gold. Listed shards leave your stash until sold or taken down.
   async function loadShards() {
     trade.sh = null; trade.msg = 'Opening the shard stall…'; paintTrade();
@@ -6276,7 +6445,8 @@
   function shardsView() {
     const have = L.shardsOf(S);
     let h = '<div class="sigex"><div class="shhave">' + L.WB_SETS.map((b, k) => '<span class="shchip sh' + k + '">' + icon('relic') + '<b>' + (have[k] || 0) + '</b> ' + b.word + '</span>').join('') + '</div>' +
-      '<p class="note small">Boss shards drop from world bosses, drawn by lottery among everyone who fought. Each boss’s shards upgrade its own Legendary set.</p>';
+      '<p class="note small">Every world boss gives you boss shards for your damage. Each boss’s shards upgrade its own Legendary set.</p>' +
+      '<h3 class="sub">Rift tokens</h3><p class="note small">You have <b>' + fmt(S.wbTok || 0) + '</b> Rift tokens. World bosses give them for your damage. Warden Sable at the Rift Gate trades ' + L.WB_TOKEN_COST + ' for a Legendary piece of any boss set.</p><div class="row"><button class="btn small" data-riftgo="1">' + icon('relic') + 'Go to the Rift Gate</button></div>';
     if (trade.msg) h += '<p class="note">' + esc(trade.msg) + '</p>';
     const x = trade.sh; if (!x) return h + '</div>';
     const others = x.l.filter(l => l.seller !== x.me).sort((a, b) => a.price / a.n - b.price / b.n);
@@ -6456,6 +6626,7 @@
       S.gold -= r.price; L.shardsOf(S)[r.k] = (L.shardsOf(S)[r.k] || 0) + r.n; afterTrade(); sfx.coin();
       toast('relic', 'Shards bought', '+' + shName(r.k, r.n) + ' for ' + fmt(r.price) + ' gold.', 'feat'); loadShards();
     });
+    if (d.riftgo) { if (S.hero) visitEnch('portal'); return; }
     if (d.hcancel) tradeAct(async () => {
       const r = await chatCall('POST', '/shards/cancel', { id: d.hcancel });
       L.shardsOf(S)[r.k] = (L.shardsOf(S)[r.k] || 0) + r.n; afterTrade(); toast('relic', 'Listing taken down', shName(r.k, r.n) + ' are back in your stash.', ''); loadShards();
@@ -6609,10 +6780,10 @@
   function paintBoss() {
     const el = $('wbbar'), x = wbState(), inA = S.wb && S.wb.until > x.now;
     let h = '';
-    if (inA) h = icon('skull') + '<span><b>Assault on ' + esc(S.wb.name) + '</b> · ' + wbDur(S.wb.until - x.now) + ' left · your damage <b>' + Math.floor(S.wb.score * 10) / 10 + '</b></span>';
+    if (inA) h = icon('skull') + '<span><b>Assault on ' + esc(S.wb.name) + '</b> · ' + wbDur(S.wb.until - x.now) + ' left · your damage <b>' + wbNum(S.wb.score, S.wb.old) + '</b></span>';
     else if (x.claim) h = icon('crown') + '<span><b>The world boss has fallen back.</b> Your reward is waiting.</span><em>Claim</em>';
     else if (x.live) {
-      const ph = L.wbPhase(x.total);
+      const ph = L.wbPhase(x.total, x.w.id);
       h = icon('skull') + '<i class="cb">' + Math.floor(ph.into / ph.need * 100) + '%</i><span><b>World boss: ' + esc(x.name) + '</b> · phase ' + (ph.broken + 1) + ' · ' + Math.floor(ph.into / ph.need * 100) + '% · ends in ' + wbDur(x.w.end - x.now) + '</span>' +
         (!CL || !signedIn() ? '<em>Sign in to fight</em>' : x.ready > 0 ? '<em class="wait">Next assault ' + wbDur(x.ready) + '</em>' : '<em>Join the assault</em>');
     } else if (x.next - x.now < 2 * 864e5) h = icon('skull') + '<span><b>' + esc(L.wbName(L.wbWindow(x.next).id)) + '</b> attacks the Hold in ' + wbDur(x.next - x.now) + '</span><em class="wait">Details</em>';
@@ -6620,19 +6791,23 @@
   }
   function openBoss() {
     if (!gateUse('boss')) return;
-    const x = wbState(), st = wb.st, ph = L.wbPhase(x.total), pct = Math.floor(ph.into / ph.need * 100);
+    const x = wbState(), st = wb.st, ph = L.wbPhase(x.total, x.w.id), pct = Math.floor(ph.into / ph.need * 100), old = L.wbOld(x.w.id), tr = L.WB_TRAITS[L.wbBoss(x.w.id)];
+    const cn = c => L.CLASSES[c].name.toLowerCase() + 's';
     const top = st && st.w.id === x.w.id ? st.top : [];
     const rank = x.me && x.me.score > 0 ? top.findIndex(t => t.score <= x.me.score) + 1 : 0;
     modal('<div class="maphead"><div><h2>' + esc(x.name) + '</h2><small>World boss · ' + (x.live ? 'ends in ' + wbDur(x.w.end - x.now) : 'next attack in ' + wbDur(x.next - x.now)) + '</small></div><button class="iconbtn" id="wb-x" aria-label="Close">&times;</button></div>' +
       '<div class="wbhero"><img src="' + SP.spriteURL('colossus', 3, 0) + '" alt=""><div>' +
       '<p>A giant of void crystal has torn through the Nyx Rift beneath the Hold. Every delver fights the same monster: each assault you make chips at one shared health bar.</p>' +
       '<div class="wbphase"><div class="wbph"><b>Phase ' + (ph.broken + 1) + '</b><span>' + pct + '%</span></div><div class="bar wbbar2"><i style="width:' + pct + '%"></i></div><small>' + ph.broken + (ph.broken === 1 ? ' phase' : ' phases') + ' broken so far · ' + (st ? st.n : 0) + (st && st.n === 1 ? ' delver has' : ' delvers have') + ' joined</small></div></div></div>' +
-      '<ul class="passfx"><li><b>Assaults</b><span>Two minutes against the boss at the strength of your deepest floor. One every 15 minutes. Strike and use your abilities for more damage.</span></li>' +
+      '<ul class="passfx">' + (old ? '<li><b>Assaults</b><span>Two minutes against the boss at the strength of your deepest floor. One every 15 minutes. Strike and use your abilities for more damage.</span></li>' :
+        '<li><b>Assaults</b><span>Two minutes against the boss. One every 15 minutes. Every point of real damage you deal chips the shared health bar, so the stronger your party, the more you deal. It hits hard and uses ' + esc(L.SPECIALS[tr.sp].name) + ': if your party falls, the assault ends.</span></li>' +
+        '<li><b>' + esc(tr.trait) + '</b><span>' + esc(tr.line) + ' Weak to ' + cn(tr.weak) + ' (+' + Math.round(L.WB_WEAK * 100) + '% damage), resists ' + tr.resist.map(cn).join(' and ') + ' (−' + Math.round(L.WB_RESIST * 100) + '%).</span></li>' +
+        '<li><b>Fight beside players</b><span>Hired and story companions deal half damage to the boss. Your hero and other players\' heroes in your party deal full damage.</span></li>') +
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
-      '<li><b>Legendary loot</b><span>' + (() => { const k = Math.floor(Date.parse(x.w.id + 'T00:00:00Z') / 6048e5) % 4, s2 = L.WB_SETS[k]; return 'Each phase broken adds a 12% chance (up to 75%) that ' + esc(x.name) + ' drops a piece of <b>' + esc(s2.name) + '</b>. One winner is drawn from everyone who fought: every whole point of your damage is one ticket. ' + esc(s2.word) + ' shards (5, plus 3 per phase) are drawn the same way. They upgrade the set and trade in the Market.'; })() + '</span></li>' +
+      '<li><b>Legendary loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a piece of <b>' + esc(s2.name) + '</b>: 2% to 20%, higher the more damage you dealt, and full odds once the server breaks 3 phases. Several delvers can win. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set from Warden Sable at the Rift Gate, just outside the Hold.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
-      (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + Math.floor(t.score).toLocaleString('en-US') + '</b></li>').join('') + '</ol>' : '') +
-      (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + Math.floor(x.me.score).toLocaleString('en-US') + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
+      (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
+      (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
       '<div class="row">' + (x.claim ? '<button class="btn" id="wb-claim">Claim your reward</button>' : !CL || !signedIn() ? '<button class="btn" id="wb-in">Sign in to fight</button>' : x.live ? (x.ready > 0 ? '<button class="btn" disabled>Next assault in ' + wbDur(x.ready) + '</button>' : '<button class="btn" id="wb-go">Join the assault</button>') : '') + '<button class="btn ghost" id="wb-no">Close</button></div>', md => {
       md.querySelector('#wb-x').onclick = closeModal; md.querySelector('#wb-no').onclick = closeModal;
       const go = md.querySelector('#wb-go'); if (go) go.onclick = () => { closeModal(); joinAssault(); };
@@ -6649,12 +6824,15 @@
     sfx.boss(); toast('skull', 'Assault!', 'Two minutes against ' + x.name + '. Strike and use your abilities!', 'feat');
     updateStage && updateStage(); paintBoss();
   }
+  // Event damage: the preview counted monsters' worth (one decimal), weekend bosses count real damage (v120).
+  function wbNum(v, old) { return old ? (Math.floor(v * 10) / 10).toLocaleString('en-US') : fmt(Math.floor(v)); }
+  function wbOld() { return L.wbOld(L.wbWindow(Date.now()).id); }
   async function sendAssault(score, fell, ck, iv) {
     if (!(score > 0)) { toast('skull', 'Assault over', fell ? 'Your party fell before landing a blow.' : 'No damage this time.', ''); return; }
     try {
       const r = await api('POST', { score, ck: ck || 0, iv: iv || [] }, '/boss/hit');
       if (wb.st && r) { wb.st.total = r.total; wb.st.me.score += r.add; wb.st.me.last = Date.now(); }
-      toast('skull', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + score + ' damage to ' + wbState().name + '. Every assault counts toward the next phase.', 'feat');
+      toast('skull', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + wbNum(score, wbOld()) + ' damage to ' + wbState().name + '. Every assault counts toward the next phase.', 'feat');
     } catch (e) { toast('lock', 'The assault did not count', 'The server could not record it. Try again in a moment.', 'warn'); }
     loadBoss().then(paintBoss);
   }
@@ -6679,9 +6857,10 @@
     sh[b] = (sh[b] || 0) + (r.sh || 0);
     let it = null; if (r.leg) { it = L.makeLegend(S, b); S.bag.push(it); S.stats.legends = (S.stats.legends || 0) + 1; }
     save(); try { pushCloud(true); } catch (e) {} updateGear(true);
-    const odds = Math.round(r.tk / Math.max(1, r.all) * 1000) / 10;
-    if (it) { sfx.boss && sfx.boss(); toast('crown', 'LEGENDARY: ' + L.gearName(it), 'You won the draw for ' + set.name + ' with ' + fmt(r.tk) + ' of ' + fmt(r.all) + ' tickets (' + odds + '%).' + (r.sh ? ' Plus ' + shName(b, r.sh) + '.' : ''), 'feat'); }
-    else toast('relic', set.word + ' loot', (r.sh ? 'You drew ' + shName(b, r.sh) + '. ' : 'No shards this time. ') + (r.who ? r.who + ' won the Legendary.' : 'No Legendary dropped this time.') + ' Your tickets: ' + fmt(r.tk) + ' of ' + fmt(r.all) + ' (' + odds + '%).', '');
+    S.wbTok = (S.wbTok || 0) + (r.tok || 0); save();
+    const odds = Math.round((r.p || 0) * 1000) / 10, got = (r.sh ? shName(b, r.sh) : 'no shards') + (r.tok ? ' and ' + r.tok + ' Rift tokens (' + fmt(S.wbTok) + ' saved)' : '');
+    if (it) { sfx.boss && sfx.boss(); toast('crown', 'LEGENDARY: ' + L.gearName(it), 'Your ' + odds + '% roll for ' + set.name + ' came up! Plus ' + got + '.', 'feat'); }
+    else toast('relic', set.word + ' loot', 'No Legendary this time (your roll was ' + odds + '%). You got ' + got + '. ' + L.WB_TOKEN_COST + ' tokens buy a piece in the Market.', '');
   }
   $('wbbar').addEventListener('click', () => {
     const x = wbState();

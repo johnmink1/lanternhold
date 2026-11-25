@@ -45,7 +45,7 @@ exports.handler = async (e) => {
     const now = Date.now();
     const list = (await scanAll(HEROES)).map(i => ({
       id: i.pid.S, name: i.name ? i.name.S : (i.bn ? i.bn.S : ''), cls: i.cls ? i.cls.S : '', level: i.lv ? +i.lv.N : 0, floor: i.fl ? +i.fl.N : 0,
-      seen: i.seen ? +i.seen.N : 0, on: i.seen ? now - i.seen.N < 18e4 : false, banned: !!i.ban, canBan: !!i.u,
+      seen: i.seen ? +i.seen.N : 0, on: i.seen ? now - i.seen.N < 18e4 : false, banned: !!i.ban, canBan: !!i.u, ref: i.rf ? i.rf.S : '',
     })).sort((a, c) => c.seen - a.seen);
     return res(200, { players: list, epoch: await getEpoch() });
   }
