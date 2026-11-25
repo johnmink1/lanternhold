@@ -1,4 +1,4 @@
-/* lh-build 202611250352 */
+/* lh-build 202611250355 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5192,64 +5192,62 @@
         ['lantern', 'The Hold today', 'Updates 102 to 119', ['The Hold’s tents: Enchanter, Armorer and Store.', 'Legendary world boss loot and Victor’s Banner.', 'Bestiary mastery, real weapon types, chat windows and the NPC Guild.']],
       ] },
     { id: 'act1', tag: 'Act I · Season 1', name: 'The First Incursion', when: 'Now to Jan 24, 2027', st: 'now', pic: 'i:lantern',
-      story: 'Old Thessaly kept the lantern lit by feeding it bearers, and at the Rift Threshold you stopped her. Without its Lampmother, the seal fails at the next surge.',
+      story: 'Fifteen regions, from the Lamplit Cellars down to the Rift Threshold. Play it to find out what waits at the bottom.',
       items: [
         ['map', 'Expeditions', 'December. Send hired NPCs out on their own jobs.', ['The <b>Expedition Board</b> at the Guild Hall posts jobs every 4 hours: scout a region, escort a Mercy Corps caravan, recover lantern-glass, break a warband camp, hunt a guardian’s echo.',
           'Each job has a <b>difficulty</b> (Easy, Fair, Hard, Deadly, Legendary), a <b>length</b> (30 minutes to a day) and a <b>skill</b>: Might (tanks), Mending (healers), Stealth (rogues), Arcana (mages) or Spirit (necromancers).',
           'Each NPC has a <b>gear rating</b> from the item levels, rarity and enchants they wear. Under the job’s minimum, they won’t go.',
           'The board shows the odds before you send anyone. Gear above the minimum, a matching skill, rarity, rank and a second NPC all raise them.',
           '<b>Success</b>: gold, hero XP, Dust and loot, sometimes region set pieces. <b>Failure</b>: home hurt, nothing found, rests a few hours. <b>Fallen</b>: on Deadly and Legendary jobs an NPC can fall and leave your company. Their gear always comes home.',
-          'For a day after a fall, the <b>Mercy Corps</b> can carry them home for gold and Dust. Story companions never fall.',
+          'For a day after a fall, the <b>Mercy Corps</b> can carry them home for gold and Dust. Legendary lore companions never fall.',
           'Jobs run while you are away. NPCs earn ranks (Recruit, Veteran, Elite, Champion), each with a perk.'], 'odds'],
-        ['lock', 'Something to do at the seal', 'Floor 150 waits for Season 2', ['Parties sealed at floor 150 can send their hires out while they wait for Act II.']],
+        ['lock', 'Waiting for Act II', 'Something to do at the end of the act', ['Reach the end of Act One and your hires can keep adventuring until Season 2 opens.']],
         ['star', 'The Longest Night', 'Winter festival, week of Dec 21', ['Lanterns hang over the Hold.', 'A short festival quest line.', 'A looks-only lantern style.']],
         ['crown', 'The first crowning', 'Jan 24', ['The alliance holding the Nexus wins Season 1, and its players fly Victor’s Banner all through Act II.']],
       ] },
-    { id: 'act2', tag: 'Act II · Season 2', name: 'The Keeperless Lantern', when: 'Jan to Apr 2027', st: 'next', pic: 's:lich',
-      story: 'The Lampmother is gone and the lantern gutters. Someone has to keep it lit, and every alliance wants that someone to be theirs.',
+    { id: 'act2', tag: 'Act II · Season 2', name: 'The Underreach', when: 'Jan to Apr 2027', st: 'next', pic: 'i:map',
+      story: 'Below the Rift Threshold lies a part of the Deep nobody has mapped. The Hold will have to grow to meet it.',
       items: [
-        ['book', 'Story', 'The Hollow King remembers', ['The Hold names your hero its Warden.', 'Brann tries to re-carve the seal-wards without feeding them anyone.', 'The Hollow King, the very first bearer, starts to remember his name.']],
-        ['map', 'The Underreach', '8 new regions, floors 151 to 230', ['New foes, guardians and region sets.', 'The first region is shaped by the Season 1 winner: iron halls for the Covenant, lit stairs for the Ascendancy, flooded tunnels for the Tide.']],
+        ['book', 'New story chapters', 'The story continues in the Journal', ['New chapters for the Hold and your companions.']],
+        ['map', 'The Underreach', '8 new regions, floors 151 to 230', ['New foes, guardians and region sets.', 'The alliance that wins Season 1 leaves its mark on the first new region.']],
         ['hammer', 'Rebuild the Hold', 'The tents become buildings', ['The Campfire grows into a Barracks with more bench room.', 'The Armorer becomes a Forge and the Enchanter a Tower.', 'A new Expedition Gate and Map Room open.']],
         ['users', 'Expeditions, part two', 'Teams of up to three', ['Send up to three NPCs together.', 'Expedition traits such as Trapwise, Steady Hands and Lucky.']],
         ['duel', 'Ember Ring seasons', 'A ranked season every act', ['A looks-only reward for the top delvers each season.']],
         ['star', 'The Thaw', 'Spring festival, March', ['For one week the Weeping Aqueduct runs clean, and its eels drop spring gifts.']],
-        ['relic', 'Act finale', 'The Deep is the Nexus’s root', ['The Hollow King remembers where the first lantern was lit.', 'The Deep is not a back door to the Nexus. It is the Nexus’s root.']],
       ] },
     { id: 'act3', tag: 'Act III · Season 3', name: 'The War Comes Down', when: 'Apr to Jul 2027', st: 'next', pic: 's:sentinel,hound',
-      story: 'Now the alliances believe in the Deep. Their armies march down the stair, and the Hold is caught between them.',
+      story: 'The alliances up top start to take the Deep seriously, and the Hold is right in their way.',
       items: [
-        ['book', 'Story', 'Two roads split', ['The Pale Oracle’s two roads split apart.', 'Wren finds Vael’s old research and must choose between the Ascendancy and the truth.', 'Kestrel and Varga follow the Tide’s coin to its plan for the Hold.']],
+        ['book', 'New story chapters', 'The story continues in the Journal', ['New chapters for your companions and the alliances.']],
         ['shield', 'Faction contracts', 'Expeditions for your alliance', ['Each success adds to your alliance’s push for the Nexus and earns banner rewards.']],
         ['lantern', 'Siege of the Hold', 'A weekend event for everyone', ['Warbands storm the Hold and every player defends a gate.', 'If the Hold stands, everyone shares the rewards.']],
         ['crown', 'Warlords', 'Named alliance champions', ['Alliance elites rise into Warlords who move between regions each week.', 'Beat them to push your alliance’s front.']],
         ['users', 'Company expeditions', 'With your Players Guild', ['Guild members pool their NPCs for long jobs of 12 to 48 hours and share the loot.']],
-        ['map', 'The Warrens of the Three Banners', '8 more regions, floors 231 to 310', ['New regions, foes, guardians and sets.']],
+        ['map', 'Eight more regions', 'Floors 231 to 310', ['New regions, foes, guardians and sets.']],
         ['dust', 'Rift-glass', 'A new crafting material', ['Found on expeditions and in the new regions.', 'Opens a tenth enchant tier and re-forging an item’s type.']],
         ['star', 'Midsummer Ember Games', 'Summer festival, June', ['A festival tournament in the Ember Ring.']],
-        ['flare', 'Act finale', 'The lantern cracks', ['The Tide breaks into the Lamplit Cellars, and the lantern cracks.']],
       ] },
     { id: 'act4', tag: 'Act IV · Season 4', name: 'The Last Surge', when: 'Jul to Oct 2027', st: 'next', pic: 's:wyrm,lich',
-      story: 'The lantern is cracked and the Rift is waking. Every alliance races for the Nexus root beneath the Hold.',
+      story: 'The last season of the year. Every alliance makes its final push for the Nexus.',
       items: [
-        ['book', 'Story', 'The Unlit speaks', ['The Unlit finally speaks.', 'The Hollow King offers to become the new seal, by choice this time.', 'Your party decides how far it will go to keep the light.']],
-        ['map', 'The Nexus Root', 'The last regions, floors 311 to 400', ['The deepest regions of the year, ending at the Nyx Heart.']],
-        ['relic', 'Nexus expeditions', 'Legendary jobs into the root', ['Hired NPCs can fall here.', 'Each success carries a relic to your alliance’s side of the Nexus.']],
-        ['flame', 'The Nyx Heart', 'A world boss for the final week', ['It lasts the whole final week.', 'Every point of damage counts for the striker’s alliance.']],
+        ['book', 'New story chapters', 'The year’s story comes together', ['The last chapters of the year, in the Journal.']],
+        ['map', 'The final regions', 'Floors 311 to 400', ['The deepest regions of the year.']],
+        ['relic', 'Nexus expeditions', 'Legendary jobs', ['The hardest jobs of the year. Hired NPCs can fall here.', 'Each success counts for your alliance in the race for the Nexus.']],
+        ['flame', 'A world boss for the final week', 'Everyone fights together', ['It lasts the whole final week.', 'Every point of damage counts for the striker’s alliance.']],
         ['shield', 'Alliance chapters', 'Five last chapters', ['The Covenant, the Ascendancy, the Tide, the Mercy Corps and the Unsworn each get a final chapter and a Legendary set.']],
         ['star', 'Harvest of the Bone Orchard', 'Autumn festival, October', ['A last festival before the surge.']],
       ] },
-    { id: 'finale', tag: 'Finale', name: 'The Breaking', when: 'Autumn 2027', st: 'next', pic: 'i:crown',
-      story: 'At the Last Surge the alliance holding the Nexus decides the Rift’s fate, and the Deep changes for good. Every ending opens Year Two.',
+    { id: 'finale', tag: 'Finale', name: 'The Nexus Decides', when: 'Autumn 2027', st: 'next', pic: 'i:crown',
+      story: 'At the end of Season 4, the alliance holding the Nexus decides what happens to the Deep. Every alliance has its own ending, and each one starts Year Two in a different place.',
       ends: [
-        ['covenant', 'The Nexus is sealed', 'The Covenant forges a new lantern from the Nexus itself, and no bearer is ever fed to it again. The Deep becomes a fortress.', 'The Long Watch'],
-        ['radiant', 'The Nexus is ruled', 'Its light becomes a ladder and the Deep fills with light. Heroes can Ascend, a new path above hero level.', 'The Climb'],
-        ['tide', 'The Nexus breaks', 'The Rift tears open across the Reach, and the Hold is the last light left burning.', 'The Dark Year'],
-        ['unsworn', 'No one holds it', 'The Hollow King keeps his promise and becomes the seal. The Nexus holds, and nobody rules it.', 'The King’s Bargain'],
+        ['covenant', 'Hold the line.', 'If the Covenant wins, the Deep goes the Covenant’s way.'],
+        ['radiant', 'Rise beyond.', 'If the Ascendancy wins, the Deep goes the Ascendancy’s way.'],
+        ['tide', 'Everything feeds the Tide.', 'If the Tide wins, the Deep goes the Tide’s way.'],
+        ['unsworn', 'And one more', 'There is one more ending. Nobody has seen it yet.'],
       ],
       items: [
-        ['cross', 'The Mercy Corps', 'No one left in the dark', ['If players reach the Mercy goal in the final season, every companion is carried home, whatever the ending.']],
-        ['relic', 'For everyone who played', 'A one-year relic', ['Everyone who played the year gets a one-year relic, and the ending is written into the Journal for good.']],
+        ['cross', 'The Mercy Corps', 'A goal for everyone', ['Reach the Mercy goal in the final season and every company gets help, whatever the ending.']],
+        ['relic', 'For everyone who played', 'A one-year relic', ['Everyone who played the year gets a one-year relic.']],
       ] },
   ];
   const GUIDE = [
@@ -5566,7 +5564,7 @@
     const r = ROADMAP[rmAt];
     const track = '<div class="rmtrack" role="tablist">' + ROADMAP.map((x, i) => '<button class="rmstop ' + x.st + (i === rmAt ? ' on' : '') + '" data-rm="' + i + '" role="tab" aria-selected="' + (i === rmAt) + '"><span class="rmdot"></span><b>' + rmShort(x) + '</b><small>' + x.name + '</small></button>').join('') + '</div>';
     const odds = '<div class="rmodds" aria-label="Example odds"><span class="ok" style="flex:70">Success 70%</span><span class="bad" style="flex:24">Failure 24%</span><span class="fall" style="flex:6"></span></div><small class="rmnote">Example odds for one job. The red sliver is Fallen, 6%.</small>';
-    const ends = r.ends ? '<div class="rmends">' + r.ends.map(([k, t, d, y]) => { const sd = L.SIDES[k]; return '<div class="rmend" style="--c:' + sd.color + '"><small>' + (k === 'unsworn' ? 'If no alliance holds it clearly' : 'If the ' + sd.name + ' holds') + '</small><b>' + t + '</b><p>' + d + '</p><em>Year Two: ' + y + '</em></div>'; }).join('') + '</div>' : '';
+    const ends = r.ends ? '<div class="rmends">' + r.ends.map(([k, t, d, y]) => { const sd = L.SIDES[k]; return '<div class="rmend" style="--c:' + sd.color + '"><small>' + (k === 'unsworn' ? 'A secret ending' : sd.name) + '</small><b>' + t + '</b><p>' + d + '</p>' + (y ? '<em>Year Two: ' + y + '</em>' : '') + '</div>'; }).join('') + '</div>' : '';
     const items = r.items.map(([ic, t, sm, d, x], j) => '<details class="rmitem"' + (x === 'odds' ? ' open' : '') + '><summary>' + icon(ic) + '<span><b>' + t + '</b><small>' + sm + '</small></span></summary><ul>' + d.map(z => '<li>' + z + '</li>').join('') + '</ul>' + (x === 'odds' ? odds : '') + '</details>').join('');
     const prev = ROADMAP[rmAt - 1], next = ROADMAP[rmAt + 1];
     return '<div class="rm">' + track + '<section class="rmpanel"><div class="rmhead">' + guidePic(r.pic) + '<div><small class="rmtag">' + r.tag + ' · ' + r.when + '<i class="rmst ' + r.st + '">' + RM_ST[r.st] + '</i></small><h3>' + r.name + '</h3><p>' + r.story + '</p></div></div>' +
