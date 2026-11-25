@@ -1,4 +1,4 @@
-/* lh-build 202611250432 */
+/* lh-build 202611250506 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1968,9 +1968,9 @@
   }
   const sfList = (items, rows, empty, o) => sfBar(items, o) + ewList(rows, items.length && !rows.length ? 'Nothing here matches these filters. Try All or Anyone.' : empty);
   document.addEventListener('click', e => { const k = e.target.closest('[data-sfk]'); if (k) { e.stopPropagation(); SF.kind = k.dataset.sfk; sfSave(); paintEnchPanel(true); } }, true);
-  document.addEventListener('change', e => { const c = e.target.closest('[data-sfs]'); if (c) { SF[c.dataset.sfs] = c.value; sfSave(); paintEnchPanel(true); } });
+  document.addEventListener('change', e => { const c = e.target.closest('[data-sfs]'); if (c) { SF[c.dataset.sfs] = c.value; sfSave(); c.blur(); paintEnchPanel(true); } });
   $('bag').addEventListener('click', e => { const k = e.target.closest('[data-invk]'); if (k) { e.stopPropagation(); INV.kind = k.dataset.invk; invSave(); updateGear(true); } });
-  $('bag').addEventListener('change', e => { const c = e.target.closest('[data-invs]'); if (c) { INV[c.dataset.invs] = c.value; invSave(); updateGear(true); } });
+  $('bag').addEventListener('change', e => { const c = e.target.closest('[data-invs]'); if (c) { INV[c.dataset.invs] = c.value; invSave(); c.blur(); updateGear(true); } });
   // Item type and who can use it, shown on every item (v117).
   const CLS_SHORT = { tank: 'Tank', healer: 'Healer', rogue: 'Rogue', mage: 'Mage', necro: 'Necro' };
   function usersText(it) { const u = L.usersOf(it); return u ? u.map(c => CLS_SHORT[c]).join(', ') : 'Any class'; }
@@ -2006,7 +2006,12 @@
     $('gearcount').textContent = L.packCount(S) || '';
     if (!gearWho) return;
     const key = gearWho + '|' + camp() + mainCamp() + '|' + S.party.join() + '|' + S.bag.length + '|' + JSON.stringify(S.gear) + '|' + S.bag.map(x => x.up + (x.lk ? 'L' : '')).join('') + '|' + S.unlocked.length + '|' + Math.floor(S.gold);
-    if (!force && key === gearKey) return; gearKey = key;
+    if (!force && key === gearKey) return;
+    // An open dropdown (Sort, Rarity, Who) would be torn down by this repaint, even the regular forced one from
+    // updatePanel, closing it under the player's finger (John, 2026-11-25). Wait until it's done: picking an
+    // option blurs it and repaints.
+    if (document.activeElement && document.activeElement.tagName === 'SELECT' && document.activeElement.closest('#tab-gear')) return;
+    gearKey = key;
     { const chip = id => {
         const m = L.memberById(id), n = Object.keys(L.betterFor(S, id)).length;
         return '<button class="whochip c-' + m.cls + (id === gearWho ? ' on' : '') + '" data-who="' + id + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""><span>' + esc(m.name) + '</span>' + (n ? '<em title="Better gear in your pack">' + n + '</em>' : '') + '</button>';
@@ -2405,11 +2410,11 @@
   }
   let panelHeld = false;
   function paintEnchPanel(force) {
-    if (fieldOn()) { const f = $('fieldench'), h = enchPanelHtml(); if (force || f.dataset.h !== h) { const top = f.scrollTop; f.innerHTML = h; f.dataset.h = h; f.scrollTop = top; } }
+    if (fieldOn()) { const f = $('fieldench'), h = enchPanelHtml(), busy = document.activeElement && document.activeElement.tagName === 'SELECT' && f.contains(document.activeElement); if (!busy && (force || f.dataset.h !== h)) { const top = f.scrollTop; f.innerHTML = h; f.dataset.h = h; f.scrollTop = top; } }
     const el = $('enchpanel'); if (!el) return; const on = L.visiting(S);
     el.hidden = !on; if (!on) { el.dataset.h = ''; return; }
     // A timed redraw (gold ticking) between press and release would swap the button out and lose the tap, so wait for the release.
-    if (!force && panelHeld) return;
+    if ((!force && panelHeld) || (document.activeElement && document.activeElement.tagName === 'SELECT' && el.contains(document.activeElement))) return;
     const kind = shopKind(), arm = kind === 'arm', h = kind === 'store' ? storePanelHtml() : kind === 'portal' ? portalPanelHtml() : arm ? armPanelHtml() : enchPanelHtml(); if (!force && el.dataset.h === h) return;
     const step = kind === 'store' ? 's' + SW.mode : kind === 'portal' ? 'p' : arm ? 'a' + AW.mode + !!AW.a + !!AW.b : EW.mode + !!EW.dst + !!EW.src + EW.idx;
     const sc = el.querySelector('.ewlist'), top = sc ? sc.scrollTop : 0, same = el.dataset.step === step;
@@ -5798,6 +5803,10 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 121, date: 'November 25, 2026', title: 'Rarer set pieces and steadier filters', items: [
+      'Set pieces are rarer: every chance to find a region, class or job set piece is halved. A guardian now drops a set piece about 1 time in 18 (was about 1 in 9). The map’s drop chances show the new odds.',
+      'The Sort, Rarity and Who dropdowns in your inventory (and on the Armorer and Enchanter counters) no longer snap shut while gold ticks in.',
+    ] },
     { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate and a crafting log', items: [
       'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
       'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
