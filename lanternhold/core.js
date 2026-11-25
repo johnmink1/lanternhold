@@ -1,4 +1,4 @@
-/* lh-build 202611252347 */
+/* lh-build 202611252353 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -65,7 +65,7 @@
   const WAR_KEY = { covenant: 'covenant', ascendancy: 'radiant', tide: 'tide' };
   const warWinOn = s => !!(s && s.warWin && s.warWin.side && sideOf(s) === s.warWin.side);
   const reviveMs = s => (warWinOn(s) ? WARWIN_REVIVE : REVIVE_TIME) * 1000;
-  // v126 Two-Headed Coin (Pip's Curio): a fallen hero has a 25% chance to be back up in 3 seconds.
+  // v125 Two-Headed Coin (Pip's Curio): a fallen hero has a 25% chance to be back up in 3 seconds.
   const downAt = (s, now) => now + (fxOnW(s, 'coin') && Math.random() < 0.25 ? 3000 : reviveMs(s));
   // Banner lantern (John, 2026-11-24): the more Grand War territories your banner holds right now, the bigger its buff:
   // +1% damage, health, healing and gold per territory, up to +15%. s.warLive = { held: { side: n }, total, week } comes
@@ -1320,7 +1320,7 @@
     { word: 'Sovereign', name: 'The Hollow Sovereign’s Court',  k: 'dps',  piece: { main: 'Scepter-Blade', chest: 'Mantle',       ring: 'Crown-Ring', neck: 'Torc' }, lore: 'The Sovereign ruled nothing but echoes. Its court regalia still answers to a command.' },
     { word: 'Nyxmaw',    name: 'Maw-Tooth Panoply',              k: 'heal', piece: { main: 'Fang',          chest: 'Hide',         ring: 'Coil',    neck: 'Tooth' }, lore: 'Pulled from the Maw of the Nyx. It mends what it once would have devoured.' },
     { word: 'Leviathan', name: 'Ashen Leviathan’s Hoard',        k: 'gold', piece: { main: 'Harpoon',       chest: 'Scaleguard',   ring: 'Band',    neck: 'Pearl' }, lore: 'Treasure from the belly of the ash-whale, still warm, still smelling of smoke.' },
-    // v126: the Golden Loot Goblin's rings (NP+ only, never from a world boss or the Rift Gate). Five rings, one per
+    // v125: the Golden Loot Goblin's rings (NP+ only, never from a world boss or the Rift Gate). Five rings, one per
     // ring slot, each with its own power (GG_RINGS); set bonuses in wbBonus. Upgraded with Gilded shards (shards[GG]).
     { word: 'Gilded', name: 'The Golden Goblin’s Hoard', k: 'gg', piece: { ring: 'Ring' }, lore: 'Every ring still smells faintly of mimic. The goblin bit each one to check it was real.' },
   ];
@@ -3248,7 +3248,7 @@
     return s;
   }
 
-  // ---------- NP+ gold sinks (v126, John 25 Nov 2026: "ideas for players to spend gold on", all NP+ only) ----------
+  // ---------- NP+ gold sinks (v125, John 25 Nov 2026: "ideas for players to spend gold on", all NP+ only) ----------
   // Every price is hours of the player's own income (the figure the Store prices from), so a sink bites the same at any
   // depth. Pip the Dicer's Lucky Crates and Curios, the Armorer's Reforge, Hold renovations and decorations, the
   // Enchanter's Dust Press, and Gulp the Hoard Mimic (global, server: infra/lambda/gulp.js and goblin.js), whose

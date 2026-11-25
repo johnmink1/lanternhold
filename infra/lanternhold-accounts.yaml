@@ -1702,7 +1702,7 @@ Resources:
       AuthorizerId: !Ref JwtAuthorizer
       Target: !Sub 'integrations/${NpIntegration}'
 
-  # v126 NP+ gold sinks (John, 25 Nov 2026): Gulp the Hoard Mimic and the Golden Loot Goblin (infra/lambda/gulp.js, goblin.js).
+  # v125 NP+ gold sinks (John, 25 Nov 2026): Gulp the Hoard Mimic and the Golden Loot Goblin (infra/lambda/gulp.js, goblin.js).
   GulpFunctionRole:
     Type: AWS::IAM::Role
     Properties:

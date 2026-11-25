@@ -1,6 +1,6 @@
 // Market: list an item for gold, browse by class, buy, cancel. Listings live under mkt#<cls> with a
 // pointer under sell#<seller>, written and removed together in transactions. Gold is paid into the
-// seller's mailbox (inbox#<seller>) as a 'sale' letter they claim. v126 (John, 25 Nov 2026, NP+ gold sinks): NP+ market
+// seller's mailbox (inbox#<seller>) as a 'sale' letter they claim. v125 (John, 25 Nov 2026, NP+ gold sinks): NP+ market
 // sales pay the seller 95%; the 5% leaves the game.
 const { DynamoDBClient, GetItemCommand, QueryCommand, TransactWriteItemsCommand } = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
 const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES;

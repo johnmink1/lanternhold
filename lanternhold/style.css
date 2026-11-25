@@ -1,4 +1,4 @@
-/* lh-build 202611252347 */
+/* lh-build 202611252353 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2463,7 +2463,7 @@ body.atench .achips{display:none}
 .tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
 #tr-rows{overflow-x:auto}
 @media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}
-/* v126 NP+ gold sinks: Pip's crates and Curio shelf, Gulp's sign, the goblin bar, Hold works */
+/* v125 NP+ gold sinks: Pip's crates and Curio shelf, Gulp's sign, the goblin bar, Hold works */
 .holdtents.n7{grid-template-columns:repeat(7,1fr)}
 .holdtents.n7 button{padding:8px 2px;font-size:12px}
 @media (max-width:720px){.holdtents.n7{grid-template-columns:repeat(4,1fr)}}
@@ -2481,5 +2481,5 @@ body.atench .achips{display:none}
 .gobbar svg{color:#f5c242}.gobbar em{background:#f5c242;color:#2a1c06}.gobbar em.wait{background:transparent;color:#f5c242;border-color:#a87418}
 .gobbar:hover,.gobbar.on{border-color:#f5c242}.gobbar.on{box-shadow:0 0 0 1px #f5c24255,0 0 18px #f5c24244}
 .pill.ok{padding:3px 10px;border-radius:999px;background:#1f5c3c;color:#c8f7d4;font-size:12px;font-weight:700}
-/* v126: with Pip and Gulp the shop header has six buttons; let them wrap on narrow screens */
+/* v125: with Pip and Gulp the shop header has six buttons; let them wrap on narrow screens */
 @media (max-width:720px){.shophead .shopbtns{flex:1 1 100%;flex-wrap:wrap;gap:6px}.shophead .shopbtns .btn{padding:5px 9px}}

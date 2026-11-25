@@ -1,4 +1,4 @@
-// Gulp the Hoard Mimic (v126, John 25 Nov 2026: a global NPC that NP+ heroes feed gold, with a fed counter; feeding
+// Gulp the Hoard Mimic (v125, John 25 Nov 2026: a global NPC that NP+ heroes feed gold, with a fed counter; feeding
 // raises an extremely rare chance that the Golden Loot Goblin bursts out). NP+ heroes only (hero row np >= 1).
 // Rows in the boss table: w='gulp' s='#' the counter { fed, m, cyc, last, stir, gid, gu, prev }; w='gulpc#<cyc>' s=<pid>
 // feeders this cycle { m, w, nm, c }; w='gulpd#<day>' s=<pid> morsels today { n }; w='gob#<gid>' s='#' { total, hp, cy, gu }.

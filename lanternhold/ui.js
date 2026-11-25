@@ -1,4 +1,4 @@
-/* lh-build 202611252347 */
+/* lh-build 202611252353 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -551,7 +551,7 @@
     g.strokeStyle = '#a8742e'; g.lineWidth = 0.6; g.stroke(); g.fillStyle = '#e9d5ff'; g.textAlign = 'center'; g.fillText(text, sx, sy - 2.6); g.textAlign = 'left';
     return c;
   }
-  // v126 Pip's wagon (redrawn at John's ask): a dark wooden caravan with a barrel roof, carved gold-trimmed panels, a lit
+  // v125 Pip's wagon (redrawn at John's ask): a dark wooden caravan with a barrel roof, carved gold-trimmed panels, a lit
   // window, a brass lantern on the eave and a string of small lanterns running back over the yard.
   function buildWagon(g, ex, fy) {
     const wx = ex + 4, ww = 70, wh = 34, wy = fy - 14 - wh;
@@ -610,7 +610,7 @@
       g.fillStyle = '#c9a040'; g.beginPath(); g.arc(cx, cy, 2, 0, Math.PI * 2); g.fill();
     }
   }
-  // v126 Gulp's corner of the yard: a post he is chained to, and coins scattered on the flagstones.
+  // v125 Gulp's corner of the yard: a post he is chained to, and coins scattered on the flagstones.
   function buildGulpYard(g, ex, fy) {
     g.fillStyle = '#4a2f1c'; g.fillRect(ex + 46, fy - 40, 5, 40); g.fillStyle = '#6a4426'; g.fillRect(ex + 45, fy - 42, 7, 3);
     g.strokeStyle = '#8a8f9a'; g.lineWidth = 1; for (let i = 0; i < 6; i++) { g.beginPath(); g.ellipse(ex + 44 - i * 4, fy - 16 + i * 1.2, 2, 1.2, 0, 0, Math.PI * 2); g.stroke(); }
@@ -5353,7 +5353,7 @@
     ['store', 'Store', 'healer', '#2f9e63', 'Tonics, oil, draughts'],
     ['portal', 'Rift Gate', 'riftkeeper', '#7c3aed', 'Rift tokens for Legendaries'],
   ];
-  // v126: NP+ heroes also find Pip's wagon and Gulp in the yard.
+  // v125: NP+ heroes also find Pip's wagon and Gulp in the yard.
   const HOLD_NP = [['dicer', 'Pip’s wagon', 'dicer', '#c9a040', 'Lucky Crates and Curios'], ['gulp', 'Gulp', 'gulp', '#f5c242', 'Feed the Hoard Mimic']];
   const holdTents = () => L.npPlus(S) ? HOLD_TENTS.concat(HOLD_NP) : HOLD_TENTS;
   const HOLD_X = i => { const n = holdTents().length; return n > 5 ? 26 + i * 308 / (n - 1) : 36 + i * 72; };
@@ -6091,7 +6091,7 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 126, date: 'November 25, 2026', title: 'NP+ gold sinks: Pip, Gulp and the Golden Loot Goblin', items: [
+    { v: 125, date: 'November 25, 2026', title: 'NP+ gold sinks: Pip, Gulp and the Golden Loot Goblin', items: [
       'New for New Playthrough heroes (NP+1 and up). Everything below is priced in hours of your own gold income, so it stays worth thinking about at any depth.',
       'Pip the Dicer (John\u2019s idea) sets up his wagon outside the Hold. Buy a Lucky Crate with gold: a Pouch (30 minutes of income), a Coffer (3 hours) or a Casket (12 hours). Each crate holds a piece of gear, with better odds in bigger crates, and Coffers and Caskets can also hold one of 8 Curios, small trinkets with odd little perks. Every 10th Casket without a Curio is sure to have one. Crates take gold only, never Sigils.',
       'Gulp the Hoard Mimic (John\u2019s idea) lives in the yard and is always hungry. Feed it morsels of gold (10 minutes of income each, 12 a day) and watch the fed counter climb for everyone on NP+. Now and then it burps something back up.',
@@ -7197,7 +7197,7 @@
   setTimeout(() => loadBoss().then(paintBoss), 3000);
   setInterval(() => { if (!document.hidden) loadBoss().then(paintBoss); }, 120000);
   setInterval(paintBoss, 1000);
-  // ---------- NP+ gold sinks (v126): Pip the Dicer's wagon and Gulp the Hoard Mimic ----------
+  // ---------- NP+ gold sinks (v125): Pip the Dicer's wagon and Gulp the Hoard Mimic ----------
   // Both are visited shops (S.shopK 'dicer' / 'gulp') that only NP+ heroes see. Pip sells Lucky Crates for gold and
   // keeps the Curio shelf; Gulp eats morsels of gold for the whole NP+ community (server gulp.js) and, very rarely,
   // the Golden Loot Goblin bursts out of it (server goblin.js), fought in 2-minute assaults like a world boss.

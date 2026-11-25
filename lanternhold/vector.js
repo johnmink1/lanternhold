@@ -1,4 +1,4 @@
-/* lh-build 202611252347 */
+/* lh-build 202611252353 */
 /* Lanternhold illustrated sprites. Each sprite is drawn as layered SVG (outline, shading, rim light, detail),
    tinted per companion or biome, rendered once to an image and then drawn on the arena canvas. */
 (function (root) {
@@ -365,7 +365,7 @@
       C(60, 66, 3, trim, ' stroke-width="1"'),
     ].join('');
   } };
-  // Pip the Dicer (v126, NP+ gold sinks; redrawn at John's ask): a lean travelling gambler in a wide-brimmed hat with a
+  // Pip the Dicer (v125, NP+ gold sinks; redrawn at John's ask): a lean travelling gambler in a wide-brimmed hat with a
   // long feather, an oxblood greatcoat with gold filigree, a teal waistcoat and watch chain, a monocle and a sly smile.
   // A golden die hovers over his open palm. Sells Lucky Crates for gold.
   ART.dicer = { w: 120, h: 160, draw(c) {
@@ -430,7 +430,7 @@
       ].join(''), 'translate(60 31) rotate(-5)'),
     ].join('');
   } };
-  // Gulp the Hoard Mimic (v126, NP+ only): a fat treasure chest with too many teeth, googly eyes on the lid, a long pink
+  // Gulp the Hoard Mimic (v125, NP+ only): a fat treasure chest with too many teeth, googly eyes on the lid, a long pink
   // tongue and stubby feet. Everyone who has started NP+ feeds the same Gulp gold.
   ART.gulp = { w: 160, h: 140, draw(c) {
     const wood = c.lg(['#a8723e', '#7a4a22', '#4a2a10'], 0, 0, 1, 1), woodD = '#3a1e08', band = c.lg(['#fff0b8', '#f5c242', '#a87418'], 0, 0, 0, 1);
@@ -870,7 +870,7 @@
       Pn('M78 56 Q80 42 94 38', 'none', ' stroke="#ffffff" stroke-width="1.5" opacity=".4"'),
     ].join('');
   });
-  // The Golden Loot Goblin (v126): the Loot Goblin in gold, with a royal purple vest.
+  // The Golden Loot Goblin (v125): the Loot Goblin in gold, with a royal purple vest.
   ART.goldgoblin = F(c => {
     const lg = c.lg.bind(c), map = { '#8fd16a': '#fff3b0', '#5aa042': '#f2c14e', '#2f6a2a': '#a8761e', '#7a4a3a': '#6b2fa0', '#53302a': '#47206e', '#321a16': '#2a1046', '#c9a36a': '#fff1a8', '#8c6a3a': '#e0a93a', '#5a4022': '#8a5a14' };
     c.lg = (st, ...a) => lg(st.map(x => typeof x === 'string' ? map[x] || x : [map[x[0]] || x[0], x[1]]), ...a);

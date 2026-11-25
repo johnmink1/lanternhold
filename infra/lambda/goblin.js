@@ -1,4 +1,4 @@
-// The Golden Loot Goblin's fight and loot (v126, NP+ only). gulp.js spawns it (w='gob#<gid>' s='#' { hp, total, cy, gu }).
+// The Golden Loot Goblin's fight and loot (v125, NP+ only). gulp.js spawns it (w='gob#<gid>' s='#' { hp, total, cy, gu }).
 // POST /goblin/hit { id, score, ck, iv }: a 2-minute assault while it is loose, one per COOL, capped at CEIL monsters'
 // worth of the hero's deepest floor + 10 (like the world boss), with the same rhythm check.
 // POST /goblin/claim { id }: once it has gone. Killed (total >= hp): Gilded shards 3 + digits over 100, a ring roll of
