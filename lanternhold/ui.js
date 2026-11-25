@@ -1,4 +1,4 @@
-/* lh-build 202611250330 */
+/* lh-build 202611250352 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1854,7 +1854,10 @@
   const SF = { kind: 'all', rar: 'all', who: 'all', sort: 'best' };
   try { Object.assign(SF, JSON.parse(localStorage.getItem('lh_shopf') || '{}')); } catch (e) {}
   const sfSave = () => { try { localStorage.setItem('lh_shopf', JSON.stringify(SF)); } catch (e) {} };
-  const sfPass = it => (SF.kind === 'all' || invKind(it) === SF.kind) && (SF.rar === 'all' || it.rar === SF.rar) && (SF.who === 'all' || L.usable(SF.who, it));
+  // noRar: the scrap lists pick rarities with their own chips and hide the Rarity menu, so a Rarity choice saved on
+  // another counter tab must not apply there (v120 fix, John: "not able to scrap for gold": Rarity = Set from the Upgrade
+  // tab emptied the scrap list while the Armour count still showed 51).
+  const sfPass = (it, noRar) => (SF.kind === 'all' || invKind(it) === SF.kind) && (noRar === true || SF.rar === 'all' || it.rar === SF.rar) && (SF.who === 'all' || L.usable(SF.who, it));
   const SF_SORT = { level: (a, b) => L.reqLevel(b) - L.reqLevel(a), rarity: (a, b) => RAR_RANK(b) - RAR_RANK(a), type: (a, b) => (INV_KINDS.findIndex(k => k[0] === invKind(a)) - INV_KINDS.findIndex(k => k[0] === invKind(b))) || String(L.tyOf(a)).localeCompare(String(L.tyOf(b))), new: (a, b) => String(b.uid).localeCompare(String(a.uid)) };
   function sfApply(list, get, noSort) {
     get = get || (x => x); const l = list.filter(r => sfPass(get(r))), by = !noSort && SF_SORT[SF.sort];
@@ -2285,10 +2288,13 @@
     const stepper = '<ol class="ewsteps">' + steps.map((s, i) => '<li class="' + (i < cur ? 'done' : i === cur ? 'cur' : '') + '"><i>' + (i < cur ? '&#10003;' : i + 1) + '</i>' + s + '</li>').join('') + '</ol>';
     return '<div class="ephead"><b>' + title + '</b>' + dust + '</div>' + tabs + perk + done + stepper + (picked ? '<div class="ewpicked">' + picked + '</div>' : '') + body;
   }
+  let panelHeld = false;
   function paintEnchPanel(force) {
     if (fieldOn()) { const f = $('fieldench'), h = enchPanelHtml(); if (force || f.dataset.h !== h) { const top = f.scrollTop; f.innerHTML = h; f.dataset.h = h; f.scrollTop = top; } }
     const el = $('enchpanel'); if (!el) return; const on = L.visiting(S);
     el.hidden = !on; if (!on) { el.dataset.h = ''; return; }
+    // A timed redraw (gold ticking) between press and release would swap the button out and lose the tap, so wait for the release.
+    if (!force && panelHeld) return;
     const kind = shopKind(), arm = kind === 'arm', h = kind === 'store' ? storePanelHtml() : arm ? armPanelHtml() : enchPanelHtml(); if (!force && el.dataset.h === h) return;
     const step = kind === 'store' ? 's' + SW.mode : arm ? 'a' + AW.mode + !!AW.a + !!AW.b : EW.mode + !!EW.dst + !!EW.src + EW.idx;
     const sc = el.querySelector('.ewlist'), top = sc ? sc.scrollTop : 0, same = el.dataset.step === step;
@@ -2299,6 +2305,8 @@
   }
   function ewSet(o) { Object.assign(EW, o, { done: null }); paintEnchPanel(true); paintEnchOv(); }
   $('enchpanel') && $('enchpanel').addEventListener('click', shopClick);
+  $('enchpanel') && $('enchpanel').addEventListener('pointerdown', () => { panelHeld = true; });
+  ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => { if (panelHeld) setTimeout(() => { panelHeld = false; }, 0); }, true));
   function shopClick(e) {
     const t = e.target.closest('[data-ewmode],[data-ewdst],[data-ewsrc],[data-ewsrcitem],[data-ewidx],[data-ewslot],[data-ewundo],[data-ewrar],[data-ewgo],[data-awmode],[data-awa],[data-awb],[data-awgo],[data-awcap]'); if (!t) return;
     const d = t.dataset;
@@ -2557,7 +2565,7 @@
     return S.bag.filter(it => o[it.rar] && !it.lk && !L.wearer(S, it.uid) && !best.has(it.uid) && !(o.keepUp && it.up > 0));
   }
   const scrapList = () => bulkList(scrapOpts);
-  const shopScrap = () => scrapList().filter(sfPass);
+  const shopScrap = () => scrapList().filter(it => sfPass(it, true));
   const shopMass = () => L.massMergePlan(S, mmCap).filter(p => sfPass(p.a));
   function openScrap() {
     const draw = () => {
@@ -5645,6 +5653,7 @@
       'Fixed: NPC Guild hire prices and wages no longer jump around. They used to count a mage\u2019s spell as always on (prices up to 70% too high) and drop when a companion was down or sent to the Campfire. Prices now follow your best five companions at full strength, so the price you see is the price you pay.',
       'Wages are now half rate while you are away, so they take the same share of your smaller away income. Before, a big roster could cost more than the party brought home overnight and hires walked off.',
       'The gold hover and the NPC Guild now show your away income (what your party brings home while you are gone) and your wages while away.',
+      'Fixed: Scrap for gold at the Armorer (and Scrap for Dust at the Enchanter) could show Melt 0 even with spare gear listed, because a Rarity filter picked on the Upgrade or Merge tab still applied. The rarity buttons on the scrap tab now decide alone.',
       'Fixed: typing @ in the desktop chat windows shows the list of players again (Tab, Enter or a click fills in the name). It only worked in the phone chat before.',
     ] },
     { v: 118, date: 'November 24, 2026', title: 'The NPC Guild', items: [
