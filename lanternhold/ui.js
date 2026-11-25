@@ -1,4 +1,4 @@
-/* lh-build 202611252353 */
+/* lh-build 202611252355 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6191,28 +6191,28 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 125, date: 'November 25, 2026', title: 'Mythic world boss gear', items: [
+    { v: 125, date: 'November 2026', title: 'Mythic gear, rarer events and NP+ gold sinks', items: [
       'World boss gear is now <b>Mythic</b>, a new tier above Legendary and the strongest gear in the game. Pieces you already own become Mythic, with more power, an extra enchant socket and higher enchant tiers.',
       'Mythic sets are stronger: +20% with 2 pieces (+30% gold for the Leviathan set) and +45% damage and health with all 4.',
       'They are meant to be a long grind. A Mythic drop after a world boss is rare: under 3% a weekend even for the strongest delvers, and full odds still need 3 phases broken.',
       'Warden Sable at the Rift Gate now asks 150 Rift tokens for a piece, and upgrading a Mythic costs twice the boss shards it did.',
       'A strong party now keeps scoring its real damage in a world boss assault (the per-assault limit is four times higher), so boss weaknesses and half-damage hires count for everyone.',
-      'New for New Playthrough heroes (NP+1 and up). Everything below is priced in hours of your own gold income, so it stays worth thinking about at any depth.',
+      'World boss loot: your Rift tokens are saved to your account together with the rest of the claim.',
+      'Treasure chests are much rarer: 1% of fights (was 3%). The Moth-wing Charm now adds +0.1% a level, up to +2%, and the Lockpick skill +1%, so chests top out at 4% of fights (was 25%). The daily quest asks for 5 chests instead of 10.',
+      'Other random events are rarer too: Loot Goblins and locked doors and chests come half as often, and Ghost Lanterns and the wandering merchant show up about half as often.',
+      'New daily limits per hero, reset at midnight UTC: 40 treasure chests, 60 ambushes, 20 locks, 6 Loot Goblins, 12 Ghost Lanterns, 8 merchants and 6 Mercy Corps encounters. After that, normal monsters take their place until tomorrow.',
+      'Alliance elites are not affected, so region trials (10 elites before you pass a region\u2019s guardian) go at the same pace as before.',
+      'Set pieces are rarer again: region set pieces drop half as often as before, and class and job set pieces a quarter as often. One region piece still earns that region\u2019s mastery star.',
+      'NPC Guild wages have a ceiling: a hire never costs more than a set share of your income an hour (Common 3%, Uncommon 6%, Rare 15%, Epic 30%, Legendary 40%). Parties whose power level ran ahead of their floor can keep an Epic again.',
+      'Wage relief: every region with all three mastery stars takes 2% off every hire\u2019s wage, Charisma takes some off, and the new Quartermaster camp job (best for Tanks) haggles it down further. Up to 50% in all. See it in the NPC Guild.',
+      'New for New Playthrough heroes (NP+1 and up), and all priced in hours of your own gold income so it stays worth thinking about at any depth:',
       'Pip the Dicer (John\u2019s idea) sets up his wagon outside the Hold. Buy a Lucky Crate with gold: a Pouch (30 minutes of income), a Coffer (3 hours) or a Casket (12 hours). Each crate holds a piece of gear, with better odds in bigger crates, and Coffers and Caskets can also hold one of 8 Curios, small trinkets with odd little perks. Every 10th Casket without a Curio is sure to have one. Crates take gold only, never Sigils.',
       'Gulp the Hoard Mimic (John\u2019s idea) lives in the yard and is always hungry. Feed it morsels of gold (10 minutes of income each, 12 a day) and watch the fed counter climb for everyone on NP+. Now and then it burps something back up.',
       'Every morsel fed by anyone makes the Golden Loot Goblin slightly more likely to appear. It is very rare. When it shows up, every NP+ hero gets 30 minutes to beat it down together in 2-minute assaults, like the world boss. It dashes about, so bring a Rogue to keep up. If time runs out it escapes with its loot.',
       'Beat it and everyone who fought shares the Golden Goblin\u2019s Hoard: 5 Gilded rings with their own set bonus, plus Gilded shards toward the ring you are missing. Top damage and the most morsels fed improve your odds. Curios and Hold works carry over to your next tier, and Pip hands back any Curio you no longer carry.',
       'Also for NP+: Reforge at the Armorer (reroll an item\u2019s enchantments, cost doubles each time, up to 6 times), the Dust Press at the Enchanter (turn gold into Dust, up to 200 a day), and Hold works: 4 renovations with a small perk each and 4 decorations just for looks.',
       'The NP+ trading market now keeps a 5% fee on each sale.',
-      'NPC Guild wages have a ceiling: a hire never costs more than a set share of your income an hour (Common 3%, Uncommon 6%, Rare 15%, Epic 30%, Legendary 40%). Parties whose power level ran ahead of their floor can keep an Epic again.',
-      'Wage relief: every region with all three mastery stars takes 2% off every hire\u2019s wage, Charisma takes some off, and the new Quartermaster camp job (best for Tanks) haggles it down further. Up to 50% in all. See it in the NPC Guild.',
-      'World boss loot: your Rift tokens are saved to your account together with the rest of the claim.',
-      'Set pieces are rarer again: region set pieces drop half as often as before, and class and job set pieces a quarter as often. One region piece still earns that region\u2019s mastery star.',
       'Fixed: after you banked the day\u2019s 15 found Sigils, the game kept popping up \u201cDaily find limit reached\u201d every few seconds. It now tells you once, keeps any extra Sigils for the next day (UTC), and a new find says they are saved for tomorrow (thanks for the report, Kyvia).',
-      'Treasure chests are much rarer: 1% of fights (was 3%). The Moth-wing Charm now adds +0.1% a level, up to +2%, and the Lockpick skill +1%, so chests top out at 4% of fights (was 25%). The daily quest asks for 5 chests instead of 10.',
-      'Other random events are rarer too: Loot Goblins and locked doors and chests come half as often, and Ghost Lanterns and the wandering merchant show up about half as often.',
-      'New daily limits per hero, reset at midnight UTC: 40 treasure chests, 60 ambushes, 20 locks, 6 Loot Goblins, 12 Ghost Lanterns, 8 merchants and 6 Mercy Corps encounters. After that, normal monsters take their place until tomorrow.',
-      'Alliance elites are not affected, so region trials (10 elites before you pass a region\u2019s guardian) go at the same pace as before.',
     ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Fixed: past about 97 levels of the Moth-wing Charm every fight turned into a Treasure Chest, so some heroes got stuck opening chests at the bottom of Act One. The charm now tops out at +20% (treasure chests at most 25% of fights), and re-beating the Lampmother no longer counts as a first clear for relic finds.',

@@ -1,4 +1,4 @@
-/* lh-build 202611252353 */
+/* lh-build 202611252355 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -3454,7 +3454,7 @@
   // A Gilded ring from the goblin (one you don't own yet when the server says you won one).
   function makeGilded(s, gr, rng) {
     const r = rng || Math.random, cls = heroCls(s) || 'tank';
-    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: 'ring', rar: 'legend', wb: GG, gr, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0, t: npT(s) }, r);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: 'ring', rar: 'mythic', wb: GG, gr, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0, t: npT(s) }, r);
   }
   const ggOwned = s => { const o = {}; for (const it of s.bag) if (it.wb === GG && it.gr != null) o[it.gr] = 1; return o; };
   // Pays out a goblin claim from the server: { ring: true|false, sh: shards }. Duplicates after the full set become shards.
