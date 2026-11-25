@@ -1,6 +1,6 @@
 # Lanternhold handoff (24 Nov 2026)
 
-This handoff stands on its own for the new Lanternhold project. It is current as of **v123**, live at https://lanternhold.born2gamellc.com.
+This handoff stands on its own for the new Lanternhold project. It is current as of **v124**, live at https://lanternhold.born2gamellc.com.
 
 ## Where Lanternhold work happens
 
@@ -17,7 +17,7 @@ Do not ship changes one at a time. Collect everything John asks for into one num
 | Path | What it is |
 |---|---|
 | `lanternhold/core.js` | All game rules: classes, foes, loot, crafting, events, the `api` export list. Any new function must be added to that big export list at the bottom. |
-| `lanternhold/ui.js` | All UI, the in-game Delver's Guide (`GUIDE`) and `PATCH_NOTES` (newest first). The next version is **v124**. |
+| `lanternhold/ui.js` | All UI, the in-game Delver's Guide (`GUIDE`) and `PATCH_NOTES` (newest first). The next version is **v125**. |
 | `lanternhold/style.css`, `index.html` | Styles and markup. |
 | `lanternhold/vector.js` | Illustrated SVG sprites (`ART.enchanter`, `ART.armorer`, classes, foes). |
 | `lanternhold/sprites.js` | Pixel fallback sprites and `itemIcon`. |
@@ -148,6 +148,7 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
     - v122 server note: `lanternhold-np` (role `lanternhold-np-role`, integration `inzby7i`, routes POST/GET `/np`) was created by CLI on 25 Nov 2026 and is not in the stack; delete those before any full stack update. Deployed and smoke-tested (401 unauthenticated).
     - v123 formation shuffle (John 25 Nov 2026): core `SHUFFLE_EVERY` 25 (guardians on floors 25/50/.../150, not the world boss), `shuffleTick` after `specialTick`: first at +8 s, then every `SHUFFLE_GAP` 22 s, warns `SHUFFLE_WARN` 3 s ahead (`shufwarn`), scrambles occupied seats for `shuffleTime` (10 s, -20%/level of the new relic `anchor` Lodestone Anchor, max -80%) into `s.shuf = {orig, until}`. `tick` start restores via `shufRestore` when time is up or the foe is gone/new (`foe.shOn`); joiners/leavers handled. A tank with Shield Wall active when it lands blocks it (`shufblock`); auto-cast tanks hold Shield Wall for the scatter vs these guardians. Saves never keep a shuffled line (`shufBase` in ui `save`/`saveObj`, `migrate` reads `o.shuf.orig`).
     - v123 locked doors and chests (John 25 Nov 2026, "you have to have a rogue"): `makeFoe0` returns `lockFoe` at `LOCK_CHANCE` 2% on non-boss floors from `LOCK_FLOOR` 10 (sprites `door`/`lockbox`). `lockTick` (tick returns early, no combat): a Rogue in the party picks for `LOCK_TIME` 5 s (taps add `LOCK_TAP` 0.35 s via `strike`; stunned/down Rogue pauses), else the party walks past after `LOCK_SKIP` 4 s. Door = `lockGold` (8x foe gold), chest = `lockDust` ((10 + 1.2*floor) x npBonus), `LOCK_SIGIL` 1% for 1 Sigil through `s.sigPend` -> `POST /sigils/earn` kind 'drop', so the server's found-Sigil daily cap (15, perks.js) applies. Counts as a foe for floor progress. Baselines to track: `stats.locks`, `stats.lockSkip`, Rogue use in parties.
+    - v124 hard feats (John 25 Nov 2026): `FEATS` r5, r25, b500, relall, up10 / pup10 (`maxedKit(s, id)`: every `openPos` spot holds an item at `UP_MAX`), solo (`stats.soloLamp`, counted in `killFoe` when the floor `ACT_ONE_END` guardian dies with one seated hero), np3, np10. Each feat is +1% (`FEAT_PER`). Feats survive NP+.
     - Party tab redesign: John asked for mockups 25 Nov 2026 (in project files lanternhold/party-redesign/), then said to forget it. Do not build unless he asks again.
 
 ## Open asks and things to watch

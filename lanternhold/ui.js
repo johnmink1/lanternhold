@@ -1,4 +1,4 @@
-/* lh-build 202611250606 */
+/* lh-build 202611250621 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5945,6 +5945,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
+      'Nine new feats for the long haul, each worth the usual +1% damage and healing: Lone Lantern (defeat the Lampmother with only your own hero in the party), Masterwork (+10 gear in every open slot on your hero), Forged Company (all five heroes in +10 gear), Ash and Ember (rekindle 5 times), The Undying Flame (rekindle 25 times), Jailbreaker (defeat 500 guardians), Reliquary (find every relic), Again, and Deeper (reach NP+3) and Lantern Eternal (reach NP+10).',
+    ] },
     { v: 123, date: 'November 25, 2026', title: 'Formation shuffle and locked doors', items: [
       'The guardians on floors 25, 50, 75, 100, 125 and 150 (and those floors again in every New Playthrough) now scatter your marching order. A banner warns you 3 seconds ahead, the line stays mixed up for 10 seconds, then it snaps back on its own, or straight away when the guardian falls.',
       'Counter it with your tank: if Shield Wall is up when the scatter lands, the tank holds the line and nothing moves. With auto-cast on, the tank now saves Shield Wall for the scatter in those fights.',

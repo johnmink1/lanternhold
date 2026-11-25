@@ -1,4 +1,4 @@
-/* lh-build 202611250606 */
+/* lh-build 202611250621 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -248,7 +248,23 @@
     { id: 'rel5',  name: 'Curio Cabinet',     desc: 'Find 5 different relics',    test: s => Object.keys(s.relics).length >= 5 },
     { id: 'chest', name: 'Lucky Find',        desc: 'Open 25 treasure chests',    test: s => s.stats.chests >= 25 },
     { id: 'gold',  name: 'Hoarder',           desc: 'Earn 100,000 gold in total', test: s => s.stats.goldEarned >= 1e5 },
+    // the hard ones (John, 2026-11-25): several rekindles, top gear, and the Lampmother alone
+    { id: 'r5',    name: 'Ash and Ember',     desc: 'Rekindle the lantern 5 times', test: s => s.stats.rekindles >= 5 },
+    { id: 'r25',   name: 'The Undying Flame', desc: 'Rekindle the lantern 25 times', test: s => s.stats.rekindles >= 25 },
+    { id: 'b500',  name: 'Jailbreaker',       desc: 'Defeat 500 guardians',       test: s => s.stats.bossKills >= 500 },
+    { id: 'relall',name: 'Reliquary',         desc: 'Find every relic',           test: s => RELICS.every(r => s.relics[r.id] > 0) },
+    { id: 'up10',  name: 'Masterwork',        desc: 'Wear +10 gear in every open slot on your hero', test: s => maxedKit(s, 'you') },
+    { id: 'pup10', name: 'Forged Company',    desc: 'Fill all five seats with heroes wearing +10 gear in every open slot', test: s => s.party.filter(Boolean).length >= PARTY_SIZE && s.party.every(id => id && maxedKit(s, id)) },
+    { id: 'solo',  name: 'Lone Lantern',      desc: 'Defeat the Lampmother with only your own hero in the party', test: s => (s.stats.soloLamp || 0) >= 1 },
+    { id: 'np3',   name: 'Again, and Deeper', desc: 'Start New Playthrough 3 (NP+3)', test: s => (s.np || 0) >= 3 },
+    { id: 'np10',  name: 'Lantern Eternal',   desc: 'Reach the last tier, NP+10',  test: s => (s.np || 0) >= 10 },
   ];
+  // every open gear spot on a hero holds an item upgraded to +10
+  function maxedKit(s, id) {
+    const g = s.gear && s.gear[id]; if (!g) return false;
+    const ps = openPos(s, id);
+    return ps.length > 0 && ps.every(p => { const it = g[p] && itemOf(s, g[p]); return !!(it && (it.up || 0) >= UP_MAX); });
+  }
 
   // ---------- story ----------
   // Each beat fires once when its condition holds. `join` adds a recruit (and seats them if there is room).
@@ -2526,6 +2542,7 @@
     s.foe = null; s.foeSwing = 0; if (!foe.goblin) s.foeGap = (now || Date.now()) + FOE_GAP * 1000;
     if (foe.boss) {
       s.stats.bossKills++;
+      if (f === ACT_ONE_END && s.party.filter(Boolean).length === 1) s.stats.soloLamp = (s.stats.soloLamp || 0) + 1; // the Lampmother, alone
       if (f % 10 === 0) masteryMark(s, regionNo(f), 1, events);
       const firstClear = f >= s.maxFloorEver - 1 && !regionNeed(s, f + 1);
       const chance = f < 10 ? 0 : (firstClear ? 0.35 : 0.03);
