@@ -1438,9 +1438,13 @@
   }
   // Region set drop odds, before Loot bonuses.
   // Set pieces are rarer since v121 (John, 2026-11-25: "they are dropping pretty easily"): every set chance is halved.
-  const SET_RATE = 0.5;
+  // v125 (John, 2026-11-25: "set items should still be harder to get ... it's becoming common"): region set pieces
+  // are halved again (one piece still earns a region's third mastery star) and class and job set pieces drop at a
+  // quarter of the v121 rate. Baseline before: John's save had 117 set pieces after 32 h (59 region, 31 class, 27 job),
+  // about one per 25 guardians.
+  const SET_RATE = 0.25, SET_RATE_KIT = 0.125;
   const RSET_DROP = { boss: 0.025 * SET_RATE, chest: 0.006 * SET_RATE, elite: 0.0015 * SET_RATE, pack: 0.0004 * SET_RATE, foe: 0.00005 * SET_RATE };
-  const JSET_BOSS = 0.03 * SET_RATE, JSET_CHEST = 0.008 * SET_RATE, CSET_BOSS = 0.06 * SET_RATE;
+  const JSET_BOSS = 0.03 * SET_RATE_KIT, JSET_CHEST = 0.008 * SET_RATE_KIT, CSET_BOSS = 0.06 * SET_RATE_KIT;
   function rollJobSet(s, f, r) {
     const classes = Array.from(new Set(s.party.filter(Boolean).map(id => memberById(id).cls)));
     const cls = classes.length ? classes[Math.floor(r() * classes.length)] : CLASS_ORDER[Math.floor(r() * 5)];

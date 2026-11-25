@@ -5949,6 +5949,7 @@
       'NPC Guild wages have a ceiling: a hire never costs more than a set share of your income an hour (Common 3%, Uncommon 6%, Rare 15%, Epic 30%, Legendary 40%). Parties whose power level ran ahead of their floor can keep an Epic again.',
       'Wage relief: every region with all three mastery stars takes 2% off every hire\u2019s wage, Charisma takes some off, and the new Quartermaster camp job (best for Tanks) haggles it down further. Up to 50% in all. See it in the NPC Guild.',
       'World boss loot: your Rift tokens are saved to your account together with the rest of the claim.',
+      'Set pieces are rarer again: region set pieces drop half as often as before, and class and job set pieces a quarter as often. One region piece still earns that region\u2019s mastery star.',
     ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Nine new feats for the long haul, each worth the usual +1% damage and healing: Lone Lantern (defeat the Lampmother with only your own hero in the party), Masterwork (+10 gear in every open slot on your hero), Forged Company (all five heroes in +10 gear), Ash and Ember (rekindle 5 times), The Undying Flame (rekindle 25 times), Jailbreaker (defeat 500 guardians), Reliquary (find every relic), Again, and Deeper (reach NP+3) and Lantern Eternal (reach NP+10).',
