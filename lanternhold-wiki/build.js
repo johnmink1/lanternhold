@@ -115,6 +115,7 @@ function guidePic(p, title) {
   return '<div class="gicon">' + icon(p.slice(2)) + '</div>';
 }
 for (const c of GUIDE) {
+  if (!c.topics.length) continue; // the Roadmap tab has its own page below
   const s = GUIDE_SLUG[c.id] || slug(c.name);
   pages.push({
     slug: s, title: c.name, nav: c.name, group: 'Guide', icon: c.icon,
@@ -126,6 +127,24 @@ for (const c of GUIDE) {
       related(GUIDE_REL[c.id]),
   });
   for (const [t, , sum, pts] of c.topics) addSearch(s, t, slug(t), sum + ' ' + pts.join(' '), c.name);
+}
+// ================= Roadmap (from ROADMAP in ui.js, the Guide's Roadmap tab) =================
+const ROADMAP = uiConst('ROADMAP') || [];
+const SIDES_W = (L && L.SIDES) || {};
+if (ROADMAP.length) {
+  const ST = { done: 'Done', now: 'Now', next: 'Planned' };
+  const short = x => x.id === 'start' ? 'Start' : x.tag.split(' · ')[0];
+  pages.push({
+    slug: 'roadmap', title: 'Roadmap', nav: 'Roadmap', group: 'Guide', icon: 'map',
+    desc: 'Lanternhold roadmap: where the game started, what has been added, and the four acts of the coming year, ending at the Last Surge.',
+    lede: 'Where Lanternhold started, what has been added, and the year ahead: four acts, one for each season of the Grand War. Tap any line to open it.',
+    body: () => '<nav class="rmtrack">' + ROADMAP.map(x => '<a class="rmstop ' + x.st + '" href="#rm-' + x.id + '"><span class="rmdot"></span><b>' + esc(short(x)) + '</b><small>' + esc(x.name) + '</small></a>').join('') + '</nav>' +
+      ROADMAP.map(x => '<section class="rmpanel" id="rm-' + x.id + '"><div class="rmhead">' + guidePic(x.pic) + '<div><small class="rmtag">' + x.tag + ' · ' + x.when + ' <i class="rmst ' + x.st + '">' + ST[x.st] + '</i></small><h2>' + x.name + '</h2><p>' + x.story + '</p></div></div>' +
+        (x.ends ? '<div class="rmends">' + x.ends.map(([k, t, d, y]) => { const sd = SIDES_W[k] || { name: k, color: '#f5c242' }; return '<div class="rmend" style="--c:' + sd.color + '"><small>' + (k === 'unsworn' ? 'If no alliance holds it clearly' : 'If the ' + sd.name + ' holds') + '</small><b>' + t + '</b><p>' + d + '</p><em>Year Two: ' + y + '</em></div>'; }).join('') + '</div>' : '') +
+        '<div class="rmlist">' + x.items.map(([ic, t, sm, d]) => '<details class="rmitem"><summary>' + icon(ic) + '<span><b>' + t + '</b><small>' + sm + '</small></span></summary><ul>' + d.map(z => '<li>' + z + '</li>').join('') + '</ul></details>').join('') + '</div></section>').join('') +
+      '<p class="rmfine">This is our plan, not a promise. Dates follow the Grand War’s seasons, and player feedback will move things around.</p>',
+  });
+  for (const x of ROADMAP) addSearch('roadmap', x.tag + ': ' + x.name, 'rm-' + x.id, x.story + ' ' + x.items.map(i => i[1] + ' ' + i[2] + ' ' + i[3].join(' ')).join(' '), 'Roadmap');
 }
 function related(list) {
   if (!list || !list.length) return '';
@@ -491,7 +510,7 @@ function homeBody() {
     '<p class="lede">Everything you need to carry the lantern down to the Nyx Rift: classes and skill trees, companions, gear and sets, every region and monster, and how each system works.</p>' +
     '<div class="hbtns"><a class="btn gold" href="/wiki/getting-started/">New here? Start with the basics</a><a class="btn" href="/?ref=wiki">Play Lanternhold free</a></div>' +
     '<ul class="counts">' + counts.map(([n, t]) => '<li><b>' + n + '</b><span>' + t + '</span></li>').join('') + '</ul></div><div class="hparty" aria-hidden="true">' + heroes + '</div></section>' +
-    '<h2 class="sect">Guide</h2><div class="tiles">' + guide.map(p => '<a class="tile" href="/wiki/' + p.slug + '/">' + icon(p.icon) + '<b>' + esc(p.title) + '</b><small>' + esc(strip(GUIDE.find(g => (GUIDE_SLUG[g.id] || slug(g.name)) === p.slug).topics.map(t => t[0]).slice(0, 4).join(', '))) + '</small></a>').join('') + '</div>' +
+    '<h2 class="sect">Guide</h2><div class="tiles">' + guide.map(p => '<a class="tile" href="/wiki/' + p.slug + '/">' + icon(p.icon) + '<b>' + esc(p.title) + '</b><small>' + (p.slug === 'roadmap' ? 'Where we started, four acts, the Breaking' : esc(strip(GUIDE.find(g => (GUIDE_SLUG[g.id] || slug(g.name)) === p.slug).topics.map(t => t[0]).slice(0, 4).join(', ')))) + '</small></a>').join('') + '</div>' +
     '<h2 class="sect">Reference</h2><div class="tiles">' + REF.map(p => '<a class="tile" href="/wiki/' + p.slug + '/">' + icon(p.icon) + '<b>' + esc(p.title) + '</b><small>' + esc(p.desc.split(': ').pop().split('. ')[0].slice(0, 110)) + '</small></a>').join('') + '</div>' +
     (NOTES[0] ? '<h2 class="sect">Latest update</h2><a class="latest" href="/wiki/patch-notes/#v' + NOTES[0].v + '"><b>' + esc(NOTES[0].title) + '</b><small>Update ' + NOTES[0].v + (NOTES[0].date ? ' · ' + esc(NOTES[0].date) : '') + '</small><span>' + esc(strip(NOTES[0].items[0])).slice(0, 180) + '</span></a>' : '') +
     '<section class="cta"><div><h2>Questions the wiki does not answer?</h2><p>Ask other delvers in #lanternhold-chat on the Grand War Discord, or report a bug in #lanternhold-bugs.</p></div><a class="btn" href="' + DISCORD + '" rel="noopener">' + icon('discord') + ' Join the Discord</a></section>';
