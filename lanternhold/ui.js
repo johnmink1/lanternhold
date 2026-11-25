@@ -1046,7 +1046,7 @@
 
   // ---------- events ----------
   let pendingGold = 0, lastGoldFloat = 0, sealedToast = false, lockToast = 0;
-  const RARITY_COLOR = { common: '#d8cfb8', fine: '#8fcf6a', rare: '#6cc4e8', epic: '#c78bff', set: '#f2c14e', legend: '#ff8a3d' };
+  const RARITY_COLOR = { common: '#d8cfb8', fine: '#8fcf6a', rare: '#6cc4e8', epic: '#c78bff', set: '#f2c14e', legend: '#ff8a3d', mythic: '#ff3d6e' };
   // ---------- fight log (John, 2026-11-23): a short record of what happened in recent fights ----------
   const FLOG = [], FLOG_MAX = 120, flogThrottle = {};
   let flogTaken = 0, flogDirty = false;
@@ -1375,7 +1375,7 @@
     if (ok || bad) craftLog('relic', 'Mass merge' + where, ok + ' merged' + (bad ? ', ' + bad + ' failed (' + bad * 2 + ' items lost)' : '') + '.', g.concat(['+' + fmt(mxp) + ' hero XP']), l, pop && (bad ? 'warn' : 'feat'));
     return { ok, bad, mxp };
   }
-  // What one upgrade costs: gold, or that boss's shards for a Legendary.
+  // What one upgrade costs: gold, or that boss's shards for a Mythic.
   const upPaid = it => it.wb != null && L.WB_SETS[it.wb] ? craftCost(L.wbUpCost(it), L.WB_SETS[it.wb].word + ' shard' + (L.wbUpCost(it) === 1 ? '' : 's')) : craftCost(L.upgradeCost(it), 'gold');
   function logUp(it, was, paid, where) { craftLog('hammer', 'Upgraded' + where, L.gearName(it) + ' is now +' + it.up + '.', ['Now: ' + craftItem(it)], [paid, 'Was: ' + was]); }
   function logScrap(title, items, g, d, pop) { craftLog('coin', title, items.length + (items.length === 1 ? ' piece' : ' pieces') + ' broken down.', ['+' + craftCost(g, 'gold')].concat(d ? ['+' + craftCost(d, 'Dust')] : []), items, pop); }
@@ -2241,7 +2241,7 @@
       (it.jset ? (() => { const js = L.JOB_SETS[it.jset], n = wearer ? L.jobSetCount(S, w, it.jset) : 0; return '<div class="iset"><b>' + js.name + (wearer ? ' <em>' + n + '/3 worn</em>' : '') + '</b><small>A job set for the ' + jobName(it.jset) + '. It helps whoever wears it while they work that job at camp.</small><small><em>2 pieces</em> +' + Math.round(L.JOB_SET_TWO * 100) + '% ' + jobName(it.jset) + ' output</small><small><em>3 pieces</em> +' + Math.round(L.JOB_SET_THREE * 100) + '% ' + jobName(it.jset) + ' output</small></div>'; })() : '') +
       (set ? '<div class="iset"><b>' + set.name + '</b><small><em>2 pieces</em> ' + set.two + '</small><small><em>3 pieces</em> ' + set.three + '</small><small class="lore">' + esc(set.lore) + '</small>' + setWhere('class') + '</div>' : '') +
       (rs ? (() => { const n = wearer ? (L.rsetCounts(S, w)[it.rset] || 0) : 0; return '<div class="iset rset"><b>' + rs.name + (wearer ? ' <em>' + n + '/4 worn</em>' : '') + '</b><small>A region set from ' + esc(regionName(it.rset)) + '. Head, chest, legs and feet, for any class. The bonuses multiply all of the wearer’s gear.</small><small><em>2 pieces</em> ' + rsetTwoText(it.rset) + '</small><small><em>4 pieces</em> ' + rsetFourText(it.rset) + '</small><small class="lore">' + esc(rs.lore) + '</small>' + setWhere('rset', it.rset) + '</div>'; })() : '') +
-      (leg ? (() => { const n = wearer ? (L.wbCounts(S, w)[it.wb] || 0) : 0, k = { hp: 'health', dps: 'damage', heal: 'healing (health for non-healers)', gold: 'gold for the whole party' }[leg.k]; return '<div class="iset legset"><b>' + leg.name + (wearer ? ' <em>' + n + '/4 worn</em>' : '') + '</b><small>A world boss Legendary. Weapon, chest, ring and amulet. Bound to you. Upgrade it with ' + leg.word + ' shards, not gold.</small><small><em>2 pieces</em> +' + Math.round(L.WB_TWO[leg.k] * 100) + '% ' + k + '</small><small><em>4 pieces</em> +' + Math.round(L.WB_FOUR * 100) + '% damage and health (healing for healers)</small><small class="lore">' + esc(leg.lore) + '</small></div>'; })() : '') +
+      (leg ? (() => { const n = wearer ? (L.wbCounts(S, w)[it.wb] || 0) : 0, k = { hp: 'health', dps: 'damage', heal: 'healing (health for non-healers)', gold: 'gold for the whole party' }[leg.k]; return '<div class="iset legset"><b>' + leg.name + (wearer ? ' <em>' + n + '/4 worn</em>' : '') + '</b><small>World boss Mythic gear, above Legendary. Weapon, chest, ring and amulet. Bound to you. Upgrade it with ' + leg.word + ' shards, not gold.</small><small><em>2 pieces</em> +' + Math.round(L.WB_TWO[leg.k] * 100) + '% ' + k + '</small><small><em>4 pieces</em> +' + Math.round(L.WB_FOUR * 100) + '% damage and health (healing for healers)</small><small class="lore">' + esc(leg.lore) + '</small></div>'; })() : '') +
       (it.rar === 'goblin' ? '<div class="iset gobset"><b>The Loot Goblin’s Sack</b><small>+' + pct100(L.GOBLIN_SACK_GOLD) + ' gold for the whole party while worn. Roughly one Loot Goblin in ' + Math.round(1 / L.GOBLIN_SACK_CHANCE).toLocaleString('en-US') + ' drops it.</small><small class="lore">Still lumpy with whatever he stole last. Nobody has been brave enough to empty it.</small></div>' : '') +
       (wearer ? '<div class="iworn"><img src="' + SP.spriteURL(wearer.cls, 2, lookHue(wearer)) + '" alt="">Worn by <b>' + esc(wearer.name) + '</b></div>' : '') +
       '<div class="iacts">' +
@@ -2351,16 +2351,16 @@
       (wardOn() ? '<button class="btn ghost small stward" data-swward="1">' + icon('star') + 'Open the Wardrobe</button>' : '') +
       '<p class="note small">Gold prices follow how much gold you earn. Speed-ups can also be bought with ' + TOKEN + '.</p>';
   }
-  // The Rift Gate's counter (v120): Warden Sable trades Rift tokens for a world boss Legendary of any set.
+  // The Rift Gate's counter (v120): Warden Sable trades Rift tokens for a world boss Mythic of any set.
   const PW = { done: null };
   function portalPanelHtml() {
     const tok = S.wbTok || 0, cost = L.WB_TOKEN_COST, sh = L.shardsOf(S);
     const head = '<div class="ephead"><b>Warden Sable’s chest</b><span class="epdust">' + icon('relic') + '<b>' + fmt(tok) + '</b> Rift tokens</span></div>';
     const bonus = b => (b.k === 'gold' ? '+' + Math.round(L.WB_TWO.gold * 100) + '% gold' : '+' + Math.round(L.WB_TWO[b.k] * 100) + '% ' + (b.k === 'hp' ? 'health' : b.k === 'dps' ? 'damage' : 'healing')) + ' with 2 pieces, +' + Math.round(L.WB_FOUR * 100) + '% damage and health with 4';
-    return head + (PW.done ? '<div class="ewdone">' + PW.done + '</div>' : '') + '<h3 class="ewq">Which Legendary set calls to you?</h3>' +
-      '<p class="ewhint">“Every world boss you fight pays tokens for the damage you dealt. Bring me ' + cost + ' and the Rift gives up a piece (a random slot) of any set it has swallowed.”</p>' +
+    return head + (PW.done ? '<div class="ewdone">' + PW.done + '</div>' : '') + '<h3 class="ewq">Which Mythic set calls to you?</h3>' +
+      '<p class="ewhint">“The Rift does not give up its treasures lightly. Every world boss you fight pays tokens for the damage you dealt. Bring me ' + cost + ' and it yields a Mythic piece (a random slot) of any set it has swallowed.”</p>' +
       '<div class="rglist">' + L.WB_SETS.slice(0, L.WB_BOSSES).map((b, k) => '<div class="rgrow"><div><b>' + esc(b.name) + '</b><small>' + bonus(b) + ' · ' + fmt(sh[k] || 0) + ' ' + esc(b.word) + ' shards for upgrades</small></div><button class="btn small" data-tokbuy="' + k + '"' + (tok < cost ? ' disabled title="Not enough Rift tokens"' : '') + '>' + icon('relic') + cost + ' tokens</button></div>').join('') + '</div>' +
-      '<p class="note small">Legendaries are bound to you and can’t be merged. Upgrade them at the Armorer with that boss’s shards.</p>';
+      '<p class="note small">Mythic pieces are bound to you and can’t be merged. Upgrade them at the Armorer with that boss’s shards.</p>';
   }
   $('enchpanel') && $('enchpanel').addEventListener('click', e => {
     if (shopKind() !== 'portal') return;
@@ -2368,7 +2368,7 @@
     const k = +t.dataset.tokbuy, it = L.buyLegend(S, k); if (!it) return;
     save(); try { pushCloud(true); } catch (x) {} updateGear(true); sfx.boss && sfx.boss(); shopBurst();
     PW.done = 'The gate flares and gives up <b>' + esc(L.gearName(it)) + '</b>. It’s in your bag. ' + fmt(S.wbTok) + ' tokens left.';
-    toast('crown', 'LEGENDARY: ' + L.gearName(it), L.WB_TOKEN_COST + ' Rift tokens traded at the Rift Gate.', 'feat'); paintEnchPanel(true);
+    toast('crown', 'MYTHIC: ' + L.gearName(it), L.WB_TOKEN_COST + ' Rift tokens traded at the Rift Gate.', 'feat'); paintEnchPanel(true);
   });
   $('enchpanel') && $('enchpanel').addEventListener('click', async e => {
     if (shopKind() !== 'store') return;
@@ -5221,7 +5221,7 @@
       '<div class="dos-go"><button class="btn small" data-go="' + to + '">Travel to floor ' + to + '</button>' + (to > x.first ? '<button class="btn small ghost" data-go="' + x.first + '">Region entrance</button>' : '') + '</div>' + lootList(x.first) + '</div>';
   }
   // Possible loot (John, 2026-11-23): the region's drops with this player's real odds per kill, from L.regionLoot.
-  const LOOT_COLOR = Object.assign({}, RARITY_COLOR, { relic: '#ff9f5a', sigil: '#9fd0ff', goblin: '#7dff6a', legend: '#ff8a3d' });
+  const LOOT_COLOR = Object.assign({}, RARITY_COLOR, { relic: '#ff9f5a', sigil: '#9fd0ff', goblin: '#7dff6a', legend: '#ff8a3d', mythic: '#ff3d6e' });
   function lootPct(p) {
     if (p >= 0.995) return '100%';
     if (p >= 0.1) return Math.round(p * 100) + '%';
@@ -5351,7 +5351,7 @@
     ['ench', 'Enchanter', 'enchanter', '#7c4dea', 'Enchant and disenchant'],
     ['arm', 'Armorer', 'armorer', '#9aa3b2', 'Upgrade, merge, melt'],
     ['store', 'Store', 'healer', '#2f9e63', 'Tonics, oil, draughts'],
-    ['portal', 'Rift Gate', 'riftkeeper', '#7c3aed', 'Rift tokens for Legendaries'],
+    ['portal', 'Rift Gate', 'riftkeeper', '#7c3aed', 'Rift tokens for Mythic gear'],
   ];
   // v125: NP+ heroes also find Pip's wagon and Gulp in the yard.
   const HOLD_NP = [['dicer', 'Pip’s wagon', 'dicer', '#c9a040', 'Lucky Crates and Curios'], ['gulp', 'Gulp', 'gulp', '#f5c242', 'Feed the Hoard Mimic']];
@@ -5835,7 +5835,8 @@
         'Each boss resists two classes (−30%) and is weak to one (+30%); the boss window shows which. It hits hard and uses a special attack.',
         'Hired and story companions deal half damage to the boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
         'Everyone fills one shared health bar. Each phase broken makes the next one twice as tough.',
-        'After the weekend tap <b>Claim</b>: 3 Sigils for taking part, 1 more per phase broken (up to 5), 5 more for the top three, and a purse of gold.']],
+        'After the weekend tap <b>Claim</b>: 3 Sigils for taking part, 1 more per phase broken (up to 5), 5 more for the top three, and a purse of gold.',
+        'Each boss guards a four-piece <b>Mythic</b> set, the strongest gear in the game, above Legendary. A drop is rare (under 3% a weekend even for the strongest delvers), so most delvers earn theirs slowly with Rift tokens (' + L.WB_TOKEN_COST + ' for a piece at the Rift Gate) and boss shards for upgrades.']],
       ['Abilities', 'i:star', 'Each party member has one ability; your hero can learn more.', [
         'They fire by themselves. Turn that off under the arena to time them.',
         'Keys <b>1 to 5</b> use them; <b>6 to 8</b> are specializations from the skill tree.']],
@@ -6091,7 +6092,12 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 125, date: 'November 25, 2026', title: 'NP+ gold sinks: Pip, Gulp and the Golden Loot Goblin', items: [
+    { v: 125, date: 'November 25, 2026', title: 'Mythic world boss gear', items: [
+      'World boss gear is now <b>Mythic</b>, a new tier above Legendary and the strongest gear in the game. Pieces you already own become Mythic, with more power, an extra enchant socket and higher enchant tiers.',
+      'Mythic sets are stronger: +20% with 2 pieces (+30% gold for the Leviathan set) and +45% damage and health with all 4.',
+      'They are meant to be a long grind. A Mythic drop after a world boss is rare: under 3% a weekend even for the strongest delvers, and full odds still need 3 phases broken.',
+      'Warden Sable at the Rift Gate now asks 150 Rift tokens for a piece, and upgrading a Mythic costs twice the boss shards it did.',
+      'A strong party now keeps scoring its real damage in a world boss assault (the per-assault limit is four times higher), so boss weaknesses and half-damage hires count for everyone.',
       'New for New Playthrough heroes (NP+1 and up). Everything below is priced in hours of your own gold income, so it stays worth thinking about at any depth.',
       'Pip the Dicer (John\u2019s idea) sets up his wagon outside the Hold. Buy a Lucky Crate with gold: a Pouch (30 minutes of income), a Coffer (3 hours) or a Casket (12 hours). Each crate holds a piece of gear, with better odds in bigger crates, and Coffers and Caskets can also hold one of 8 Curios, small trinkets with odd little perks. Every 10th Casket without a Curio is sure to have one. Crates take gold only, never Sigils.',
       'Gulp the Hoard Mimic (John\u2019s idea) lives in the yard and is always hungry. Feed it morsels of gold (10 minutes of income each, 12 a day) and watch the fed counter climb for everyone on NP+. Now and then it burps something back up.',
@@ -6772,8 +6778,8 @@
   function shardsView() {
     const have = L.shardsOf(S);
     let h = '<div class="sigex"><div class="shhave">' + L.WB_SETS.map((b, k) => '<span class="shchip sh' + k + '">' + icon('relic') + '<b>' + (have[k] || 0) + '</b> ' + b.word + '</span>').join('') + '</div>' +
-      '<p class="note small">Every world boss gives you boss shards for your damage. Each boss’s shards upgrade its own Legendary set.</p>' +
-      '<h3 class="sub">Rift tokens</h3><p class="note small">You have <b>' + fmt(S.wbTok || 0) + '</b> Rift tokens. World bosses give them for your damage. Warden Sable at the Rift Gate trades ' + L.WB_TOKEN_COST + ' for a Legendary piece of any boss set.</p><div class="row"><button class="btn small" data-riftgo="1">' + icon('relic') + 'Go to the Rift Gate</button></div>';
+      '<p class="note small">Every world boss gives you boss shards for your damage. Each boss’s shards upgrade its own Mythic set.</p>' +
+      '<h3 class="sub">Rift tokens</h3><p class="note small">You have <b>' + fmt(S.wbTok || 0) + '</b> Rift tokens. World bosses give them for your damage. Warden Sable at the Rift Gate trades ' + L.WB_TOKEN_COST + ' for a Mythic piece of any boss set.</p><div class="row"><button class="btn small" data-riftgo="1">' + icon('relic') + 'Go to the Rift Gate</button></div>';
     if (trade.msg) h += '<p class="note">' + esc(trade.msg) + '</p>';
     const x = trade.sh; if (!x) return h + '</div>';
     const others = x.l.filter(l => l.seller !== x.me).sort((a, b) => a.price / a.n - b.price / b.n);
@@ -7131,7 +7137,7 @@
         '<li><b>' + esc(tr.trait) + '</b><span>' + esc(tr.line) + ' Weak to ' + cn(tr.weak) + ' (+' + Math.round(L.WB_WEAK * 100) + '% damage), resists ' + tr.resist.map(cn).join(' and ') + ' (−' + Math.round(L.WB_RESIST * 100) + '%).</span></li>' +
         '<li><b>Fight beside players</b><span>Hired and story companions deal half damage to the boss. Your hero and other players\' heroes in your party deal full damage.</span></li>') +
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
-      '<li><b>Legendary loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a piece of <b>' + esc(s2.name) + '</b>: 2% to 20%, higher the more damage you dealt, and full odds once the server breaks 3 phases. Several delvers can win. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set from Warden Sable at the Rift Gate, just outside the Hold.'; })() + '</span></li>' +
+      '<li><b>Mythic loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a Mythic piece of <b>' + esc(s2.name) + '</b>. Mythic gear is above Legendary and very rare: under 3% even for the strongest delvers, higher the more damage you dealt, and full odds only once the server breaks 3 phases. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set from Warden Sable at the Rift Gate, just outside the Hold.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
       (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
       (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
@@ -7186,8 +7192,8 @@
     save(); try { pushCloud(true); } catch (e) {} updateGear(true);
     S.wbTok = (S.wbTok || 0) + (r.tok || 0); save();
     const odds = Math.round((r.p || 0) * 1000) / 10, got = (r.sh ? shName(b, r.sh) : 'no shards') + (r.tok ? ' and ' + r.tok + ' Rift tokens (' + fmt(S.wbTok) + ' saved)' : '');
-    if (it) { sfx.boss && sfx.boss(); toast('crown', 'LEGENDARY: ' + L.gearName(it), 'Your ' + odds + '% roll for ' + set.name + ' came up! Plus ' + got + '.', 'feat'); }
-    else toast('relic', set.word + ' loot', 'No Legendary this time (your roll was ' + odds + '%). You got ' + got + '. ' + L.WB_TOKEN_COST + ' tokens buy a piece in the Market.', '');
+    if (it) { sfx.boss && sfx.boss(); toast('crown', 'MYTHIC: ' + L.gearName(it), 'Your ' + odds + '% roll for ' + set.name + ' came up! Plus ' + got + '.', 'feat'); }
+    else toast('relic', set.word + ' loot', 'No Mythic this time (your roll was ' + odds + '%). You got ' + got + '. ' + L.WB_TOKEN_COST + ' tokens buy a piece in the Market.', '');
   }
   $('wbbar').addEventListener('click', () => {
     const x = wbState();

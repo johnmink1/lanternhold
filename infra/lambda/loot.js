@@ -1,7 +1,8 @@
 // World boss loot. v120 (John, 25 Nov 2026): personal rolls, not one lottery. After an event every player who hit
 // rolls their own Legendary chance, seeded by event + player so a retry sees the same roll:
-// chance = min(20%, 2% x max(1, digits - 2)) x min(1, 0.4 + 0.2 x phases broken), digits = log10(damage).
-// They also get boss shards and the same number of Rift tokens (the game's token shop trades 40 for a piece):
+// chance = min(3%, 0.4% x max(1, digits - 2)) x min(1, 0.4 + 0.2 x phases broken), digits = log10(damage).
+// v125 (John, 25 Nov 2026): boss gear is Mythic and a drop should be rare (was min(20%, 2% x ...)).
+// They also get boss shards and the same number of Rift tokens (the game's token shop trades 150 for a piece):
 // 1 + max(0, whole digits - 2) + min(phases, 5). The preview (2026-11-23) counted monsters' worth, so its scores
 // are scaled x1000 first. Boss shards trade on their own market (pk sh# for listings, ss#<seller> for the seller's
 // pointers); the gold goes to the seller's mailbox as a 'sale' letter, like the gear market.
@@ -23,7 +24,7 @@ const row = i => ({ id: i.sk.S, seller: i.seller.S, name: i.name.S, k: +i.k.N, n
 function roll(id, rows, me) {
   const g = rows.find(i => i.s.S === '#'), my = rows.find(i => i.s.S === me), sc = my ? +my.score.N * (pre(id) ? 1e3 : 1) : 0;
   if (!(sc > 0)) return null;
-  const ph = phases(g ? +g.total.N : 0, id), dg = Math.log10(sc), p = Math.min(.2, .02 * Math.max(1, dg - 2)) * Math.min(1, .4 + .2 * ph);
+  const ph = phases(g ? +g.total.N : 0, id), dg = Math.log10(sc), p = Math.min(.03, .004 * Math.max(1, dg - 2)) * Math.min(1, .4 + .2 * ph);
   return { p, leg: rnd(id, 'L' + me) < p, tok: 1 + Math.max(0, Math.floor(dg) - 2) + Math.min(ph, 5), ph };
 }
 exports.handler = async (e) => {

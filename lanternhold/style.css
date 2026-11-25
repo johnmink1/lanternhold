@@ -2217,6 +2217,10 @@ body.atench #ghostlamp,body.atench #merchant,body.atench #spwarn,body.atench .fl
 .r-legend{--rc:#ff8a3d}.pgear .r-legend{color:#ff8a3d}.ilink.r-legend{--rc:#ff8a3d}.mkname.r-legend{color:#ffa463}
 .tile.r-legend{box-shadow:inset 0 0 12px rgba(0,0,0,.6),0 0 12px rgba(255,138,61,.45)}
 .mkcard.r-legend{border-color:rgba(255,138,61,.45)}
+.r-mythic{--rc:#ff3d6e}.pgear .r-mythic{color:#ff3d6e}.ilink.r-mythic{--rc:#ff3d6e}.mkname.r-mythic{color:#ff6b8f}
+.tile.r-mythic{box-shadow:inset 0 0 12px rgba(0,0,0,.6),0 0 14px rgba(255,61,110,.6)}
+.mkcard.r-mythic{border-color:rgba(255,61,110,.5)}
+.iset.legset{border-color:#ff3d6e66;background:linear-gradient(180deg,#24101a,#120a0e)}.iset.legset b{color:#ff6b8f}
 .iset.legset{border-color:#ff8a3d66;background:linear-gradient(180deg,#22160f,#120d0a)}.iset.legset b{color:#ffa463}
 .ewcost.legc{color:#ffa463}
 .shtile{display:grid;place-items:center;--sc:#ff8a3d;color:var(--sc);box-shadow:inset 0 0 10px rgba(0,0,0,.6),0 0 8px color-mix(in srgb,var(--sc) 35%,transparent)}
