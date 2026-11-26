@@ -6266,7 +6266,7 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 132, date: 'November 2026', title: 'Support the developer', items: [
-      'Lanternhold stays free. A new Support the dev button (and a line in Settings) lets you buy the developer a coffee if you like. It gives nothing in game and is separate from Mercy Corps donations.',
+      'New Support the dev button: buy the developer a coffee. Gives nothing in game, separate from Mercy Corps.',
     ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
