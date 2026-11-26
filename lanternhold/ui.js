@@ -3842,7 +3842,7 @@
       nameAsk = false; if (!prof) loadProfile();
       const n = r && r.recruits;
       if (n > 0) {
-        const g = Math.max(20, L.offlineGoldPerSec(S) * 600) * n;
+        const g = Math.max(20, L.pipRate(S) * 600) * n;
         S.gold += g; S.stats.goldEarned += g;
         toast('user', 'Your hero was recruited', n + (n === 1 ? ' player' : ' players') + ' took ' + S.hero.name + ' into their party. +' + fmt(g) + ' gold.', 'feat');
       }
@@ -7553,7 +7553,7 @@
     try {
       const r = await api('POST', { id }, '/boss/claim');
       if (!r) throw 0;
-      const g = Math.max(2000, L.offlineGoldPerSec(S) * 1800 * (1 + r.phases));
+      const g = Math.max(2000, L.pipRate(S) * 1800 * (1 + r.phases));
       S.gold += g; S.stats.goldEarned += g; if (typeof prof !== 'undefined' && prof) prof.bal = r.bal; save();
       closeModal(); sfx.relic();
       toast('crown', 'World boss reward', '+' + r.sig + ' Sigils and ' + fmt(g) + ' gold. You ranked ' + r.rank + ' of ' + r.n + '.', 'feat');
