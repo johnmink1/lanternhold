@@ -1,4 +1,4 @@
-/* lh-build 202611261706 */
+/* lh-build 202611261721 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4165,7 +4165,7 @@
         use('gs-look', 'crown', 'Profile looks', 'Frames, titles, banners, emblems', 'Open') +
         (CL ? use('gs-mkt', 'coin', 'Sigil exchange', 'Sell ' + TOKEN + ' for gold, or buy them with gold', 'Open') : '') +
       '</div>' +
-      (CL ? '<div class="shopuses">' + use('gs-sup', 'users', 'Support the game', 'Free one-time ' + TOKEN + ' for joining our Discord or following us on itch.io', 'Open') + '</div>' : '') +
+      (CL ? '<div class="shopuses">' + use('gs-sup', 'users', 'Support the game', 'Free one-time ' + TOKEN + ' for joining our Discord or adding us to an itch.io collection', 'Open') + '</div>' : '') +
       // 2. Lanternholder: one set of perks, two ways to get it
       '<div class="shopsec subbox"><h3>Lanternholder <span class="tag">Premium</span></h3>' +
       '<p class="shopsub">Convenience, never power.</p>' +
@@ -4503,49 +4503,59 @@
     if (w) setTimeout(() => toast('flame', 'A fresh start', w === 'me' ? 'An admin reset your account. Your delve starts again from the top of the stair.' : 'The Deep has been reset for everyone. Every delver starts again from the top of the stair.', 'feat'), 1500);
   }
   function isAdmin() { return !!(sess && sess.id && String(claims(sess.id)['cognito:groups'] || '').includes('admins')); }
-  // Support tasks (v132): one-time Sigil thanks for joining the Discord or following Born 2 Game on itch.io, checked by hand.
-  // Ratings, reviews and comments are welcome but never rewarded or penalized (itch.io and other sites do not allow paying for them).
+  // Support tasks (v132, John 26 Nov 2026): one-time Sigil thanks, checked and paid by the server with no admin step.
+  // The player signs in to Discord or itch.io in a pop-up (read-only OAuth, implicit grant); oauth.html hands the token back here,
+  // and POST /support/claim asks Discord or itch itself. Ratings, reviews, comments and follows are never rewarded or penalized:
+  // itch.io unlists pages that game ratings or comments, and its API cannot see follows anyway.
+  const SUP_APP = { discord: '', itch: '' }; // OAuth client ids (public). Empty = that task shows as coming soon.
+  const SUP_CB = location.origin + '/oauth.html';
   const SUP = [
-    { id: 'discord', icon: 'discord', name: 'Join our Discord', how: 'Join the Born 2 Game Discord and pick <b>Lanternhold</b> when it asks which communities you want.', url: 'https://discord.gg/6G7E7rhGFu', go: 'Open Discord', ask: 'Discord username' },
-    { id: 'itch', icon: 'star', name: 'Follow us on itch.io', how: 'Sign in to itch.io and press <b>Follow</b> on the Born 2 Game page.', url: 'https://born2gamellc.itch.io', go: 'Open itch.io', ask: 'itch.io username' },
+    { id: 'discord', icon: 'discord', name: 'Join our Discord', how: 'Join the Born 2 Game Discord and pick <b>Lanternhold</b> when it asks which communities you want. Then check here: Discord shows you exactly what we can see (only your membership in our server).', join: 'https://discord.gg/6G7E7rhGFu', joinTxt: 'Open Discord', check: 'Check with Discord',
+      auth: (id, st) => 'https://discord.com/oauth2/authorize?response_type=token&client_id=' + id + '&scope=guilds.members.read&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
+    { id: 'itch', icon: 'star', name: 'Add us to an itch.io collection', how: 'On itch.io, press <b>Add To Collection</b> on the Lanternhold page and save it to any collection. Then check here: itch.io asks before sharing your profile and collections with us.', join: 'https://born2gamellc.itch.io/lanternhold', joinTxt: 'Open itch.io', check: 'Check with itch.io',
+      auth: (id, st) => 'https://itch.io/user/oauth?response_type=token&client_id=' + id + '&scope=' + encodeURIComponent('profile:me profile:collections') + '&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
   ];
-  const SUP_CHECK = { discord: 'Look the name up in the Discord member list and check it has the Lanternhold Community role.', itch: 'Check the name is in your itch.io followers (Dashboard, Analytics or your profile).' };
-  let supData = null, supBusy = false;
-  function supAdminHtml() {
-    if (adminSup === null) return '<h3 class="sub">Support tasks</h3><p class="note">The support task queue needs the v132 server update (support Lambda and its routes).</p>';
-    const ago = t => { const h = Math.floor((Date.now() - t) / 36e5); return h < 1 ? 'just now' : h < 48 ? h + ' h ago' : Math.floor(h / 24) + ' d ago'; };
-    return '<h3 class="sub">Support tasks' + (adminSup.length ? ' <span class="tag">' + adminSup.length + '</span>' : '') + '</h3>' + (adminSup.length ? '<p class="note">Players asking for their one-time ' + TOKEN + ' thanks. Approve only after you find the name. ' + esc(SUP_CHECK.discord) + ' ' + esc(SUP_CHECK.itch) + '</p><div class="adm-list">' +
-      adminSup.map(c => '<div class="adm-row"><span class="adm-n"><b>' + esc(c.hero || 'Unnamed') + '</b><small>' + (c.task === 'discord' ? 'Discord' : 'itch.io') + ': <b>' + esc(c.name) + '</b> &middot; ' + c.sig + ' ' + TOKEN + ' &middot; ' + ago(c.at) + (c.exp ? ' (expired, they can resend)' : '') + '</small></span>' +
-        '<span class="adm-act"><button class="btn small" data-sok="' + esc(c.task + '|' + c.uid) + '">Approve</button><button class="btn small ghost" data-sno="' + esc(c.task + '|' + c.uid) + '">Deny</button></span></div>').join('') + '</div>' : '<p class="note">No support tasks waiting.</p>');
+  const SUP_ERR = { notmember: 'Discord says you are not in the Born 2 Game server yet. Join it, then check again.', role: 'You are in the server, but without the Lanternhold role. In Discord, open Channels & Roles and pick Lanternhold, then check again.',
+    nogame: 'Lanternhold is not in any of your itch.io collections yet. Add it, then check again.', taken: 'That account already earned this reward on another hero.', done: 'You already have this one.',
+    floor: 'Reach floor 10 first, then check again.', hero: 'Play a little first so your hero is registered, then check again.', token: 'The sign-in did not go through. Try again.', remote: 'We could not reach them just now. Try again in a minute.' };
+  let supData = null, supBusy = false, supBack = null;
+  function supStart(task) {
+    const t = SUP.find(x => x.id === task); if (!t || !SUP_APP[task]) return;
+    const st = 'sup' + task + Math.random().toString(36).slice(2, 12);
+    try { localStorage.setItem('lh_oauth_st', st); localStorage.removeItem('lh_oauth'); } catch (e) {}
+    const w = window.open(t.auth(SUP_APP[task], st), 'lhoauth', 'width=520,height=760');
+    if (!w) location.href = t.auth(SUP_APP[task], st);
   }
+  // oauth.html posts the token back to this window, or (when the pop-up was blocked) leaves it in localStorage and reloads the game.
+  async function supFinish(m) {
+    let want = null; try { want = localStorage.getItem('lh_oauth_st'); localStorage.removeItem('lh_oauth_st'); localStorage.removeItem('lh_oauth'); } catch (e) {}
+    if (!m || !m.token || !m.state || m.state !== want) return;
+    const task = m.state.startsWith('supdiscord') ? 'discord' : m.state.startsWith('supitch') ? 'itch' : '';
+    if (!task || supBusy) return; supBusy = true;
+    try { const r = await papi('POST', '/support/claim', { task, token: m.token }); if (supData) supData.mine = r.mine; if (prof && r.bal != null) prof.bal = r.bal; sfx.buy(); toast('star', '+' + r.add + ' ' + TOKEN, 'Thank you for supporting Lanternhold!', 'feat'); }
+    catch (e) { toast('lock', 'Not yet', SUP_ERR[e.code] || 'Try again in a moment.', 'warn'); }
+    supBusy = false; if (document.querySelector('#sp-x')) openSupport(supBack);
+  }
+  window.addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.lhOauth) supFinish(e.data.lhOauth); });
+  setTimeout(() => { let m = null; try { m = JSON.parse(localStorage.getItem('lh_oauth') || 'null'); } catch (e) {} if (m && Date.now() - (m.at || 0) < 6e5 && signedIn()) { openSupport(); supFinish(m); } }, 2500);
   async function openSupport(back) {
-    back = typeof back === 'function' ? back : closeModal;
-    const st = c => !c ? '' : c.st === 'ok' ? '<span class="tag once">Done</span>' : c.st === 'pend' ? '<span class="tag">Being checked</span>' : c.st === 'no' ? '<span class="tag">Not found</span>' : '<span class="tag">Expired</span>';
-    const row = t => { const c = supData && supData.mine[t.id], sig = supData ? supData.tasks[t.id] : null, open = !c || c.st === 'no' || c.st === 'exp';
-      return '<div class="supt"><div class="supth">' + icon(t.icon) + '<b>' + t.name + '</b>' + (sig ? '<span class="supsig">' + sigil + sig + '</span>' : '') + st(c) + '</div>' +
-        '<small>' + t.how + '</small>' +
-        (c && c.st === 'ok' ? '<small>Thank you! The ' + TOKEN + ' are in your account.</small>' : c && c.st === 'pend' ? '<small>We are checking <b>' + esc(c.name) + '</b>. The ' + TOKEN + ' arrive once the team finds you, usually within a day or two.</small>' :
-          (c && c.st === 'no' ? '<small>We could not find <b>' + esc(c.name) + '</b>. Check the spelling and send it again.</small>' : '') +
-          '<div class="supform"><a class="btn small ghost" href="' + t.url + '" target="_blank" rel="noopener">' + t.go + '</a><input id="sup-' + t.id + '" placeholder="' + t.ask + '" maxlength="40" autocomplete="off" spellcheck="false" value="' + esc(c ? c.name : '') + '"><button class="btn small" data-supgo="' + t.id + '"' + (supData && open ? '' : ' disabled') + '>Done it</button></div>') + '</div>'; };
-    modal('<div class="maphead"><div><h2>Support the game</h2><small>Two small ways to help Lanternhold grow, each thanked once with free ' + TOKEN + '.</small></div><button class="iconbtn" id="sp-x" aria-label="Close">&times;</button></div>' +
+    supBack = back = typeof back === 'function' ? back : closeModal;
+    const row = t => { const c = supData && supData.mine[t.id], sig = supData ? supData.tasks[t.id] : null, live = !!SUP_APP[t.id];
+      return '<div class="supt"><div class="supth">' + icon(t.icon) + '<b>' + t.name + '</b>' + (sig ? '<span class="supsig">' + sigil + sig + '</span>' : '') + (c ? '<span class="tag once">Done</span>' : '') + '</div>' +
+        (c ? '<small>Thank you! The ' + TOKEN + ' are in your account.</small>' : '<small>' + t.how + '</small>' +
+          '<div class="supform"><a class="btn small ghost" href="' + t.join + '" target="_blank" rel="noopener">' + t.joinTxt + '</a><button class="btn small" data-supgo="' + t.id + '"' + (supData && live ? '' : ' disabled') + '>' + (live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
+    modal('<div class="maphead"><div><h2>Support the game</h2><small>Two small ways to help Lanternhold grow, each thanked once with free ' + TOKEN + '. They are checked and paid right away.</small></div><button class="iconbtn" id="sp-x" aria-label="Close">&times;</button></div>' +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' : !supData ? '<p class="note">Loading…</p>' : '') +
       '<div class="supts">' + SUP.map(row).join('') + '</div>' +
       '<div class="supnote"><b>Reviews and comments</b><small>If you enjoy Lanternhold, an honest rating, review or comment on <a href="https://born2gamellc.itch.io/lanternhold" target="_blank" rel="noopener">itch.io</a> or anywhere you play helps new players find us. These never earn rewards or any in-game benefit, and we never penalize anyone for what they write or for not writing. We do not pay for likes, ratings, reviews or comments.</small></div>' +
-      '<p class="note small">Each task pays once per account, after the team checks it. A Discord or itch.io name can be used on one account only. Your hero needs to reach floor 10 first.</p>' +
+      '<p class="note small">Each task pays once per account, and each Discord or itch.io account counts once. Your hero needs to reach floor 10 first. We only read what the check needs and never post anything for you.</p>' +
       '<div class="row"><button class="btn ghost" id="sp-ok">Back</button></div>', md => {
         md.className = 'sheet';
         md.querySelector('#sp-x').onclick = closeModal; md.querySelector('#sp-ok').onclick = () => back();
-        md.querySelectorAll('[data-supgo]').forEach(b => b.onclick = async () => {
-          if (supBusy) return; const id = b.dataset.supgo, name = md.querySelector('#sup-' + id).value.trim().replace(/^@/, '');
-          if (!name) { toast('user', 'Add your username', 'Type the name we should look for.', 'warn'); return; }
-          supBusy = true; b.disabled = true;
-          try { const r = await papi('POST', '/support/claim', { task: id, name }); supData.mine = r.mine; sfx.buy(); toast('star', 'Thanks for the support!', 'The team will check it and send your ' + TOKEN + '.', 'feat'); }
-          catch (e) { toast('lock', 'That did not go through', e.code === 'name' ? 'That does not look like a ' + (id === 'discord' ? 'Discord' : 'itch.io') + ' username. Use letters, numbers, dots, dashes or underscores.' : e.code === 'taken' ? 'That name is already used on another account.' : e.code === 'floor' ? 'Reach floor 10 first, then try again.' : e.code === 'hero' ? 'Play a little first so your hero is registered, then try again.' : e.code === 'pending' || e.code === 'done' ? 'You already sent this one.' : 'Try again in a moment.', 'warn'); }
-          supBusy = false; openSupport(back);
-        });
+        md.querySelectorAll('[data-supgo]').forEach(b => b.onclick = () => supStart(b.dataset.supgo));
       });
     if (signedIn() && CL && !supData) {
-      try { supData = await papi('GET', '/support'); } catch (e) { supData = null; const n = document.querySelector('#sp-x') && $('modalbody').querySelector('.note'); if (n) n.textContent = e.code === 404 || e.code === 'Not Found' ? 'Support tasks open with the next server update.' : 'Could not load your tasks. Try again in a moment.'; return; }
+      try { supData = await papi('GET', '/support'); } catch (e) { const n = document.querySelector('#sp-x') && $('modalbody').querySelector('.note'); if (n) n.textContent = e.code === 404 || e.code === 'Not Found' ? 'Support tasks open with the next server update.' : 'Could not load your tasks. Try again in a moment.'; return; }
       if (document.querySelector('#sp-x')) openSupport(back);
     }
   }
@@ -4556,14 +4566,13 @@
     if (!r.ok) throw new Error(r.status === 403 ? 'This account is not an admin.' : j.error === 'self' ? 'You cannot ban yourself.' : j.error === 'player' ? 'That player has not played since bans were added, so their account cannot be found yet.' : j.error === 'name' ? 'The name you typed does not match the hero.' : 'The server said no (' + r.status + ').');
     return j;
   }
-  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [], adminSup = null;
+  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [];
   function paintAdminTab() { const t = $('tabadmin'); if (t) t.hidden = !isAdmin(); }
   async function loadAdmin() {
     $('adminbox').innerHTML = '<p class="note">Loading players…</p>';
     try { adminList = await adminApi('GET', '/admin/players'); } catch (e) { $('adminbox').innerHTML = '<p class="note">' + esc(e.message) + '</p>'; return; }
     try { adminLinks = (await adminApi('GET', '/admin/links')).links || []; await loadWar(); } catch (e) { adminLinks = []; }
     try { adminLog = (await adminApi('GET', '/admin/audit')).log || []; } catch (e) { adminLog = []; }
-    try { adminSup = (await adminApi('GET', '/admin/support')).list || []; } catch (e) { adminSup = null; }
     paintAdmin();
   }
   // Where players came from: the first ?ref= tag (or referring site) each signed-in hero arrived with (server field rf).
@@ -4589,7 +4598,6 @@
       '<div class="adm-list">' + (list.length ? list.map(p => '<div class="adm-row' + (p.banned ? ' banned' : '') + '"><span class="adm-n"><b>' + esc(p.name || 'Unnamed') + '</b>' + (p.cls ? ' ' + classTag(p.cls) : '') + '<small>' + (p.banned ? 'Banned' : (p.on ? '<span class="online">Online now</span> &middot; ' : 'Seen ' + ago(p.seen) + ' &middot; ') + 'power level ' + p.level + ', floor ' + p.floor) + '</small></span>' +
         '<button class="btn small ghost" data-log="' + p.id + '">View Log</button>' +
         (p.canBan ? '<button class="btn small ghost" data-grant="' + p.id + '">Sigils</button><button class="btn small ghost" data-reset="' + p.id + '">Reset</button>' : '') + (p.banned ? '<button class="btn small ghost" data-unban="' + p.id + '">Unban</button>' : '<button class="btn small danger" data-ban="' + p.id + '"' + (p.canBan ? '' : ' disabled title="They need to play once more before they can be banned"') + '>Ban</button>') + '</div>').join('') : '<p class="note">No players match.</p>') + '</div>' +
-      supAdminHtml() +
       '<h3 class="sub">Grand War links</h3>' + (adminLinks.length ? '<p class="note">Players asking to show their Grand War commander badges. Approve only when you know the player is that commander, for example from Discord.</p><div class="adm-list">' + adminLinks.sort((a, c) => a.wv - c.wv).map(l => '<div class="adm-row"><span class="adm-n"><b>' + esc(l.name || 'Unnamed') + '</b> wants to be <b>' + esc(l.wl) + '</b><small>' + (commander(l.wl) ? warBadge(l.wl) : 'Not on the war ladder right now') + (l.wv ? ' &middot; <span class="online">Verified</span>' : ' &middot; Waiting') + '</small></span>' + (l.wv ? '' : '<button class="btn small" data-lok="' + l.id + '">Approve</button>') + '<button class="btn small ghost" data-lno="' + l.id + '">' + (l.wv ? 'Remove' : 'Reject') + '</button></div>').join('') + '</div>' : '<p class="note">No players have asked to link a Grand War commander yet.</p>') +
       '<h3 class="sub">Admin log</h3>' + (adminLog.length ? '<div class="adm-list">' + adminLog.map(l => '<div class="adm-row"><span class="adm-n"><b>' + (l.act === 'wipe' ? 'Server wiped' : 'Reset ' + esc(l.name || 'a player') + (l.self ? ' (their own account)' : '')) + '</b><small>' + esc(l.by) + ' &middot; ' + new Date(l.at).toLocaleString() + (l.act === 'reset' ? ' &middot; ' + (l.sigils ? 'Sigils and purchases wiped too' : 'Sigils and purchases kept') : '') + '</small></span></div>').join('') + '</div>' : '<p class="note">No player resets or server wipes yet.</p>') +
       '<div class="adm-danger"><h3 class="sub">Wipe the server</h3><p class="note">Deletes every cloud save, every hero on the guild board and every market listing and letter. Everyone, signed in or not, starts over from a new game the next time they open Lanternhold. Bans, Sigils, bought looks, Sigil market listings, store links and Grand War links stay in place. This cannot be undone.</p><button class="btn danger" id="adm-wipe">Wipe the server…</button></div>';
@@ -4598,14 +4606,6 @@
   $('tab-admin').addEventListener('click', async e => {
     if (adminBusy) return;
     if (e.target.closest('#adm-re')) { loadAdmin(); return; }
-    const sok = e.target.closest('[data-sok]'), sno = e.target.closest('[data-sno]');
-    if (sok || sno) {
-      const [task, uid] = (sok || sno).dataset[sok ? 'sok' : 'sno'].split('|'), c = (adminSup || []).find(x => x.task === task && x.uid === uid);
-      adminBusy = true;
-      try { const r = await adminApi('POST', '/admin/support', { task, uid, ok: !!sok }); toast('star', sok ? 'Task approved' : 'Task denied', sok ? (c ? c.hero || 'They' : 'They') + ' got ' + r.add + ' ' + TOKEN + '.' : 'No ' + TOKEN + ' given. They can send a different name.', 'feat'); }
-      catch (x) { toast('lock', 'That did not work', x.message, 'warn'); }
-      adminBusy = false; loadAdmin(); return;
-    }
     const lok = e.target.closest('[data-lok]'), lno = e.target.closest('[data-lno]');
     if (lok || lno) {
       adminBusy = true;
@@ -6324,7 +6324,7 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 132, date: 'November 2026', title: 'Support the game', items: [
-      'Sigil shop: Support the game gives free one-time Sigils for joining our Discord (10) or following Born 2 Game on itch.io (5), once the team checks it. Ratings and comments are always welcome but never rewarded.',
+      'Sigil shop: Support the game gives free one-time Sigils for joining our Discord (10) or adding Lanternhold to an itch.io collection (5), checked automatically. Ratings and comments are always welcome but never rewarded.',
     ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',

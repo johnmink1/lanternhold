@@ -1,82 +1,68 @@
-// Support tasks (v132, John 26 Nov 2026): one-time Sigil thanks for joining the Discord or following Born 2 Game on itch.io.
-// No Sigils for ratings, reviews or comments (itch.io unlists pages that game them). A player sends their Discord or itch name,
-// an admin checks it by hand and approves or denies; Sigils land only on approval. Once per task per account, and a name can
-// back only one account. Rows in the trade table: sup#<sub>/<task> (claim), supq/<task>#<sub> (open queue), supn/<task>#<name> (name lock).
-// GET /support (own claims), POST /support/claim { task, name }, GET /admin/support (queue), POST /admin/support { task, uid, ok }.
+// Support tasks (v132, John 26 Nov 2026): one-time Sigil thanks for joining the Born 2 Game Discord or adding Lanternhold to an
+// itch.io collection, checked and paid automatically. No Sigils for ratings, reviews, comments or follows (itch.io unlists pages that
+// game ratings or comments, and its API cannot see follows). The game signs the player in to Discord or itch.io (OAuth implicit grant,
+// read-only scopes) and sends the access token here once; this Lambda asks Discord or itch itself, so the client cannot fake it.
+//   discord: GET discord.com/api/v10/users/@me/guilds/<GUILD>/member (scope guilds.members.read) -> member, plus role ROLE if set
+//   itch:    GET api.itch.io/profile (profile:me) and /profile/collections?game_id=<GAME> (profile:collections) -> any has_game
+// Once per task per account, and a Discord or itch account can pay only one game account. The token is never stored.
+// Trade-table rows: sup#<sub>/<task> (st 'ok', ext id, at) and supn/<task>#<ext id> (uid). Routes: GET /support, POST /support/claim { task, token }.
 const D = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
-const db = new D.DynamoDBClient({}), { WALLETS: W, HEROES: H, TRADE: T } = process.env;
+const db = new D.DynamoDBClient({}), { WALLETS: W, HEROES: H, TRADE: T, ROLE } = process.env;
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) });
 const S = v => ({ S: String(v) }), N = v => ({ N: String(v) }), send = c => db.send(c);
-const TASKS = { discord: { sig: 10, re: /^[a-z0-9_.]{2,32}$/ }, itch: { sig: 5, re: /^[a-z0-9_-]{2,40}$/ } };
-const EXP = 14 * 864e5, MINFL = 10;
+const GUILD = '860889720456347688', GAME = 5427018, MINFL = 10;
+const TASKS = { discord: 10, itch: 5 };
 const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
-const mine = async sub => {
-  const r = await send(new D.QueryCommand({ TableName: T, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': S('sup#' + sub) }, ConsistentRead: true }));
-  const out = {}, now = Date.now();
-  for (const i of r.Items || []) { const st = i.st.S, at = +i.at.N; out[i.sk.S] = { st: st === 'pend' && now - at > EXP ? 'exp' : st, name: i.nm.S, at }; }
-  return out;
-};
+const get = async (url, tok) => { const r = await fetch(url, { headers: { Authorization: 'Bearer ' + tok }, signal: AbortSignal.timeout(5000) }); return { s: r.status, j: await r.json().catch(() => ({})) }; };
+// Returns the outside account id, or an error code for the player.
+async function check(task, tok) {
+  if (task === 'discord') {
+    const r = await get('https://discord.com/api/v10/users/@me/guilds/' + GUILD + '/member', tok);
+    if (r.s === 401) return { err: 'token' };
+    if (r.s === 404 || r.s === 403 && r.j.code === 10004) return { err: 'notmember' };
+    if (r.s !== 200 || !r.j.user || !r.j.user.id) return { err: 'remote' };
+    if (ROLE && !(r.j.roles || []).includes(ROLE)) return { err: 'role' };
+    return { id: r.j.user.id };
+  }
+  const p = await get('https://api.itch.io/profile', tok);
+  if (p.s === 401 || p.s === 403 || p.j.errors) return { err: 'token' };
+  if (p.s !== 200 || !p.j.user || !p.j.user.id) return { err: 'remote' };
+  const c = await get('https://api.itch.io/profile/collections?game_id=' + GAME, tok);
+  if (c.s !== 200 || c.j.errors) return { err: 'remote' };
+  if (!(c.j.collections || []).some(x => x.has_game)) return { err: 'nogame' };
+  return { id: String(p.j.user.id) };
+}
 exports.handler = async (e) => {
   const rk = e.routeKey, cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, { error: 1 });
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400, { error: 1 }); }
   const sub = cl.sub, now = Date.now();
-  if (rk === 'GET /support') return res(200, { tasks: Object.fromEntries(Object.entries(TASKS).map(([k, t]) => [k, t.sig])), mine: await mine(sub) });
-  if (rk === 'POST /support/claim') {
-    const t = TASKS[b.task], nm = String(b.name || '').trim().replace(/^@/, '').toLowerCase();
-    if (!Object.hasOwn(TASKS, b.task) || !t.re.test(nm)) return res(400, { error: 'name' });
-    const h = (await send(new D.GetItemCommand({ TableName: H, Key: { pid: S(pidOf(sub)) } }))).Item;
-    if (!h || h.ban) return res(403, { error: 'hero' });
-    if (!h.fl || +h.fl.N < MINFL) return res(403, { error: 'floor', need: MINFL });
-    const old = (await mine(sub))[b.task];
-    if (old && (old.st === 'ok' || old.st === 'pend')) return res(409, { error: old.st === 'ok' ? 'done' : 'pending' });
-    const oldRaw = old ? (await send(new D.GetItemCommand({ TableName: T, Key: { pk: S('sup#' + sub), sk: S(b.task) }, ConsistentRead: true }))).Item : null;
-    const ops = [
-      // the name lock: free, or already ours (a resend after a deny or an expiry)
-      { Put: { TableName: T, Item: { pk: S('supn'), sk: S(b.task + '#' + nm), uid: S(sub), at: N(now) }, ConditionExpression: 'attribute_not_exists(pk) OR uid = :u', ExpressionAttributeValues: { ':u': S(sub) } } },
-      { Put: { TableName: T, Item: { pk: S('sup#' + sub), sk: S(b.task), st: S('pend'), nm: S(nm), at: N(now) },
-        ConditionExpression: oldRaw ? 'st = :s AND #a = :a' : 'attribute_not_exists(pk)', ExpressionAttributeNames: oldRaw ? { '#a': 'at' } : undefined,
-        ExpressionAttributeValues: oldRaw ? { ':s': oldRaw.st, ':a': oldRaw.at } : undefined } },
-      { Put: { TableName: T, Item: { pk: S('supq'), sk: S(b.task + '#' + sub), nm: S(nm), at: N(now), pid: h.pid, hn: h.name || S('') } } },
-    ];
-    try { await send(new D.TransactWriteItemsCommand({ TransactItems: ops })); }
-    catch (x) {
-      if (x.name !== 'TransactionCanceledException') throw x;
-      return res(409, { error: x.CancellationReasons && x.CancellationReasons[0].Code === 'ConditionalCheckFailed' ? 'taken' : 'state' });
-    }
-    // a resend under a new name lets go of the old name, if it is still ours (a denied name was already freed)
-    if (oldRaw && oldRaw.nm.S !== nm) {
-      try { await send(new D.DeleteItemCommand({ TableName: T, Key: { pk: S('supn'), sk: S(b.task + '#' + oldRaw.nm.S) }, ConditionExpression: 'uid = :u', ExpressionAttributeValues: { ':u': S(sub) } })); }
-      catch (x) { if (x.name !== 'ConditionalCheckFailedException') throw x; }
-    }
-    return res(200, { ok: true, mine: await mine(sub) });
+  const mine = async () => {
+    const r = await send(new D.QueryCommand({ TableName: T, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': S('sup#' + sub) }, ConsistentRead: true }));
+    return Object.fromEntries((r.Items || []).map(i => [i.sk.S, { st: i.st.S, at: +i.at.N }]));
+  };
+  if (rk === 'GET /support') return res(200, { tasks: TASKS, mine: await mine() });
+  if (rk !== 'POST /support/claim') return res(404, { error: 1 });
+  const task = b.task, tok = String(b.token || '');
+  if (!Object.hasOwn(TASKS, task) || !/^[\w.~+/=-]{10,200}$/.test(tok)) return res(400, { error: 1 });
+  if ((await mine())[task]) return res(409, { error: 'done' });
+  const h = (await send(new D.GetItemCommand({ TableName: H, Key: { pid: S(pidOf(sub)) } }))).Item;
+  if (!h || h.ban) return res(403, { error: 'hero' });
+  if (!h.fl || +h.fl.N < MINFL) return res(403, { error: 'floor', need: MINFL });
+  let c; try { c = await check(task, tok); } catch (x) { c = { err: 'remote' }; }
+  if (c.err) return res(c.err === 'remote' ? 502 : 403, { error: c.err });
+  const add = TASKS[task];
+  try {
+    await send(new D.TransactWriteItemsCommand({ TransactItems: [
+      { Put: { TableName: T, Item: { pk: S('supn'), sk: S(task + '#' + c.id), uid: S(sub), at: N(now) }, ConditionExpression: 'attribute_not_exists(pk)' } },
+      { Put: { TableName: T, Item: { pk: S('sup#' + sub), sk: S(task), st: S('ok'), ext: S(c.id), at: N(now), pid: h.pid }, ConditionExpression: 'attribute_not_exists(pk)' } },
+      { Update: { TableName: W, Key: { userId: S(sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :a, own = if_not_exists(own, :o)',
+        ExpressionAttributeValues: { ':g': N(100), ':a': N(add), ':o': { SS: ['f.plain'] } } } },
+    ] }));
+  } catch (x) {
+    if (x.name !== 'TransactionCanceledException') throw x;
+    return res(409, { error: x.CancellationReasons && x.CancellationReasons[0].Code === 'ConditionalCheckFailed' ? 'taken' : 'done' });
   }
-  if (!String(cl['cognito:groups'] || '').includes('admins')) return res(403, { error: 'admin only' });
-  if (rk === 'GET /admin/support') {
-    const r = await send(new D.QueryCommand({ TableName: T, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': S('supq') } }));
-    const list = (r.Items || []).map(i => { const [task, uid] = i.sk.S.split('#'); return { task, uid, name: i.nm.S, at: +i.at.N, pid: i.pid.S, hero: i.hn.S, sig: TASKS[task] ? TASKS[task].sig : 0, exp: now - +i.at.N > EXP }; });
-    return res(200, { list: list.sort((a, c) => a.at - c.at) });
-  }
-  if (rk === 'POST /admin/support') {
-    const t = TASKS[b.task], uid = String(b.uid || '');
-    if (!Object.hasOwn(TASKS, b.task) || !/^[0-9a-f-]{36}$/.test(uid)) return res(400, { error: 1 });
-    const c = (await send(new D.GetItemCommand({ TableName: T, Key: { pk: S('sup#' + uid), sk: S(b.task) }, ConsistentRead: true }))).Item;
-    if (!c || c.st.S !== 'pend') {
-      await send(new D.DeleteItemCommand({ TableName: T, Key: { pk: S('supq'), sk: S(b.task + '#' + uid) } }));
-      return res(409, { error: 'state' });
-    }
-    const ok = !!b.ok, ops = [
-      { Update: { TableName: T, Key: { pk: S('sup#' + uid), sk: S(b.task) }, UpdateExpression: 'SET st = :n, #b = :b, dt = :d', ConditionExpression: 'st = :p', ExpressionAttributeNames: { '#b': 'by' },
-        ExpressionAttributeValues: { ':n': S(ok ? 'ok' : 'no'), ':p': S('pend'), ':b': S(cl.sub), ':d': N(now) } } },
-      { Delete: { TableName: T, Key: { pk: S('supq'), sk: S(b.task + '#' + uid) } } },
-    ];
-    if (ok) ops.push({ Update: { TableName: W, Key: { userId: S(uid) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :a, own = if_not_exists(own, :o)',
-      ExpressionAttributeValues: { ':g': N(100), ':a': N(t.sig), ':o': { SS: ['f.plain'] } } } });
-    // a denied name is freed so its real owner can claim it
-    else ops.push({ Delete: { TableName: T, Key: { pk: S('supn'), sk: S(b.task + '#' + c.nm.S) } } });
-    try { await send(new D.TransactWriteItemsCommand({ TransactItems: ops })); }
-    catch (x) { if (x.name === 'TransactionCanceledException') return res(409, { error: 'state' }); throw x; }
-    return res(200, { ok: true, add: ok ? t.sig : 0 });
-  }
-  return res(404, { error: 1 });
+  const w = (await send(new D.GetItemCommand({ TableName: W, Key: { userId: S(sub) }, ConsistentRead: true }))).Item;
+  return res(200, { ok: true, add, bal: w && w.bal ? +w.bal.N : null, mine: await mine() });
 };
