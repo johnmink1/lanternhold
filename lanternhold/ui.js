@@ -5145,20 +5145,24 @@
   function trainRows() {
     const ids = S.party.filter(Boolean), d = ids.map(id => L.steadyDps(S, id)), tot = d.reduce((a, b) => a + b, 0) || 1;
     return '<table class="ttab"><thead><tr><th>Member</th><th>Damage/s</th><th>vs guardians</th><th>Share</th><th>Heal/s</th><th>Health</th></tr></thead><tbody>' +
-      ids.map((id, i) => { const m = L.memberById(id), pct = Math.round(d[i] / tot * 100), hl = L.healPerSec(S, id);
-        return '<tr><td><b>' + esc(m.name) + '</b> ' + classTag(m.cls) + '</td><td>' + fmt(d[i]) + '</td><td>' + fmt(d[i] * (1 + L.wearVal(S, id, 'boss'))) + '</td><td><span class="tbar"><i style="width:' + pct + '%"></i></span> ' + pct + '%</td><td>' + (hl ? fmt(hl) : '-') + '</td><td>' + fmt(L.maxHpOf(S, id)) + '</td></tr>'; }).join('') +
-      '</tbody></table><p class="tsum">Party <b>' + fmt(tot) + '</b> damage/s steady &middot; strike <b>' + fmt(L.clickDamage(S, Date.now())) + '</b> &middot; critical chance <b>' + Math.round(L.critChance(S) * 100) + '%</b> (x5)</p>';
+      ids.map((id, i) => { const m = L.memberById(id), pct = Math.round(d[i] / tot * 100), hl = L.steadyHeal(S, id);
+        return '<tr><td><b>' + esc(m.name) + '</b> ' + classTag(m.cls) + (S.down[id] ? ' <small class="tdown">down</small>' : '') + '</td><td>' + fmt(d[i]) + '</td><td>' + fmt(d[i] * (1 + L.wearVal(S, id, 'boss'))) + '</td><td><span class="tbar"><i style="width:' + pct + '%"></i></span> ' + pct + '%</td><td>' + (hl ? fmt(hl) : '-') + '</td><td>' + fmt(L.maxHpOf(S, id)) + '</td></tr>'; }).join('') +
+      '</tbody></table><p class="tsum">Party <b>' + fmt(tot) + '</b> damage/s steady &middot; tap <b>' + fmt(L.steadyClick(S)) + '</b> per hit (<span id="tr-now">' + fmt(L.clickDamage(S, Date.now())) + '</span> right now) &middot; critical chance <b>' + Math.round(L.critChance(S) * 100) + '%</b> (x5)</p>' +
+      '<p class="note tnote">Each tap hits for 1 + 5% of your party\'s damage/s at that moment, so it rises when buffs or a mage spell are up. The monster does not change it.</p>';
   }
   function openTraining() {
     trainRun = null;
-    modal('<div class="center"><h2>Training Grounds</h2><p class="note">A practice dummy for comparing gear, seats and skills. Steady numbers leave out timed buffs and anyone who is down.</p></div>' +
+    modal('<div class="center"><h2>Training Grounds</h2><p class="note">A practice dummy for comparing gear, seats and skills. Steady numbers leave out timed buffs and count everyone as standing.</p></div>' +
       '<div id="tr-rows">' + trainRows() + '</div>' +
       '<div class="tdummy"><button class="dummy" id="tr-hit" title="Strike the dummy">' + icon('shield') + '<span>Dummy</span></button><div id="tr-live"><p>Press <b>Start 10 s test</b>, then strike the dummy as fast as you like. The test counts your party as it is right now, buffs and all.</p></div></div>' +
       '<div class="row"><button class="btn" id="tr-go">Start 10 s test</button><button class="btn ghost" id="tr-x">Close</button></div>', md => {
       const live = md.querySelector('#tr-live'), go = md.querySelector('#tr-go');
       const paint = () => { const r = trainRun; if (!r) return; const t = Math.min(10, (Date.now() - r.at) / 1000), all = r.party + r.taps;
-        live.innerHTML = '<p><b>' + t.toFixed(1) + ' s</b> &middot; party ' + fmt(r.party) + ' &middot; strikes ' + fmt(r.taps) + ' (' + r.n + (r.crit ? ', ' + r.crit + ' critical' : '') + ')</p><p class="tbig">' + fmt(all / Math.max(0.1, t)) + ' <small>damage/s</small></p>' + (r.done ? '<p class="note">Done. Change gear or seats and run it again to compare.</p>' : ''); };
+        const tt = Math.max(0.1, t);
+        live.innerHTML = '<p><b>' + t.toFixed(1) + ' s</b> &middot; party ' + fmt(r.party) + ' &middot; taps ' + fmt(r.taps) + '</p><p class="tbig">' + fmt(all / tt) + ' <small>damage/s</small></p>' +
+          '<p class="ttaps">' + r.n + ' taps &middot; <b>' + (r.n / tt).toFixed(1) + '</b>/s &middot; <b>' + fmt(r.n ? r.taps / r.n : 0) + '</b> per tap' + (r.crit ? ' &middot; ' + r.crit + ' critical' : '') + ' &middot; tap damage/s <b>' + fmt(r.taps / tt) + '</b></p>' + (r.done ? '<p class="note">Done. Change gear or seats and run it again to compare.</p>' : ''); };
       const step = () => { const r = trainRun; if (!r || r.done || !document.body.contains(live)) return; const now = Date.now(), dt = Math.min(0.5, (now - r.last) / 1000); r.last = now; r.party += L.totalDps(S, now) * dt;
+        { const n = md.querySelector('#tr-now'); if (n) n.textContent = fmt(L.clickDamage(S, now)); }
         if (now - r.at >= 10000) { r.done = true; go.disabled = false; go.textContent = 'Run again'; } paint(); if (!r.done) setTimeout(step, 100); };
       go.onclick = () => { L.qEv(S, 'dummy'); trainRun = { at: Date.now(), last: Date.now(), party: 0, taps: 0, n: 0, crit: 0 }; go.disabled = true; md.querySelector('#tr-rows').innerHTML = trainRows(); step(); };
       md.querySelector('#tr-hit').onclick = () => { const r = trainRun; if (!r || r.done) return; const c = Math.random() < L.critChance(S); r.taps += L.clickDamage(S, Date.now()) * (c ? 5 : 1); r.n++; if (c) r.crit++; try { sfx.hit && sfx.hit(); } catch (e) {} paint(); };
@@ -6519,6 +6523,7 @@
       'New hero profile: key stats up top and sections you can fold. A Public profile tab lets you choose what other players see.',
       'Tap a name in the Players Guild to see that hero’s public profile. Banners now show on party rows.',
       'Borrowed player heroes now keep up with their owner’s latest gear and power level on their own. Their damage and health are each capped at twice yours.',
+      'Training Grounds: healers always show Heal/s, and the dummy run shows your taps per second and tap damage.',
       'New damage meter under the fight log: who deals your damage over the last 30 seconds.',
       'Sigil shop: give $1 or any amount to our Extra Life team for children’s hospitals.',
       'New Support the dev button: buy the developer a coffee. It gives nothing in game.',
