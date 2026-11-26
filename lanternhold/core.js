@@ -2233,7 +2233,9 @@
     { id: 'oil', name: 'Flask of Lantern Oil', icon: 'oil', desc: 'Pour it during a guardian fight for ' + OIL_TIME + ' more seconds before the lantern gutters.' },
   ].concat(TONICS);
   function shopPrice(s, id) {
-    const income = offlineGoldPerSec(s) * 60;
+    // Steady dive-income average (pipRate), not the party seated right now: benching strong heroes in camp made
+    // tonics nearly free to stockpile (same fix as Pip, Bounty Board).
+    const income = pipRate(s) * 60;
     const t = tonicById(id);
     if (t) return Math.max(60, Math.round(income * t.mult));
     return Math.max(id === 'draught' ? 40 : 25, Math.round(income * (id === 'draught' ? 2 : 1.5)));
@@ -2678,7 +2680,7 @@
     const k = opts[Math.floor(r() * opts.length)];
     if (k === 'tonic') { const t = TONICS[Math.floor(r() * TONICS.length)]; const was = shopPrice(s, t.id) * 2; return { k, id: t.id, n: 2, name: '2 × ' + t.name, desc: t.desc, was, price: Math.round(was * (1 - MERCH_OFF)) }; }
     if (k === 'draught' || k === 'oil') { const it = SHOP.find(x => x.id === k); const was = shopPrice(s, k) * 3; return { k, id: k, n: 3, name: '3 × ' + it.name, desc: it.desc, was, price: Math.round(was * (1 - MERCH_OFF)) }; }
-    const n = Math.round(20 + (s.maxFloorEver || 1) * 1.5), was = Math.max(80, Math.round(offlineGoldPerSec(s) * 60 * 6));
+    const n = Math.round(20 + (s.maxFloorEver || 1) * 1.5), was = Math.max(80, Math.round(pipRate(s) * 60 * 6));
     return { k: 'dust', n, name: n + ' Dust', desc: 'Dust for enchanting, without scrapping a thing.', was, price: Math.round(was * (1 - MERCH_OFF)) };
   }
   function merchantTick(s, now, active, rng, events) {
@@ -3048,7 +3050,7 @@
     s.ghost = null; s.ghostNext = now + GHOST_COOL * 1000; s.stats.ghosts = (s.stats.ghosts || 0) + 1;
     const r = rng(), f = Math.max(1, s.floor);
     let out;
-    if (r < 0.45) { const gold = Math.max(25, Math.round(offlineGoldPerSec(s) * 120)); s.gold += gold; out = { kind: 'gold', n: gold }; }
+    if (r < 0.45) { const gold = Math.max(25, Math.round(pipRate(s) * 120)); s.gold += gold; out = { kind: 'gold', n: gold }; }
     else if (r < 0.8) { const d = Math.round(4 + f * 0.4); s.dust = (s.dust || 0) + d; out = { kind: 'dust', n: d }; }
     else { const t = TONICS[Math.floor(rng() * TONICS.length)]; s.items[t.id] = (s.items[t.id] || 0) + 1; out = { kind: 'tonic', id: t.id, name: t.name }; }
     return out;
