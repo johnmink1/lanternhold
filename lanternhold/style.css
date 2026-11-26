@@ -1,4 +1,4 @@
-/* lh-build 202611260519 */
+/* lh-build 202611261905 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -1166,6 +1166,7 @@ body.resting .arena{cursor:default}
 .renewnote{margin:10px 0 0}.renewnote b{color:var(--text)}
 @media (max-width:560px){.packs{grid-template-columns:repeat(2,1fr);row-gap:16px}}
 .storelink+.note{margin-top:10px}
+.mercygive .row{margin:10px 0 6px}.mercygive .note{margin:0}
 /* Mercy's Blessing pill */
 .stat.mercy{color:#8fcf6a;cursor:pointer;font:inherit;font-weight:800;font-size:15px;animation:mercyglow 3s ease-in-out infinite}
 .stat.mercy:hover{border-color:#8fcf6a}
@@ -1200,6 +1201,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .quest>div{flex:1;min-width:0}.quest b{display:block}.quest small{color:var(--muted);font-size:12px}
 .quest.done{border-color:var(--gold)}.quest.got{opacity:.7}
 .quest .sigil{width:14px;height:14px;vertical-align:-2px;margin-right:2px}
+.quest .qgorow{margin-top:6px}
 .qbar{height:6px;border-radius:6px;background:var(--line);margin:6px 0 3px;overflow:hidden}.qbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ffd970)}
 .qok{color:var(--violet);font-weight:800;white-space:nowrap}
 .quest.bonus{background:linear-gradient(180deg,rgba(232,121,249,.08),var(--panel))}
@@ -2465,8 +2467,9 @@ body.atench .achips{display:none}
 .dummy{flex:none;width:92px;height:92px;border-radius:14px;border:2px solid #8a6a3a;background:radial-gradient(circle at 50% 40%,#5a4328,#2a1f14);color:#e9c98a;display:grid;place-items:center;cursor:pointer;font-weight:700}
 .dummy svg{width:34px;height:34px}.dummy:active{transform:scale(.95)}
 .tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
+.tdown{color:var(--bad,#ff6b5a);font-size:11px;font-weight:600}.tnote{font-size:12px;margin:-4px 0 10px}.ttaps{color:var(--muted);font-size:13px;margin:2px 0 6px}.ttaps b{color:var(--text,#e8e6e3)}
 #tr-rows{overflow-x:auto}
-@media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}
+@media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6),.ttab .tbar{display:none}.ttab th,.ttab td{padding-left:4px;padding-right:4px}}
 /* v125 NP+ gold sinks: Pip's crates and Curio shelf, Gulp's sign, the goblin bar, Hold works */
 .holdtents.n7{grid-template-columns:repeat(7,1fr)}
 .holdtents.n7 button{padding:8px 2px;font-size:12px}
@@ -2544,3 +2547,99 @@ body.atench.shopmin .stage .arena{display:none!important}
 .sethead{margin:18px 0 0;font-size:15px}
 .setnotif span{display:flex;flex-direction:column;gap:2px;padding-right:12px}
 .setnotif small{color:var(--muted);font-size:12px}
+
+/* v132 hero profile: My hero / Public profile tabs (John, 26 Nov 2026) */
+.prof.v2 .profhead{gap:14px}
+.prof.v2 .profspr{width:76px;height:94px}
+.prof.v2 .phid{min-width:0}
+.prof.v2 .phid h2{font-size:22px;line-height:1.15;overflow-wrap:anywhere}
+.prof.v2 .bio{margin:12px 0 10px;color:var(--muted);font-size:14px}
+.ptabs{margin:14px 0 2px;width:100%}
+.ptabs button{flex:1;padding:8px 10px;font-size:14px}
+.pkpi{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0 8px}
+.pkpi div{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 9%,var(--bg2)),var(--bg2));border:1px solid var(--line2);border-radius:10px;padding:8px 10px;min-width:0}
+.pkpi span{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pkpi b{display:block;font-size:19px;line-height:1.25;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pxp{margin:4px 0 12px}
+.pxprow{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:4px}
+.pxprow span{color:var(--dim);font-variant-numeric:tabular-nums}
+.pxp small{display:block;color:var(--accent);font-size:12.5px;margin-top:4px}
+.psec{border-top:1px solid var(--line);padding:2px 0}
+.psec>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:10px 2px;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.psec>summary::-webkit-details-marker{display:none}
+.psec>summary::after{content:'+';color:var(--dim);font-size:18px;font-weight:400;letter-spacing:0}
+.psec[open]>summary::after{content:'\2212'}
+.psec .pstats{margin:0 0 10px}
+.psec .ability{margin-bottom:6px}
+.prof.v2 .pstats b{font-variant-numeric:tabular-nums}
+.pstats.attr{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+.pgear.two{grid-template-columns:1fr 1fr;column-gap:16px;margin-bottom:10px}
+.pgear.two li{min-width:0;font-size:13.5px}
+.pgear.two b{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pgear b[data-info]{cursor:pointer}
+.pgear b[data-info]:hover{text-decoration:underline}
+.pgear .r-common{color:var(--text)}
+.pubsec{margin-top:10px}
+.pubsec h4{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.pubsec .pstats{margin:0}
+.pparty{display:flex;flex-wrap:wrap;gap:6px}
+.pparty span{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;font-weight:700}
+.pvlist{display:grid;grid-template-columns:1fr 1fr;column-gap:18px}
+.pvrow{gap:12px;cursor:pointer;padding:8px 0}
+.pvrow span{font-weight:700;font-size:14px}
+.pvrow small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.pvrow input{flex:none}
+#pv-st{min-height:1.2em;margin:6px 0 4px;font-size:13px}
+#pv-st:empty{display:none}
+.pftags .online{font-size:12.5px}
+@media (max-width:560px){
+  .pkpi{grid-template-columns:1fr 1fr}
+  .pgear.two,.pvlist{grid-template-columns:1fr}
+  .prof.v2 .profspr{width:64px;height:80px}
+}
+.modal .sheet.profsheet{max-width:640px}
+.pvbox{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:12px 0 4px}
+.pvbox>b{display:block;font-size:14px}
+.pvbox>small{display:block;color:var(--muted);font-size:12.5px;margin:2px 0 8px}
+.pvchips{display:flex;flex-wrap:wrap;gap:6px}
+.pvchip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--dim);font:700 13px var(--body);cursor:pointer;text-decoration:line-through;text-decoration-color:color-mix(in srgb,currentColor 50%,transparent)}
+.pvchip svg{width:14px;height:14px}
+.pvchip.on{color:var(--text);text-decoration:none;border-color:color-mix(in srgb,var(--good) 55%,transparent);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.pvchip.on svg{color:var(--good)}
+/* party rows: player banners (v132) */
+.seat.sbn{border-color:color-mix(in srgb,var(--line2) 70%,#f2c14e 30%)}
+.seat.sbn .lv{color:color-mix(in srgb,var(--text) 82%,transparent)}
+.sban{display:inline-block;width:16px;height:24px;flex:none;margin-left:2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.sban svg{width:100%;height:100%;display:block}
+/* Damage meter (v132) */
+#meter{padding:4px 10px 8px}
+.mtab td:nth-child(2){text-align:right;font-variant-numeric:tabular-nums}
+.mtab td:first-child{white-space:normal}
+#meter .tsum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+#meter .tsum .btn{margin-left:auto}
+.mtab{table-layout:auto}
+.mtab td:last-child{text-align:right;width:1%}
+@media (max-width:520px){.mtab .tbar{display:none}.mtab td{padding:5px 4px}}
+.mtab td{display:table-cell!important}
+/* v132 Support the game: one-time Sigil tasks */
+.supts{display:grid;gap:10px;margin:8px 0 12px}
+.supt{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;border:1px solid var(--line2);background:var(--panel)}
+.supt small{color:var(--muted);font-size:13px;line-height:1.4}
+.supth{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.supth svg{width:18px;height:18px;color:var(--gold);flex:none}
+.supsig{display:inline-flex;align-items:center;gap:3px;margin-left:auto;font-weight:700;color:var(--gold)}.supsig .sigil{width:16px;height:16px}
+.supform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:2px}
+.supform input{flex:1 1 140px;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--line2);background:var(--bg2);color:var(--text);font:inherit}
+.supnote{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;border:1px dashed var(--line2);margin-bottom:8px}
+.supnote small{color:var(--muted);font-size:13px;line-height:1.4}.supnote a{color:var(--gold)}
+.supt small a{color:var(--gold)}
+/* unique Legendaries: camp post bonus tags and Guild Hall side quests */
+.uqp{font-style:normal;font-size:11px;font-weight:800;color:var(--ember);white-space:nowrap;cursor:help}
+.job .uqp{display:block;margin-top:2px}
+.uqhint{font-size:11px;color:var(--muted);cursor:help}
+.uqt{display:block;color:var(--ember);font-weight:700;margin-top:2px}
+.uqlist{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.uqrow{display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line2);border-radius:10px;background:var(--panel2)}
+.uqrow img{width:32px;height:32px;image-rendering:pixelated;flex:none}
+.uqrow b{font-size:13px}.uqrow small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.jobline{flex-wrap:wrap}.jobline .uqhint,.jobline > .uqp{flex-basis:100%}
+.uqline > .uqp{flex-basis:auto}

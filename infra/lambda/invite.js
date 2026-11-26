@@ -13,7 +13,7 @@ async function heroes(ids) {
   if (!ids.length) return {};
   const r = await db.send(new D.BatchGetItemCommand({ RequestItems: { [T]: { Keys: ids.slice(0, 50).map(K), ProjectionExpression: 'pid, #n, cls, lv, sd, pf, wl, wv, seen', ExpressionAttributeNames: { '#n': 'name' } } } }));
   const o = {};
-  for (const i of r.Responses[T] || []) if (i.name) o[i.pid.S] = { id: i.pid.S, name: i.name.S, cls: i.cls.S, level: +i.lv.N, side: i.sd ? i.sd.S : 'unsworn', on: Date.now() - +(i.seen || { N: 0 }).N < 18e4, pf: i.pf ? JSON.parse(i.pf.S) : null, w: i.wv && i.wv.N === '1' ? i.wl.S : '' };
+  for (const i of r.Responses[T] || []) if (i.name) { const pf = i.pf ? JSON.parse(i.pf.S) : null, hid = pf && Array.isArray(pf.h) ? pf.h : []; if (pf) { if (hid.includes('b')) pf.b = ''; if (hid.includes('e')) pf.e = []; delete pf.h; } o[i.pid.S] = { id: i.pid.S, name: i.name.S, cls: i.cls.S, level: +i.lv.N, side: i.sd ? i.sd.S : 'unsworn', on: !hid.includes('on') && Date.now() - +(i.seen || { N: 0 }).N < 18e4, pf, w: i.wv && i.wv.N === '1' && !hid.includes('w') ? i.wl.S : '' }; }
   return o;
 }
 exports.handler = async (e) => {

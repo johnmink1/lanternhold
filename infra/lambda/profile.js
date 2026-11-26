@@ -11,6 +11,8 @@ const CAT = Object.fromEntries(('f.plain0 f.iron150 f.radiant150 f.tide150 f.mer
   'g.night0 g.forge150 g.crypt150 g.glass150 g.storm200 g.rift350 g.nexus500 ' +
   'e.lantern0 e.shield0 e.sword0 e.skull40 e.flame40 e.wave40 e.sun40 e.moon40 e.star40 e.key40 e.anvil40 e.crown60 e.eye60 e.rose60 e.raven80 e.rift100')
   .split(' ').map(x => { const m = x.match(/^(.+?)(\d+)$/); return [m[1], +m[2]]; }));
+// Parts of the public profile a player can hide (v132); heroes.js leaves them out of GET /heroes.
+const HIDE = ['fl', 'np', 'on', 'st', 'gr', 'rc', 'pa', 'b', 'e', 'w'];
 const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|http|www\.|\.com)/i;
 const res = (c, b, h) => ({ statusCode: c, headers: Object.assign({ 'content-type': 'application/json' }, h), body: JSON.stringify(b) });
 const S = v => ({ S: String(v) });
@@ -44,7 +46,7 @@ exports.handler = async (e) => {
     if (rk === 'PUT /profile') {
       const own = new Set((await wallet()).own.SS);
       const ok = (k, id) => id === '' || CAT[k + '.' + id] === 0 || own.has(k + '.' + id);
-      const p = { b: String(b.b || '').replace(/\s+/g, ' ').trim(), t: String(b.t || ''), f: String(b.f || ''), c: String(b.c || ''), g: String(b.g || ''), e: [...new Set(Array.isArray(b.e) ? b.e.map(String) : [])] };
+      const p = { b: String(b.b || '').replace(/\s+/g, ' ').trim(), t: String(b.t || ''), f: String(b.f || ''), c: String(b.c || ''), g: String(b.g || ''), e: [...new Set(Array.isArray(b.e) ? b.e.map(String) : [])], h: [...new Set(Array.isArray(b.h) ? b.h.map(String) : [])].filter(k => HIDE.includes(k)) };
       if (p.b.length > 140 || BAD.test(p.b.replace(/[^a-z.\/]/gi, ''))) return res(400, { error: 'bio' });
       if (!ok('t', p.t) || !ok('f', p.f) || !ok('c', p.c) || !ok('g', p.g) || p.e.length > 6 || !p.e.every(x => x && ok('e', x))) return res(400, { error: 'item' });
       await both('SET pf = :p', { ':p': S(JSON.stringify(p)) });

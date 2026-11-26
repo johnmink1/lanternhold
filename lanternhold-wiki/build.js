@@ -210,12 +210,19 @@ ref({
   lede: 'Story companions join as you go deeper and rest by the campfire until you bring them along. They are a little weaker than other players’ heroes, by design.',
   body: () => {
     const tiers = [[0, 'The first five'], [1, 'Met deeper down']];
-    return tiers.map(([t, h]) => '<h2>' + h + '</h2><div class="grid2">' + L.MEMBERS.filter(m => m.tier === t).map(m => {
+    return tiers.map(([t, h]) => '<h2>' + h + '</h2><div class="grid2">' + L.MEMBERS.filter(m => m.tier === t && !m.uniq).map(m => {
       const side = L.SIDES[m.side];
       return card(m.id, esc(m.name), { pic: pic(m.cls, m.hue, m.name), style: '--acc:' + CLS[m.cls].color,
         sub: esc(m.title) + ' · ' + chip(esc(clsName(m.cls)), 'c') + (side ? ' ' + chip(esc(side.name), 's') : ''),
         body: '<p>' + esc(m.bio) + '</p>' + (m.line ? '<p class="quote">' + esc(m.line) + '</p>' : '') });
     }).join('') + '</div>').join('') +
+      '<h2 id="unique">Unique Legendaries</h2><p>Eight one-of-a-kind Legendary companions. Each gives a small extra bonus while working their own camp job, on top of the job itself. They draw a Legendary wage like any Legendary hire.</p><div class="grid2">' + L.MEMBERS.filter(m => m.uniq).map(m => {
+        const side = L.SIDES[m.side], u = L.UNIQ[m.id], post = u.job === 'any' ? 'any camp job' : L.JOBS.find(j => j.id === u.job).name;
+        const how = u.how === 'guild' ? 'Now and then on offer at the Guild Hall once you reach floor ' + u.floor + '.' : u.how === 'quest' ? 'Finish the side quest that opens on floor ' + u.floor + '. Joins for free.' : u.how === 'adv' ? 'Joins for free the first time you beat the floor ' + u.floor + ' guardian.' : 'Caged by a monster somewhere past floor ' + u.floor + '. Very rare: a Rogue in the party, the Mercy Corps banner and floors past 100 each make it likelier. Free him to have him join; if the monster gets away, he waits at the Guild Hall.';
+        return card(m.id, esc(m.name), { pic: pic(m.cls, m.hue, m.name), style: '--acc:' + CLS[m.cls].color,
+          sub: esc(m.title) + ' · ' + chip(esc(clsName(m.cls)), 'c') + (side ? ' ' + chip(esc(side.name), 's') : ''),
+          body: '<p>' + esc(m.bio) + '</p>' + kv([['Camp bonus', '<b>' + esc(u.perk) + '</b> as ' + esc(post) + ': ' + esc(u.text)], ['How to find', esc(how)]]) });
+      }).join('') + '</div>' +
       '<h2 id="traits">Companion traits</h2><p>Every story companion rolls three traits when they join: one for a seat, one for a class they fight beside, and one for camp. Traits come in Common, Fine and Rare grades.</p>' +
       table(['Kind', 'Names', 'What it can give'], [
         ['Position', L.POS_TRAIT_NAME.map((n, i) => esc(n) + ' <small>(' + L.POS_NAME[i] + ')</small>').join(', '), Object.values(L.TRAIT_FX).map(f => pct(f.lo, 1) + ' to ' + pct(f.hi, 1) + ' ' + f.n).join('; ')],
@@ -281,7 +288,7 @@ ref({
       '<p>Beat a guardian before the lantern runs out (' + 30 + ' seconds to start). Each region guardian is listed on <a href="/wiki/regions/">Regions</a>.</p>' +
       '<h2 id="tricks">Monster tricks</h2>' + table(['Trick', 'What it does'], Object.values(L.MODS).map(m => ['<b>' + esc(m.name) + '</b>', esc(m.desc)])) +
       '<h2 id="merchant">Wandering merchant</h2><p>From floor ' + L.MERCH_FLOOR + ', and only while you are playing, a merchant sometimes stops beside the fight for ' + Math.round(L.MERCH_LIFE / 60) + ' minutes with one deal at ' + pct(L.MERCH_OFF) + ' off: two tonics, three Campfire Draughts or Lantern Oil, or a pile of Dust. Missing it costs nothing.</p>' +
-      '<h2 id="bounties">Bounty board</h2><p>Open it from the Quests button. Three bounties at a time, new every ' + L.BOUNTY_HOURS + ' hours, built from the floors your hero has reached: hunt a kind of monster on certain floors, beat a guardian a few times, open chests, defeat alliance elites or break shields. Each pays gold and Dust, sometimes a tonic. Unclaimed finished bounties are paid when the board changes.</p>' +
+      '<h2 id="bounties">Bounty board</h2><p>Open it from the Quests button. Three bounties at a time, new every ' + L.BOUNTY_HOURS + ' hours, built for your hero from about ' + Math.floor(L.QDEFS.length / 10) * 10 + ' kinds across the whole game: hunts and guardians, monster tricks, the Grand War, crafting, training, the Guild, Ember Ring duels, the Market, world boss weekends, and for NP+ heroes Pip, Gulp and the Hold. You only get what your hero can do right now, and the three on show always come from different parts of the game. Each pays gold and Dust, sometimes a tonic. Unclaimed finished bounties are paid when the board changes.</p>' +
       '<h2 id="keeper">The Lantern Keeper</h2><p>While the store owner is online, every hero gets +' + pct(L.KEEPER) + ' damage, healing, gold, hero XP and gear finds. A gold banner over the fight shows when it is on.</p>' +
       '<h2 id="shielded">Shielded foes</h2><p>From floor ' + L.SHIELD_FLOOR + ', some monsters and many guardians fight inside a shield. While it is up the party deals ' + pct(L.SHIELD_CUT) + ' less damage. Each tap knocks ' + pct(L.SHIELD_TAP) + ' off it (a critical tap twice that), and it wears away on its own in ' + L.SHIELD_DECAY.foe + ' seconds (' + L.SHIELD_DECAY.boss + ' for guardians, who raise it once more at half health).</p>' +
       '<h2 id="ghost-lantern">Ghost Lantern</h2><p>From floor ' + L.GHOST_FLOOR + ', and only while you are playing, a Ghost Lantern sometimes drifts into the fight. It slowly saps party damage or healing, up to ' + pct(L.GHOST_MAX) + '. Tap it to shatter it for a burst of gold, some Dust or a free tonic. Left alone it fades after ' + L.GHOST_LIFE + ' seconds and nothing is lost.</p>' +
@@ -411,11 +418,11 @@ ref({
     '<p class="note">Kindling also buys skill tree ranks, +' + L.BAG_STEP + ' pack slots and extra ring and trinket slots. Changing class costs ' + L.CLASS_CHANGE_COST + ' Kindling.</p>' +
     '<h2 id="relics">Relics</h2><p>Guardians from floor 10 sometimes drop a relic. Duplicates level it up, and relics stay through rekindling.</p>' + table(['Relic', 'Bonus'], L.RELICS.map(r => ['<b>' + esc(r.name) + '</b>', esc(r.desc)])) +
     '<h2 id="records">Records</h2><p>Each record you earn adds ' + 1 + '% to party damage, permanently.</p><div class="grid3 tight">' + L.FEATS.filter(f => !f.hidden).map(f => '<div class="mini" id="feat-' + f.id + '">' + icon('cup') + '<b>' + esc(f.name) + '</b><small>' + esc(f.desc) + '</small></div>').join('') + '</div>' +
-    '<h2 id="quests">Daily quests</h2><p>Three a day, picked from the list below. Each pays ' + L.QUEST_REWARD + ' Sigil, and finishing all three pays ' + L.QUEST_BONUS + ' more.</p><ul>' + L.QUESTS.map(q => '<li>' + esc(q.text.replace('{n}', num(q.n))) + '</li>').join('') + '</ul>' +
+    '<h2 id="quests">Daily quests</h2><p>Three a day, picked for your hero from the same kinds as the bounty board, and never the same kind two days running. Each pays ' + L.QUEST_REWARD + ' Sigil, and finishing all three pays ' + L.QUEST_BONUS + ' more.</p>' +
     '<h2 id="milestones">Training milestones</h2><p>Companions get a big power jump at power levels ' + L.MILESTONES.slice(0, 8).join(', ') + ' and on up to ' + num(L.MILESTONES[L.MILESTONES.length - 1]) + '.</p>' +
     '<h2 id="offline">While you are away</h2><p>Your party earns 25% of its gold for ' + (L.OFFLINE_BASE / 3600) + ' hours while the game is closed. Night Watch adds 16 hours a rank, up to ' + (L.OFFLINE_MAX / 3600) + ' hours.</p>' + related(['classes', 'getting-stronger']),
   index: () => { for (const s of L.STATS) addSearch('progression', s.name, 'stats', 'Hero stat: ' + s.desc, 'Stat'); for (const u of L.KINDLE_UPS) addSearch('progression', u.name, 'kindling', 'Kindling upgrade: ' + u.desc, 'Kindling'); for (const r of L.RELICS) addSearch('progression', r.name, 'relics', 'Relic: ' + r.desc, 'Relic');
-    for (const f of L.FEATS.filter(f => !f.hidden)) addSearch('progression', f.name, 'feat-' + f.id, 'Record: ' + f.desc, 'Record'); addSearch('progression', 'Rekindling', 'rekindle', 'Restart for Embers and Kindling from floor ' + L.REKINDLE_FLOOR, 'Progression'); addSearch('progression', 'Daily quests', 'quests', L.QUESTS.map(q => q.text.replace('{n}', q.n)).join('. '), 'Quests'); },
+    for (const f of L.FEATS.filter(f => !f.hidden)) addSearch('progression', f.name, 'feat-' + f.id, 'Record: ' + f.desc, 'Record'); addSearch('progression', 'Rekindling', 'rekindle', 'Restart for Embers and Kindling from floor ' + L.REKINDLE_FLOOR, 'Progression'); addSearch('progression', 'Daily quests', 'quests', 'Three quests a day picked for your hero, 1 Sigil each', 'Quests'); },
 });
 
 // ---- Store items ----
