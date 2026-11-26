@@ -1,4 +1,4 @@
-/* lh-build 202611261721 */
+/* lh-build 202611261745 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4165,7 +4165,7 @@
         use('gs-look', 'crown', 'Profile looks', 'Frames, titles, banners, emblems', 'Open') +
         (CL ? use('gs-mkt', 'coin', 'Sigil exchange', 'Sell ' + TOKEN + ' for gold, or buy them with gold', 'Open') : '') +
       '</div>' +
-      (CL ? '<div class="shopuses">' + use('gs-sup', 'users', 'Support the game', 'Free one-time ' + TOKEN + ' for joining our Discord or adding us to an itch.io collection', 'Open') + '</div>' : '') +
+      (CL ? '<div class="shopuses">' + use('gs-sup', 'users', 'Support the game', 'Free one-time ' + TOKEN + ' for linking your Discord or itch.io account', 'Open') + '</div>' : '') +
       // 2. Lanternholder: one set of perks, two ways to get it
       '<div class="shopsec subbox"><h3>Lanternholder <span class="tag">Premium</span></h3>' +
       '<p class="shopsub">Convenience, never power.</p>' +
@@ -4503,21 +4503,20 @@
     if (w) setTimeout(() => toast('flame', 'A fresh start', w === 'me' ? 'An admin reset your account. Your delve starts again from the top of the stair.' : 'The Deep has been reset for everyone. Every delver starts again from the top of the stair.', 'feat'), 1500);
   }
   function isAdmin() { return !!(sess && sess.id && String(claims(sess.id)['cognito:groups'] || '').includes('admins')); }
-  // Support tasks (v132, John 26 Nov 2026): one-time Sigil thanks, checked and paid by the server with no admin step.
-  // The player signs in to Discord or itch.io in a pop-up (read-only OAuth, implicit grant); oauth.html hands the token back here,
-  // and POST /support/claim asks Discord or itch itself. Ratings, reviews, comments and follows are never rewarded or penalized:
-  // itch.io unlists pages that game ratings or comments, and its API cannot see follows anyway.
+  // Support tasks (v132, John 26 Nov 2026): one-time Sigil thanks for linking a Discord or itch.io account to the hero, checked and
+  // paid by the server. The player signs in in a pop-up (identity-only OAuth, implicit grant); oauth.html hands the token back here
+  // and POST /support/claim asks Discord or itch who it belongs to. Nothing rewards joining, following, collecting, rating, reviewing
+  // or commenting: those would break Discord's or itch.io's rules (John: never break a platform's terms).
   const SUP_APP = { discord: '', itch: '' }; // OAuth client ids (public). Empty = that task shows as coming soon.
   const SUP_CB = location.origin + '/oauth.html';
   const SUP = [
-    { id: 'discord', icon: 'discord', name: 'Join our Discord', how: 'Join the Born 2 Game Discord and pick <b>Lanternhold</b> when it asks which communities you want. Then check here: Discord shows you exactly what we can see (only your membership in our server).', join: 'https://discord.gg/6G7E7rhGFu', joinTxt: 'Open Discord', check: 'Check with Discord',
-      auth: (id, st) => 'https://discord.com/oauth2/authorize?response_type=token&client_id=' + id + '&scope=guilds.members.read&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
-    { id: 'itch', icon: 'star', name: 'Add us to an itch.io collection', how: 'On itch.io, press <b>Add To Collection</b> on the Lanternhold page and save it to any collection. Then check here: itch.io asks before sharing your profile and collections with us.', join: 'https://born2gamellc.itch.io/lanternhold', joinTxt: 'Open itch.io', check: 'Check with itch.io',
-      auth: (id, st) => 'https://itch.io/user/oauth?response_type=token&client_id=' + id + '&scope=' + encodeURIComponent('profile:me profile:collections') + '&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
+    { id: 'discord', icon: 'discord', name: 'Link your Discord', how: 'Sign in with Discord to link it to your hero. We only see your Discord name and id, nothing else. Our community is on the <a href="https://discord.gg/6G7E7rhGFu" target="_blank" rel="noopener">Born 2 Game Discord</a> if you want to say hi.', check: 'Link Discord',
+      auth: (id, st) => 'https://discord.com/oauth2/authorize?response_type=token&client_id=' + id + '&scope=identify&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
+    { id: 'itch', icon: 'star', name: 'Link your itch.io account', how: 'Sign in with itch.io to link it to your hero. We only see your public itch.io profile.', check: 'Link itch.io',
+      auth: (id, st) => 'https://itch.io/user/oauth?response_type=token&client_id=' + id + '&scope=profile%3Ame&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
   ];
-  const SUP_ERR = { notmember: 'Discord says you are not in the Born 2 Game server yet. Join it, then check again.', role: 'You are in the server, but without the Lanternhold role. In Discord, open Channels & Roles and pick Lanternhold, then check again.',
-    nogame: 'Lanternhold is not in any of your itch.io collections yet. Add it, then check again.', taken: 'That account already earned this reward on another hero.', done: 'You already have this one.',
-    floor: 'Reach floor 10 first, then check again.', hero: 'Play a little first so your hero is registered, then check again.', token: 'The sign-in did not go through. Try again.', remote: 'We could not reach them just now. Try again in a minute.' };
+  const SUP_ERR = { taken: 'That account is already linked to another hero.', done: 'You already have this one.',
+    floor: 'Reach floor 10 first, then try again.', hero: 'Play a little first so your hero is registered, then try again.', token: 'The sign-in did not go through. Try again.', remote: 'We could not reach them just now. Try again in a minute.' };
   let supData = null, supBusy = false, supBack = null;
   function supStart(task) {
     const t = SUP.find(x => x.id === task); if (!t || !SUP_APP[task]) return;
@@ -4543,12 +4542,12 @@
     const row = t => { const c = supData && supData.mine[t.id], sig = supData ? supData.tasks[t.id] : null, live = !!SUP_APP[t.id];
       return '<div class="supt"><div class="supth">' + icon(t.icon) + '<b>' + t.name + '</b>' + (sig ? '<span class="supsig">' + sigil + sig + '</span>' : '') + (c ? '<span class="tag once">Done</span>' : '') + '</div>' +
         (c ? '<small>Thank you! The ' + TOKEN + ' are in your account.</small>' : '<small>' + t.how + '</small>' +
-          '<div class="supform"><a class="btn small ghost" href="' + t.join + '" target="_blank" rel="noopener">' + t.joinTxt + '</a><button class="btn small" data-supgo="' + t.id + '"' + (supData && live ? '' : ' disabled') + '>' + (live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
-    modal('<div class="maphead"><div><h2>Support the game</h2><small>Two small ways to help Lanternhold grow, each thanked once with free ' + TOKEN + '. They are checked and paid right away.</small></div><button class="iconbtn" id="sp-x" aria-label="Close">&times;</button></div>' +
+          '<div class="supform"><button class="btn small" data-supgo="' + t.id + '"' + (supData && live ? '' : ' disabled') + '>' + (live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
+    modal('<div class="maphead"><div><h2>Support the game</h2><small>Link your accounts to your hero and get free ' + TOKEN + ', once each, paid right away.</small></div><button class="iconbtn" id="sp-x" aria-label="Close">&times;</button></div>' +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' : !supData ? '<p class="note">Loading…</p>' : '') +
       '<div class="supts">' + SUP.map(row).join('') + '</div>' +
       '<div class="supnote"><b>Reviews and comments</b><small>If you enjoy Lanternhold, an honest rating, review or comment on <a href="https://born2gamellc.itch.io/lanternhold" target="_blank" rel="noopener">itch.io</a> or anywhere you play helps new players find us. These never earn rewards or any in-game benefit, and we never penalize anyone for what they write or for not writing. We do not pay for likes, ratings, reviews or comments.</small></div>' +
-      '<p class="note small">Each task pays once per account, and each Discord or itch.io account counts once. Your hero needs to reach floor 10 first. We only read what the check needs and never post anything for you.</p>' +
+      '<p class="note small">Each one pays once per account, and each Discord or itch.io account can link to one hero. Your hero needs to reach floor 10 first. We never post anything for you.</p>' +
       '<div class="row"><button class="btn ghost" id="sp-ok">Back</button></div>', md => {
         md.className = 'sheet';
         md.querySelector('#sp-x').onclick = closeModal; md.querySelector('#sp-ok').onclick = () => back();
@@ -6324,7 +6323,7 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 132, date: 'November 2026', title: 'Support the game', items: [
-      'Sigil shop: Support the game gives free one-time Sigils for joining our Discord (10) or adding Lanternhold to an itch.io collection (5), checked automatically. Ratings and comments are always welcome but never rewarded.',
+      'Sigil shop: Support the game gives free one-time Sigils for linking your Discord (10) or itch.io (5) account. Ratings and comments are always welcome but never rewarded.',
     ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
