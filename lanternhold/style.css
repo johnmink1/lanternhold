@@ -1,4 +1,4 @@
-/* lh-build 202611260128 */
+/* lh-build 202611260143 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2539,3 +2539,8 @@ body.atench.shopmin .stage .arena{display:none!important}
 .dawnwin small{display:block;color:#ffc76a;text-transform:uppercase;letter-spacing:.12em;font-size:11px}
 .dawnwin h2{margin:4px 0 10px}
 .buy .tdust em{color:#d8c8ff}
+
+/* v130: Settings > Notifications */
+.sethead{margin:18px 0 0;font-size:15px}
+.setnotif span{display:flex;flex-direction:column;gap:2px;padding-right:12px}
+.setnotif small{color:var(--muted);font-size:12px}

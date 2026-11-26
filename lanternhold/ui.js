@@ -1,4 +1,4 @@
-/* lh-build 202611260128 */
+/* lh-build 202611260143 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1122,6 +1122,7 @@
   function handleEvents() {
     let kills = 0, gold = 0;
     for (const e of events) {
+      toastKind = EV_KIND[e.type] || null;
       logEv(e);
       if (e.type === 'hit' && e.lock) {
         floatText('Pick!', 'auto', FOE_X + (Math.random() - 0.5) * 0.16, 0.42 + (Math.random() - 0.5) * 0.16); tone(900 + Math.random() * 300, 0.04, 'square', 0.02, 700);
@@ -1315,6 +1316,7 @@
         $('auto').checked = false;
       }
     }
+    toastKind = null;
     if (kills) pendingGold += gold;
     const tnow = performance.now();
     if (pendingGold > 0 && tnow - lastGoldFloat > 450) {
@@ -1325,7 +1327,19 @@
   }
 
   // ---------- toasts / modals ----------
+  // v130 (Kyvia, Discord): Settings > Notifications turns each kind of automatic pop-up on or off. A switched-off
+  // kind still goes to the bell. Pop-ups that answer something the player just did have no kind and always show.
+  const TOAST_KINDS = [['loot', 'Loot and finds', 'Rare gear, set pieces, Sigils, relics'], ['progress', 'Bosses and progress', 'Guardians, region trials, mastery, feats, journal'],
+    ['level', 'Hero level-ups', 'New hero levels and unlocks'], ['combat', 'Fights and tips', 'Ambushes, stuns, falls and first-time tips'],
+    ['events', 'Mercy Corps and Loot Goblin', 'Wounded companions, rescues, the goblin'], ['hires', 'Hires and wages', 'Contracts ending, unpaid hires'],
+    ['chat', 'Chat', 'Mentions and whispers']];
+  const EV_KIND = { loot: 'loot', rset: 'loot', goblinsack: 'loot', sigil: 'loot', relic: 'loot', kill: 'progress', trial: 'progress', regionlock: 'progress', mastery: 'progress', beast: 'progress', lore: 'progress', sealed: 'progress',
+    herolevel: 'level', lock: 'combat', nexus: 'combat', nexusleave: 'combat', ambush: 'combat', cc: 'combat', oom: 'combat', special: 'combat', shuffle: 'combat', shieldup: 'combat', pack: 'combat', wipe: 'combat', bossfail: 'combat', retry: 'combat',
+    goblinflee: 'events', goblinkill: 'events', mercy: 'events', rescued: 'events', aided: 'events', mercyleft: 'events', npcleft: 'hires' };
+  let toastKind = null;
+  const toastOff = k => !!(k && S && S.settings && S.settings.toastOff && S.settings.toastOff[k]);
   function toast(ic, title, sub, cls, det) {
+    if (toastOff(toastKind)) { noteLog(ic, title, sub, cls, det); return; }
     const t = document.createElement('div');
     t.className = 'toast ' + (cls || '');
     t.innerHTML = icon(ic) + '<div><b></b><small></small></div>';
@@ -3548,6 +3562,8 @@
       '<label class="setrow"><span>Sound effects</span><input type="checkbox" id="s-sound"' + (S.settings.sound ? ' checked' : '') + '></label>' +
       (window.LHMusic ? '<label class="setrow"><span>Music</span><input type="checkbox" id="s-music"' + (LHMusic.on() ? ' checked' : '') + '></label>' +
         '<p class="setnote">Pick tracks, set the volume or mute from the <button class="linkbtn" id="s-musicpanel">music player</button> (the note button at the top).</p>' : '') +
+      '<h3 class="sethead">Notifications</h3><p class="setnote">Choose which pop-ups show in the corner. Switched-off ones still go to the bell.</p>' +
+      TOAST_KINDS.map(([k, n, d]) => '<label class="setrow setnotif"><span>' + n + '<small>' + d + '</small></span><input type="checkbox" data-notif="' + k + '"' + (toastOff(k) ? '' : ' checked') + '></label>').join('') +
       '<p style="margin-top:16px">Your progress saves automatically in this browser. Copy a backup to move it to another device.</p>' +
       '<div class="row"><button class="btn ghost" id="s-export">Copy backup</button><button class="btn ghost" id="s-import">Load backup</button><button class="btn danger" id="s-reset">Erase progress</button></div>' +
       '<div class="row"><button class="btn ghost" id="s-intro">Watch the intro</button>' + (fsOk() ? '<button class="btn ghost" id="s-full">' + (fsEl() ? 'Leave full screen' : 'Play full screen') + '</button>' : '') + '</div>' +
@@ -3556,6 +3572,7 @@
       '<p class="credits">Lanternhold &middot; A Grand War game by Born 2 Game, LLC. &copy; 2026 Born 2 Game, LLC. Made with care, no ads, no tracking.</p>' +
       '<div class="row"><button class="btn" id="s-close">Done</button></div>', m => {
         m.querySelector('#s-sound').onchange = e => { S.settings.sound = e.target.checked; };
+        m.querySelectorAll('[data-notif]').forEach(c => c.onchange = () => { const off = Object.assign({}, S.settings.toastOff); if (c.checked) delete off[c.dataset.notif]; else off[c.dataset.notif] = 1; S.settings.toastOff = off; save(); });
         if (window.LHMusic) {
           m.querySelector('#s-music').onchange = e => LHMusic.setOn(e.target.checked);
           m.querySelector('#s-musicpanel').onclick = () => { closeModal(); LHMusic.open(); };
@@ -3593,7 +3610,7 @@
     const wagesBefore = S.wagesPaid || 0, wev = [];
     L.payWages(S, sec, Date.now(), wev, true);
     const wpaid = (S.wagesPaid || 0) - wagesBefore;
-    if (wev.length) setTimeout(() => { for (const e of wev) toast('user', esc(e.name || 'A hire') + (e.why === 'short' ? '’s contract ended' : ' walked off unpaid'), 'While you were away. Their gear is back in your bag.' + (e.why === 'short' ? '' : ' They wait on the Guild Hall bench for 3 days.'), 'warn'); updateSeats(true); paintBoard(); }, 1500);
+    if (wev.length) setTimeout(() => { toastKind = 'hires'; for (const e of wev) toast('user', esc(e.name || 'A hire') + (e.why === 'short' ? '’s contract ended' : ' walked off unpaid'), 'While you were away. Their gear is back in your bag.' + (e.why === 'short' ? '' : ' They wait on the Guild Hall bench for 3 days.'), 'warn'); toastKind = null; updateSeats(true); paintBoard(); }, 1500);
     if (fromLoad && sec >= 60 && g > 0) {
       modal('<div class="center"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-lantern"/></svg><h2>Welcome back</h2><p>Your party kept delving for ' + fmtTime(sec) + ' while you were away and brought home</p><div class="big">' + fmt(g) + ' gold</div><p class="muted">Away from the game your party earns a quarter of its usual gold.' + (wpaid >= 1 ? ' Your hires were paid ' + fmt(wpaid) + ' gold in wages.' : '') + (away > win ? ' They stopped after ' + fmtTime(win) + ' and waited for you at the stair.' + (win < L.OFFLINE_MAX ? ' Night Watch in the Skills tab keeps them going longer, up to 3 days.' : '') : '') + '</p><div class="row" style="justify-content:center"><button class="btn" id="m-ok">Collect</button></div></div>', m => { m.querySelector('#m-ok').onclick = () => { sfx.coin(); closeModal(); }; });
     }
@@ -3616,7 +3633,7 @@
       if (S.hero && S.autoTrain && now - (logic.lastAuto || 0) > 1000) { logic.lastAuto = now; if (L.autoTrain(S, mainCamp())) updateSeats(true); }
       updatePanel(false);
       const got = L.checkFeats(S);
-      got.forEach(f => toast('star', 'Feat earned: ' + f.name, f.desc + ' (+1% party damage)', 'feat'));
+      toastKind = 'progress'; got.forEach(f => toast('star', 'Feat earned: ' + f.name, f.desc + ' (+1% party damage)', 'feat')); toastKind = null;
     }
     if (now - lastSave > 10000) { lastSave = now; save(); }
   }
@@ -4779,7 +4796,7 @@
     // v117 (John: "the @ didnt let you know about it"): a ping always toasts (so it lands in the bell) and chimes,
     // even with that channel open; the line flashes; the chat button and the browser tab show it while you are away.
     if (!viewing(k)) chat.ment[k] = (chat.ment[k] || 0) + hits.length;
-    toast('chat', '@ ' + m.name + ' mentioned you in ' + ch, String(m.text).replace(ITEM_TOKEN, '[item]').slice(0, 90), 'feat');
+    toastKind = 'chat'; toast('chat', '@ ' + m.name + ' mentioned you in ' + ch, String(m.text).replace(ITEM_TOKEN, '[item]').slice(0, 90), 'feat'); toastKind = null;
     try { sfx.relic(); } catch (e) {}
     chat.flash = new Set(hits.map(x => x.id)); setTimeout(() => { chat.flash = null; }, 2500);
     if (document.hidden) { chat.away = (chat.away || 0) + hits.length; document.title = '(' + chat.away + ') @ ' + BASE_TITLE; }
@@ -4953,7 +4970,7 @@
           const first = !chat.polled[k], add = mergeMsgs(k, await chatCall('GET', '/chat?ch=' + k + '&since=' + encodeURIComponent(chat.since[k] || '0')));
           chat.polled[k] = 1; if (first && k !== 'dm') markSeen(k);
           if (!first && k !== 'dm') pingMentions(k, add);
-          if (k === 'dm' && !first) { const w = add.filter(m => m.from !== chat.me && !chat.muted.has(m.from)).pop(); if (w) toast('chat', 'Whisper from ' + w.name, w.text.replace(ITEM_TOKEN, '[item]').slice(0, 90), ''); }
+          if (k === 'dm' && !first) { const w = add.filter(m => m.from !== chat.me && !chat.muted.has(m.from)).pop(); if (w) { toastKind = 'chat'; toast('chat', 'Whisper from ' + w.name, w.text.replace(ITEM_TOKEN, '[item]').slice(0, 90), ''); toastKind = null; } }
         } catch (e) { if (k === 'dm' && e.status === 403) { const t = document.querySelector('#chatch [data-ch="dm"]'); if (t) t.hidden = true; } }
       }
       paintUnread();
@@ -6234,6 +6251,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 130, date: 'November 2026', title: 'Notification settings', items: [
+      'Settings: a new Notifications section lets you turn each kind of corner pop-up on or off. Switched-off ones still go to the bell.',
+    ] },
     { v: 129, date: 'November 2026', title: 'NP+ training', items: [
       'NP+ training costs more gold each tier. From NP+2, Healers, Necromancers and Mages past power level 100 also need Dust to train.',
     ] },
