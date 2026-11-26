@@ -6443,17 +6443,17 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 132, date: 'November 2026', title: 'One name per player', items: [
-      'Hero names are now one per player, ignoring capitals, spaces and hyphens. If your name is taken, the game asks you to pick a new one.',
-      'Sigil shop: Give $1 or any amount to our Extra Life team for children’s hospitals. Add your #WarName to credit your alliance.',
-      'Quests: the Bounty Board and daily quests now draw from 200 kinds across the whole game, from Ember Ring duels and Guild hires to crafting, world boss weekends, Pip and Gulp.',
-      'You only get quests your hero can do, the three on show always come from different parts of the game, and a kind you just had waits days before it comes back.',
-      'Many quests have a button that takes you straight to the right place. Bounty gold is the same as before on average.',
-      'Your hero profile is easier to read: power level, damage, health and deepest floor up top, then Combat, Journey, Attributes and Gear in sections you can fold.',
-      'New Public profile tab: choose what other players see in the Players Guild (floor, NP+ tier, online status, stats, gear, records, party, bio, emblems, Grand War badge).',
-      'Tap a name in the Players Guild to see that hero’s public profile.',
-      'Party list: your banner and other players’ banners now show on their rows.',
-      'New Support the dev button: buy the developer a coffee. Gives nothing in game, separate from Mercy Corps.',
+    { v: 132, date: 'November 2026', title: 'Quests, profiles and one name each', items: [
+      'Hero names are now one per player. If yours is taken, the game asks you to pick a new one.',
+      'Quests: the Bounty Board and daily quests now draw from 200 kinds across the game, picked for your hero. Many have a button that takes you there.',
+      'New hero profile: key stats up top and sections you can fold. A Public profile tab lets you choose what other players see.',
+      'Tap a name in the Players Guild to see that hero’s public profile. Banners now show on party rows.',
+      'New damage meter under the fight log: who deals your damage over the last 30 seconds.',
+      'Sigil shop: give $1 or any amount to our Extra Life team for children’s hospitals.',
+      'New Support the dev button: buy the developer a coffee. It gives nothing in game.',
+      'Balance: repeat guardian kills give at most 5 relics a day per hero. First clears are not capped.',
+      'Balance: NP+ foes drop more gold (x2 at NP+1, x3 at NP+2, and so on).',
+      'Fix: Store, merchant, ghost, recruit and world boss gold now use your steady income, so swapping your party no longer changes them.',
     ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
