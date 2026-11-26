@@ -1,4 +1,4 @@
-/* lh-build 202611260259 */
+/* lh-build 202611260308 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6253,7 +6253,7 @@
   const PATCH_NOTES = [
     { v: 130, date: 'November 2026', title: 'Notification settings', items: [
       'Settings: a new Notifications section lets you turn each kind of corner pop-up on or off. Switched-off ones still go to the bell.',
-      'Fix: Pip, Gulp, the Armorer’s reforge, the Dust Press and Hold works now price from your best income in the deep, set once a day. Swapping your party, gear or camp jobs no longer changes prices.',
+      'Fix: Pip, Gulp, the Armorer’s reforge, the Dust Press and Hold works now price from your usual income in the deep (a slow average), set once a day. Swapping your party, gear or camp jobs no longer changes prices.',
     ] },
     { v: 129, date: 'November 2026', title: 'NP+ training', items: [
       'NP+ training costs more gold each tier. From NP+2, Healers, Necromancers and Mages past power level 100 also need Dust to train.',
@@ -7407,7 +7407,7 @@
       '<div class="rglist">' + L.CRATES.map(crate).join('') + '</div>' +
       '<h3 class="sub">The Curio shelf (' + n + ' of ' + L.CURIOS.length + ')</h3><p class="note small">Each Curio you own adds +' + Math.round(L.CURIO_PER * 100) + '% party damage, +' + Math.round((L.CURIOS.length * L.CURIO_PER + L.CURIO_ALL) * 100) + '% with all ' + L.CURIOS.length + '. You never find one you already own, and a Gilded Casket brings one at least every ' + L.CURIO_PITY + ' (' + (pip.n || 0) + ' since your last). Curios stay yours through New Playthroughs: take them again here for free.</p>' +
       '<div class="cushelf">' + shelf + '</div>' +
-      '<p class="note small">Crates cost gold only, never Sigils. Prices follow your best income in the deep and are set once a day.</p>';
+      '<p class="note small">Crates cost gold only, never Sigils. Prices follow your usual income in the deep and are set once a day.</p>';
   }
   $('enchpanel') && $('enchpanel').addEventListener('click', e => {
     if (shopKind() !== 'dicer') return;
@@ -7519,7 +7519,7 @@
     modal('<div class="maphead"><div><h2>Hold works</h2><small>NP+ projects for the Hold. Built once, kept through every New Playthrough.</small></div><button class="iconbtn" id="wk-x" aria-label="Close">&times;</button></div>' +
       '<h3 class="sub">Renovations</h3><div class="rglist">' + L.RENOS.map(x => row(x, true)).join('') + '</div>' +
       '<h3 class="sub">Decorations</h3><div class="rglist">' + L.DECOS.map(x => row(x, false)).join('') + '</div>' +
-      '<p class="note small">Prices follow your best income in the deep and are set once a day.</p><div class="row"><button class="btn ghost" id="wk-hold">&larr; The Hold</button></div>', md => {
+      '<p class="note small">Prices follow your usual income in the deep and are set once a day.</p><div class="row"><button class="btn ghost" id="wk-hold">&larr; The Hold</button></div>', md => {
         md.querySelector('#wk-x').onclick = closeModal; md.querySelector('#wk-hold').onclick = openHold;
         md.querySelectorAll('[data-reno]').forEach(b => b.onclick = () => { const id = b.dataset.reno, x = L.RENOS.find(q => q.id === id) || L.DECOS.find(q => q.id === id), c = L.buildReno(S, id); if (!c) return;
           save(); try { pushCloud(true); } catch (e) {} sfx.relic(); toast('star', x.name + ' is built', (x.fx ? x.fx + '. ' : '') + '-' + fmt(c) + ' gold.', 'feat'); updatePanel(true); openWorks(); });

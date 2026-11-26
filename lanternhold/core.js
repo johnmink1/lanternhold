@@ -1,4 +1,4 @@
-/* lh-build 202611260259 */
+/* lh-build 202611260308 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -3360,26 +3360,32 @@
   // Enchanter's Dust Press, and Gulp the Hoard Mimic (global, server: infra/lambda/gulp.js and goblin.js), whose
   // Golden Loot Goblin drops the Gilded rings (WB_SETS[GG]). Curios owned, renovations and decorations survive NP+.
   const npPlus = s => npTier(s) >= 1;
-  // Price income (hotfix, Kyvia on Discord 26 Nov 2026: prices moved with where you stood and who was in the party, so
-  // parking a Gold Find party in camp made crates cheap). Now: the best offline income seen while fighting in the dive
-  // this playthrough (pip.pk, sampled every 10 s and never lower), locked once a UTC day (pip.lk). Party swaps, camp
-  // jobs and gear changes can no longer lower a price. Before any sample: the floor's income at the 4 kills/s cap with
-  // your account-wide gold bonuses only (no gear or camp jobs).
+  // Price income (hotfix, Kyvia on Discord 26 Nov 2026). First fix: prices moved with where you stood and who was in
+  // the party, so parking a Gold Find party in camp made crates cheap. Second fix: a "best ever" sample caught short
+  // spikes (a strong guest, a Gold Find gear swap, a buff) and priced a Casket at 554B against 788M/h away income.
+  // Now: a slow running average (3 h time constant) of offline income sampled every 10 s while fighting in the dive,
+  // per playthrough, locked once a UTC day after 30 min of samples. A quick swap barely moves it; parking a weak party
+  // for hours to lower it costs those hours of income. Before 30 min of samples: the average so far, or (no samples
+  // yet) the floor's income at the 4 kills/s cap with account-wide gold bonuses only (no gear or camp jobs).
   const pipDay = now => new Date(now || Date.now()).toISOString().slice(0, 10);
+  const PIP_TAU = 3 * 3600e3, PIP_STEP = 10e3, PIP_GAP = 60e3, PIP_READY = 1800e3;
   function acctGoldPerSec(s) {
     const f0 = Math.max(1, (s.maxFloor || 1) - 1), f = isBossFloor(f0) ? Math.max(1, f0 - 1) : f0;
     return 4 * foeGold(f, false) * goldMult(s) / ((1 + gearGold(s)) * (1 + campBonus(s, 'gold'))) * 0.5 * (1 + relicVal(s, 'bell'));
   }
+  function pipOf(s) { const p = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }); if (p.pk || p.lk) { delete p.pk; delete p.lk; delete p.pkAt; } return p; }
   function samplePipIncome(s, now) {
-    const p = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }), t = npTier(s);
-    if (p.pkAt && now - p.pkAt < 10000 && now >= p.pkAt) return; p.pkAt = now;
-    const v = offlineGoldPerSec(s); if (!(v > 0) || !isFinite(v)) return;
-    if (!p.pk || p.pk.t !== t) p.pk = { t, v }; else if (v > p.pk.v) p.pk.v = v;
+    const p = pipOf(s), t = npTier(s), a = p.avg;
+    if (a && a.t === t && now >= a.at && now - a.at < PIP_STEP) return;
+    const v = offlineGoldPerSec(s); if (!(v >= 0) || !isFinite(v)) return;
+    if (!a || a.t !== t || !(a.v > 0)) { p.avg = { t, v, at: now, n: 0 }; return; }
+    const dt = Math.min(PIP_GAP, Math.max(0, now - a.at)), k = 1 - Math.exp(-dt / PIP_TAU);
+    a.v += (v - a.v) * k; a.n += dt; a.at = now;
   }
   function pipRate(s) {
-    const p = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }), t = npTier(s), d = pipDay(s.clock);
-    if (p.lk && p.lk.d === d && p.lk.t === t) return p.lk.v;
-    if (p.pk && p.pk.t === t && p.pk.v > 0) { p.lk = { d, t, v: p.pk.v }; return p.lk.v; }
+    const p = pipOf(s), t = npTier(s), d = pipDay(s.clock), a = p.avg;
+    if (p.lock && p.lock.d === d && p.lock.t === t) return p.lock.v;
+    if (a && a.t === t && a.v > 0) { if (a.n >= PIP_READY) p.lock = { d, t, v: a.v }; return a.v; }
     return acctGoldPerSec(s);
   }
   const incomeHour = s => Math.max(3600, pipRate(s) * 3600);
