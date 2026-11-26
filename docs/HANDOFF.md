@@ -18,7 +18,7 @@ Do not ship changes one at a time. Collect everything John asks for into one num
 |---|---|
 | `lanternhold/core.js` | All game rules: classes, foes, loot, crafting, events, the `api` export list. Any new function must be added to that big export list at the bottom. |
 | `lanternhold/ui.js` | All UI, the in-game Delver's Guide (`GUIDE`) and `PATCH_NOTES` (newest first). The open bundle is **v128** (branch `claude/lanternhold-v128`, PR #42); v127 is live. |
-| `lanternhold/style.css`, `index.html` | Styles and markup. |
+| `lanternhold/style.css`, `index.html` | Styles and markup. `window.LH_SUPPORT_URL` in `index.html` is John's Buy Me a Coffee page (buymeacoffee.com/born2gamellc, set v132). It shows the "Support the dev" button and a Settings line. It supports John's time, not charity; keep it apart from the Mercy Corps / Extra Life buttons and give no in-game reward. |
 | `lanternhold/vector.js` | Illustrated SVG sprites (`ART.enchanter`, `ART.armorer`, classes, foes). |
 | `lanternhold/sprites.js` | Pixel fallback sprites and `itemIcon`. |
 | `lanternhold/intro.js`, `music.js` | Intro story and the soundtrack player. |
