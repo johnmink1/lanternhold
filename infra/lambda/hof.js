@@ -3,10 +3,12 @@
 // It reads the public hero rows only: name, class, power level (lv), NP+ tier and time (np/npAt, stamped by np.js),
 // c0 (first start time the server saw) and hf (record numbers save.js copies from each synced save). Banned heroes
 // and heroes unseen for 60 days are left out. Hidden feats are never counted (save.js drops them), and nothing here
-// says who was first to NP+1. Top 3 per category; the answer is kept for 2 minutes.
+// says who was first to NP+1. Admins' heroes are left out (John, 26 Nov 2026). Top 3 per category; the answer is
+// kept for 2 minutes.
 const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');
-const db = new DynamoDBClient({});
-const T = process.env.HEROES, CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'];
+const { CognitoIdentityProviderClient, ListUsersInGroupCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const db = new DynamoDBClient({}), idp = new CognitoIdentityProviderClient({});
+const T = process.env.HEROES, POOL = process.env.POOL, CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'];
 let body = '', at = 0;
 const top = (rows, val, asc) => rows.map(r => [r, val(r)]).filter(x => x[1] > 0)
   .sort((a, b) => (asc ? a[1] - b[1] : b[1] - a[1]) || a[0].ts - b[0].ts).slice(0, 3).map(([r, v]) => ({ name: r.name, cls: r.cls, v }));
@@ -14,9 +16,11 @@ exports.handler = async () => {
   if (!body || Date.now() - at > 120000) {
     const items = []; let k;
     do { const r = await db.send(new ScanCommand({ TableName: T, ExclusiveStartKey: k })); items.push(...(r.Items || [])); k = r.LastEvaluatedKey; } while (k);
+    // If the admin list can't be read, show nothing rather than risk listing an admin.
+    const adm = new Set(((await idp.send(new ListUsersInGroupCommand({ UserPoolId: POOL, GroupName: 'admins' }))).Users || []).map(u => u.Username));
     const cut = Date.now() - 60 * 864e5, rows = [];
     for (const i of items) {
-      if (!i.name || i.ban || !i.hf || !i.seen || +i.seen.N < cut) continue;
+      if (!i.name || i.ban || (i.u && adm.has(i.u.S)) || !i.hf || !i.seen || +i.seen.N < cut) continue;
       let h; try { h = JSON.parse(i.hf.S); } catch (e) { continue; }
       const c0 = i.c0 ? +i.c0.N : 0, np = i.np ? +i.np.N : 0;
       rows.push({ name: i.name.S, cls: i.cls ? i.cls.S : '', lv: i.lv ? +i.lv.N : 0, np, ts: c0 || Date.now(), h,

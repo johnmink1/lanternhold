@@ -1,4 +1,4 @@
-/* lh-build 202611260151 */
+/* lh-build 202611260221 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4744,15 +4744,20 @@
     try {
       const r = await fetch(CL.api.replace(/\/$/, '') + '/hof'); if (!r.ok) throw r.status;
       const j = await r.json(), me = S.hero && S.hero.name, medal = ['top1', 'top2', 'top3'];
-      const row = (p, i, val) => '<li class="' + medal[i] + (p.name === me ? ' me' : '') + '"><span class="lbr">' + (i + 1) + '</span><span class="lbn"><b>' + esc(p.name) + '</b> ' + (L.CLASSES[p.cls] ? classTag(p.cls) : '') + '</span><span class="hofv">' + val + '</span></li>';
-      const card = ([k, ic, name, sub, f]) => '<section class="hofc"><h4>' + icon(ic) + name + '</h4><small>' + sub + '</small>' +
-        ((j[k] || []).length ? '<ol class="lboard hofl">' + j[k].map((p, i) => row(p, i, f(p.v))).join('') + '</ol>' : '<p class="note small">No one yet. Be the first.</p>') + '</section>';
-      const cls = ['tank', 'healer', 'rogue', 'mage', 'necro'];
-      const mine = S.hero ? '<p class="note small">Your hero: power level ' + L.lvl(S, 'you') + ' · gear rating ' + fmt(L.gearRating(S, 'you')) + '</p>' : '';
-      const best = '<section class="hofc hofwide"><h4>' + icon('shield') + 'Best in class</h4><small>Highest power level for each class, then gear rating</small><ol class="lboard hofl">' +
-        cls.map(c => { const b = (j.cls || {})[c]; return '<li class="' + (b && b.name === me ? 'me' : '') + '"><span class="hofk">' + classTag(c) + '</span><span class="lbn">' + (b ? '<b>' + esc(b.name) + '</b>' : '<i class="hofnone">No one yet</i>') + '</span>' +
-          (b ? '<span class="hofv">power level ' + b.lv + '<small>gear rating ' + fmt(b.gr) + '</small></span>' : '') + '</li>'; }).join('') + '</ol>' + mine + '</section>';
-      box.innerHTML = '<p class="note">Records across the Reach. Your hero joins after their next sync. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(card).join('') + best + HOF.slice(2).map(card).join('') + '</div>';
+      // v131: compact. Each record is one line showing its leader; tap to open the top 3 (John: "collapse things").
+      const who = p => '<b>' + esc(p.name) + '</b>' + (L.CLASSES[p.cls] ? ' ' + classTag(p.cls) : '');
+      const line = (ic, name, lead, val, body, mine) => '<details class="hofd' + (mine ? ' me' : '') + '"><summary>' + icon(ic) + '<span class="hofn">' + name + '</span><span class="hofl1">' + lead + '</span><span class="hofv">' + val + '</span></summary>' + body + '</details>';
+      const rec = ([k, ic, name, sub, f]) => {
+        const t = j[k] || [];
+        return line(ic, name, t[0] ? '<b>' + esc(t[0].name) + '</b>' : '<i class="hofnone">No one yet</i>', t[0] ? f(t[0].v) : '',
+          '<small>' + sub + '</small>' + (t.length ? '<ol>' + t.map((p, i) => '<li' + (p.name === me ? ' class="me"' : '') + '><span class="hofr">' + (i + 1) + '.</span>' + who(p) + '<em>' + f(p.v) + '</em></li>').join('') + '</ol>' : ''),
+          t.some(p => p.name === me));
+      };
+      const cls = ['tank', 'healer', 'rogue', 'mage', 'necro'], cb = j.cls || {};
+      const best = line('shield', 'Best in class', '', cls.filter(c => cb[c]).length + ' of 5',
+        '<small>Highest power level, then gear rating</small><ol>' + cls.map(c => { const b = cb[c]; return '<li' + (b && b.name === me ? ' class="me"' : '') + '>' + classTag(c) + (b ? '<span class="hofb"><b>' + esc(b.name) + '</b><small>power level ' + b.lv + ' · gear rating ' + fmt(b.gr) + '</small></span>' : '<i class="hofnone">No one yet</i>') + '</li>'; }).join('') + '</ol>' +
+        (S.hero ? '<small>You: power level ' + L.lvl(S, 'you') + ' · gear rating ' + fmt(L.gearRating(S, 'you')) + '</small>' : ''), cls.some(c => cb[c] && cb[c].name === me));
+      box.innerHTML = '<p class="note small">Tap a record for the top 3. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(rec).join('') + best + HOF.slice(2).map(rec).join('') + '</div>';
     } catch (e) { box.innerHTML = '<p class="note">' + (e === 404 ? 'The Hall of Fame opens soon.' : 'The Hall of Fame could not load right now. Try again in a minute.') + '</p>'; hofAt = 0; }
   }
   $('lbseg').addEventListener('click', e => {

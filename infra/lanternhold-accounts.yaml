@@ -2158,6 +2158,9 @@ Resources:
               - Effect: Allow
                 Action: [dynamodb:Scan]
                 Resource: !GetAtt HeroesTable.Arn
+              - Effect: Allow
+                Action: [cognito-idp:ListUsersInGroup]
+                Resource: !GetAtt UserPool.Arn
   HofFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -2170,10 +2173,11 @@ Resources:
       Environment:
         Variables:
           HEROES: !Ref HeroesTable
+          POOL: !Ref UserPool
       Code:
         ZipFile: |
           // built from infra/lambda/hof.js by infra/build.py
-          const{DynamoDBClient:p,ScanCommand:f}=require("@aws-sdk/client-dynamodb"),u=new p({}),v=process.env.HEROES,g=["tank","healer","rogue","mage","necro"];let h="",m=0;const a=(r,l,i)=>r.map(t=>[t,l(t)]).filter(t=>t[1]>0).sort((t,c)=>(i?t[1]-c[1]:c[1]-t[1])||t[0].ts-c[0].ts).slice(0,3).map(([t,c])=>({name:t.name,cls:t.cls,v:c}));exports.handler=async()=>{if(!h||Date.now()-m>12e4){const r=[];let l;do{const e=await u.send(new f({TableName:v,ExclusiveStartKey:l}));r.push(...e.Items||[]),l=e.LastEvaluatedKey}while(l);const i=Date.now()-60*864e5,t=[];for(const e of r){if(!e.name||e.ban||!e.hf||!e.seen||+e.seen.N<i)continue;let n;try{n=JSON.parse(e.hf.S)}catch{continue}const s=e.c0?+e.c0.N:0,o=e.np?+e.np.N:0;t.push({name:e.name.S,cls:e.cls?e.cls.S:"",lv:e.lv?+e.lv.N:0,np:o,ts:s||Date.now(),h:n,fast:o>=1&&n.n1>s&&s>0?n.n1-s:0})}const c={fast:a(t,e=>e.fast,!0),rich:a(t,e=>e.h.g),boss:a(t,e=>e.h.bk),np:t.filter(e=>e.np>0).sort((e,n)=>n.np-e.np||n.lv-e.lv).slice(0,3).map(e=>({name:e.name,cls:e.cls,v:e.np})),kills:a(t,e=>e.h.ki),earned:a(t,e=>e.h.ge),feats:a(t,e=>e.h.ft),time:a(t,e=>e.h.pt),cls:{},n:t.length};for(const e of g){const n=t.filter(s=>s.cls===e).sort((s,o)=>o.lv-s.lv||(o.h.gr||0)-(s.h.gr||0)||s.ts-o.ts)[0];n&&(c.cls[e]={name:n.name,lv:n.lv,gr:n.h.gr||0})}h=JSON.stringify(c),m=Date.now()}return{statusCode:200,headers:{"content-type":"application/json","cache-control":"public, max-age=120"},body:h}};
+          const{DynamoDBClient:u,ScanCommand:d}=require("@aws-sdk/client-dynamodb"),{CognitoIdentityProviderClient:f,ListUsersInGroupCommand:v}=require("@aws-sdk/client-cognito-identity-provider"),w=new u({}),g=new f({}),S=process.env.HEROES,y=process.env.POOL,N=["tank","healer","rogue","mage","necro"];let m="",h=0;const a=(r,l,i)=>r.map(t=>[t,l(t)]).filter(t=>t[1]>0).sort((t,n)=>(i?t[1]-n[1]:n[1]-t[1])||t[0].ts-n[0].ts).slice(0,3).map(([t,n])=>({name:t.name,cls:t.cls,v:n}));exports.handler=async()=>{if(!m||Date.now()-h>12e4){const r=[];let l;do{const e=await w.send(new d({TableName:S,ExclusiveStartKey:l}));r.push(...e.Items||[]),l=e.LastEvaluatedKey}while(l);const i=new Set(((await g.send(new v({UserPoolId:y,GroupName:"admins"}))).Users||[]).map(e=>e.Username)),t=Date.now()-60*864e5,n=[];for(const e of r){if(!e.name||e.ban||e.u&&i.has(e.u.S)||!e.hf||!e.seen||+e.seen.N<t)continue;let s;try{s=JSON.parse(e.hf.S)}catch{continue}const o=e.c0?+e.c0.N:0,c=e.np?+e.np.N:0;n.push({name:e.name.S,cls:e.cls?e.cls.S:"",lv:e.lv?+e.lv.N:0,np:c,ts:o||Date.now(),h:s,fast:c>=1&&s.n1>o&&o>0?s.n1-o:0})}const p={fast:a(n,e=>e.fast,!0),rich:a(n,e=>e.h.g),boss:a(n,e=>e.h.bk),np:n.filter(e=>e.np>0).sort((e,s)=>s.np-e.np||s.lv-e.lv).slice(0,3).map(e=>({name:e.name,cls:e.cls,v:e.np})),kills:a(n,e=>e.h.ki),earned:a(n,e=>e.h.ge),feats:a(n,e=>e.h.ft),time:a(n,e=>e.h.pt),cls:{},n:n.length};for(const e of N){const s=n.filter(o=>o.cls===e).sort((o,c)=>c.lv-o.lv||(c.h.gr||0)-(o.h.gr||0)||o.ts-c.ts)[0];s&&(p.cls[e]={name:s.name,lv:s.lv,gr:s.h.gr||0})}m=JSON.stringify(p),h=Date.now()}return{statusCode:200,headers:{"content-type":"application/json","cache-control":"public, max-age=120"},body:m}};
 
   HofIntegration:
     Type: AWS::ApiGatewayV2::Integration
