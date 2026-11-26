@@ -163,6 +163,11 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
 
     - v126 (John, 26 Nov 2026, from Kyvia's Discord ideas): shop header **Compact** button hides the scene (`shopMin`/`setShopMin`, localStorage `lh_shopmin`, `body.shopmin`; `resize()` skips a 0-size arena). Who filter on the Gear tab and shop counters lists party heroes (`h:<id>`, `whoPass`/`whoOpts`: worn by them, or usable + `canWear` now). `.shopbtns` wrap on phones. `LHDebug.visitEnch` for tests. v125 also got the Sigil cap fix (`sigCapped`, `lh_sigcap`: one toast and no claims until the next UTC day).
 
+## Log watch (John, 26 Nov 2026)
+
+John: "watch the game logs... look out on odd things". Every 4 hours a read-only sweep reads the admin activity log (all players, `audit.js` flags plus gold-rate, spend and NP+ checks) and CloudWatch Lambda Errors/Throttles, and reports only new anomalies. Runbook and known false alarms: project files `log-watch/sweep.md`. Broken things can be hotfixed; mechanics or save changes need John's OK; AWS changes need his go.
+- First sweep found `lanternhold-invite` failing ~100% of calls since at least 23 Nov ('dec' is a DynamoDB reserved word), so party invites never showed. Fixed in PR #49; deployed 26 Nov 2026 03:25 UTC with John's go via `infra/deploy/hotfix-invite-dec.sh` (backup `~/lhbak/lanternhold-invite-202611260325.zip`); errors went from 8-11/min to 0.
+
 ## Discord feedback (bugs and feature requests)
 
 - Lanternhold's 🐛︱bugs and 💡︱feature-requests channels (Born 2 Game server, 🏮 Lanternhold category) are read through the Born 2 Game bot, not a Discord login: born2game-bot `lanternholdfeedback.py` copies them every 15 min into the admin-only Wix CMS collection `LanternholdFeedback` (site ecac49db-e491-426a-a292-00abaf698ccd). Read it with the Wix connector (`/wix-data/v2/items/query`).
