@@ -1,4 +1,4 @@
-/* lh-build 202611260003 */
+/* lh-build 202611260007 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6209,6 +6209,7 @@
       'NPC Guild wages have a ceiling: a hire never costs more than a set share of your income an hour (Common 3%, Uncommon 6%, Rare 15%, Epic 30%, Legendary 40%). Parties whose power level ran ahead of their floor can keep an Epic again.',
       'Wage relief: every region with all three mastery stars takes 2% off every hire\u2019s wage, Charisma takes some off, and the new Quartermaster camp job (best for Tanks) haggles it down further. Up to 50% in all. See it in the NPC Guild.',
       'New Playthrough is now a real climb: on NP+ monsters get tougher the deeper you go (NP+1: double health on floor 1, five times by floor 150), so gear, stats and party combos matter.',
+      'NP+2 and up: monsters can carry NP+ marks. Stoneskin (Tanks and Rogues deal 60% less), Spellproof (Mages, Necromancers and Healers deal 60% less), Plague Aura (healing and life steal 60% lower) and Ironclad (takes only 10% damage unless the hero has Piercing). New Piercing enchant on NP+2 gear, and Rogues pierce 25% on their own. Guardians always carry marks.',
       'New for New Playthrough heroes (NP+1 and up), and all priced in hours of your own gold income so it stays worth thinking about at any depth:',
       'Pip the Dicer (John\u2019s idea) sets up his wagon outside the Hold. Buy a Lucky Crate with gold: a Pouch (30 minutes of income), a Coffer (3 hours) or a Casket (12 hours). Each crate holds a piece of gear, with better odds in bigger crates, and Coffers and Caskets can also hold one of 8 Curios, small trinkets with odd little perks. Every 10th Casket without a Curio is sure to have one. Crates take gold only, never Sigils.',
       'Gulp the Hoard Mimic (John\u2019s idea) lives in the yard and is always hungry. Feed it morsels of gold (10 minutes of income each, 12 a day) and watch the fed counter climb for everyone on NP+. Now and then it burps something back up.',
