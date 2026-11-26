@@ -1,4 +1,4 @@
-/* lh-build 202611260519 */
+/* lh-build 202611261706 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2544,3 +2544,13 @@ body.atench.shopmin .stage .arena{display:none!important}
 .sethead{margin:18px 0 0;font-size:15px}
 .setnotif span{display:flex;flex-direction:column;gap:2px;padding-right:12px}
 .setnotif small{color:var(--muted);font-size:12px}
+/* v132 Support the game: one-time Sigil tasks */
+.supts{display:grid;gap:10px;margin:8px 0 12px}
+.supt{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;border:1px solid var(--line2);background:var(--panel)}
+.supt small{color:var(--muted);font-size:13px;line-height:1.4}
+.supth{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.supth svg{width:18px;height:18px;color:var(--gold);flex:none}
+.supsig{display:inline-flex;align-items:center;gap:3px;margin-left:auto;font-weight:700;color:var(--gold)}.supsig .sigil{width:16px;height:16px}
+.supform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:2px}
+.supform input{flex:1 1 140px;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--line2);background:var(--bg2);color:var(--text);font:inherit}
+.supnote{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;border:1px dashed var(--line2);margin-bottom:8px}
+.supnote small{color:var(--muted);font-size:13px;line-height:1.4}.supnote a{color:var(--gold)}
