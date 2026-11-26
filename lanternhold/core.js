@@ -1,4 +1,4 @@
-/* lh-build 202611260336 */
+/* lh-build 202611260408 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -467,7 +467,11 @@
   const rawTough = f => (f <= 10 ? 0.8 + 0.02 * f : 1) * (f > 15 ? Math.pow(1.012, f - 15) : 1) * (f > 40 ? Math.pow(1.012, f - 40) : 1);
   const tough = f => Math.pow(rawTough(f), TOUGH_POW);
   const foeHp = (f, boss) => baseHp(f) * tough(f) * (boss ? 9 : 1);
-  const foeGold = (f, boss) => (1 + baseHp(f) / 40) * (boss ? 5 : 1);
+  // Gold dials (John, 26 Nov 2026: deep-floor gold ran away, ~8-11% more a floor compounding). Past GOLD_SOFT_FLOOR
+  // gold per kill grows a flat GOLD_SOFT_RATE a floor; GOLD_RATE scales all foe gold. Upgrade/salvage prices follow.
+  const GOLD_SOFT_FLOOR = 100, GOLD_SOFT_RATE = 1.06, GOLD_RATE = 1;
+  const rawGold = f => 1 + baseHp(f) / 40;
+  const foeGold = (f, boss) => GOLD_RATE * (f > GOLD_SOFT_FLOOR ? rawGold(GOLD_SOFT_FLOOR) * Math.pow(GOLD_SOFT_RATE, f - GOLD_SOFT_FLOOR) : rawGold(f)) * (boss ? 5 : 1);
   // Foe damage per second. Grows a little slower than foe health, so a well-kept party can hold.
   const foeDps = (f, boss) => 1.1 * Math.pow(Math.pow(1.205, f - 1) * (f > 60 ? Math.pow(1.025, f - 60) : 1) * Math.sqrt(rawTough(f)), POW) * (boss ? 2.2 : 1);
   const FOE_SWING = 1.6;
@@ -477,6 +481,27 @@
   function nextMilestone(lvl) { return MILESTONES.find(t => t > lvl) || null; }
 
   const lvl = (s, id) => { if (isGuest(s, id)) { const g = s.guests.find(x => x.id === id); return g ? g.level : 0; } return s.levels[id] || 0; };
+  // Borrowed player heroes (John, 26 Nov 2026: "borrowed heroes should bring their gear, stats and all"). Each hero's game
+  // publishes a build card (buildCard: steady damage, health, healing, Piercing with its own gear, stats, skills and
+  // bonuses). A borrowed copy fights with that card, scaled down so it is never more than GUEST_CAP x your own hero's
+  // steady damage or health. Each player hero seated adds FRIEND_PER party damage and gold, up to FRIEND_MAX of them.
+  const GUEST_CAP = 2, FRIEND_PER = 0.05, FRIEND_MAX = 2;
+  const guestRec = (s, id) => isGuest(s, id) ? (s.guests || []).find(x => x.id === id) : null;
+  const cardOf = (s, id) => { const g = guestRec(s, id); return g && g.bp && g.bp.d >= 0 ? g.bp : null; };
+  let gkCache = { s: null, t: -1, v: {} };
+  function guestK(s, id) {
+    const bp = cardOf(s, id); if (!bp) return 1;
+    const t = s.clock || 0; if (gkCache.s !== s || gkCache.t !== t) gkCache = { s, t, v: {} };
+    if (gkCache.v[id] != null) return gkCache.v[id];
+    gkCache.v[id] = 1; // guards re-entry while your own numbers are worked out
+    const yd = s.hero ? steadyDps(s, 'you') : 0, yh = s.hero ? maxHpOf(s, 'you') : 0;
+    let k = 1;
+    if (bp.d > 0) k = Math.min(k, GUEST_CAP * yd / bp.d);
+    if (bp.h > 0) k = Math.min(k, GUEST_CAP * yh / bp.h);
+    return (gkCache.v[id] = Math.max(0, k));
+  }
+  const friendsSeated = s => Math.min(FRIEND_MAX, (s.party || []).filter(id => id && isGuest(s, id)).length);
+  const friendMult = s => 1 + FRIEND_PER * friendsSeated(s);
   function costDiscount(s) { return Math.min(0.25, relicVal(s, 'ledger')) + Math.min(0.15, campTrait(s, 'train')); }
   function memberBaseCost(m) { return m.id === 'you' ? 8 : TIER[m.tier].cost * (1 + CLASS_ORDER.indexOf(m.cls) * 0.6); }
   // NP+ training (John, 26 Nov 2026): gold costs x(1 + NP_TRAIN x tier). From NP+NP_TDUST_TIER, Healers, Necromancers
@@ -525,6 +550,7 @@
   const scale = (s, id) => { const m = memberById(id), L = lvl(s, id); return Math.pow(L * milestoneMult(L) * TIER[m.tier].stat * (m.player ? 1 : (m.pow || NPC_POWER)), POW); };
 
   function maxHpOf(s, id) {
+    const bp = cardOf(s, id); if (bp) return Math.max(1, bp.h * guestK(s, id));
     const m = memberById(id);
     return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * npBonus(s) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)) * (1 + renoVal(s, 'hp') + (fxOnW(s, 'globe') ? 0.05 : 0) + (fxOnW(s, 'g2') ? 0.05 : 0)));
   }
@@ -533,11 +559,13 @@
   const KEEPER = 0.25;
   const keeperOn = s => !!(s.keeper && s.keeper.until > (s.clock || Date.now()));
   const keeperMult = s => keeperOn(s) ? 1 + KEEPER : 1;
-  function partyMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')) * (1 + curioColl(s) + renoVal(s, 'dps') + (fxOnW(s, 'g0') ? 0.05 : 0)); }
+  function partyMult(s) { return friendMult(s) * keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')) * (1 + curioColl(s) + renoVal(s, 'dps') + (fxOnW(s, 'g0') ? 0.05 : 0)); }
   // Your own hero hits harder as a tank or healer, so every class can carry a run at a similar pace.
   const HERO_DPS = { tank: 3, healer: 5 };
   function memberDps(s, id, now) {
     if (!id || s.down[id] || !lvl(s, id)) return 0;
+    const bp = cardOf(s, id);
+    if (bp) { const cc = s.cc && ccOf(s, id, now); return bp.d * guestK(s, id) * (cc ? (cc.k === 'stun' ? 0 : CC.disarm.dmg) : 1) * (1 - ghostSap(s, 'dps', now)) * wbMult(s, id); }
     const m = memberById(id), c = CLASSES[m.cls];
     let d = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps');
     if (id === 'you') { d *= (HERO_DPS[m.cls] || 1) * (1 + sk(s, 'dps')); const fu = fxOn(s, 'fury', now); if (fu) d *= fu; }
@@ -563,12 +591,13 @@
     if (m.includes('iron')) x *= NP_IRON + (1 - NP_IRON) * Math.min(1, pierce || 0);
     return x;
   }
-  const pierceOf = (s, id) => { const m = memberById(id); return Math.min(1, wearVal(s, id, 'pierce') + (m && m.cls === 'rogue' ? ROGUE_PIERCE : 0)); };
+  const pierceOf = (s, id) => { const m = memberById(id), bp = cardOf(s, id); return Math.min(1, (bp ? bp.pc || 0 : wearVal(s, id, 'pierce')) + (m && m.cls === 'rogue' ? ROGUE_PIERCE : 0)); };
   function npMarkMult(s, id) { const m = memberById(id); return m ? npMarkCls(s, m.cls, pierceOf(s, id)) : 1; }
   const npHealCut = s => (s.foe && !s.foe.world && s.foe.mods && s.foe.mods.includes('plague') ? 1 - NP_PLAGUE : 1);
   function healPerSec(s, id) { return healPerSec0(s, id) * npHealCut(s); }
   function healPerSec0(s, id) {
     if (!id || s.down[id] || !lvl(s, id)) return 0;
+    const bp = cardOf(s, id); if (bp) return memberById(id).cls === 'healer' ? (bp.hl || 0) * guestK(s, id) : 0;
     const m = memberById(id); if (m.cls !== 'healer') return 0;
     return (CLASSES.healer.heal * scale(s, id) * gearMult(s, id, 'heal') * (1 + wearVal(s, id, 'heal')) * (1 + relicVal(s, 'censer')) * (1 + EMBER_HP * s.embers) * (1 + FEAT_PER * featCount(s)) * sidePerk(s, 'heal') * (1 + campBonus(s, 'heal')) * (1 + sk(s, 'pheal') + (id === 'you' ? sk(s, 'heal') : 0))) * keeperMult(s) * (1 - ghostSap(s, 'heal')) * (s.cc && ccOf(s, id) ? (ccOf(s, id).k === 'stun' ? 0 : CC.disarm.heal) : 1);
   }
@@ -583,7 +612,7 @@
   function spendRes(s, id, n) { const v = resOf(s, id); if (v < n) return false; s.res[id] = v - n; return true; }
   const oom = (s, id) => !!(s.oom && s.oom[id]);
   function clickDamage(s, now) { return (1 + totalDps(s, now) * 0.05) * (1 + relicVal(s, 'whet')); }
-  function goldMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'gold')) * (1 + gearGold(s)) * (1 + kup(s, 'purse')) * (1 + relicVal(s, 'locket')) * sidePerk(s, 'gold') * (1 + campBonus(s, 'gold')) * (1 + sk(s, 'gold')); }
+  function goldMult(s) { return friendMult(s) * keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'gold')) * (1 + gearGold(s)) * (1 + kup(s, 'purse')) * (1 + relicVal(s, 'locket')) * sidePerk(s, 'gold') * (1 + campBonus(s, 'gold')) * (1 + sk(s, 'gold')); }
   function critChance(s) { return 0.04 + relicVal(s, 'dice') + sk(s, 'crit') + (fxOnW(s, 'die') ? 0.06 : 0) + (fxOnW(s, 'g1') ? 0.03 : 0); }
   function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern') + (fxOnW(s, 'glass') ? 10 : 0); }
   // Capped (v124 fix): the Moth-wing Charm had no cap, so a hero who kept re-beating the Lampmother stacked it past
@@ -824,6 +853,7 @@
   // so the price can't be lowered by unseating companions and doesn't swing mid-fight (v119 fix, John 25 Nov 2026).
   function steadyDps(s, id) {
     if (!id || !lvl(s, id)) return 0;
+    const bp = cardOf(s, id); if (bp) return bp.d * guestK(s, id);
     const m = memberById(id); if (!m) return 0;
     let d = CLASSES[m.cls].dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps');
     if (id === 'you') d *= (HERO_DPS[m.cls] || 1) * (1 + sk(s, 'dps'));
@@ -2234,11 +2264,32 @@
     registerHero(s);
     s.levels.you = 1; s.party[0] = 'you'; if (!s.unlocked.includes('you')) s.unlocked.unshift('you'); s.hp.you = maxHpOf(s, 'you');
   }
+  // A build card from the server: finite, non-negative numbers only (anything else means the old level-only copy).
+  function cleanCard(b) {
+    if (!b || typeof b !== 'object') return null;
+    const n = v => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(v, 1e300) : 0);
+    const c = { d: n(b.d), h: n(b.h), hl: n(b.hl), pc: Math.min(1, n(b.pc)), t: Math.min(NP_MAX, n(b.t) | 0) };
+    return c.h > 0 ? c : null;
+  }
+  // Your own hero's card, without the bonuses that come from your own borrowed heroes or the Lantern Keeper.
+  function buildCard(s) {
+    if (!s.hero || !lvl(s, 'you')) return null;
+    const f = friendMult(s) * keeperMult(s);
+    return { d: steadyDps(s, 'you') / f, h: maxHpOf(s, 'you'), hl: heroCls(s) === 'healer' ? healPerSec0(s, 'you') / f : 0, pc: pierceOf(s, 'you'), t: npTier(s) };
+  }
+  // A newer card or level for a hero already in your party (from the Players Guild).
+  function refreshGuest(s, g) {
+    const x = (s.guests || []).find(y => y.id === g.id); if (!x) return false;
+    if (g.level) x.level = Math.max(1, Math.floor(g.level));
+    const c = cleanCard(g.bp); if (c) x.bp = c;
+    if (s.hp[x.id] != null) s.hp[x.id] = Math.min(s.hp[x.id], maxHpOf(s, x.id));
+    return true;
+  }
   function addGuest(s, g) {
     // g: { id, name, cls, level } from the hero board
     if (s.mode !== 'multi') return false;
     s.guests = (s.guests || []).filter(x => x.id !== g.id);
-    s.guests.push({ id: g.id, name: g.name, cls: g.cls, side: SIDES[g.side] ? g.side : null, level: Math.max(1, Math.floor(g.level)), at: Date.now() });
+    s.guests.push({ id: g.id, name: g.name, cls: g.cls, side: SIDES[g.side] ? g.side : null, level: Math.max(1, Math.floor(g.level)), bp: cleanCard(g.bp), at: Date.now() });
     registerHero(s);
     const slot = s.party.indexOf(null);
     if (slot >= 0) s.party[slot] = g.id;
@@ -3591,7 +3642,7 @@
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
     STATS, STAT_CLASS, STAT_BASE, STAT_AFFINITY, STAT_MAX, RESPEC_COST, statSpent, xpNeed, heroLevel, pointsFor, heroPoints, statScore, addStat, resetStats, statVal, PACK_CHANCE, PACK_GOLD,
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
-    newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, memberById, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
+    newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
     clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
     offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };
