@@ -1,4 +1,4 @@
-/* lh-build 202611260016 */
+/* lh-build 202611260037 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6196,29 +6196,25 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 125, date: 'November 2026', title: 'Mythic gear, rarer events and NP+ gold sinks', items: [
-      'World boss gear is now Mythic, a new tier above Legendary and the strongest gear in the game. Pieces you already own become Mythic, with more power, an extra enchant socket and higher enchant tiers.',
-      'Mythic sets are stronger: +20% with 2 pieces (+30% gold for the Leviathan set) and +45% damage and health with all 4.',
-      'They are meant to be a long grind. A Mythic drop after a world boss is rare: under 3% a weekend even for the strongest delvers, and full odds still need 3 phases broken.',
-      'Warden Sable at the Rift Gate now asks 150 Rift tokens for a piece, and upgrading a Mythic costs twice the boss shards it did.',
-      'A strong party now keeps scoring its real damage in a world boss assault (the per-assault limit is four times higher), so boss weaknesses and half-damage hires count for everyone.',
-      'World boss loot: your Rift tokens are saved to your account together with the rest of the claim.',
-      'Treasure chests are much rarer: 1% of fights (was 3%). The Moth-wing Charm now adds +0.1% a level, up to +2%, and the Lockpick skill +1%, so chests top out at 4% of fights (was 25%). The daily quest asks for 5 chests instead of 10.',
-      'Other random events are rarer too: Loot Goblins and locked doors and chests come half as often, and Ghost Lanterns and the wandering merchant show up about half as often.',
-      'New daily limits per hero, reset at midnight UTC: 40 treasure chests, 60 ambushes, 20 locks, 6 Loot Goblins, 12 Ghost Lanterns, 8 merchants and 6 Mercy Corps encounters. After that, normal monsters take their place until tomorrow.',
-      'Alliance elites are not affected, so region trials (10 elites before you pass a region\u2019s guardian) go at the same pace as before.',
-      'Set pieces are rarer again: region set pieces drop half as often as before, and class and job set pieces a quarter as often. One region piece still earns that region\u2019s mastery star.',
-      'NPC Guild wages have a ceiling: a hire never costs more than a set share of your income an hour (Common 3%, Uncommon 6%, Rare 15%, Epic 30%, Legendary 40%). Parties whose power level ran ahead of their floor can keep an Epic again.',
-      'Wage relief: every region with all three mastery stars takes 2% off every hire\u2019s wage, Charisma takes some off, and the new Quartermaster camp job (best for Tanks) haggles it down further. Up to 50% in all. See it in the NPC Guild.',
-      'New Playthrough is now a real climb: on NP+ monsters get tougher the deeper you go (NP+1: double health on floor 1, five times by floor 150), so gear, stats and party combos matter.',
-      'NP+2 and up: monsters can carry NP+ marks. Stoneskin (Tanks and Rogues deal 60% less), Spellproof (Mages, Necromancers and Healers deal 60% less), Plague Aura (healing and life steal 60% lower) and Ironclad (takes only 10% damage unless the hero has Piercing). New Piercing enchant on NP+2 gear, and Rogues pierce 25% on their own. Guardians always carry marks.',
-      'New for New Playthrough heroes (NP+1 and up), and all priced in hours of your own gold income so it stays worth thinking about at any depth:',
-      'Pip the Dicer (John\u2019s idea) sets up his wagon outside the Hold. Buy a Lucky Crate with gold: a Pouch (30 minutes of income), a Coffer (3 hours) or a Casket (12 hours). Each crate holds a piece of gear, with better odds in bigger crates, and Coffers and Caskets can also hold one of 8 Curios, small trinkets with odd little perks. Every 10th Casket without a Curio is sure to have one. Crates take gold only, never Sigils.',
-      'Gulp the Hoard Mimic (John\u2019s idea) lives in the yard and is always hungry. Feed it morsels of gold (10 minutes of income each, 12 a day) and watch the fed counter climb for everyone on NP+. Now and then it burps something back up.',
-      'Every morsel fed by anyone makes the Golden Loot Goblin slightly more likely to appear. It is very rare. When it shows up, every NP+ hero gets 30 minutes to beat it down together in 2-minute assaults, like the world boss. It dashes about, so bring a Rogue to keep up. If time runs out it escapes with its loot.',
-      'Beat it and everyone who fought shares the Golden Goblin\u2019s Hoard: 5 Gilded rings with their own set bonus, plus Gilded shards toward the ring you are missing. Top damage and the most morsels fed improve your odds. Curios and Hold works carry over to your next tier, and Pip hands back any Curio you no longer carry.',
-      'Also for NP+: Reforge at the Armorer (reroll an item\u2019s enchantments, cost doubles each time, up to 6 times), the Dust Press at the Enchanter (turn gold into Dust, up to 200 a day), and Hold works: 4 renovations with a small perk each and 4 decorations just for looks.',
-      'The NP+ trading market now keeps a 5% fee on each sale.',
-      'Fixed: after you banked the day\u2019s 15 found Sigils, the game kept popping up \u201cDaily find limit reached\u201d every few seconds. It now tells you once, keeps any extra Sigils for the next day (UTC), and a new find says they are saved for tomorrow (thanks for the report, Kyvia).',
+      'World boss gear is now Mythic, above Legendary. Pieces you own upgrade, with more power and an extra enchant socket.',
+      'Mythic sets: +20% with 2 pieces (+30% gold for the Leviathan set), +45% damage and health with 4.',
+      'Mythic drops are rare (under 3% a weekend). Warden Sable asks 150 Rift tokens a piece, and upgrades cost twice the shards.',
+      'World boss assaults count four times more of a strong party’s damage. Rift tokens now save with the rest of your claim.',
+      'Treasure chests drop in 1% of fights (was 3%), 4% at most with the Moth-wing Charm and Lockpick. The daily quest asks for 5.',
+      'Loot Goblins, locks, Ghost Lanterns and the merchant come half as often. Each has a daily limit per hero (reset at midnight UTC).',
+      'Alliance elites are unchanged, so region trials go at the same pace.',
+      'Set pieces are rarer: region sets half as often, class and job sets a quarter as often.',
+      'NPC wages are capped at a share of your income an hour (Common 3% up to Legendary 40%).',
+      'Wage relief, up to 50%: mastered regions, Charisma and the new Quartermaster camp job.',
+      'NP+ is a real climb: monsters get tougher the deeper you go (NP+1: double health on floor 1, five times by floor 150).',
+      'NP+2 and up: monsters can carry marks. Stoneskin and Spellproof resist physical or magic damage, Plague Aura cuts healing, Ironclad needs Piercing gear (Rogues pierce a little on their own).',
+      'For NP+ heroes, priced in hours of your own income:',
+      'Pip the Dicer sells Lucky Crates for gold: gear, and in bigger crates one of 8 Curios.',
+      'Gulp the Hoard Mimic eats gold morsels. Every morsel makes the rare Golden Loot Goblin a bit more likely.',
+      'Beat the Golden Loot Goblin together within 30 minutes for a share of 5 Gilded rings.',
+      'Reforge at the Armorer, the Dust Press at the Enchanter, and Hold works (renovations and decorations).',
+      'The NP+ market keeps a 5% fee on each sale.',
+      'Fixed: “Daily find limit reached” no longer repeats. Extra Sigils are saved for the next day.',
     ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Fixed: past about 97 levels of the Moth-wing Charm every fight turned into a Treasure Chest, so some heroes got stuck opening chests at the bottom of Act One. The charm now tops out at +20% (treasure chests at most 25% of fights), and re-beating the Lampmother no longer counts as a first clear for relic finds.',
@@ -6228,14 +6224,14 @@
       'The guardians on floors 25, 50, 75, 100, 125 and 150 (and those floors again in every New Playthrough) now scatter your marching order. A banner warns you 3 seconds ahead, the line stays mixed up for 10 seconds, then it snaps back on its own, or straight away when the guardian falls.',
       'Counter it with your tank: if Shield Wall is up when the scatter lands, the tank holds the line and nothing moves. With auto-cast on, the tank now saves Shield Wall for the scatter in those fights.',
       'New relic: Lodestone Anchor. Each level cuts the scatter time by 20%, up to 80%.',
-      'Locked doors and chests (John\u2019s idea): from floor 10, about 1 fight in 50 is a lock instead of a monster. Only a Rogue can pick it (about 5 seconds, taps help). Doors hide gold, chests hide Dust, and either has a 1% chance of a Sigil. No Rogue? You walk past it.',
+      'Locked doors and chests: from floor 10, about 1 fight in 50 is a lock instead of a monster. Only a Rogue can pick it (about 5 seconds, taps help). Doors hide gold, chests hide Dust, and either has a 1% chance of a Sigil. No Rogue? You walk past it.',
     ] },
     { v: 122, date: 'November 25, 2026', title: 'New Playthrough (NP+)', items: [
       'Beat the Lampmother on floor 150 and you can start a New Playthrough from the Skills tab (Rekindle view). The whole story starts again at the next tier, NP+1 up to NP+10, and you get +25 Sigils and a tier badge on your profile, the Players Guild and in chat.',
       'Each tier: monsters have +25% health and damage, gear drops at +10% item level, and you keep +2% damage, health and gold for good (up to +20% at NP+10).',
       'Resets: gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story. Kept: everything bought with Sigils (Wardrobe, Bag of Holding, campfire spots, Lanternholder, tonics), your profile, journal lore, feats, Ember Ring rating and Rift tokens.',
       'Fair trading: each tier has its own market, mail only goes between heroes on the same tier, trading opens 24 hours after you start, gear from an earlier tier can not be worn, and your old listings, offers and unclaimed mail are cleared when you start. One tier a week at most.',
-      'Your tier also shows as a gold ring around your profile picture, brighter at every tier (thanks for the idea, Chipplin).',
+      'Your tier also shows as a gold ring around your profile picture, brighter at every tier.',
       'New: Training Grounds on the Party tab. See each seated member’s steady damage, damage against guardians, share, healing and health, then run a 10 second test on a practice dummy (strike it too) to compare gear, seats and skills.',
     ] },
     { v: 121, date: 'November 25, 2026', title: 'Rarer set pieces and steadier filters', items: [
@@ -6780,7 +6776,7 @@
       'The Campfire: story companions rest here. Bring them along whenever you like, and see who joins next.',
       'The Players Guild: recruit heroes made by other players. Heroes whose owners are playing right now are marked Online now.',
       'A Players Guild button at the top of the Party tab takes you straight there.',
-      'Raised skeletons now visibly lunge and claw at monsters (thanks for the suggestion, Chipplin).'] },
+      'Raised skeletons now visibly lunge and claw at monsters.'] },
     { v: 6, date: 'November 22, 2026', title: 'Help for new delvers', items: [
       'A step-by-step tutorial for new players that points at the real buttons.',
       'The Delver’s Guide: open the ? at the top for a handbook on every system.',
