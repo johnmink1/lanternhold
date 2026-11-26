@@ -74,6 +74,8 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
 
 **Lanternholder** costs 500 Sigils for 30 days, or $4.99/month.
 
+**Mercy Corps donations (v132, John 26 Nov 2026):** the Sigil shop's "Give to the Mercy Corps" box has Give $1 and Other amount. Both open John's Extra Life participant page (`EL_DONATE`, participant 566739, team 73553; `?amount=1` presets the amount, there is no message parameter). Money goes straight to Children's Miracle Network; nothing touches the Wix store (John chose this over a store item: no receipts, fixed prices, charity-law risk). The game copies the player's verified War Name as `#warname` and asks them to add it to the message; the Born2Game-Bot Extra Life feed (`koprulu/extralife.py`, every 15 min) credits that commander's alliance and announces it in the Grand War channel. Team-level donations are disabled on team 73553, so always link a participant page.
+
 ## Live as of v105
 
 - **v86–v91:** mana and stamina, wearer-only enchants, Ghost Lantern, status effects (burn, poison, stun, disarm), mastery XP, shielded foes, wandering merchant, bounty board, Lantern Keeper.
