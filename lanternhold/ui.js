@@ -3796,6 +3796,10 @@
   const CL = window.LH_CLOUD && window.LH_CLOUD.clientId ? window.LH_CLOUD : null;
   const TOK_KEY = 'lanternhold.session.v1';
   let sess = null, lastCloud = 0;
+  // Discord Activity (v133 private test): set by discord/boot.js only inside Discord's frame. dcTok is the player's Discord
+  // access token (identify scope, memory only); dcLinkTok waits for an email sign-in to link Discord to that hero.
+  const DC = window.LH_DISCORD || null;
+  let dcTok = '', dcLinkTok = '';
   try { sess = JSON.parse(localStorage.getItem(TOK_KEY) || 'null'); } catch (e) {}
   const signedIn = () => !!(sess && sess.refresh);
   function storeSess() { try { sess ? localStorage.setItem(TOK_KEY, JSON.stringify(sess)) : localStorage.removeItem(TOK_KEY); } catch (e) {} }
@@ -3817,6 +3821,7 @@
     const t = res.AuthenticationResult;
     sess = { id: t.IdToken, exp: Date.now() + (t.ExpiresIn - 60) * 1000, refresh: t.RefreshToken || (sess && sess.refresh), email: email || (sess && sess.email) || claims(t.IdToken).email };
     storeSess(); paintAccount();
+    if (DC && dcLinkTok) dcLink();
   }
   async function idToken() {
     if (!signedIn()) return null;
@@ -3959,11 +3964,11 @@
       confirm: '<button type="button" class="link" id="f-resend">Send a new code</button><button type="button" class="link" data-go="up">Use a different email</button>',
       forgot: '<button type="button" class="link" data-go="in">Back to sign in</button>', reset: '',
     }[mode];
-    modal('<form class="auth" novalidate><h2>' + titles[mode] + '</h2><p>' + lead + '</p>' + (mode === 'in' || mode === 'up' ? '<button type="button" class="btn b2g" id="f-b2g">Continue with Born 2 Game</button><div class="or"><span>or use your email</span></div>' : '') + f +
+    modal('<form class="auth" novalidate><h2>' + titles[mode] + '</h2><p>' + lead + '</p>' + (!DC && (mode === 'in' || mode === 'up') ? '<button type="button" class="btn b2g" id="f-b2g">Continue with Born 2 Game</button><div class="or"><span>or use your email</span></div>' : '') + f +
       '<div class="err" id="f-err"></div><button class="btn" type="submit" id="f-go">' + btn + '</button><div class="links">' + links + '</div>' +
       '<button type="button" class="btn ghost skipacct" id="f-skip">' + (S.hero ? 'Play without an account' : 'Back to making a new hero') + '</button>' +
       '<p class="credits">An account is optional. It only keeps your save safe across devices. We only keep your email and game save. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p></form>', m => {
-        m.querySelector('#f-skip').onclick = () => { const had = !!S.hero; closeModal(); if (had) toast('user', 'Playing without an account', 'Your progress saves on this device. You can sign in any time from the top bar.', 'feat'); };
+        m.querySelector('#f-skip').onclick = () => { if (DC && dcLinkTok && !signedIn()) { dcWelcome(); return; } const had = !!S.hero; closeModal(); if (had) toast('user', 'Playing without an account', 'Your progress saves on this device. You can sign in any time from the top bar.', 'feat'); };
         const ca = m.querySelector('.codeage'); if (ca) { const t = codeSent(email); ca.textContent = t ? 'The newest code was sent at ' + new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '. Older codes stop working. It can take a few minutes, so check Spam or Junk too.' : 'It can take a few minutes, so check Spam or Junk too.'; }
         m.querySelectorAll('.em').forEach(x => x.textContent = email || '');
         const em = m.querySelector('#f-email'); if (em && email) em.value = email;
@@ -4036,11 +4041,68 @@
         m.querySelector('#a-close').onclick = closeModal;
       });
   }
+  // ---------- Discord Activity sign-in (v133 private test) ----------
+  // Inside Discord the player's Discord account is the sign-in. The game asks Discord for a one-time code (identify
+  // scope only), and POST /discord/login (infra/lambda/discordlogin.js) swaps it for Discord's token, finds the hero linked
+  // to that Discord id (an Activity link, or the v132 "Link your Discord" support task) and returns game tokens. A Discord
+  // account with no hero yet picks: start a new hero, or sign in once with email and password to link the hero they have.
+  async function dcPost(path, body, auth) {
+    const r = await fetch(CL.api.replace(/\/$/, '') + path, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, auth ? { Authorization: auth } : {}), body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(j.error || 'http ' + r.status); e.code = j.error || r.status; throw e; }
+    return j;
+  }
+  async function dcStart() {
+    let j;
+    try {
+      await DC.ready;
+      const a = await DC.sdk.commands.authorize({ client_id: DC.clientId, response_type: 'code', state: '', prompt: 'none', scope: ['identify'] });
+      j = await dcPost('/discord/login', { code: a.code });
+    } catch (e) {
+      if (signedIn()) reconcile();
+      toast('lock', 'Discord sign-in did not finish', signedIn() ? 'You are still signed in to your hero.' : 'You can still play. Your progress saves on this device until you sign in.', 'warn');
+      return;
+    }
+    dcTok = j.access_token || '';
+    if (dcTok) DC.sdk.commands.authenticate({ access_token: dcTok }).then(a => { DC.user = a && a.user; }).catch(() => {});
+    if (j.AuthenticationResult) { dcSignedIn(j); return; }
+    if (signedIn()) { dcLinkTok = dcTok; dcLink(); reconcile(); return; }
+    dcWelcome();
+  }
+  function dcSignedIn(j) {
+    const sub = claims(j.AuthenticationResult.IdToken).sub, mine = signedIn() && sess.id ? claims(sess.id).sub : '';
+    // Signed in here to another hero before: this Discord account's hero wins, and its own save loads.
+    if (mine && mine !== sub && S.hero) { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} takeTokens(j, j.name); location.reload(); return; }
+    takeTokens(j, j.name);
+    if (mine !== sub) toast('user', 'Signed in with Discord', 'Welcome, ' + esc(j.name || 'adventurer') + '. Your progress syncs to your account.', 'feat');
+    reconcile();
+  }
+  function dcWelcome() {
+    $('modal').dataset.lock = '1';
+    modal('<div class="center"><h2>Welcome to Lanternhold</h2><p>Your Discord account is not linked to a hero yet. Start fresh, or bring the hero you already play.</p></div>' +
+      '<div class="choice"><button class="pick" id="dc-new"><b>Start a new hero</b><small>Your Discord account becomes your sign-in.</small></button>' +
+      '<button class="pick" id="dc-old"><b>I already play</b><small>Sign in once with your Lanternhold email and password. After that, Discord signs you in.</small></button></div>' +
+      '<div class="err" id="dc-err"></div>' +
+      '<p class="note small">Signed in with Born 2 Game on the website? Open Get ' + TOKEN + ' &gt; Support the game there and link your Discord, then reopen Lanternhold here.</p>', md => {
+        const err = md.querySelector('#dc-err');
+        md.querySelector('#dc-new').onclick = async e => {
+          const b = e.currentTarget; b.disabled = true;
+          try { const j = await dcPost('/discord/login', { token: dcTok, create: 1 }); delete $('modal').dataset.lock; closeModal(); dcSignedIn(j); }
+          catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
+        };
+        md.querySelector('#dc-old').onclick = () => { delete $('modal').dataset.lock; dcLinkTok = dcTok; authForm('in', '', 'Sign in to link this hero to your Discord account.'); };
+      });
+  }
+  async function dcLink() {
+    const t = dcLinkTok; if (!t) return; dcLinkTok = '';
+    try { await dcPost('/discord/link', { token: t }, await idToken()); toast('user', 'Discord linked', 'From now on, opening Lanternhold in Discord signs you in to this hero.', 'feat'); }
+    catch (e) { toast('lock', 'Discord not linked', e.code === 'taken' ? 'That Discord account already belongs to another hero.' : 'You are signed in, but linking did not work. It will try again next time.', 'warn'); }
+  }
   async function eraseCloud() { if (CL && signedIn()) { try { await api('DELETE'); } catch (e) {} } }
   if (CL) {
     $('btn-account').hidden = false; paintAccount();
     $('btn-account').addEventListener('click', openAccount);
-    if (signedIn()) setTimeout(reconcile, 800);
+    if (DC) setTimeout(dcStart, 300); else if (signedIn()) setTimeout(reconcile, 800);
     setInterval(() => { if (signedIn() && Date.now() - lastCloud > 60000) pushCloud(true); }, 15000);
     setTimeout(pollInvites, 3000); setInterval(() => { if (!document.hidden) pollInvites(); }, 30000); setInterval(drainJoins, 2000);
     document.addEventListener('visibilitychange', () => { if (document.hidden && signedIn()) pushCloud(true); });
@@ -4259,6 +4321,7 @@
   const b64u = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const rnd = n => b64u(crypto.getRandomValues(new Uint8Array(n)));
   async function wixGo(body, tok) {
+    if (DC) { toast('lock', 'Not in Discord yet', 'Sigil packs and the membership are not sold in the Discord version yet.', 'warn'); return; }
     if (!tok) tok = (await wixPost('/oauth2/token', { clientId: WIX_APP, grantType: 'anonymous' })).access_token;
     const r = await wixPost('/redirect-session/v1/redirect-session', body, tok);
     save(); if (signedIn()) await Promise.race([pushCloud(true), new Promise(ok => setTimeout(ok, 3000))]);
@@ -4348,21 +4411,22 @@
       '<li><b>+' + L.PASS_BAG + ' bag slots</b><span>More room for loot.</span></li>' +
       '<li><b>+' + L.PASS_OFFLINE / 3600 + ' hours away</b><span>Your party earns offline for longer.</span></li></ul>' +
       (member ? '<p class="passstate">You are a Lanternholder member. It renews on <b>' + subDate() + '</b>.</p>' : left ? '<p class="passstate">Lanternholder is on for <b>' + left + '</b>.</p>' : '') +
-      '<div class="lhways"><div class="lhway"><small>With ' + TOKEN + '</small><b>' + sigil + L.PASS_COST + '</b><span>30 days. Nothing renews. Buy again to add 30 more.</span><button class="btn" id="gs-pass2"' + (member ? ' disabled' : '') + '>' + (left && !member ? 'Add 30 days' : 'Use ' + L.PASS_COST + ' ' + TOKEN) + '</button></div>' +
+      '<div class="lhways"><div class="lhway"><small>With ' + TOKEN + '</small><b>' + sigil + L.PASS_COST + '</b><span>30 days. Nothing renews. Buy again to add 30 more.</span><button class="btn" id="gs-pass2"' + (member ? ' disabled' : '') + '>' + (left && !member ? 'Add 30 days' : 'Use ' + L.PASS_COST + ' ' + TOKEN) + '</button></div>' + (DC ? '</div></div>' :
         '<div class="lhway"><small>Monthly membership</small><b>' + SUB_PRICE + '<i>/month</i></b><span>Renews every month until you cancel in your Born 2 Game account.</span>' +
-        (member ? '<a class="btn ghost" href="' + SUB_MANAGE + '" target="_blank" rel="noopener">Manage or cancel</a>' : '<button class="btn ghost" id="gs-sub">Subscribe</button>') + '</div></div></div>' +
-      // 3. buying Sigils
+        (member ? '<a class="btn ghost" href="' + SUB_MANAGE + '" target="_blank" rel="noopener">Manage or cancel</a>' : '<button class="btn ghost" id="gs-sub">Subscribe</button>') + '</div></div></div>') +
+      // 3. buying Sigils (not inside Discord for now: Discord's rules want paid items sold through Discord too, at the same price)
+      (DC ? '<p class="note small">Packs of ' + TOKEN + ' and the monthly membership are not sold in the Discord version yet.</p>' :
       '<div class="shopsec"><h3>Buy ' + TOKEN + ' <span class="tag once">One-time</span></h3><p class="shopsub">Pay once. Nothing renews. Every pack also lights a <b>Lantern Surge</b> for everyone: +25% gold and XP, 30 minutes per 500 ' + TOKEN + '.</p></div>' +
       '<div class="packs">' + tiles + '</div>' +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' :
         linked ? '<div class="storelink"><span>Store account: <b>' + esc(w.n || 'linked') + '</b></span><button class="btn small ghost" id="gs-sync">Check for purchases</button><button class="btn small ghost" id="gs-out">Unlink</button></div>' :
-        '<div class="storelink"><span>Packs and memberships are sold in the Born 2 Game store. Sign in there once and every purchase lands on this hero.</span><button class="btn small" id="gs-in">Sign in with Born 2 Game</button></div>') +
+        '<div class="storelink"><span>Packs and memberships are sold in the Born 2 Game store. Sign in there once and every purchase lands on this hero.</span><button class="btn small" id="gs-in">Sign in with Born 2 Game</button></div>')) +
       // 4. Mercy Corps: real donations to Extra Life, paid on Extra Life's own page
       '<div class="shopsec subbox mercygive"><h3>Give to the Mercy Corps <span class="tag">Charity</span></h3>' +
       '<p class="shopsub">Donate to our Extra Life team for Children’s Miracle Network Hospitals. Gifts also light Mercy’s Blessing for every hero' + (warTag() ? ' and credit your alliance (' + esc(warTag()) + ')' : '') + '.</p>' +
       '<div class="row left"><button class="btn" id="gs-give1">Give $1</button><button class="btn ghost" id="gs-giveo">Other amount</button></div>' +
       '<p class="note small">Opens Extra Life’s secure page. The money goes straight to the charity, never to the game, and you get the receipt.</p></div>' +
-      '<p class="note small">Payment is handled by the Born 2 Game store at born2gamellc.com. Every account starts with 100 ' + TOKEN + ', and the team hands more out at Grand War events.</p>' +
+      '<p class="note small">' + (DC ? '' : 'Payment is handled by the Born 2 Game store at born2gamellc.com. ') + 'Every account starts with 100 ' + TOKEN + ', and the team hands more out at Grand War events.</p>' +
       '<div class="row"><button class="btn ghost" id="gs-ok">Back</button></div>', md => {
         md.querySelector('#gs-x').onclick = closeModal; md.querySelector('#gs-ok').onclick = () => back();
         const go = async (b, f) => { b.disabled = true; try { await f(); } catch (e) { b.disabled = false; toast('lock', 'Could not reach the store', 'Check your connection and try again.', 'warn'); } };
@@ -4385,7 +4449,7 @@
       });
     if (signedIn() && !prof && CL) loadProfile().then(() => { if (prof && document.querySelector('#gs-x')) getSigils(back); }).catch(() => {});
   }
-  setTimeout(() => { storeReturn().then(done => { if (!done) storeSync(false); }); }, 1500);
+  if (!DC) setTimeout(() => { storeReturn().then(done => { if (!done) storeSync(false); }); }, 1500);
   async function linkCommander(n) {
     n = String(n || '').trim();
     if (n && !commander(n)) { toast('lock', 'Commander not found', 'Pick your name from the Grand War list. It must match the war ladder exactly.', 'warn'); return; }
@@ -4711,6 +4775,7 @@
   let supData = null, supBusy = false, supBack = null;
   function supStart(task) {
     const t = SUP.find(x => x.id === task); if (!t || !SUP_APP[task]) return;
+    if (DC) { if (task === 'discord' && dcTok) supClaim('discord', dcTok); return; }
     const st = 'sup' + task + Math.random().toString(36).slice(2, 12);
     try { localStorage.setItem('lh_oauth_st', st); localStorage.removeItem('lh_oauth'); } catch (e) {}
     const w = window.open(t.auth(SUP_APP[task], st), 'lhoauth', 'width=520,height=760');
@@ -4721,8 +4786,11 @@
     let want = null; try { want = localStorage.getItem('lh_oauth_st'); localStorage.removeItem('lh_oauth_st'); localStorage.removeItem('lh_oauth'); } catch (e) {}
     if (!m || !m.token || !m.state || m.state !== want) return;
     const task = m.state.startsWith('supdiscord') ? 'discord' : m.state.startsWith('supitch') ? 'itch' : '';
+    supClaim(task, m.token);
+  }
+  async function supClaim(task, token) {
     if (!task || supBusy) return; supBusy = true;
-    try { const r = await papi('POST', '/support/claim', { task, token: m.token }); if (supData) supData.mine = r.mine; if (prof && r.bal != null) prof.bal = r.bal; sfx.buy(); toast('star', '+' + r.add + ' ' + TOKEN, 'Thank you for supporting Lanternhold!', 'feat'); }
+    try { const r = await papi('POST', '/support/claim', { task, token }); if (supData) supData.mine = r.mine; if (prof && r.bal != null) prof.bal = r.bal; sfx.buy(); toast('star', '+' + r.add + ' ' + TOKEN, 'Thank you for supporting Lanternhold!', 'feat'); }
     catch (e) { toast('lock', 'Not yet', SUP_ERR[e.code] || 'Try again in a moment.', 'warn'); }
     supBusy = false; if (document.querySelector('#sp-x')) openSupport(supBack);
   }
@@ -4733,7 +4801,7 @@
     const row = t => { const c = supData && supData.mine[t.id], sig = supData ? supData.tasks[t.id] : null, live = !!SUP_APP[t.id];
       return '<div class="supt"><div class="supth">' + icon(t.icon) + '<b>' + t.name + '</b>' + (sig ? '<span class="supsig">' + sigil + sig + '</span>' : '') + (c ? '<span class="tag once">Done</span>' : '') + '</div>' +
         (c ? '<small>Thank you! The ' + TOKEN + ' are in your account.</small>' : '<small>' + t.how + '</small>' +
-          '<div class="supform"><button class="btn small" data-supgo="' + t.id + '"' + (supData && live ? '' : ' disabled') + '>' + (live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
+          '<div class="supform"><button class="btn small" data-supgo="' + t.id + '"' + (supData && live && !(DC && t.id !== 'discord') ? '' : ' disabled') + '>' + (DC && t.id !== 'discord' ? 'On the website' : live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
     modal('<div class="maphead"><div><h2>Support the game</h2><small>Link your accounts to your hero and get free ' + TOKEN + ', once each, paid right away.</small></div><button class="iconbtn" id="sp-x" aria-label="Close">&times;</button></div>' +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' : !supData ? '<p class="note">Loading…</p>' : '') +
       '<div class="supts">' + SUP.map(row).join('') + '</div>' +
@@ -4982,7 +5050,8 @@
   $('codexseg').addEventListener('click', e => { if (e.target.closest('[data-cx="board"]')) loadBoard(); });
   // ---------- the Grand War: season strip and war room ----------
   const WAR_URL = 'https://war.born2gamellc.com/';
-  const WAR_ART = { covenant: WAR_URL + 'static/alliance-covenant.jpg', radiant: WAR_URL + 'static/alliance-ascendancy.jpg', tide: WAR_URL + 'static/alliance-tide.jpg' };
+  const WAR_IMG = DC && !DC.mock ? location.origin + '/lh-war/' : WAR_URL; // inside Discord the art comes through the /lh-war URL mapping
+  const WAR_ART = { covenant: WAR_IMG + 'static/alliance-covenant.jpg', radiant: WAR_IMG + 'static/alliance-ascendancy.jpg', tide: WAR_IMG + 'static/alliance-tide.jpg' };
   const SEASON = { n: 1, name: 'The First Incursion', start: Date.UTC(2026, 10, 1, 5), week1: Date.UTC(2026, 10, 8, 5), surge: Date.UTC(2027, 0, 24, 5), weeks: 12 };
   function paintWarStrip() {
     const now = Date.now(), wk = Math.max(1, Math.min(SEASON.weeks, Math.floor((now - SEASON.week1) / 6048e5) + 1));

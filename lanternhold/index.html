@@ -59,6 +59,8 @@ var M=[[/reddit\.com$|redd\.it$/,"reddit"],[/itch\.io$|itch\.zone$|hwcdn\.net$/,
 for(var i=0;i<M.length&&!r;i++)if(M[i][0].test(h))r=M[i][1];
 if(!r)r=("web-"+h.replace(/[^a-z0-9]+/g,"-")).slice(0,24).replace(/-+$/,"")}
 ls.setItem("lh_ref",r.toLowerCase())})()}catch(e){}</script>
+<script>/* Inside Discord (Activity frame), or localhost with ?discord=mock: load the Discord SDK and the Activity glue (discord/boot.js). */
+if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)&&/[?&]discord=mock\b/.test(location.search)))document.write('<script src="discord/sdk.js?v=202611261532"><\/script><script src="discord/boot.js?v=202611261532"><\/script>');</script>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
