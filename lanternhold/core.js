@@ -139,6 +139,18 @@
     shield: { name: 'Shielded', desc: 'Fights behind a shield: your party deals far less damage until it breaks. Tap the foe to break it fast; it also wears down on its own' },
   };
   const MOD_KEYS = Object.keys(MODS).filter(k => k !== 'shield');
+  // NP+ marks (John, 26 Nov 2026: "in NP+2 the mobs should have resistances"). From NP+NP_MARK_TIER monsters can carry
+  // resistances and auras that a party has to be built around: swap classes in, heal through rot, wear Piercing.
+  // Kept out of MOD_KEYS so a first playthrough never sees them. Rolled in makeFoe (npMark), used by npMarkMult/npHealCut.
+  const NP_MODS = {
+    stone:  { name: 'Stoneskin',   desc: 'Hide like rock: Tanks and Rogues deal 60% less damage to it (NP+)' },
+    runed:  { name: 'Spellproof',  desc: 'Runes drink magic: Mages, Necromancers and Healers deal 60% less damage to it (NP+)' },
+    plague: { name: 'Plague Aura', desc: 'Its rot cuts all healing and life steal on your party by 60% (NP+)' },
+    iron:   { name: 'Ironclad',    desc: 'Heavy plate: takes only 10% damage from a hero without Piercing. Piercing gear and Rogues break through (NP+)' },
+  };
+  Object.assign(MODS, NP_MODS);
+  const NP_MOD_KEYS = Object.keys(NP_MODS), NP_MARK_TIER = 2, NP_RESIST = 0.6, NP_PLAGUE = 0.6, NP_IRON = 0.1, ROGUE_PIERCE = 0.25;
+  const PHYS_CLS = { tank: 1, rogue: 1 }, MAGIC_CLS = { mage: 1, necro: 1, healer: 1 };
   // Shielded foes (John, 2026-11-24): while the shield is up the party deals SHIELD_CUT less damage. Every tap knocks
   // SHIELD_TAP off it (a critical tap twice that), and it wears away by itself in SHIELD_DECAY seconds so idle players
   // are never stuck. Guardians raise it once more at half health.
@@ -524,9 +536,22 @@
   }
   function totalDps(s, now) {
     let d = 0; for (const id of s.party) d += memberDps(s, id, now);
-    return d + minionDps(s, now);
+    return d + minionDps(s, now) * npMarkCls(s, 'necro', 0);
   }
-  function healPerSec(s, id) {
+  // How much of a party member's damage gets through the foe's NP+ marks (1 when it has none).
+  function npMarkCls(s, cls, pierce) {
+    const m = s.foe && s.foe.mods; if (!m || !m.length || s.foe.world) return 1;
+    let x = 1;
+    if (m.includes('stone') && PHYS_CLS[cls]) x *= 1 - NP_RESIST;
+    if (m.includes('runed') && MAGIC_CLS[cls]) x *= 1 - NP_RESIST;
+    if (m.includes('iron')) x *= NP_IRON + (1 - NP_IRON) * Math.min(1, pierce || 0);
+    return x;
+  }
+  const pierceOf = (s, id) => { const m = memberById(id); return Math.min(1, wearVal(s, id, 'pierce') + (m && m.cls === 'rogue' ? ROGUE_PIERCE : 0)); };
+  function npMarkMult(s, id) { const m = memberById(id); return m ? npMarkCls(s, m.cls, pierceOf(s, id)) : 1; }
+  const npHealCut = s => (s.foe && !s.foe.world && s.foe.mods && s.foe.mods.includes('plague') ? 1 - NP_PLAGUE : 1);
+  function healPerSec(s, id) { return healPerSec0(s, id) * npHealCut(s); }
+  function healPerSec0(s, id) {
     if (!id || s.down[id] || !lvl(s, id)) return 0;
     const m = memberById(id); if (m.cls !== 'healer') return 0;
     return (CLASSES.healer.heal * scale(s, id) * gearMult(s, id, 'heal') * (1 + wearVal(s, id, 'heal')) * (1 + relicVal(s, 'censer')) * (1 + EMBER_HP * s.embers) * (1 + FEAT_PER * featCount(s)) * sidePerk(s, 'heal') * (1 + campBonus(s, 'heal')) * (1 + sk(s, 'pheal') + (id === 'you' ? sk(s, 'heal') : 0))) * keeperMult(s) * (1 - ghostSap(s, 'heal')) * (s.cc && ccOf(s, id) ? (ccOf(s, id).k === 'stun' ? 0 : CC.disarm.heal) : 1);
@@ -1643,6 +1668,8 @@
     j: { name: 'Leech',   k: 'leech',   v: 0.004,  cap: 0.08, fmt: 'pct', what: 'life steal', per: 1 },
     k: { name: 'Bulwark', k: 'block',   v: 0.005,  cap: 0.25, fmt: 'pct', what: 'block chance', per: 1 },
     l: { name: 'Plating', k: 'def',     v: 0.006,  cap: 0.3,  fmt: 'pct', what: 'defense', per: 1 },
+    // NP+ only (v126): only rolls on gear that dropped at NP+2 or deeper. Breaks Ironclad plate for the wearer.
+    m: { name: 'Piercing', k: 'pierce', v: 0.1,    cap: 0.9,  fmt: 'pct', what: 'armor piercing against Ironclad foes', per: 1, np: 2 },
   };
   const ENCH_KEYS = Object.keys(ENCH), ENCH_MAX = 4;
   // Rings and trinkets lean toward regen and life steal; armor leans toward block and defense; weapons toward life steal.
@@ -1654,7 +1681,7 @@
   const enchTierMax = it => Math.min(9, 1 + Math.floor(it.ilvl / 12) + (it.rar === 'epic' || it.rar === 'set' || it.rar === 'goblin' || it.rar === 'legend' ? 1 : 0));
   function rollEnch(it, r) {
     let e = ''; const n = sockets(it), tm = enchTierMax(it);
-    const pool = ENCH_KEYS.concat(ENCH_BIAS[it.slot] || []);
+    const pool = ENCH_KEYS.filter(k => !ENCH[k].np || (it.t | 0) >= ENCH[k].np).concat(ENCH_BIAS[it.slot] || []);
     for (let i = 0; i < n; i++) if (r() < (ENCH_FILL[it.rar] || 0)) e += pool[Math.floor(r() * pool.length)] + (1 + Math.floor(r() * tm));
     it.en = e; return it;
   }
@@ -2199,8 +2226,19 @@
   // NP+: every foe outside the shared world boss fight is tougher and hits harder (npFoeHp / npFoeAtk).
   function makeFoe(s, rng) {
     const foe = makeFoe0(s, rng), mh = npFoeHp(s, s.floor), ma = npFoeAtk(s, s.floor);
-    if (mh > 1 && foe && !foe.world && !foe.wounded && !foe.lock) { foe.hp *= mh; foe.max *= mh; foe.atk *= ma; }
+    if (mh > 1 && foe && !foe.world && !foe.wounded && !foe.lock) { foe.hp *= mh; foe.max *= mh; foe.atk *= ma; if (!foe.chest && !foe.goblin) npMark(s, foe, rng); }
     return foe;
+  }
+  // NP+ marks: from NP+2 a share of monsters (15% per tier past 1, at most 75%) carries one mark, two from NP+6.
+  // Guardians always carry one, two from NP+5, three from NP+8. Stoneskin and Spellproof never come together.
+  function npMark(s, foe, rng) {
+    const n = npTier(s), r = rng || Math.random; if (n < NP_MARK_TIER) return;
+    const k = foe.boss ? (n >= 8 ? 3 : n >= 5 ? 2 : 1) : r() < Math.min(0.75, 0.15 * (n - 1)) ? (n >= 6 ? 2 : 1) : 0;
+    let pool = NP_MOD_KEYS.slice(); foe.mods = foe.mods || [];
+    for (let i = 0; i < k && pool.length; i++) {
+      const m = pool[Math.floor(r() * pool.length)]; foe.mods.push(m);
+      pool = pool.filter(x => x !== m && !(m === 'stone' && x === 'runed') && !(m === 'runed' && x === 'stone'));
+    }
   }
   function makeFoe0(s, rng) {
     const f = s.floor, boss = isBossFloor(f), r = rng || Math.random;
@@ -2316,7 +2354,7 @@
   const wbBoss = id => Math.floor(Date.parse(id + 'T00:00:00Z') / 6048e5) % WB_TRAITS.length;
   // How much of a party member's damage reaches the boss: class trait, then half for hired and story companions.
   function wbMult(s, id) {
-    if (!s.wb || s.wb.old || !s.foe || !s.foe.world) return 1;
+    if (!s.wb || s.wb.old || !s.foe || !s.foe.world) return npMarkMult(s, id);
     const t = WB_TRAITS[s.wb.k || 0], c = memberById(id) && memberById(id).cls;
     return (c === t.weak ? 1 + WB_WEAK : t.resist.includes(c) ? 1 - WB_RESIST : 1) * (id === 'you' || isGuest(s, id) ? 1 : WB_NPC);
   }
@@ -3012,7 +3050,7 @@
     }
     if (s.foe && s.foe.wounded && mercyAided(s, now, events)) return;
     // life steal: a share of each hero's own damage heals that hero
-    for (const id of s.party) { if (!id || s.down[id]) continue; const ls = wearVal(s, id, 'leech'); if (ls > 0) { const mx = maxHpOf(s, id); s.hp[id] = Math.min(mx, (s.hp[id] || 0) + memberDps(s, id, now) * ls * dt); } }
+    for (const id of s.party) { if (!id || s.down[id]) continue; const ls = wearVal(s, id, 'leech') * npHealCut(s); if (ls > 0) { const mx = maxHpOf(s, id); s.hp[id] = Math.min(mx, (s.hp[id] || 0) + memberDps(s, id, now) * ls * dt); } }
     // abilities
     if (s.autoCast) for (const id of s.party) if (id && !s.down[id] && !ccOf(s, id, now) && (memberById(id).cls === 'healer' ? !oom(s, id) && resOf(s, id) > 0 : resOf(s, id) >= AB_COST)) { const st = s.abil[id]; if ((!st || st.readyAt <= now) && wantsCast(s, id, now)) castAbility(s, id, now, events); }
     if (s.autoCast && !s.down.you && !ccOf(s, 'you', now)) for (const ab of heroSpecs(s)) { if (resOf(s, 'you') < SPEC_COST) break; const st = s.abil['you:' + ab.id]; if ((!st || st.readyAt <= now) && wantsSpec(s, ab, now)) castSpec(s, ab.id, now, events); }
@@ -3231,7 +3269,7 @@
   }
 
   const api = {
-    steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
+    steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
     NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,

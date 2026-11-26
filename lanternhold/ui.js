@@ -2871,7 +2871,7 @@
   let npSrv = null; // { np, npAt, next } from GET /np
   // 'x2 health on floor 1, rising to x5 by floor 150 (damage x1.5 to x2.1)'
   const npX = v => '\u00d7' + (Math.round(v * 10) / 10);
-  const npFoeText = t => npX(L.npFoeHp({ np: t }, 1)) + ' health on floor 1, rising to ' + npX(L.npFoeHp({ np: t }, L.ACT_ONE_END)) + ' by floor ' + L.ACT_ONE_END + ' (damage ' + npX(L.npFoeAtk({ np: t }, 1)) + ' to ' + npX(L.npFoeAtk({ np: t }, L.ACT_ONE_END)) + ')';
+  const npFoeText = t => npX(L.npFoeHp({ np: t }, 1)) + ' health on floor 1, rising to ' + npX(L.npFoeHp({ np: t }, L.ACT_ONE_END)) + ' by floor ' + L.ACT_ONE_END + ' (damage ' + npX(L.npFoeAtk({ np: t }, 1)) + ' to ' + npX(L.npFoeAtk({ np: t }, L.ACT_ONE_END)) + ')' + (t >= L.NP_MARK_TIER ? '; some carry NP+ marks (Stoneskin, Spellproof, Plague Aura, Ironclad), so build your party and gear around them' : '');
   function paintNp() {
     const box = $('npbox'); if (!box) return;
     const t = L.npTier(S), ready = L.npReady(S), next = npSrv && npSrv.next > Date.now() ? npSrv.next : 0;

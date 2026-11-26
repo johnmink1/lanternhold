@@ -2463,3 +2463,8 @@ body.atench .achips{display:none}
 .tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
 #tr-rows{overflow-x:auto}
 @media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}
+/* NP+ marks (v126) */
+.foemods .m-stone{background:#2a2620;border-color:#8a7a5a;color:#e8dcc0}
+.foemods .m-runed{background:#1d1438;border-color:#7a5ac8;color:#d8c8ff}
+.foemods .m-plague{background:#16240e;border-color:#5a8a2a;color:#cfeeb0}
+.foemods .m-iron{background:#1e242c;border-color:#8a9aac;color:#e4ecf4}
