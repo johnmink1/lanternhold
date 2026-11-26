@@ -1,4 +1,4 @@
-/* lh-build 202611260143 */
+/* lh-build 202611260151 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4719,7 +4719,49 @@
         (top.length ? '<ol class="lboard">' + top.map((p, i) => '<li class="' + (i < 3 ? 'top' + (i + 1) : '') + (p.name === me ? ' me' : '') + '"><span class="lbr">' + (i + 1) + '</span><span class="lbn"><b>' + esc(p.name) + '</b> ' + classTag(p.cls) + (L.SIDES[p.side] ? '<small>' + esc(L.SIDES[p.side].name) + '</small>' : '') + '</span><span class="lbf"><b>Floor ' + p.floor + '</b><small>power level ' + p.level + '</small></span></li>').join('') + '</ol>' : '<p class="note">Nobody is on the board yet. Be the first.</p>');
     } catch (e) { box.innerHTML = '<p class="note">The leaderboard could not load right now. Try again in a minute.</p>'; lbAt = 0; }
   }
-  $('codexseg').addEventListener('click', e => { if (e.target.closest('[data-cx="board"]')) loadBoard(); });
+  // v131 Hall of Fame (John, 26 Nov 2026): records across the Reach from GET /hof (infra/lambda/hof.js). Hidden feats
+  // never count, and nothing here says who was first to NP+1.
+  let lbView = 'deep', hofAt = 0;
+  const HOF = [
+    ['fast', 'map', 'Fastest to NP+1', 'From a new game to New Playthrough 1', v => hofDur(v)],
+    ['rich', 'coin', 'Net worth', 'Most gold on hand', v => fmt(v) + ' gold'],
+    ['boss', 'crown', 'Guardian slayers', 'Most guardians defeated', v => fmt(v)],
+    ['np', 'lantern', 'New Playthrough', 'Highest NP+ reached', v => 'NP+' + v],
+    ['kills', 'sword', 'Monster hunters', 'Most monsters defeated', v => fmt(v)],
+    ['earned', 'bag', 'Fortune makers', 'Most gold earned, all time', v => fmt(v) + ' gold'],
+    ['feats', 'star', 'Feat collectors', 'Most feats earned', v => fmt(v)],
+    ['time', 'torch', 'Lantern keepers', 'Most time in the Deep', v => hofDur(v * 1000)],
+  ];
+  function hofDur(ms) {
+    const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60);
+    return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + (m % 60) + 'm' : Math.max(1, m) + 'm';
+  }
+  async function loadHof(force) {
+    const box = $('hoftop'); if (!box) return;
+    if (!CL) { box.innerHTML = '<p class="note">The Hall of Fame needs the online server.</p>'; return; }
+    if (!force && Date.now() - hofAt < 120000) return; hofAt = Date.now();
+    if (!box.innerHTML) box.innerHTML = '<p class="note">Opening the Hall of Fame…</p>';
+    try {
+      const r = await fetch(CL.api.replace(/\/$/, '') + '/hof'); if (!r.ok) throw r.status;
+      const j = await r.json(), me = S.hero && S.hero.name, medal = ['top1', 'top2', 'top3'];
+      const row = (p, i, val) => '<li class="' + medal[i] + (p.name === me ? ' me' : '') + '"><span class="lbr">' + (i + 1) + '</span><span class="lbn"><b>' + esc(p.name) + '</b> ' + (L.CLASSES[p.cls] ? classTag(p.cls) : '') + '</span><span class="hofv">' + val + '</span></li>';
+      const card = ([k, ic, name, sub, f]) => '<section class="hofc"><h4>' + icon(ic) + name + '</h4><small>' + sub + '</small>' +
+        ((j[k] || []).length ? '<ol class="lboard hofl">' + j[k].map((p, i) => row(p, i, f(p.v))).join('') + '</ol>' : '<p class="note small">No one yet. Be the first.</p>') + '</section>';
+      const cls = ['tank', 'healer', 'rogue', 'mage', 'necro'];
+      const mine = S.hero ? '<p class="note small">Your hero: power level ' + L.lvl(S, 'you') + ' · gear rating ' + fmt(L.gearRating(S, 'you')) + '</p>' : '';
+      const best = '<section class="hofc hofwide"><h4>' + icon('shield') + 'Best in class</h4><small>Highest power level for each class, then gear rating</small><ol class="lboard hofl">' +
+        cls.map(c => { const b = (j.cls || {})[c]; return '<li class="' + (b && b.name === me ? 'me' : '') + '"><span class="hofk">' + classTag(c) + '</span><span class="lbn">' + (b ? '<b>' + esc(b.name) + '</b>' : '<i class="hofnone">No one yet</i>') + '</span>' +
+          (b ? '<span class="hofv">power level ' + b.lv + '<small>gear rating ' + fmt(b.gr) + '</small></span>' : '') + '</li>'; }).join('') + '</ol>' + mine + '</section>';
+      box.innerHTML = '<p class="note">Records across the Reach. Your hero joins after their next sync. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(card).join('') + best + HOF.slice(2).map(card).join('') + '</div>';
+    } catch (e) { box.innerHTML = '<p class="note">' + (e === 404 ? 'The Hall of Fame opens soon.' : 'The Hall of Fame could not load right now. Try again in a minute.') + '</p>'; hofAt = 0; }
+  }
+  $('lbseg').addEventListener('click', e => {
+    const b = e.target.closest('[data-lb]'); if (!b) return; lbView = b.dataset.lb;
+    document.querySelectorAll('#lbseg button').forEach(x => x.classList.toggle('on', x === b));
+    $('boardtop').hidden = lbView !== 'deep'; $('hoftop').hidden = lbView !== 'hof';
+    if (lbView === 'hof') loadHof(); else loadBoard();
+  });
+  $('codexseg').addEventListener('click', e => { if (e.target.closest('[data-cx="board"]')) { if (lbView === 'hof') loadHof(); else loadBoard(); } });
   // ---------- the Grand War: season strip and war room ----------
   const WAR_URL = 'https://war.born2gamellc.com/';
   const WAR_ART = { covenant: WAR_URL + 'static/alliance-covenant.jpg', radiant: WAR_URL + 'static/alliance-ascendancy.jpg', tide: WAR_URL + 'static/alliance-tide.jpg' };
@@ -6251,6 +6293,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 131, date: 'November 2026', title: 'Hall of Fame', items: [
+      'Codex > Leaderboard has a new Hall of Fame: fastest to NP+1, net worth, best in each class (power level and gear rating), guardian slayers and more.',
+    ] },
     { v: 130, date: 'November 2026', title: 'Notification settings', items: [
       'Settings: a new Notifications section lets you turn each kind of corner pop-up on or off. Switched-off ones still go to the bell.',
     ] },
