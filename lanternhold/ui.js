@@ -1689,7 +1689,7 @@
     parts.push(fmt(L.memberDps(S, id, now) || 0) + ' dmg/s');
     parts.push(fmt(L.maxHpOf(S, id)) + ' hp');
     // A borrowed hero stronger than GUEST_CAP x your hero fights at that cap; say so, or it looks out of date.
-    if (L.isGuest(S, id) && L.guestK(S, id) < 0.999) parts.push('<span class="muted" title="Borrowed heroes fight at up to ' + L.GUEST_CAP + 'x your hero’s damage and health. Grow your hero to raise the cap.">capped at ' + L.GUEST_CAP + 'x you</span>');
+    if (L.isGuest(S, id) && L.guestK(S, id) < 0.999) parts.push('<span class="muted" title="Borrowed heroes fight at up to ' + L.GUEST_CAP + 'x your hero’s damage and ' + L.GUEST_CAP + 'x its health, each on its own. Grow your hero to raise the cap.">capped at ' + L.GUEST_CAP + 'x you</span>');
     return parts.join(' &middot; ');
   }
 
@@ -6518,7 +6518,7 @@
       'Quests: the Bounty Board and daily quests now draw from 200 kinds across the game, picked for your hero. Many have a button that takes you there.',
       'New hero profile: key stats up top and sections you can fold. A Public profile tab lets you choose what other players see.',
       'Tap a name in the Players Guild to see that hero’s public profile. Banners now show on party rows.',
-      'Borrowed player heroes now keep up with their owner’s latest gear and power level on their own.',
+      'Borrowed player heroes now keep up with their owner’s latest gear and power level on their own. Their damage and health are each capped at twice yours.',
       'New damage meter under the fight log: who deals your damage over the last 30 seconds.',
       'Sigil shop: give $1 or any amount to our Extra Life team for children’s hospitals.',
       'New Support the dev button: buy the developer a coffee. It gives nothing in game.',
