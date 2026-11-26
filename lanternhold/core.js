@@ -1,4 +1,4 @@
-/* lh-build 202611260408 */
+/* lh-build 202611260519 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -2621,7 +2621,9 @@
   }
   function bountyReward(s, b) {
     const mins = { hunt: 6, region: 5, guardian: 5, chest: 4, elite: 6, shield: 4 }[b.k] || 4;
-    return { gold: Math.max(50, Math.round(offlineGoldPerSec(s) * 60 * mins)), dust: Math.round(3 + (s.maxFloor || 1) * 0.3) };
+    // Hotfix (Kyvia, Discord 26 Nov 2026): the gold used live away income, so swapping a Gold Find hero in just before
+    // claiming raised it by about a billion. It now uses the same slow dive-income average as Pip's prices (pipRate).
+    return { gold: Math.max(50, Math.round(pipRate(s) * 60 * mins)), dust: Math.round(3 + (s.maxFloor || 1) * 0.3) };
   }
   // Rolls the board over when the window changes (paying out finished, unclaimed bounties) and returns it.
   function bountyState(s, now) {
