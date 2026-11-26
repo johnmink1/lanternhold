@@ -1,4 +1,4 @@
-/* lh-build 202611251638 */
+/* lh-build 202611260007 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -65,6 +65,8 @@
   const WAR_KEY = { covenant: 'covenant', ascendancy: 'radiant', tide: 'tide' };
   const warWinOn = s => !!(s && s.warWin && s.warWin.side && sideOf(s) === s.warWin.side);
   const reviveMs = s => (warWinOn(s) ? WARWIN_REVIVE : REVIVE_TIME) * 1000;
+  // v125 Two-Headed Coin (Pip's Curio): a fallen hero has a 25% chance to be back up in 3 seconds.
+  const downAt = (s, now) => now + (fxOnW(s, 'coin') && Math.random() < 0.25 ? 3000 : reviveMs(s));
   // Banner lantern (John, 2026-11-24): the more Grand War territories your banner holds right now, the bigger its buff:
   // +1% damage, health, healing and gold per territory, up to +15%. s.warLive = { held: { side: n }, total, week } comes
   // from the war site's /api/nexus.json and refreshes every 15 minutes.
@@ -139,6 +141,18 @@
     shield: { name: 'Shielded', desc: 'Fights behind a shield: your party deals far less damage until it breaks. Tap the foe to break it fast; it also wears down on its own' },
   };
   const MOD_KEYS = Object.keys(MODS).filter(k => k !== 'shield');
+  // NP+ marks (John, 26 Nov 2026: "in NP+2 the mobs should have resistances"). From NP+NP_MARK_TIER monsters can carry
+  // resistances and auras that a party has to be built around: swap classes in, heal through rot, wear Piercing.
+  // Kept out of MOD_KEYS so a first playthrough never sees them. Rolled in makeFoe (npMark), used by npMarkMult/npHealCut.
+  const NP_MODS = {
+    stone:  { name: 'Stoneskin',   desc: 'Hide like rock: Tanks and Rogues deal 60% less damage to it (NP+)' },
+    runed:  { name: 'Spellproof',  desc: 'Runes drink magic: Mages, Necromancers and Healers deal 60% less damage to it (NP+)' },
+    plague: { name: 'Plague Aura', desc: 'Its rot cuts all healing and life steal on your party by 60% (NP+)' },
+    iron:   { name: 'Ironclad',    desc: 'Heavy plate: takes only 10% damage from a hero without Piercing. Piercing gear and Rogues break through (NP+)' },
+  };
+  Object.assign(MODS, NP_MODS);
+  const NP_MOD_KEYS = Object.keys(NP_MODS), NP_MARK_TIER = 2, NP_RESIST = 0.6, NP_PLAGUE = 0.6, NP_IRON = 0.1, ROGUE_PIERCE = 0.25;
+  const PHYS_CLS = { tank: 1, rogue: 1 }, MAGIC_CLS = { mage: 1, necro: 1, healer: 1 };
   // Shielded foes (John, 2026-11-24): while the shield is up the party deals SHIELD_CUT less damage. Every tap knocks
   // SHIELD_TAP off it (a critical tap twice that), and it wears away by itself in SHIELD_DECAY seconds so idle players
   // are never stuck. Guardians raise it once more at half health.
@@ -214,7 +228,7 @@
     { id: 'whet',     name: 'Grim Whetstone',          desc: '+25% strike damage per level',           per: 0.25 },
     { id: 'hourglass',name: 'Cracked Hourglass',       desc: '+10% ability duration per level',        per: 0.10 },
     { id: 'lamp',     name: 'Lamp of the First Delve', desc: '+3s lantern time per level',             per: 3 },
-    { id: 'moth',     name: 'Moth-wing Charm',         desc: '+1% treasure chest chance per level (max 20%)', per: 0.01 },
+    { id: 'moth',     name: 'Moth-wing Charm',         desc: '+0.1% treasure chest chance per level (max 2%)', per: 0.001 },
     { id: 'ledger',   name: 'Ledger of Old Debts',     desc: '-1% training costs per level (max 25%)', per: 0.01 },
     { id: 'dice',     name: 'Bone Dice',               desc: '+2% critical strike chance per level',   per: 0.02 },
     { id: 'lens',     name: 'Deepglass Lens',          desc: '+6% damage to guardians per level',     per: 0.06 },
@@ -477,12 +491,18 @@
   function emberMult(s) { return 1 + EMBER_PER * s.embers; }
   // ---------- New Playthrough (NP+, John 25 Nov 2026, docs/NP-PLUS.md) ----------
   // After the floor 150 guardian a hero can start over at the next tier, NP+1 to NP+10. Each tier makes foes
-  // NP_FOE x tier tougher, gear drops NP_ILVL x tier higher, and gives +NP_PER x tier damage, health and gold.
+  // foes tougher (npFoeHp/npFoeAtk), gear drops NP_ILVL x tier higher, and gives +NP_PER x tier damage, health and gold.
   // The server (infra/lambda/np.js) grants NP_SIGILS once per tier, at least NP_GAP apart, and owns the tier.
-  const NP_MAX = 10, NP_FOE = 0.25, NP_ILVL = 0.1, NP_PER = 0.02, NP_SIGILS = 25, NP_GAP = 7 * 864e5, NP_LOCK = 864e5;
+  const NP_MAX = 10, NP_ILVL = 0.1, NP_PER = 0.02, NP_SIGILS = 25, NP_GAP = 7 * 864e5, NP_LOCK = 864e5;
   function npTier(s) { return Math.max(0, Math.min(NP_MAX, (s && s.np) | 0)); }
   function npT(s) { return npTier(s) || undefined; }
-  function npFoe(s) { return 1 + NP_FOE * npTier(s); }
+  // v125 (John 26 Nov 2026: NP+ must make players build gear, stats and party combos, not blast through): foe health
+  // x(1 + NP_HP x tier) on floor 1, growing with depth by (1 + NP_HP_DEPTH x tier x floor); damage half as steep.
+  // NP+1: health x2 on floor 1, x5 by floor 150. NP+10: x11 on floor 1, about x176 by floor 150.
+  const NP_HP = 1, NP_HP_DEPTH = 0.01, NP_ATK = 0.5, NP_ATK_DEPTH = 0.005;
+  function npFoeHp(s, f) { const n = npTier(s); return n ? (1 + NP_HP * n) * (1 + NP_HP_DEPTH * n * Math.max(1, f || 1)) : 1; }
+  function npFoeAtk(s, f) { const n = npTier(s); return n ? (1 + NP_ATK * n) * (1 + NP_ATK_DEPTH * n * Math.max(1, f || 1)) : 1; }
+  function npFoe(s) { return npFoeHp(s, s && s.floor); }
   function npBonus(s) { return 1 + NP_PER * npTier(s); }
   function npIlvl(s, f) { return npTier(s) ? Math.round(f * (1 + NP_ILVL * npTier(s))) : f; }
   // Gear from an earlier tier can't be worn (no stashing gear on an alt before starting over).
@@ -492,14 +512,14 @@
 
   function maxHpOf(s, id) {
     const m = memberById(id);
-    return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * npBonus(s) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)));
+    return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * npBonus(s) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)) * (1 + renoVal(s, 'hp') + (fxOnW(s, 'globe') ? 0.05 : 0) + (fxOnW(s, 'g2') ? 0.05 : 0)));
   }
   // The Lantern Keeper (John, 2026-11-24): while the store owner's verified account is online, every hero gets
   // +KEEPER to damage, healing, gold, hero XP and gear finds. The page learns it from the server (s.keeper.until).
   const KEEPER = 0.25;
   const keeperOn = s => !!(s.keeper && s.keeper.until > (s.clock || Date.now()));
   const keeperMult = s => keeperOn(s) ? 1 + KEEPER : 1;
-  function partyMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')); }
+  function partyMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')) * (1 + curioColl(s) + renoVal(s, 'dps') + (fxOnW(s, 'g0') ? 0.05 : 0)); }
   // Your own hero hits harder as a tank or healer, so every class can carry a run at a similar pace.
   const HERO_DPS = { tank: 3, healer: 5 };
   function memberDps(s, id, now) {
@@ -518,9 +538,22 @@
   }
   function totalDps(s, now) {
     let d = 0; for (const id of s.party) d += memberDps(s, id, now);
-    return d + minionDps(s, now);
+    return d + minionDps(s, now) * npMarkCls(s, 'necro', 0);
   }
-  function healPerSec(s, id) {
+  // How much of a party member's damage gets through the foe's NP+ marks (1 when it has none).
+  function npMarkCls(s, cls, pierce) {
+    const m = s.foe && s.foe.mods; if (!m || !m.length || s.foe.world) return 1;
+    let x = 1;
+    if (m.includes('stone') && PHYS_CLS[cls]) x *= 1 - NP_RESIST;
+    if (m.includes('runed') && MAGIC_CLS[cls]) x *= 1 - NP_RESIST;
+    if (m.includes('iron')) x *= NP_IRON + (1 - NP_IRON) * Math.min(1, pierce || 0);
+    return x;
+  }
+  const pierceOf = (s, id) => { const m = memberById(id); return Math.min(1, wearVal(s, id, 'pierce') + (m && m.cls === 'rogue' ? ROGUE_PIERCE : 0)); };
+  function npMarkMult(s, id) { const m = memberById(id); return m ? npMarkCls(s, m.cls, pierceOf(s, id)) : 1; }
+  const npHealCut = s => (s.foe && !s.foe.world && s.foe.mods && s.foe.mods.includes('plague') ? 1 - NP_PLAGUE : 1);
+  function healPerSec(s, id) { return healPerSec0(s, id) * npHealCut(s); }
+  function healPerSec0(s, id) {
     if (!id || s.down[id] || !lvl(s, id)) return 0;
     const m = memberById(id); if (m.cls !== 'healer') return 0;
     return (CLASSES.healer.heal * scale(s, id) * gearMult(s, id, 'heal') * (1 + wearVal(s, id, 'heal')) * (1 + relicVal(s, 'censer')) * (1 + EMBER_HP * s.embers) * (1 + FEAT_PER * featCount(s)) * sidePerk(s, 'heal') * (1 + campBonus(s, 'heal')) * (1 + sk(s, 'pheal') + (id === 'you' ? sk(s, 'heal') : 0))) * keeperMult(s) * (1 - ghostSap(s, 'heal')) * (s.cc && ccOf(s, id) ? (ccOf(s, id).k === 'stun' ? 0 : CC.disarm.heal) : 1);
@@ -537,12 +570,24 @@
   const oom = (s, id) => !!(s.oom && s.oom[id]);
   function clickDamage(s, now) { return (1 + totalDps(s, now) * 0.05) * (1 + relicVal(s, 'whet')); }
   function goldMult(s) { return keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'gold')) * (1 + gearGold(s)) * (1 + kup(s, 'purse')) * (1 + relicVal(s, 'locket')) * sidePerk(s, 'gold') * (1 + campBonus(s, 'gold')) * (1 + sk(s, 'gold')); }
-  function critChance(s) { return 0.04 + relicVal(s, 'dice') + sk(s, 'crit'); }
-  function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern'); }
+  function critChance(s) { return 0.04 + relicVal(s, 'dice') + sk(s, 'crit') + (fxOnW(s, 'die') ? 0.06 : 0) + (fxOnW(s, 'g1') ? 0.03 : 0); }
+  function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern') + (fxOnW(s, 'glass') ? 10 : 0); }
   // Capped (v124 fix): the Moth-wing Charm had no cap, so a hero who kept re-beating the Lampmother stacked it past
   // 97 levels and every fight became a Treasure Chest (Chipplin, 25 Nov 2026: +380M gold a second at floor 149/150).
-  const MOTH_MAX = 0.2, CHEST_MAX = 0.25;
-  function chestChance(s) { return Math.min(CHEST_MAX, 0.03 + Math.min(MOTH_MAX, relicVal(s, 'moth')) + sk(s, 'chest')); }
+  // v125 (John, 25 Nov 2026: "Chests should have a really low spawn rate... All events should have a low spawn rate.
+  // Even a percentage a day cap would be good on top of it"): base 3% -> 1%, charm +2% max, 4% total, plus EV_DAY caps.
+  const CHEST_BASE = 0.01, MOTH_MAX = 0.02, CHEST_MAX = 0.04;
+  function chestChance(s) { return Math.min(CHEST_MAX, CHEST_BASE + Math.min(MOTH_MAX, relicVal(s, 'moth')) + sk(s, 'chest')); }
+  // Daily caps on random events, per hero, reset at UTC midnight like the daily quests. Once a cap is hit that event
+  // stops showing up until tomorrow (a normal foe takes its place). The Admin event spawner ignores the caps.
+  const EV_DAY = { chest: 40, pack: 60, lock: 20, goblin: 6, ghost: 12, merchant: 8, mercy: 6 };
+  function evDay(s, now) {
+    const d = new Date(now || s.clock || Date.now()).toISOString().slice(0, 10);
+    if (!s.evd || s.evd.d !== d) s.evd = { d, n: {} };
+    return s.evd;
+  }
+  const evOk = (s, k, now) => (evDay(s, now).n[k] || 0) < EV_DAY[k];
+  function evUse(s, k, now) { const e = evDay(s, now); e.n[k] = (e.n[k] || 0) + 1; }
   function abilityDuration(s, ab) { return ab.dur * (1 + relicVal(s, 'hourglass')); }
 
   // ---------- Skill trees ----------
@@ -564,7 +609,7 @@
     ],
     rogue: [
       { b: 'Shadow', s: [SK('Light Feet', 'dodge', 0.03, 3, '+{v} dodge chance for your hero'), SK('Quick Hands', 'dps', 0.15, 3, '+{v} damage for your hero'), SK('Vanish', 'cd', 0.35, 1, 'Backstab comes back 35% sooner')] },
-      { b: 'Fortune', s: [SK('Sticky Fingers', 'gold', 0.08, 3, '+{v} gold'), SK('Keen Eye', 'loot', 0.06, 3, '+{v} gear drop chance'), SK('Lockpick', 'chest', 0.02, 1, '+2% treasure chest chance')] },
+      { b: 'Fortune', s: [SK('Sticky Fingers', 'gold', 0.08, 3, '+{v} gold'), SK('Keen Eye', 'loot', 0.06, 3, '+{v} gear drop chance'), SK('Lockpick', 'chest', 0.01, 1, '+1% treasure chest chance')] },
       { b: 'Edge', s: [SK('Find the Gap', 'crit', 0.02, 3, '+{v} critical strike chance'), SK('Coordinated Strike', 'pdps', 0.04, 3, '+{v} party damage'), SK('Killing Blow', 'power', 1, 1, 'Backstab hits twice as hard')] },
     ],
     mage: [
@@ -648,7 +693,7 @@
     { id: 'con', name: 'Constitution', short: 'CON', desc: 'party health',                fx: { php: 0.008 } },
     { id: 'int', name: 'Intelligence', short: 'INT', desc: 'ability power and damage',    fx: { power: 0.01, pdps: 0.002 } },
     { id: 'wis', name: 'Wisdom',       short: 'WIS', desc: 'healing and ability cooldowns', fx: { pheal: 0.008, cd: 0.003 } },
-    { id: 'cha', name: 'Charisma',     short: 'CHA', desc: 'gold from every fight',       fx: { gold: 0.008 } },
+    { id: 'cha', name: 'Charisma',     short: 'CHA', desc: 'gold from every fight and lower hire wages', fx: { gold: 0.008 } },
     { id: 'lck', name: 'Luck',         short: 'LCK', desc: 'a little of everything: loot, chests, crits, gold, Sigils and ambush spoils', fx: { loot: 0.005, chest: 0.0002, crit: 0.0005, gold: 0.003, sig: 0.000002, spoils: 0.01 } },
   ];
   const STAT_CLASS = { tank: ['str', 'con'], healer: ['wis', 'cha'], rogue: ['dex', 'lck'], mage: ['int', 'wis'], necro: ['int', 'con'] };
@@ -776,7 +821,7 @@
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    return Math.min(4, d / (foeHp(f, false) * npFoe(s))) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
+    return Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f))) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
   const incCache = new WeakMap();
   function npcIncomeMin(s, now) {
@@ -821,14 +866,36 @@
   function npcWageParts(s, id) {
     const h = s.hires && s.hires[id]; if (!h) return [];
     const lv = lvl(s, id), d = gearMult(s, id, 'dps') - 1, hp = gearMult(s, id, 'hp') - 1, base = npcWageAt(h.rar, 1, 0, 0), atLv = npcWageAt(h.rar, lv, 0, 0), withD = npcWageAt(h.rar, lv, d, 0);
-    return [['Base fee', base], ['Power level ' + lv, atLv - base], ['Gear damage', withD - atLv], ['Gear health', npcWageAt(h.rar, lv, d, hp) - withD]];
+    const w = wageOf(s, h.rar, lv, d, hp), out = [['Base fee', base], ['Power level ' + lv, atLv - base], ['Gear damage', withD - atLv], ['Gear health', w.stat - withD]];
+    if (w.capped) out.push(['Capped at ' + Math.round(WAGE_CAP[h.rar] * 100) + '% of income', w.cap - w.stat]);
+    if (w.relief > 0) out.push(['Your wage relief ' + Math.round(w.relief * 100) + '%', -Math.min(w.stat, w.cap) * w.relief]);
+    return out;
   }
   // An offer's wage once hired: the power level they would join at, with no gear yet.
   function npcOfferWage(s, o) {
     const lv = o.lv || s.levels[o.id] || (LEGENDS.includes(o.id) ? 1 : 0) || Math.max(1, Math.round(Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))) * npcRar(o.rar).lvF));
-    return npcWageAt(o.rar, lv, 0, 0);
+    return wageOf(s, o.rar, lv, 0, 0).wage;
   }
-  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return npcWageAt(h.rar, lvl(s, id), gearMult(s, id, 'dps') - 1, gearMult(s, id, 'hp') - 1); };
+  // v125 (John, 25 Nov 2026): a hire's wage never passes WAGE_CAP of your steady income an hour (the NPC Guild's
+  // yardstick, npcIncomeMin), so a party whose power level ran ahead of its floor can still keep one. Below that,
+  // the player earns the wage down with the game's own systems (John: push players to stats, camp, gear and
+  // region masteries): every region with all three mastery stars, Charisma points and a Quartermaster at camp
+  // each take a share off, together at most WAGE_RELIEF_MAX.
+  const WAGE_CAP = { common: 0.03, uncommon: 0.06, rare: 0.15, epic: 0.3, legendary: 0.4 };
+  const WAGE_RELIEF_MAST = 0.02, WAGE_RELIEF_CHA = 0.004, WAGE_RELIEF_MAX = 0.5;
+  function wageRelief(s) {
+    let full = 0; for (const r in (s.mast || {})) if (masteryStars(s, r) === 3) full++;
+    const cha = ((s.attr || {}).cha || 0) * WAGE_RELIEF_CHA * ((STAT_CLASS[heroCls(s)] || []).includes('cha') ? STAT_AFFINITY : 1);
+    const parts = [['Region mastery (' + full + ' full region' + (full === 1 ? '' : 's') + ')', full * WAGE_RELIEF_MAST], ['Charisma', cha], ['Quartermaster at camp', campBonus(s, 'wage')]].filter(x => x[1] > 1e-9);
+    return { parts, total: Math.min(WAGE_RELIEF_MAX, parts.reduce((a, x) => a + x[1], 0)) };
+  }
+  const wageCapAt = (s, rar) => (WAGE_CAP[rar] || WAGE_CAP.common) * npcIncomeMin(s) * 60;
+  // The stat wage, the income cap, and what the player's relief takes off: { stat, cap, capped, relief, wage }.
+  function wageOf(s, rar, lv, dpsPct, hpPct) {
+    const stat = npcWageAt(rar, lv, dpsPct, hpPct), cap = wageCapAt(s, rar), relief = wageRelief(s).total, base = Math.min(stat, cap);
+    return { stat, cap, capped: stat > cap, relief, wage: base * (1 - relief) };
+  }
+  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return wageOf(s, h.rar, lvl(s, id), gearMult(s, id, 'dps') - 1, gearMult(s, id, 'hp') - 1).wage; };
   const wagesPerHour = s => Object.keys(s.hires || {}).reduce((a, id) => a + wagePerHour(s, id), 0);
   const legendBeat = id => STORY.find(b => b.join === id);
   function npcReq(s, o) {
@@ -1022,7 +1089,7 @@
     if (!s.hero) return 0;
     const base = (1 + s.floor / 25) * (foe.boss ? 15 : foe.chest ? 2 : foe.elite ? 4 : 1) * (foe.pack ? foe.pack * PACK_XP : 1);
     const before = heroLevel(s).lv;
-    const xp = base * (1 + sk(s, 'xp') + masteryXp(s) + beastBonus(s, foe)) * keeperMult(s);
+    const xp = base * (1 + sk(s, 'xp') + masteryXp(s) + beastBonus(s, foe) + renoVal(s, 'xp') + (fxOnW(s, 'hat') ? 0.15 : 0)) * keeperMult(s);
     s.hxp += xp;
     const after = heroLevel(s).lv;
     if (after > before && events) events.push({ type: 'herolevel', lv: after, from: before, pts: pointsFor(after) - pointsFor(before) });
@@ -1272,9 +1339,10 @@
     if (it.slot === 'weapon') it.slot = 'main';
     else if (it.slot === 'armor') it.slot = CLOTH[it.cls] && !it.set ? 'robe' : 'chest';
     else if (it.slot === 'trinket') it.slot = 'neck';
+    if (it.wb != null && it.rar === 'legend') it.rar = 'mythic'; // v125: world boss gear is Mythic, above Legendary
     if (!it.ty || !ITYPES[it.ty]) it.ty = tyOf(Object.assign({}, it, { ty: null }));
     if (typeof it.en !== 'string') { if (it.uid) rollEnch(it, seeded(it.uid)); else it.en = ''; }
-    else if (enchList(it).length > sockets(it) || !/^([a-l][1-9])*$/.test(it.en)) it.en = enchStr(enchList(it).slice(0, sockets(it)));
+    else if (enchList(it).length > sockets(it) || !/^([a-m][1-9])*$/.test(it.en)) it.en = enchStr(enchList(it).slice(0, sockets(it)));
     return it;
   }
   const RARITY = [
@@ -1285,6 +1353,7 @@
     { id: 'set',    name: 'Set',    pct: 0.18, w: 0,  prefix: '' },
     { id: 'goblin', name: 'Goblin', pct: 0.26, w: 0,  prefix: '' },
     { id: 'legend', name: 'Legendary', pct: 0.34, w: 0, prefix: '' },
+    { id: 'mythic', name: 'Mythic', pct: 0.5, w: 0, prefix: '' },
   ];
   // Region sets (John, 2026-11-23): every region of the Deep drops its own four-piece armor set, for any class.
   // Pieces only drop on that region's floors and only rarely (guardians are the best bet), so a full set is a long
@@ -1318,10 +1387,24 @@
     { word: 'Sovereign', name: 'The Hollow Sovereign’s Court',  k: 'dps',  piece: { main: 'Scepter-Blade', chest: 'Mantle',       ring: 'Crown-Ring', neck: 'Torc' }, lore: 'The Sovereign ruled nothing but echoes. Its court regalia still answers to a command.' },
     { word: 'Nyxmaw',    name: 'Maw-Tooth Panoply',              k: 'heal', piece: { main: 'Fang',          chest: 'Hide',         ring: 'Coil',    neck: 'Tooth' }, lore: 'Pulled from the Maw of the Nyx. It mends what it once would have devoured.' },
     { word: 'Leviathan', name: 'Ashen Leviathan’s Hoard',        k: 'gold', piece: { main: 'Harpoon',       chest: 'Scaleguard',   ring: 'Band',    neck: 'Pearl' }, lore: 'Treasure from the belly of the ash-whale, still warm, still smelling of smoke.' },
+    // v125: the Golden Loot Goblin's rings (NP+ only, never from a world boss or the Rift Gate). Five rings, one per
+    // ring slot, each with its own power (GG_RINGS); set bonuses in wbBonus. Upgraded with Gilded shards (shards[GG]).
+    { word: 'Gilded', name: 'The Golden Goblin’s Hoard', k: 'gg', piece: { ring: 'Ring' }, lore: 'Every ring still smells faintly of mimic. The goblin bit each one to check it was real.' },
   ];
+  const GG = 4, WB_BOSSES = 4, GG_DUP = 10;
+  const GG_RINGS = [
+    { name: 'Grinning Band', fx: '+5% party damage' },
+    { name: 'Coinbiter Loop', fx: '+3% critical chance for the party' },
+    { name: 'Gilt-Tooth Ring', fx: '+5% party health' },
+    { name: 'Pickpocket’s Coil', fx: '+10% gear finds' },
+    { name: 'Goblin King’s Signet', fx: 'The Loot Goblin can never steal from your pack' },
+  ];
+  const GG_TWO = 0.1, GG_THREE = 0.1, GG_FIVE = 0.25;
   const WB_SLOTS = ['main', 'chest', 'ring', 'neck'];
-  const WB_PCT = 0.34, WB_TWO = { hp: 0.15, dps: 0.15, heal: 0.15, gold: 0.25 }, WB_FOUR = 0.3;
-  const wbUpCost = it => (it.up || 0) + 1; // boss shards of that boss to raise a Legendary one level
+  // v125 (John, 25 Nov 2026): boss gear is Mythic, above Legendary: rare, slow to finish and much stronger than anything
+  // else. Upgrades cost twice the shards (110 to reach +10), and each boss only comes round every fourth weekend.
+  const WB_PCT = 0.5, WB_TWO = { hp: 0.2, dps: 0.2, heal: 0.2, gold: 0.3 }, WB_FOUR = 0.45;
+  const wbUpCost = it => 2 * ((it.up || 0) + 1); // boss shards of that boss to raise a Mythic one level
   const RSET_PIECE = {
     plate:   { head: 'Helm', chest: 'Hauberk',  legs: 'Greaves',   feet: 'Sabatons' },
     leather: { head: 'Hood', chest: 'Jerkin',   legs: 'Breeches',  feet: 'Boots' },
@@ -1373,6 +1456,8 @@
   const itemScore = it => { const w = weightOf(it); return gearPct(it) * (w.dps + w.hp); };
   function gearName(it) {
     if (it.rar === 'goblin') return 'Loot Goblin’s Sack';
+    if (it.wb === GG && GG_RINGS[it.gr]) return GG_RINGS[it.gr].name;
+    if (it.cu && curioById(it.cu)) return curioById(it.cu).name;
     if (it.wb != null && WB_SETS[it.wb]) return WB_SETS[it.wb].word + ' ' + WB_SETS[it.wb].piece[it.slot === 'robe' ? 'chest' : it.slot];
     if (it.rset != null && REGION_SETS[it.rset]) return REGION_SETS[it.rset].word + ' ' + rsetPiece(it);
     if (it.jset) return JOB_SETS[it.jset].pieces[it.slot];
@@ -1419,9 +1504,13 @@
   }
   // Region set drop odds, before Loot bonuses.
   // Set pieces are rarer since v121 (John, 2026-11-25: "they are dropping pretty easily"): every set chance is halved.
-  const SET_RATE = 0.5;
+  // v125 (John, 2026-11-25: "set items should still be harder to get ... it's becoming common"): region set pieces
+  // are halved again (one piece still earns a region's third mastery star) and class and job set pieces drop at a
+  // quarter of the v121 rate. Baseline before: John's save had 117 set pieces after 32 h (59 region, 31 class, 27 job),
+  // about one per 25 guardians.
+  const SET_RATE = 0.25, SET_RATE_KIT = 0.125;
   const RSET_DROP = { boss: 0.025 * SET_RATE, chest: 0.006 * SET_RATE, elite: 0.0015 * SET_RATE, pack: 0.0004 * SET_RATE, foe: 0.00005 * SET_RATE };
-  const JSET_BOSS = 0.03 * SET_RATE, JSET_CHEST = 0.008 * SET_RATE, CSET_BOSS = 0.06 * SET_RATE;
+  const JSET_BOSS = 0.03 * SET_RATE_KIT, JSET_CHEST = 0.008 * SET_RATE_KIT, CSET_BOSS = 0.06 * SET_RATE_KIT;
   function rollJobSet(s, f, r) {
     const classes = Array.from(new Set(s.party.filter(Boolean).map(id => memberById(id).cls)));
     const cls = classes.length ? classes[Math.floor(r() * classes.length)] : CLASS_ORDER[Math.floor(r() * 5)];
@@ -1435,7 +1524,7 @@
   const BOH_COST = 6500;
   const bagCap = s => s.boh ? Infinity : GEAR_CAP + BAG_STEP * (s.bagUps || 0) + (passOn(s) ? PASS_BAG : 0);
   function dropGear(s, foe, rng, events) {
-    const r = rng || Math.random, f = s.floor, loot = 1 + campBonus(s, 'loot') + sk(s, 'loot');
+    const r = rng || Math.random, f = s.floor, loot = 1 + campBonus(s, 'loot') + sk(s, 'loot') + renoVal(s, 'loot') + (fxOnW(s, 'g3') ? 0.1 : 0);
     let it = null;
     const rk = foe.boss ? 'boss' : foe.chest ? 'chest' : foe.elite ? 'elite' : foe.pack ? 'pack' : 'foe';
     if (!foe.goblin && r() < RSET_DROP[rk] * loot) it = rollRegionSet(s, f, r);
@@ -1609,7 +1698,7 @@
   }
   const salvageValue = it => foeGold(Math.max(1, it.ilvl), false) * 3 * (1 + RARITY.findIndex(r => r.id === it.rar)) * (1 + it.up);
   // Dust (John, 2026-11-23): scrapping gear also gives Dust, more for rarer and deeper pieces. Moving an enchant costs Dust.
-  const DUST = { common: 1, fine: 3, rare: 8, epic: 20, set: 15, goblin: 60, legend: 100 };
+  const DUST = { common: 1, fine: 3, rare: 8, epic: 20, set: 15, goblin: 60, legend: 100, mythic: 160 };
   const dustValue = it => Math.max(1, Math.round((DUST[it.rar] || 1) * (1 + it.ilvl / 25) * (1 + 0.25 * (it.up || 0))));
   const enchCost = x => 5 * x.t * x.t;
   function salvage(s, uid) {
@@ -1637,18 +1726,20 @@
     j: { name: 'Leech',   k: 'leech',   v: 0.004,  cap: 0.08, fmt: 'pct', what: 'life steal', per: 1 },
     k: { name: 'Bulwark', k: 'block',   v: 0.005,  cap: 0.25, fmt: 'pct', what: 'block chance', per: 1 },
     l: { name: 'Plating', k: 'def',     v: 0.006,  cap: 0.3,  fmt: 'pct', what: 'defense', per: 1 },
+    // NP+ only (v126): only rolls on gear that dropped at NP+2 or deeper. Breaks Ironclad plate for the wearer.
+    m: { name: 'Piercing', k: 'pierce', v: 0.1,    cap: 0.9,  fmt: 'pct', what: 'armor piercing against Ironclad foes', per: 1, np: 2 },
   };
   const ENCH_KEYS = Object.keys(ENCH), ENCH_MAX = 4;
   // Rings and trinkets lean toward regen and life steal; armor leans toward block and defense; weapons toward life steal.
   const ENCH_BIAS = { ring: ['i', 'i', 'j'], neck: ['i', 'j', 'j'], main: ['j', 'j'], off: ['k', 'k', 'l'], chest: ['l', 'l', 'k'], robe: ['l', 'i'], head: ['l', 'k'], legs: ['l', 'k'], feet: ['k', 'i'] };
-  const SOCK_BASE = { common: 0, fine: 1, rare: 2, epic: 3, set: 2, goblin: 3, legend: 3 }, ENCH_FILL = { common: 0.3, fine: 0.4, rare: 0.5, epic: 0.7, set: 0.5, goblin: 0.8, legend: 0.9 };
+  const SOCK_BASE = { common: 0, fine: 1, rare: 2, epic: 3, set: 2, goblin: 3, legend: 3, mythic: 4 }, ENCH_FILL = { common: 0.3, fine: 0.4, rare: 0.5, epic: 0.7, set: 0.5, goblin: 0.8, legend: 0.9, mythic: 1 };
   const sockets = it => Math.min(ENCH_MAX, (SOCK_BASE[it.rar] || 0) + (it.ilvl >= 30 ? 1 : 0) + (it.ilvl >= 80 ? 1 : 0));
   const enchList = it => { const o = [], e = it && it.en || ''; for (let i = 0; i + 1 < e.length; i += 2) if (ENCH[e[i]]) o.push({ id: e[i], t: +e[i + 1] }); return o; };
   const enchStr = l => l.map(x => x.id + x.t).join('');
-  const enchTierMax = it => Math.min(9, 1 + Math.floor(it.ilvl / 12) + (it.rar === 'epic' || it.rar === 'set' || it.rar === 'goblin' || it.rar === 'legend' ? 1 : 0));
+  const enchTierMax = it => Math.min(9, 1 + Math.floor(it.ilvl / 12) + (it.rar === 'epic' || it.rar === 'set' || it.rar === 'goblin' || it.rar === 'legend' ? 1 : it.rar === 'mythic' ? 2 : 0));
   function rollEnch(it, r) {
     let e = ''; const n = sockets(it), tm = enchTierMax(it);
-    const pool = ENCH_KEYS.concat(ENCH_BIAS[it.slot] || []);
+    const pool = ENCH_KEYS.filter(k => !ENCH[k].np || (it.t | 0) >= ENCH[k].np).concat(ENCH_BIAS[it.slot] || []);
     for (let i = 0; i < n; i++) if (r() < (ENCH_FILL[it.rar] || 0)) e += pool[Math.floor(r() * pool.length)] + (1 + Math.floor(r() * tm));
     it.en = e; return it;
   }
@@ -1809,25 +1900,30 @@
   }
   function wbBonus(s, id, kind) {
     const c = wbCounts(s, id), cls = memberById(id).cls; let v = 0;
+    const gn = c[GG] || 0, gk = kind === 'dps' || kind === 'hp' || (kind === 'heal' && cls === 'healer');
+    if (gn >= 2 && (kind === 'dps' || (kind === 'heal' && cls === 'healer'))) v += GG_TWO;
+    if (gn >= 3 && kind === 'hp') v += GG_THREE;
+    if (gn >= 5 && gk) v += GG_FIVE;
     for (const i in c) {
+      if (+i === GG) continue;
       const n = c[i], k = WB_SETS[i] && WB_SETS[i].k; if (!k || n < 2) continue;
       if (k === kind || (k === 'heal' && kind === 'hp' && cls !== 'healer')) v += WB_TWO[k];
       if (n >= 4 && (kind === 'dps' || kind === 'hp' || (kind === 'heal' && cls === 'healer'))) v += WB_FOUR;
     }
     return v;
   }
-  const shardsOf = s => { if (!Array.isArray(s.shards)) s.shards = [0, 0, 0, 0]; return s.shards; };
+  const shardsOf = s => { if (!Array.isArray(s.shards)) s.shards = [0, 0, 0, 0, 0]; while (s.shards.length < WB_SETS.length) s.shards.push(0); return s.shards; };
   // A Legendary from world boss b, for the hero's class, at the player's deepest depth.
   // The winner can always wear it: item level follows their deepest floor, capped by the hero's level.
   function makeLegend(s, b, rng) {
     const r = rng || Math.random, cls = heroCls(s) || 'tank', slot = WB_SLOTS[Math.floor(r() * WB_SLOTS.length)];
-    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: slot === 'chest' && CLOTH[cls] ? 'robe' : slot, rar: 'legend', wb: b, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0, t: npT(s) }, r);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: slot === 'chest' && CLOTH[cls] ? 'robe' : slot, rar: 'mythic', wb: b, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0, t: npT(s) }, r);
   }
   // Rift tokens (v120, John): every world boss pays tokens for your damage (loot.js); WB_TOKEN_COST buys a Legendary
   // piece of any boss set, so every delver gets there in the end and stronger parties get there sooner.
-  const WB_TOKEN_COST = 40;
+  const WB_TOKEN_COST = 150; // v125: was 40. A long grind on purpose (John)
   function buyLegend(s, b, rng) {
-    if (!s.hero || !WB_SETS[b] || (s.wbTok || 0) < WB_TOKEN_COST) return null;
+    if (!s.hero || !WB_SETS[b] || b >= WB_BOSSES || (s.wbTok || 0) < WB_TOKEN_COST) return null;
     s.wbTok -= WB_TOKEN_COST; const it = makeLegend(s, b, rng); s.bag.push(it); s.stats.legends = (s.stats.legends || 0) + 1;
     return it;
   }
@@ -2045,6 +2141,7 @@
     { id: 'armor', name: 'Armorer', stat: 'hp', aff: 'tank', base: 0.02, icon: 'shield', fmt: 'party health', desc: 'Hammers dents out of shields and straps on spare plate.' },
     { id: 'prospect', name: 'Prospector', stat: 'gold', aff: 'rogue', base: 0.025, icon: 'coin', fmt: 'gold', desc: 'Pans the underground streams for coin the dead left behind.' },
     { id: 'lamp', name: 'Lamplighter', stat: 'lamp', aff: 'necro', base: 0.35, icon: 'lamp', fmt: 'lantern oil per guardian', desc: 'Trims the wick and rations the oil.' },
+    { id: 'quarter', name: 'Quartermaster', stat: 'wage', aff: 'tank', base: 0.01, icon: 'coin', fmt: 'off hire wages', desc: 'Keeps the Guild Hall ledgers and haggles every hire\u2019s wage down.' },
   ];
   // Extra job output from what a companion wears: job affixes plus a job set.
   function jobGear(s, id, jid) {
@@ -2169,18 +2266,18 @@
   // Called when a new foe is due. Returns a Mercy Corps encounter, or null for a normal foe.
   function mercyFoe(s, now, rng) {
     const r = rng || Math.random, f = s.floor;
-    if (f < MERCY_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now) || now < (s.mercyNext || 0) || !mercyActive(s, now)) return null;
+    if (f < MERCY_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now) || now < (s.mercyNext || 0) || !mercyActive(s, now) || !evOk(s, 'mercy', now)) return null;
     if (s.goblin && s.goblin.item && f >= s.goblin.floor) return null;
     const who = MERCY_NAMES[Math.floor(r() * MERCY_NAMES.length)], roll = r(), heal = partyHeal(s);
     if (heal > 0 && roll < WOUNDED_CHANCE) {
       const max = Math.max(200, heal * AID_SEC / 0.9);
-      s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1;
+      s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1; evUse(s, 'mercy', now);
       return { name: who + ', wounded', who, wounded: 1, sprite: 'healer', boss: false, chest: false, elite: false, side: null, ambush: 0, pack: 0, hp: max * 0.1, max, hue: 0, atk: 0, mods: [], ward: 0, wardAt: 0, aidT: 0, sp: null };
     }
     if (roll >= WOUNDED_CHANCE && roll < WOUNDED_CHANCE + RESCUE_CHANCE) {
       const foe = makeFoe(s, r); if (foe.boss || foe.chest || foe.goblin || foe.pack || foe.world) return foe;
       foe.rescue = who; foe.hp *= 1.5; foe.max = foe.hp;
-      s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1;
+      s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1; evUse(s, 'mercy', now);
       return foe;
     }
     return null;
@@ -2190,21 +2287,33 @@
     s.mercyAid = Math.max(now, s.mercyAid || 0) + MERCY_MIN * 60000; s.stats.aided = (s.stats.aided || 0) + 1;
     s.foe = null; s.foeGap = now + 900; events && events.push({ type: 'aided', who: f.who }); return true;
   }
-  // NP+: every foe outside the shared world boss fight is NP_FOE x tier tougher and hits that much harder.
+  // NP+: every foe outside the shared world boss fight is tougher and hits harder (npFoeHp / npFoeAtk).
   function makeFoe(s, rng) {
-    const foe = makeFoe0(s, rng), m = npFoe(s);
-    if (m > 1 && foe && !foe.world && !foe.wounded && !foe.lock) { foe.hp *= m; foe.max *= m; foe.atk *= m; }
+    const foe = makeFoe0(s, rng), mh = npFoeHp(s, s.floor), ma = npFoeAtk(s, s.floor);
+    if (mh > 1 && foe && !foe.world && !foe.wounded && !foe.lock) { foe.hp *= mh; foe.max *= mh; foe.atk *= ma; if (!foe.chest && !foe.goblin) npMark(s, foe, rng); }
     return foe;
+  }
+  // NP+ marks: from NP+2 a share of monsters (15% per tier past 1, at most 75%) carries one mark, two from NP+6.
+  // Guardians always carry one, two from NP+5, three from NP+8. Stoneskin and Spellproof never come together.
+  function npMark(s, foe, rng) {
+    const n = npTier(s), r = rng || Math.random; if (n < NP_MARK_TIER) return;
+    const k = foe.boss ? (n >= 8 ? 3 : n >= 5 ? 2 : 1) : r() < Math.min(0.75, 0.15 * (n - 1)) ? (n >= 6 ? 2 : 1) : 0;
+    let pool = NP_MOD_KEYS.slice(); foe.mods = foe.mods || [];
+    for (let i = 0; i < k && pool.length; i++) {
+      const m = pool[Math.floor(r() * pool.length)]; foe.mods.push(m);
+      pool = pool.filter(x => x !== m && !(m === 'stone' && x === 'runed') && !(m === 'runed' && x === 'stone'));
+    }
   }
   function makeFoe0(s, rng) {
     const f = s.floor, boss = isBossFloor(f), r = rng || Math.random;
     if (s.wb && s.wb.until > (s.clock || Date.now())) return wbFoe(s);
     if (!boss) {
       if (s.goblin && s.goblin.item && f >= s.goblin.floor) return goblinFoe(s, true);
-      if (!s.goblin && f >= GOBLIN_FLOOR && r() < GOBLIN_CHANCE && s.bag.some(it => !it.lk && !wearer(s, it.uid))) return goblinFoe(s, false);
+      if (!s.goblin && f >= GOBLIN_FLOOR && r() < GOBLIN_CHANCE && evOk(s, 'goblin') && s.bag.some(it => !it.lk && !wearer(s, it.uid))) { evUse(s, 'goblin'); return goblinFoe(s, false); }
     }
-    if (!boss && f >= LOCK_FLOOR && r() < LOCK_CHANCE) return lockFoe(r);
-    const chest = !boss && r() < chestChance(s);
+    if (!boss && f >= LOCK_FLOOR && r() < LOCK_CHANCE && evOk(s, 'lock')) { evUse(s, 'lock'); return lockFoe(r); }
+    const chest = !boss && r() < chestChance(s) && evOk(s, 'chest');
+    if (chest) evUse(s, 'chest');
     const b = biomeOf(f);
     let sprite, name;
     if (boss) {
@@ -2220,7 +2329,8 @@
     // Some foes sneak up and hit the back of the line first.
     let ambush = !boss && !chest && f >= 6 && r() < (elite ? 0.3 : 0.1) ? 2 : 0;
     // Ambush encounter: now and then a few monsters team up and jump the party. Tougher, but the spoils are rich.
-    const pack = !boss && !chest && f >= PACK_FLOOR && r() < PACK_CHANCE ? 2 + Math.floor(r() * 3) : 0;
+    const pack = !boss && !chest && f >= PACK_FLOOR && r() < PACK_CHANCE && evOk(s, 'pack') ? 2 + Math.floor(r() * 3) : 0;
+    if (pack) evUse(s, 'pack');
     let hpx = hp;
     if (pack) { hpx = hp * pack * 0.85; ambush = 2; }
     const mods = chest ? [] : rollMods(f, boss, elite, b, r);
@@ -2232,7 +2342,7 @@
   // Rogue can pick it (LOCK_TIME seconds, faster with taps; a stunned or fallen Rogue pauses it). A door hides gold, a
   // chest hides Dust, and either has a LOCK_SIGIL chance of one Sigil, banked through the server's daily cap for found
   // Sigils like chests and guardians. Without a Rogue the party walks past after LOCK_SKIP seconds.
-  const LOCK_FLOOR = 10, LOCK_CHANCE = 0.02, LOCK_TIME = 5, LOCK_TAP = 0.35, LOCK_SKIP = 4, LOCK_SIGIL = 0.01, LOCK_GOLD = 8;
+  const LOCK_FLOOR = 10, LOCK_CHANCE = 0.01, LOCK_TIME = 5, LOCK_TAP = 0.35, LOCK_SKIP = 4, LOCK_SIGIL = 0.01, LOCK_GOLD = 8;
   const lockFoe = r => { const door = r() < 0.5; return { lock: door ? 'door' : 'chest', name: door ? 'Locked Door' : 'Locked Chest', sprite: door ? 'door' : 'lockbox', hp: 100, max: 100, atk: 0, mods: [], sp: null, pick: 0, wait: 0, hue: 0, ambush: 0, pack: 0, ward: 0, wardAt: 0 }; };
   const lockRogue = s => s.party.find(id => id && memberById(id).cls === 'rogue') || null;
   const lockDust = (s, f) => Math.round((10 + f * 1.2) * npBonus(s));
@@ -2250,8 +2360,8 @@
     lockPick(s, dt, now, rng, events);
   }
   function lockPick(s, sec, now, rng, events) {
-    const f = s.foe; f.pick += sec; f.hp = Math.max(1, f.max * (1 - f.pick / LOCK_TIME));
-    if (f.pick < LOCK_TIME) return;
+    const f = s.foe, lt = LOCK_TIME * (fxOnW(s, 'key') ? 0.5 : 1); f.pick += sec; f.hp = Math.max(1, f.max * (1 - f.pick / lt));
+    if (f.pick < lt) return;
     const fl = s.floor, r = rng || Math.random, out = { type: 'lockopen', k: f.lock, gold: 0, dust: 0, sigil: 0, id: lockRogue(s) };
     if (f.lock === 'door') { out.gold = lockGold(s, fl); s.gold += out.gold; s.stats.goldEarned += out.gold; }
     else { out.dust = lockDust(s, fl); s.dust = (s.dust || 0) + out.dust; }
@@ -2264,7 +2374,7 @@
   }
   // Loot Goblin: a rare thief that fights back. Kill it before it flees, or it runs off with one unworn item from the pack
   // and hides a few floors deeper. Find it there and kill it to win the item back. Worn gear is never taken.
-  const GOBLIN_FLOOR = 8, GOBLIN_CHANCE = 0.006, GOBLIN_TIME = 20, GOBLIN_GOLD = 6;
+  const GOBLIN_FLOOR = 8, GOBLIN_CHANCE = 0.003, GOBLIN_TIME = 20, GOBLIN_GOLD = 6;
   const goblinHide = (s, r) => { const f = s.floor + 2 + Math.floor(r() * 4); return actTwoOpen() ? f : Math.min(ACT_ONE_END, f); };
   function goblinFoe(s, carrying) {
     // Tough enough that idle damage alone barely gets there in time: strikes and abilities make the difference.
@@ -2273,6 +2383,7 @@
   }
   // Picks what the goblin grabs: any unworn item, better ones more likely.
   function goblinGrab(s, r) {
+    if (fxOnW(s, 'g4')) return null; // the Goblin King's Signet
     const pool = s.bag.filter(it => !it.lk && !wearer(s, it.uid)); if (!pool.length) return null;
     const w = pool.map(it => 1 + 2 * Math.max(0, RARITY.findIndex(x => x.id === it.rar)));
     let x = r() * w.reduce((a, b) => a + b, 0);
@@ -2299,7 +2410,7 @@
   // weak to one (WB_TRAITS, index = wbBoss(id), same order as WB_NAMES and loot.js), and it hits harder and uses a
   // special attack. One assault counts at most WB_CEIL monsters' worth of your deepest floor (the server checks the
   // same against your hero's floor). The preview event (2026-11-23) keeps the old monsters'-worth scoring.
-  const WB_HP1R = 1e9, WB_CEIL = 150, WB_NPC = 0.5, WB_WEAK = 0.3, WB_RESIST = 0.3, WB_ATK = 1.3;
+  const WB_HP1R = 1e9, WB_CEIL = 600, WB_NPC = 0.5, WB_WEAK = 0.3, WB_RESIST = 0.3, WB_ATK = 1.3;
   const WB_TRAITS = [
     { weak: 'mage', resist: ['tank', 'rogue'], sp: 'shards', trait: 'Crystal hide', line: 'Blades skid off its void crystal, but spells crack it.' },
     { weak: 'healer', resist: ['necro', 'mage'], sp: 'void', trait: 'Hollow crown', line: 'Dark arts feed it and spells sink into its hollow, but holy light burns it.' },
@@ -2310,7 +2421,8 @@
   const wbBoss = id => Math.floor(Date.parse(id + 'T00:00:00Z') / 6048e5) % WB_TRAITS.length;
   // How much of a party member's damage reaches the boss: class trait, then half for hired and story companions.
   function wbMult(s, id) {
-    if (!s.wb || s.wb.old || !s.foe || !s.foe.world) return 1;
+    if (!s.wb || s.wb.old || !s.foe || !s.foe.world) return npMarkMult(s, id);
+    if (s.wb.gob) return id === 'you' || isGuest(s, id) ? 1 : WB_NPC;
     const t = WB_TRAITS[s.wb.k || 0], c = memberById(id) && memberById(id).cls;
     return (c === t.weak ? 1 + WB_WEAK : t.resist.includes(c) ? 1 - WB_RESIST : 1) * (id === 'you' || isGuest(s, id) ? 1 : WB_NPC);
   }
@@ -2336,11 +2448,12 @@
     s.stats.wbAssaults = (s.stats.wbAssaults || 0) + 1;
     // ck = the part of the score from the player's own strikes, iv = gaps between those strikes (ms). The server
     // re-runs the rhythm check on iv and drops ck from a machine-even assault (worldboss.js).
-    events && events.push({ type: 'wbend', score, fell: !!fell, ck: Math.min(score, cut(wb.ck || 0)), iv: (wb.iv || []).slice(0, 3000) });
+    events && events.push({ type: 'wbend', score, fell: !!fell, ck: Math.min(score, cut(wb.ck || 0)), iv: (wb.iv || []).slice(0, 3000), gob: wb.gob ? wb.id : null });
   }
   function wbFoe(s) {
     const f = Math.max(1, s.maxFloorEver);
     const nu = !s.wb.old && s.wb.cap, t = WB_TRAITS[s.wb.k || 0];
+    if (s.wb.gob) return { name: s.wb.name, sprite: 'goldgoblin', world: true, gob: true, boss: false, chest: false, elite: false, side: null, ambush: 0, pack: 0, hp: 1e300, max: 1e300, hue: 0, atk: foeDps(f, true) * FOE_SWING * 0.9, mods: [], ward: 0, wardAt: 0, sp: null, spAt: 0, spWind: null };
     return { name: s.wb.name, sprite: 'colossus', world: true, boss: false, chest: false, elite: false, side: null, ambush: 0, pack: 0, hp: 1e300, max: 1e300, hue: 0, atk: foeDps(f, true) * FOE_SWING * (nu ? WB_ATK : 0.8), mods: [], ward: 0, wardAt: 0, sp: nu ? t.sp : null, spAt: 0, spWind: null };
   }
   function rollMods(f, boss, elite, b, r) {
@@ -2359,7 +2472,7 @@
       if (s.foe.lock || s.foe.wounded) return; // overkill never spills onto a lock
       const foe = s.foe, mult = (foe.boss ? 1 + relicVal(s, 'lens') : 1) * (1 + fxOn(s, 'vuln', now || Date.now())) * (1 + beastBonus(s, foe));
       let dmg = amount * mult;
-      if (foe.world) { s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); return; }
+      if (foe.world) { if (s.wb.gob && gobDash(s, now || Date.now()) && !gobRogue(s)) return; s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); return; }
       if (foe.shield > 0) dmg *= 1 - SHIELD_CUT;
       if (foe.ward > 0) { const soak = Math.min(foe.ward, dmg); foe.ward -= soak; dmg -= soak; amount = dmg / mult; if (dmg <= 0) return; }
       if (dmg < foe.hp) { foe.hp -= dmg; drain(s, dmg); return; }
@@ -2393,7 +2506,7 @@
   const QUESTS = [
     { id: 'kills',  stat: 'kills',     n: 400, text: 'Defeat {n} monsters' },
     { id: 'boss',   stat: 'bossKills', n: 12,  text: 'Defeat {n} guardians' },
-    { id: 'chests', stat: 'chests',    n: 10,  text: 'Open {n} treasure chests' },
+    { id: 'chests', stat: 'chests',    n: 5,   text: 'Open {n} treasure chests' },
     { id: 'crits',  stat: 'crits',     n: 150, text: 'Land {n} critical hits' },
     { id: 'clicks', stat: 'clicks',    n: 250, text: 'Strike {n} times with your lantern' },
   ];
@@ -2491,7 +2604,7 @@
   // ---------- Wandering merchant (John, 2026-11-24) ----------
   // Only while you are playing: now and then a merchant sets up beside the fight for MERCH_LIFE seconds with one deal
   // at MERCH_OFF off. Buy it or let it go; missing it costs nothing.
-  const MERCH_FLOOR = 5, MERCH_LIFE = 120, MERCH_EVERY = 1500, MERCH_COOL = 900, MERCH_OFF = 0.5;
+  const MERCH_FLOOR = 5, MERCH_LIFE = 120, MERCH_EVERY = 3000, MERCH_COOL = 900, MERCH_OFF = 0.5;
   function merchOffer(s, rng) {
     const r = rng || Math.random, opts = ['tonic', 'tonic', 'draught', 'dust'];
     if ((s.maxFloorEver || 0) >= 10) opts.push('oil');
@@ -2505,7 +2618,8 @@
     rng = rng || Math.random;
     if (s.merchant && now >= s.merchant.until) { s.merchant = null; s.merchNext = now + MERCH_COOL * 1000; events && events.push({ type: 'merchgone' }); return; }
     if (s.merchant || !active || (s.maxFloorEver || 0) < MERCH_FLOOR || resting(s, now) || visiting(s)) return;
-    if (now < (s.merchNext || 0) || rng() >= 1 / (MERCH_EVERY * 2)) return;
+    if (now < (s.merchNext || 0) || rng() >= 1 / (MERCH_EVERY * 2) || !evOk(s, 'merchant', now)) return;
+    evUse(s, 'merchant', now);
     s.merchant = { at: now, until: now + MERCH_LIFE * 1000, offer: merchOffer(s, rng) };
     events && events.push({ type: 'merchant' });
   }
@@ -2634,7 +2748,7 @@
   }
   function hurtHero(s, t, dmg, now, events) {
     s.hp[t] = (s.hp[t] == null ? maxHpOf(s, t) : s.hp[t]) - dmg;
-    if (s.hp[t] <= 0) { s.hp[t] = 0; s.down[t] = now + reviveMs(s); if (s.dots) delete s.dots[t]; events && events.push({ type: 'fall', id: t }); return true; }
+    if (s.hp[t] <= 0) { s.hp[t] = 0; s.down[t] = downAt(s, now); if (s.dots) delete s.dots[t]; events && events.push({ type: 'fall', id: t }); return true; }
     return false;
   }
   function addDot(s, t, k, dps, events) {
@@ -2750,10 +2864,10 @@
     if (mods.includes('venom')) { s.poison = s.poison || {}; s.poison[t] = { dps: dmg * 0.12, until: now + 5000 }; events && events.push({ type: 'poison', id: t }); }
     if (mods.includes('cleave')) {
       const live = s.party.filter(id => id && !s.down[id]), nx = live[live.indexOf(t) + 1];
-      if (nx) { s.hp[nx] = (s.hp[nx] == null ? maxHpOf(s, nx) : s.hp[nx]) - dmg * 0.4; if (s.hp[nx] <= 0) { s.hp[nx] = 0; s.down[nx] = now + reviveMs(s); events && events.push({ type: 'fall', id: nx }); } }
+      if (nx) { s.hp[nx] = (s.hp[nx] == null ? maxHpOf(s, nx) : s.hp[nx]) - dmg * 0.4; if (s.hp[nx] <= 0) { s.hp[nx] = 0; s.down[nx] = downAt(s, now); events && events.push({ type: 'fall', id: nx }); } }
     }
     if (s.hp[t] <= 0) {
-      s.hp[t] = 0; s.down[t] = now + reviveMs(s);
+      s.hp[t] = 0; s.down[t] = downAt(s, now);
       events && events.push({ type: 'fall', id: t });
       if (!alive(s).length) wipe(s, now, events);
     }
@@ -2828,7 +2942,7 @@
   const visiting = s => !!(s && s.enchAt);
   // The Hold's shops (v102): kind 'ench' (the Enchanter), 'arm' (the Armorer), 'store' (the Quartermaster's Store, v107)
   // or 'portal' (the Rift Gate outside the walls, v120: Rift tokens for world boss Legendaries). s.enchAt and s.shopK are never saved.
-  function visitEnchanter(s, now, kind) { if (!s.hero || s.enchAt) return false; s.enchAt = now || Date.now(); s.shopK = kind === 'arm' || kind === 'store' || kind === 'portal' ? kind : 'ench'; return true; }
+  function visitEnchanter(s, now, kind) { if (!s.hero || s.enchAt) return false; s.enchAt = now || Date.now(); s.shopK = kind === 'arm' || kind === 'store' || kind === 'portal' || ((kind === 'dicer' || kind === 'gulp') && npPlus(s)) ? kind : 'ench'; return true; }
   function leaveEnchanter(s) { if (!s.enchAt) return false; s.enchAt = 0; s.shopK = null; return true; }
   // The Armorer's forge melts spare gear for SMELT_MULT x the scrap gold, but gives no Dust.
   const SMELT_MULT = 2;
@@ -2842,7 +2956,7 @@
   // Ghost Lantern (John, 2026-11-24): now and then, only while the player is actively playing, a ghost lantern drifts
   // into the fight and slowly saps party damage or healing, never more than GHOST_MAX. Tap it to shatter it for a small
   // reward. Left alone it fades after GHOST_LIFE seconds and the stat comes straight back: nothing lasting is lost.
-  const GHOST_FLOOR = 5, GHOST_LIFE = 30, GHOST_MAX = 0.1, GHOST_EVERY = 480, GHOST_COOL = 240;
+  const GHOST_FLOOR = 5, GHOST_LIFE = 30, GHOST_MAX = 0.1, GHOST_EVERY = 960, GHOST_COOL = 600;
   const GHOST_STATS = { dps: 'damage', heal: 'healing' };
   function ghostSap(s, k, now) {
     const g = s.ghost; if (!g || g.k !== k) return 0;
@@ -2854,7 +2968,8 @@
     rng = rng || Math.random;
     if (s.ghost && now >= s.ghost.until) { const k = s.ghost.k; s.ghost = null; s.ghostNext = now + GHOST_COOL * 1000; events && events.push({ type: 'ghostgone', k }); return; }
     if (s.ghost || !active || s.maxFloorEver < GHOST_FLOOR || resting(s, now) || visiting(s) || !s.foe || nexusOn(s)) return;
-    if (now < (s.ghostNext || 0) || rng() >= 1 / GHOST_EVERY) return;
+    if (now < (s.ghostNext || 0) || rng() >= 1 / GHOST_EVERY || !evOk(s, 'ghost', now)) return;
+    evUse(s, 'ghost', now);
     const hasHealer = s.party.some(id => id && healPerSec(s, id) > 0);
     const k = hasHealer && rng() < 0.35 ? 'heal' : 'dps';
     s.ghost = { at: now, until: now + GHOST_LIFE * 1000, k, x: 0.25 + rng() * 0.5 };
@@ -2962,7 +3077,7 @@
     if (s.foe.lock) { lockTick(s, dt, now, rng, events); return; }
     if (s.foe.goblin) {
       s.foe.flee += dt;
-      if (s.foe.flee >= GOBLIN_TIME) { goblinFlee(s, rng, events); return; }
+      if (s.foe.flee >= GOBLIN_TIME + (fxOnW(s, 'mouse') ? 5 : 0)) { goblinFlee(s, rng, events); return; }
     }
     if (s.foe.boss) {
       s.lantern += dt;
@@ -2986,7 +3101,7 @@
     if (s.poison) for (const id in s.poison) {
       const p = s.poison[id]; if (p.until <= now || s.down[id] || !s.party.includes(id)) { delete s.poison[id]; continue; }
       s.hp[id] -= p.dps * dt;
-      if (s.hp[id] <= 0) { s.hp[id] = 0; s.down[id] = now + reviveMs(s); delete s.poison[id]; events && events.push({ type: 'fall', id }); if (!alive(s).length) { wipe(s, now, events); return; } }
+      if (s.hp[id] <= 0) { s.hp[id] = 0; s.down[id] = downAt(s, now); delete s.poison[id]; events && events.push({ type: 'fall', id }); if (!alive(s).length) { wipe(s, now, events); return; } }
     }
     if (s.dots) for (const id in s.dots) {
       const d = s.dots[id]; if (s.down[id] || !s.party.includes(id)) { delete s.dots[id]; continue; }
@@ -3006,7 +3121,7 @@
     }
     if (s.foe && s.foe.wounded && mercyAided(s, now, events)) return;
     // life steal: a share of each hero's own damage heals that hero
-    for (const id of s.party) { if (!id || s.down[id]) continue; const ls = wearVal(s, id, 'leech'); if (ls > 0) { const mx = maxHpOf(s, id); s.hp[id] = Math.min(mx, (s.hp[id] || 0) + memberDps(s, id, now) * ls * dt); } }
+    for (const id of s.party) { if (!id || s.down[id]) continue; const ls = wearVal(s, id, 'leech') * npHealCut(s); if (ls > 0) { const mx = maxHpOf(s, id); s.hp[id] = Math.min(mx, (s.hp[id] || 0) + memberDps(s, id, now) * ls * dt); } }
     // abilities
     if (s.autoCast) for (const id of s.party) if (id && !s.down[id] && !ccOf(s, id, now) && (memberById(id).cls === 'healer' ? !oom(s, id) && resOf(s, id) > 0 : resOf(s, id) >= AB_COST)) { const st = s.abil[id]; if ((!st || st.readyAt <= now) && wantsCast(s, id, now)) castAbility(s, id, now, events); }
     if (s.autoCast && !s.down.you && !ccOf(s, 'you', now)) for (const ab of heroSpecs(s)) { if (resOf(s, 'you') < SPEC_COST) break; const st = s.abil['you:' + ab.id]; if ((!st || st.readyAt <= now) && wantsSpec(s, ab, now)) castSpec(s, ab.id, now, events); }
@@ -3109,7 +3224,7 @@
   // Everything else (gold, Dust, floors, levels, XP, stat points, skills, Kindling, gear, Embers, relics, companions,
   // hires, story) starts fresh.
   const NP_KEEP = ['hero', 'mode', 'lore', 'feats', 'settings', 'stats', 'boh', 'rosterUps', 'pass', 'passTrial', 'passTrialGiven', 'sub', 'keeper', 'created', 'econ', 'wd', 'ref', 'npLog',
-    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv'];
+    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv', 'curios', 'reno', 'pip', 'gulpLoot'];
   // Applies the reset in place once the server has granted tier `tier` at time `at`. Returns false if not allowed.
   // force: the server says this account is already on `tier` (another device started it), so reset to it anyway.
   function startNP(s, tier, at, force) {
@@ -3182,7 +3297,7 @@
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    const killsPerSec = Math.min(4, d / (foeHp(f, false) * npFoe(s)));
+    const killsPerSec = Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f)));
     return killsPerSec * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
 
@@ -3224,9 +3339,184 @@
     return s;
   }
 
+  // ---------- NP+ gold sinks (v125, John 25 Nov 2026: "ideas for players to spend gold on", all NP+ only) ----------
+  // Every price is hours of the player's own income (the figure the Store prices from), so a sink bites the same at any
+  // depth. Pip the Dicer's Lucky Crates and Curios, the Armorer's Reforge, Hold renovations and decorations, the
+  // Enchanter's Dust Press, and Gulp the Hoard Mimic (global, server: infra/lambda/gulp.js and goblin.js), whose
+  // Golden Loot Goblin drops the Gilded rings (WB_SETS[GG]). Curios owned, renovations and decorations survive NP+.
+  const npPlus = s => npTier(s) >= 1;
+  const incomeHour = s => Math.max(3600, offlineGoldPerSec(s) * 3600);
+  const priceH = (s, h) => Math.max(1, Math.round(incomeHour(s) * h));
+  const sinkFloor = s => Math.max(1, s.maxFloor || s.floor || 1);
+  // Pip the Dicer: three crates of gear (never Common) and a chance at a Curio. Gold only, never Sigils.
+  const CRATES = [
+    { id: 'pouch', name: 'Cloth Pouch', h: 0.5, odds: [['fine', 0.6], ['rare', 0.3], ['epic', 0.09], ['set', 0.01]], cu: 0 },
+    { id: 'coffer', name: 'Iron Coffer', h: 3, odds: [['rare', 0.55], ['epic', 0.35], ['set', 0.08], ['rset', 0.02]], cu: 0.005 },
+    { id: 'casket', name: 'Gilded Casket', h: 12, odds: [['epic', 0.63], ['set', 0.25], ['rset', 0.12]], cu: 0.09 },
+  ];
+  const CURIO_PITY = 10, CURIO_PER = 0.01, CURIO_ALL = 0.02;
+  const CURIOS = [
+    { id: 'die', name: 'Loaded Die', fx: '+6% critical chance for the party' },
+    { id: 'coin', name: 'Two-Headed Coin', fx: 'When a hero falls, 25% chance they are back up in 3 seconds' },
+    { id: 'hat', name: 'Pip’s Spare Hat', fx: '+15% hero XP' },
+    { id: 'glass', name: 'Hourglass of Borrowed Time', fx: '+10 seconds of lantern on guardian floors' },
+    { id: 'key', name: 'Skeleton Key', fx: 'Rogues pick locks twice as fast' },
+    { id: 'mouse', name: 'Wind-up Mouse', fx: 'The Loot Goblin waits 5 seconds longer before it flees' },
+    { id: 'globe', name: 'Snow Globe of the Hold', fx: '+5% party health' },
+    { id: 'tooth', name: 'Mimic’s Baby Tooth', fx: 'Each morsel you feed Gulp counts 1.5 times toward your goblin loot bonus' },
+  ];
+  const curioById = id => CURIOS.find(c => c.id === id);
+  const crateById = id => CRATES.find(c => c.id === id);
+  const crateCost = (s, id) => priceH(s, crateById(id).h);
+  const curiosOf = s => s.curios || (s.curios = {});
+  const curioCount = s => CURIOS.filter(c => curiosOf(s)[c.id]).length;
+  const curioColl = s => { const n = curioCount(s); return n * CURIO_PER + (n >= CURIOS.length ? CURIO_ALL : 0); };
+  // What every Curio and Gilded ring worn by the seated party adds, cached for a second (critChance and friends run per hit).
+  const wornFx = new WeakMap();
+  function fxSet(s) {
+    const t = Math.floor((s.clock || Date.now()) / 1000), c = wornFx.get(s);
+    if (c && c.t === t && c.g === s.gear && c.n === s.bag.length) return c.v;
+    const v = {}, by = {}; for (const it of s.bag) if (it.cu || it.gr != null) by[it.uid] = it;
+    for (const id of s.party) if (id) { const g = equipped(s, id); for (const p in g) { const it = by[g[p]]; if (!it) continue; if (it.cu) v[it.cu] = 1; if (it.gr != null) v['g' + it.gr] = 1; } }
+    wornFx.set(s, { t, g: s.gear, n: s.bag.length, v }); return v;
+  }
+  const fxOnW = (s, k) => !!(s && s.bag && s.party && fxSet(s)[k]);
+  function makeCurio(s, id, r) {
+    const f = sinkFloor(s);
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls: heroCls(s) || 'tank', slot: 'neck', rar: 'epic', cu: id, lk: 1, ilvl: npIlvl(s, f), up: 0, t: npT(s) }, r || Math.random);
+  }
+  function crateGear(s, rar, r) {
+    const f = sinkFloor(s);
+    if (rar === 'rset') { const it = rollRegionSet(s, f, r); if (it) { s.lore['rset_' + it.rset] = Date.now(); return it; } rar = 'set'; }
+    if (rar === 'set') return rollGear(s, Math.max(15, f), { set: true }, r);
+    const it = rollGear(s, f, null, r); it.rar = rar; delete it.aff;
+    if (r() < (AFFIX_CHANCE[rar] || 0)) it.aff = { j: JOB_KEYS[Math.floor(r() * JOB_KEYS.length)], v: Math.round((0.1 + r() * 0.2) * (rar === 'epic' ? 1.5 : 1) * 100) / 100 };
+    return rollEnch(it, r);
+  }
+  // Opens one crate: gear always, a Curio sometimes (one you don't own yet; caskets guarantee one every CURIO_PITY).
+  function openCrate(s, id, rng) {
+    const r = rng || Math.random, c = crateById(id); if (!c || !npPlus(s) || !s.hero) return null;
+    const cost = crateCost(s, id); if (s.gold < cost) return null;
+    s.gold -= cost; const pip = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }); pip.spent += cost; pip.opened++;
+    let x = r(), rar = c.odds[c.odds.length - 1][0]; for (const [k, p] of c.odds) { if (x < p) { rar = k; break; } x -= p; }
+    const item = crateGear(s, rar, r); s.bag.push(item); if (item.set) s.lore['set_' + item.set] = Date.now();
+    let curio = null; const missing = CURIOS.filter(q => !curiosOf(s)[q.id]);
+    if (c.cu && missing.length) {
+      if (id === 'casket') pip.n++;
+      if (r() < c.cu || (id === 'casket' && pip.n >= CURIO_PITY)) {
+        const q = missing[Math.floor(r() * missing.length)]; curio = makeCurio(s, q.id, r); s.bag.push(curio); curiosOf(s)[q.id] = Date.now(); pip.n = 0;
+      }
+    }
+    s.stats.goldSunk = (s.stats.goldSunk || 0) + cost;
+    return { cost, item, curio };
+  }
+  // A Curio you own but no longer carry (sold, or left behind by a new NP+ tier) can be taken again from Pip for free.
+  const curioHeld = (s, id) => s.bag.some(it => it.cu === id);
+  function retakeCurio(s, id) {
+    if (!npPlus(s) || !curiosOf(s)[id] || curioHeld(s, id)) return null;
+    const it = makeCurio(s, id); s.bag.push(it); return it;
+  }
+
+  // The Armorer's Reforge: rerolls an item's enchantments, job affix and weapon type, keeping item level, rarity and
+  // upgrades. 1 hour of income, doubling for each reforge of the same item (at most REFORGE_MAX).
+  const REFORGE_H = 1, REFORGE_MAX = 6;
+  const canReforge = it => !!it && ['common', 'fine', 'rare', 'epic'].includes(it.rar) && !it.cu && it.wb == null && !it.gob && (it.rf || 0) < REFORGE_MAX;
+  const reforgeCost = (s, it) => priceH(s, REFORGE_H * Math.pow(2, (it && it.rf) || 0));
+  function reforge(s, uid, rng) {
+    const r = rng || Math.random, it = itemOf(s, uid); if (!npPlus(s) || !canReforge(it)) return null;
+    const cost = reforgeCost(s, it); if (s.gold < cost) return null;
+    s.gold -= cost; s.stats.goldSunk = (s.stats.goldSunk || 0) + cost;
+    const was = { en: it.en, ty: it.ty, aff: it.aff };
+    if (it.slot === 'main') { const l = TY_MAIN[it.cls] || ['sword']; it.ty = l[Math.floor(r() * l.length)]; }
+    delete it.aff; if (r() < (AFFIX_CHANCE[it.rar] || 0) * 2) it.aff = { j: JOB_KEYS[Math.floor(r() * JOB_KEYS.length)], v: Math.round((0.1 + r() * 0.2) * (it.rar === 'epic' ? 1.5 : 1) * 100) / 100 };
+    rollEnch(it, r); it.rf = (it.rf || 0) + 1; enchDirty && enchDirty();
+    return { cost, item: it, was };
+  }
+
+  // Hold renovations (one-time projects, a small perk each) and decorations (looks only).
+  const RENOS = [
+    { id: 'tower', name: 'The Watchtower', h: 24, k: 'dps', v: 0.02, fx: '+2% party damage', line: 'A lookout over the stair, with a brass bell for the night watch.' },
+    { id: 'bath', name: 'The Bathhouse', h: 36, k: 'hp', v: 0.02, fx: '+2% party health', line: 'Hot springs piped up from the deep. Everyone comes back a little tougher.' },
+    { id: 'fire', name: 'The Great Campfire', h: 48, k: 'xp', v: 0.02, fx: '+2% hero XP', line: 'A ring of stone benches round a fire big enough for every tale.' },
+    { id: 'garden', name: 'The Lantern Garden', h: 72, k: 'loot', v: 0.02, fx: '+2% gear finds', line: 'Glowing lantern-flowers that light the path to buried things.' },
+  ];
+  const DECOS = [
+    { id: 'moth', name: 'Pet lantern-moth', h: 6, line: 'A fat, friendly moth that flutters round your party in the Hold.' },
+    { id: 'trim', name: 'Gold-trimmed tents', h: 12, line: 'Gold thread on every tent and flag in the Hold.' },
+    { id: 'fount', name: 'Coin fountain', h: 24, line: 'A fountain in the yard that splashes gold coins.' },
+    { id: 'statue', name: 'Statue of your hero', h: 48, line: 'Your hero in polished stone, in the middle of the Hold.' },
+  ];
+  const renoCost = (s, id) => { const x = RENOS.find(q => q.id === id) || DECOS.find(q => q.id === id); return x ? priceH(s, x.h) : Infinity; };
+  const renoVal = (s, k) => { if (!s || !s.reno) return 0; let v = 0; for (const x of RENOS) if (x.k === k && s.reno[x.id]) v += x.v; return v; };
+  function buildReno(s, id) {
+    if (!npPlus(s) || !s.hero) return false; s.reno = s.reno || {}; if (s.reno[id]) return false;
+    const cost = renoCost(s, id); if (!(cost <= s.gold)) return false;
+    s.gold -= cost; s.reno[id] = Date.now(); s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; return cost;
+  }
+
+  // The Enchanter's Dust Press: gold into Dust at a poor rate, capped each day.
+  const PRESS_H = 2 / 60, PRESS_DAY = 200;
+  const pressDay = now => Math.floor((now || Date.now()) / 864e5);
+  const pressLeft = (s, now) => { const p = s.press; return PRESS_DAY - (p && p.d === pressDay(now) ? p.n : 0); };
+  const pressCost = (s, n) => priceH(s, PRESS_H * n);
+  function pressDust(s, n, now) {
+    n = Math.min(n | 0, pressLeft(s, now)); if (!npPlus(s) || n <= 0) return 0;
+    const cost = pressCost(s, n); if (s.gold < cost) return 0;
+    const d = pressDay(now); if (!s.press || s.press.d !== d) s.press = { d, n: 0 };
+    s.gold -= cost; s.press.n += n; s.dust = (s.dust || 0) + n; s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; return cost;
+  }
+
+  // Gulp the Hoard Mimic: one morsel = 10 minutes of income. The server (gulp.js) counts them, rolls the goblin and keeps
+  // the fed counter; the game takes the gold once the server has taken the morsels. 1 in 20 morsels Gulp coughs
+  // something up (a tonic, Dust or a Fine piece). Never gold.
+  const MORSEL_H = 10 / 60, GULP_DAY = 12, GULP_BURP = 0.05;
+  const morselCost = s => priceH(s, MORSEL_H);
+  function feedGulp(s, n, rng) {
+    const r = rng || Math.random, cost = morselCost(s) * n; if (!npPlus(s) || n <= 0 || s.gold < cost) return null;
+    s.gold -= cost; s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; s.stats.morsels = (s.stats.morsels || 0) + n;
+    const burps = [];
+    for (let i = 0; i < n; i++) if (r() < GULP_BURP) {
+      const k = r();
+      if (k < 0.4) { const t = TONICS[Math.floor(r() * TONICS.length)]; s.items[t.id] = (s.items[t.id] || 0) + 1; burps.push(t.name); }
+      else if (k < 0.75) { const d = Math.max(5, Math.round(5 + sinkFloor(s) / 5)); s.dust = (s.dust || 0) + d; burps.push(d + ' Dust'); }
+      else { const it = crateGear(s, 'fine', r); s.bag.push(it); burps.push(gearName(it)); }
+    }
+    return { cost, burps };
+  }
+  // The Golden Loot Goblin, fought like a world boss (2-minute assaults on a shared health bar, server goblin.js) but it
+  // runs off GOB_TIME after it appears. Cooldown GOB_COOL. Every GOB_DASH seconds it dashes for GOB_DASH_LEN: a party
+  // without a Rogue loses its target (no damage) until it stops.
+  const GOB_TIME = 30 * 60, GOB_COOL = 5 * 60, GOB_DASH = 30, GOB_DASH_LEN = 2;
+  function startGoblinAssault(s, now, gob) {
+    if (!npPlus(s) || !gob || now >= gob.until || resting(s, now) || !alive(s).length || (s.wb && s.wb.until > now)) return false;
+    const unit = foeHp(Math.max(1, s.maxFloorEver), false);
+    s.wb = { until: Math.min(gob.until, now + WB_TIME * 1000), at: now, score: 0, name: 'The Golden Loot Goblin', id: gob.id, gob: 1, cap: WB_CEIL * unit };
+    s.foe = null; s.foeSwing = 0; return true;
+  }
+  const gobDash = (s, now) => !!(s.wb && s.wb.gob && ((now - s.wb.at) / 1000) % GOB_DASH >= GOB_DASH - GOB_DASH_LEN);
+  const gobRogue = s => alive(s).some(id => memberById(id).cls === 'rogue');
+  // A Gilded ring from the goblin (one you don't own yet when the server says you won one).
+  function makeGilded(s, gr, rng) {
+    const r = rng || Math.random, cls = heroCls(s) || 'tank';
+    return rollEnch({ uid: Date.now().toString(36) + (uidSeq++), cls, slot: 'ring', rar: 'mythic', wb: GG, gr, lk: 1, ilvl: Math.max(1, Math.min(s.maxFloorEver || s.floor || 1, Math.floor(lvl(s, 'you') / 1.5))), up: 0, t: npT(s) }, r);
+  }
+  const ggOwned = s => { const o = {}; for (const it of s.bag) if (it.wb === GG && it.gr != null) o[it.gr] = 1; return o; };
+  // Pays out a goblin claim from the server: { ring: true|false, sh: shards }. Duplicates after the full set become shards.
+  function lootGoblin(s, res, rng) {
+    const r = rng || Math.random, sh = shardsOf(s); let it = null, dup = 0;
+    sh[GG] = (sh[GG] || 0) + (res.sh || 0);
+    if (res.ring) {
+      const own = ggOwned(s), miss = GG_RINGS.map((_, i) => i).filter(i => !own[i]);
+      if (miss.length) { it = makeGilded(s, miss[Math.floor(r() * miss.length)], r); s.bag.push(it); s.stats.gilded = (s.stats.gilded || 0) + 1; }
+      else { dup = GG_DUP; sh[GG] += GG_DUP; }
+    }
+    return { item: it, dup };
+  }
+
   const api = {
-    steadyDps, NP_MAX, NP_FOE, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    npPlus, incomeHour, priceH, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
+    steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
@@ -3234,7 +3524,7 @@
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
     newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, memberById, trainCost, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
     clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
-    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
+    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LH = api;

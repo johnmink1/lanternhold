@@ -6,7 +6,9 @@ const SIDE_NAME = { covenant: 'the Iron Covenant', radiant: 'the Radiant Ascenda
 const CLS_NAME = { tank: 'tank', healer: 'healer', rogue: 'rogue', mage: 'mage', necro: 'necromancer' };
 const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'];
 const SIDES = ['covenant', 'radiant', 'tide', 'mercy', 'unsworn'];
-const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn)/i;
+const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard|jizz|dildo|penis|vagin|cumsh|cumsl)/i;
+// Short words that are rude alone but sit inside real names (Cumberland), so only whole words count (v125).
+const BADW = /(^|[ '\-])(cum+s?|cumming|tits?|boobs?|anal|sexy?)([ '\-]|$)/i;
 const res = (c, b) => ({ statusCode: c, headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
 const pidOf = sub => crypto.createHash('sha256').update('lh:' + sub).digest('hex').slice(0, 16);
 exports.handler = async (e) => {
@@ -18,7 +20,7 @@ exports.handler = async (e) => {
   if (rk === 'PUT /hero') {
     // rf: the channel tag (?ref=) the player first arrived with, kept once, to count players per channel.
     const name = String(b.name || '').trim();
-    if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name) || BAD.test(name.replace(/[^a-z]/gi, ''))) return res(400, { error: 'name' });
+    if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name) || BAD.test(name.replace(/[^a-z]/gi, '')) || BADW.test(name)) return res(400, { error: 'name' });
     if (!CLS.includes(b.cls)) return res(400, { error: 'class' });
     const floor = Math.max(1, Math.min(100000, Math.floor(Number(b.floor) || 1)));
     const level = Math.max(1, Math.min(50 + floor * 8, Math.floor(Number(b.level) || 1)));
