@@ -272,6 +272,9 @@
     { id: 'solo',  name: 'Lone Lantern',      desc: 'Defeat the Lampmother with only your own hero in the party', test: s => (s.stats.soloLamp || 0) >= 1 },
     { id: 'np3',   name: 'Again, and Deeper', desc: 'Start New Playthrough 3 (NP+3)', test: s => (s.np || 0) >= 3 },
     { id: 'np10',  name: 'Lantern Eternal',   desc: 'Reach the last tier, NP+10',  test: s => (s.np || 0) >= 10 },
+    // hidden (John, 26 Nov 2026): only one player can ever hold it. The server records the first to start NP+1
+    // and adds the title 't.dawn' to their wallet; loadProfile in ui.js grants the feat from that. Never listed until earned.
+    { id: 'dawn',  name: 'The First Dawn',    desc: 'The first delver ever to begin New Playthrough 1', hidden: true, test: () => false },
   ];
   // every open gear spot on a hero holds an item upgraded to +10
   function maxedKit(s, id) {
