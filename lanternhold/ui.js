@@ -3725,14 +3725,35 @@
     try {
       let ref = ''; try { ref = localStorage.getItem('lh_ref') || ''; } catch (e) {}
       const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S) }, '/hero');
-      if (!prof) loadProfile();
+      nameAsk = false; if (!prof) loadProfile();
       const n = r && r.recruits;
       if (n > 0) {
         const g = Math.max(20, L.offlineGoldPerSec(S) * 600) * n;
         S.gold += g; S.stats.goldEarned += g;
         toast('user', 'Your hero was recruited', n + (n === 1 ? ' player' : ' players') + ' took ' + S.hero.name + ' into their party. +' + fmt(g) + ' gold.', 'feat');
       }
-    } catch (e) {}
+    } catch (e) { if (e && e.message === 'cloud 409') askNewName(); }
+  }
+  // Hero names are unique across players, ignoring case, spaces, hyphens and apostrophes (v132). The server answers 409
+  // when another player holds the name; the player picks a new one and the board, chat and mail use it from then on.
+  let nameAsk = false;
+  function askNewName(msg) {
+    if ((nameAsk && !msg) || !S.hero) return; nameAsk = true;
+    $('modal').dataset.lock = '1';
+    modal('<div class="center"><h2>That name is taken</h2><p>' + (msg || 'Another player already goes by <b>' + esc(S.hero.name) + '</b>. Names are one per player, so choose a new one for your hero. Your progress stays as it is.') + '</p></div>' +
+      '<input id="nn-name" maxlength="16" placeholder="2 to 16 letters" autocomplete="off"><div class="err" id="nn-err"></div>' +
+      '<div class="row" style="justify-content:center"><button class="btn" id="nn-go">Use this name</button></div>', md => {
+      const nm = md.querySelector('#nn-name'), err = md.querySelector('#nn-err');
+      md.querySelector('#nn-go').onclick = async () => {
+        const name = nm.value.trim().replace(/\s+/g, ' ');
+        if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name)) { err.textContent = 'Use 2 to 16 letters. Spaces, hyphens and apostrophes are fine.'; return; }
+        try { await api('PUT', { name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref: '', bp: L.buildCard(S) }, '/hero'); }
+        catch (e) { err.textContent = e && e.message === 'cloud 409' ? 'Someone has that one too. Try another.' : e && e.message === 'cloud 400' ? 'That name is not allowed. Try another.' : 'Could not reach the server. Try again.'; return; }
+        S.hero.name = name; L.registerHero(S); save(); nameAsk = false;
+        delete $('modal').dataset.lock; closeModal(); updateSeats(true); updatePanel(true);
+        toast('user', 'Welcome, ' + name, 'Your hero now goes by this name.', 'feat');
+      };
+    });
   }
   async function reconcile() {
     let rec; try { rec = await api('GET'); } catch (e) { if (!S.hero && $('modal').hidden) setup(); return; }
@@ -6265,6 +6286,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 132, date: 'November 2026', title: 'One name per player', items: [
+      'Hero names are now one per player, ignoring capitals, spaces and hyphens. If your name is taken, the game asks you to pick a new one.',
+    ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
       'Balance: past floor 100, gold per kill now grows 6% a floor instead of 10% or more. Floors 1 to 100 are unchanged. Upgrade and salvage prices follow.',
