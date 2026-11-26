@@ -1,4 +1,4 @@
-/* lh-build 202611262215 */
+/* lh-build 202611262349 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -3851,6 +3851,7 @@
     sess = { id: t.IdToken, exp: Date.now() + (t.ExpiresIn - 60) * 1000, refresh: t.RefreshToken || (sess && sess.refresh), email: email || (sess && sess.email) || claims(t.IdToken).email };
     storeSess(); paintAccount();
     if (DC && dcLinkTok) dcLink();
+    if (!DC) setTimeout(dcCodeAsk, 400);
   }
   async function idToken() {
     if (!signedIn()) return null;
@@ -4110,9 +4111,9 @@
     $('modal').dataset.lock = '1';
     modal('<div class="center"><h2>Welcome to Lanternhold</h2><p>Your Discord account is not linked to a hero yet. Start fresh, or bring the hero you already play.</p></div>' +
       '<div class="choice"><button class="pick" id="dc-new"><b>Start a new hero</b><small>Your Discord account becomes your sign-in.</small></button>' +
-      '<button class="pick" id="dc-old"><b>I already play</b><small>Sign in once with your Lanternhold email and password. After that, Discord signs you in.</small></button></div>' +
-      '<div class="err" id="dc-err"></div>' +
-      '<p class="note small">Signed in with Born 2 Game on the website? Open Get ' + TOKEN + ' &gt; Support the game there and link your Discord, then reopen Lanternhold here.</p>', md => {
+      '<button class="pick" id="dc-old"><b>I already play</b><small>Sign in once with your Lanternhold email and password. After that, Discord signs you in.</small></button>' +
+      '<button class="pick" id="dc-web"><b>I sign in with Born 2 Game</b><small>No password? Get a short code here and confirm it on the website.</small></button></div>' +
+      '<div class="err" id="dc-err"></div>', md => {
         const err = md.querySelector('#dc-err');
         md.querySelector('#dc-new').onclick = async e => {
           const b = e.currentTarget; b.disabled = true;
@@ -4120,6 +4121,55 @@
           catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
         };
         md.querySelector('#dc-old').onclick = () => { delete $('modal').dataset.lock; dcLinkTok = dcTok; authForm('in', '', 'Sign in to link this hero to your Discord account.'); };
+        md.querySelector('#dc-web').onclick = async e => {
+          const b = e.currentTarget; b.disabled = true;
+          try { const j = await dcPost('/discord/code', { token: dcTok }); if (j.linked) { dcStart(); closeModal(); return; } dcPair(j.pair); }
+          catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
+        };
+      });
+  }
+  // Heroes with no password (Born 2 Game store sign-in): the website confirms a short code while this window waits.
+  let dcPairTimer = 0;
+  function dcPair(code) {
+    const until = Date.now() + 15 * 6e4, link = 'https://lanternhold.born2gamellc.com/?dclink=' + code;
+    clearInterval(dcPairTimer);
+    modal('<div class="center"><h2>Link your hero</h2><p>Open Lanternhold in your browser, sign in the way you always do, and confirm this code:</p>' +
+      '<p class="dc-code">' + code + '</p></div>' +
+      '<button class="btn wide" id="dc-open">Open Lanternhold in my browser</button>' +
+      '<p class="note small center" id="dc-wait">Waiting for the website. This window signs you in by itself. The code works for 15 minutes.</p>' +
+      '<button class="btn ghost wide" id="dc-back">Back</button>', md => {
+        md.querySelector('#dc-open').onclick = () => DC.open(link);
+        md.querySelector('#dc-back').onclick = () => { clearInterval(dcPairTimer); dcWelcome(); };
+      });
+    $('modal').dataset.lock = '1';
+    dcPairTimer = setInterval(async () => {
+      if (Date.now() > until) { clearInterval(dcPairTimer); const w = $('dc-wait'); if (w) w.textContent = 'The code ran out. Press Back and get a new one.'; return; }
+      try { const j = await dcPost('/discord/login', { token: dcTok }); if (j.AuthenticationResult) { clearInterval(dcPairTimer); delete $('modal').dataset.lock; closeModal(); dcSignedIn(j); } } catch (x) {}
+    }, 4000);
+  }
+  // Website side: ?dclink=CODE from the Activity. Kept through a store sign-in redirect, asked once signed in.
+  let dcAsked = false;
+  function dcCodeKeep() {
+    const q = new URLSearchParams(location.search), c = (q.get('dclink') || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    if (!q.has('dclink')) return;
+    q.delete('dclink'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+    if (c.length === 6) try { localStorage.setItem('lh_dclink', JSON.stringify({ c, exp: Date.now() + 15 * 6e4 })); } catch (e) {}
+  }
+  function dcCodeAsk() {
+    if (DC || dcAsked) return;
+    let p = null; try { p = JSON.parse(localStorage.getItem('lh_dclink') || 'null'); } catch (e) {}
+    if (!p || !p.c || p.exp < Date.now()) { try { localStorage.removeItem('lh_dclink'); } catch (e) {} return; }
+    if (!signedIn()) { dcAsked = true; setTimeout(() => authForm('in', '', 'Sign in to the hero you want to play in Discord, then confirm the code.'), 600); return; }
+    dcAsked = true;
+    const done = () => { try { localStorage.removeItem('lh_dclink'); } catch (e) {} };
+    modal('<div class="center"><h2>Play this hero in Discord?</h2><p>Discord showed you the code <b>' + esc(p.c) + '</b>. Linking it means opening Lanternhold in Discord signs you in to this hero.</p></div>' +
+      '<div class="err" id="dcl-err"></div><button class="btn wide" id="dcl-yes">Link to Discord</button><button class="btn ghost wide" id="dcl-no">Not now</button>', md => {
+        md.querySelector('#dcl-no').onclick = () => { done(); closeModal(); };
+        md.querySelector('#dcl-yes').onclick = async e => {
+          const b = e.currentTarget; b.disabled = true;
+          try { const j = await dcPost('/discord/link', { pair: p.c }, await idToken()); done(); closeModal(); toast('user', 'Discord linked', 'Go back to Discord. ' + esc(j.name || 'Your account') + ' is signing in to this hero now.', 'feat'); }
+          catch (x) { b.disabled = false; md.querySelector('#dcl-err').textContent = x.code === 'taken' ? 'That Discord account already plays another hero.' : x.code === 'code' ? 'That code ran out or was already used. Get a new one in Discord.' : 'Could not reach the server. Try again in a moment.'; if (x.code === 'code' || x.code === 'taken') done(); }
+        };
       });
   }
   async function dcLink() {
@@ -4131,7 +4181,7 @@
   if (CL) {
     $('btn-account').hidden = false; paintAccount();
     $('btn-account').addEventListener('click', openAccount);
-    if (DC) setTimeout(dcStart, 300); else if (signedIn()) setTimeout(reconcile, 800);
+    if (DC) setTimeout(dcStart, 300); else { dcCodeKeep(); if (signedIn()) setTimeout(reconcile, 800); setTimeout(dcCodeAsk, 1500); }
     setInterval(() => { if (signedIn() && Date.now() - lastCloud > 60000) pushCloud(true); }, 15000);
     setTimeout(pollInvites, 3000); setInterval(() => { if (!document.hidden) pollInvites(); }, 30000); setInterval(drainJoins, 2000);
     document.addEventListener('visibilitychange', () => { if (document.hidden && signedIn()) pushCloud(true); });

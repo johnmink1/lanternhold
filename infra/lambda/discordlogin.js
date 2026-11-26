@@ -5,6 +5,11 @@
 //                                           game account linked to that Discord id. Not linked yet: { link: 1, access_token }.
 //   POST /discord/login { token, create: 1 } makes a fresh game account for that Discord id and signs it in.
 //   POST /discord/link { token }             with the game's sign-in: links that Discord id to the signed-in account.
+//   POST /discord/code { token }             no sign-in needed. For heroes with no password (Born 2 Game store sign-in):
+//                                           gives a short code that lives 15 minutes. The player opens the website,
+//                                           signs in there any way they like and confirms the code:
+//   POST /discord/link { pair }              with the game's sign-in: links the Discord id behind that code. The Activity
+//                                           keeps asking POST /discord/login { token } and signs in once the link exists.
 // Every answer carries access_token so the page can finish the SDK's authenticate(). Tokens are never stored.
 // Links: trade row dc#<discord id>/link (u = Cognito sub). The v132 support task row supn/discord#<id> (uid) also counts.
 // Sign-in uses Cognito's custom flow with a one-time code that only this function can write (authchal.js checks it).
@@ -42,23 +47,51 @@ async function signIn(user) {
     ChallengeResponses: { USERNAME: user.Username, ANSWER: code } }));
   return t.AuthenticationResult;
 }
+// Link codes: 6 letters and digits that are easy to read aloud (no 0/O, 1/I/L).
+const ABC = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+const pairKey = c => ({ pk: S('dccode#' + c), sk: S('-') });
 exports.handler = async (e) => {
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400, { error: 'json' }); }
-  const code = String(b.code || ''), given = String(b.token || '');
+  const code = String(b.code || ''), given = String(b.token || ''), pair = String(b.pair || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
   if (code.length > 200 || given.length > 200) return res(400, { error: 'token' });
-  const tok = code ? await swap(code) : given;
-  if (!tok) return res(401, { error: 'token' });
-  const me = await who(tok);
-  if (!me) return res(401, { error: 'token' });
+  const cl = e.requestContext && e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
+  let tok = '', me = null, pairRow = null;
+  if (e.routeKey === 'POST /discord/link' && b.pair !== undefined) {
+    // Linking from the website with a code the Activity showed: the Discord id comes from the code, not a token.
+    if (!cl || !cl.sub) return res(401, { error: 'auth' });
+    if (pair.length !== 6) return res(404, { error: 'code' });
+    pairRow = await get(pairKey(pair));
+    if (!pairRow || +pairRow.exp.N < Date.now()) return res(404, { error: 'code' });
+    me = { id: pairRow.d.S, name: pairRow.name.S };
+  } else {
+    tok = code ? await swap(code) : given;
+    if (!tok) return res(401, { error: 'token' });
+    me = await who(tok);
+    if (!me) return res(401, { error: 'token' });
+  }
   const now = Date.now(), place = sub => db.send(new D.PutItemCommand({ TableName: T, ConditionExpression: 'attribute_not_exists(pk)',
     Item: Object.assign(linkKey(me.id), { u: S(sub), name: S(me.name), at: N(now) }) }));
 
+  if (e.routeKey === 'POST /discord/code') {
+    if (await linked(me.id)) return res(200, { linked: 1 });
+    for (let i = 0; i < 5; i++) {
+      const c = Array.from(crypto.randomBytes(6), x => ABC[x % ABC.length]).join('');
+      try {
+        await db.send(new D.PutItemCommand({ TableName: T, ConditionExpression: 'attribute_not_exists(pk)', Item: Object.assign(pairKey(c),
+          { d: S(me.id), name: S(me.name), exp: N(now + 15 * 6e4), ttl: N(Math.floor(now / 1000) + 3600) }) }));
+        return res(200, { pair: c, name: me.name });
+      } catch (x) { if (x.name !== 'ConditionalCheckFailedException') throw x; }
+    }
+    return res(503, { error: 'busy' });
+  }
+
   if (e.routeKey === 'POST /discord/link') {
-    const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
     if (!cl || !cl.sub) return res(401, { error: 'auth' });
     const was = await linked(me.id);
     if (was && was !== cl.sub) return res(409, { error: 'taken' });
     if (!was) { try { await place(cl.sub); } catch (x) { if (x.name !== 'ConditionalCheckFailedException') throw x; return res(409, { error: 'taken' }); } }
+    // Used up: the code stops working (PutItem only; the shared role has no DeleteItem). The row's ttl removes it later.
+    if (pairRow) { await db.send(new D.PutItemCommand({ TableName: T, Item: Object.assign({}, pairRow, { exp: N(0) }) })); return res(200, { ok: 1, name: me.name }); }
     return res(200, { ok: 1, access_token: tok });
   }
 

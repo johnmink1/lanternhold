@@ -1,4 +1,4 @@
-/* lh-build 202611262215 */
+/* lh-build 202611262349 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2643,3 +2643,5 @@ body.atench.shopmin .stage .arena{display:none!important}
 .uqrow b{font-size:13px}.uqrow small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 .jobline{flex-wrap:wrap}.jobline .uqhint,.jobline > .uqp{flex-basis:100%}
 .uqline > .uqp{flex-basis:auto}
+.modal .btn.wide{display:block;width:100%;margin-top:10px}
+.dc-code{font:700 40px/1.2 "Chakra Petch",monospace;letter-spacing:.25em;color:#f0b452;margin:14px 0 4px;user-select:all}
