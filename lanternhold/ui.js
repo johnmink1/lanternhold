@@ -4340,6 +4340,7 @@
         use('gs-look', 'crown', 'Profile looks', 'Frames, titles, banners, emblems', 'Open') +
         (CL ? use('gs-mkt', 'coin', 'Sigil exchange', 'Sell ' + TOKEN + ' for gold, or buy them with gold', 'Open') : '') +
       '</div>' +
+      (CL ? '<div class="shopuses">' + use('gs-sup', 'users', 'Support the game', 'Free one-time ' + TOKEN + ' for linking your Discord or itch.io account', 'Open') + '</div>' : '') +
       // 2. Lanternholder: one set of perks, two ways to get it
       '<div class="shopsec subbox"><h3>Lanternholder <span class="tag">Premium</span></h3>' +
       '<p class="shopsub">Convenience, never power.</p>' +
@@ -4375,6 +4376,7 @@
         const wd = md.querySelector('#gs-ward'); if (wd) wd.onclick = () => openWardrobe('k');
         md.querySelector('#gs-look').onclick = () => openProfileEditor();
         const mk = md.querySelector('#gs-mkt'); if (mk) mk.onclick = () => { closeModal(); openTrade('sigils'); };
+        const su = md.querySelector('#gs-sup'); if (su) su.onclick = () => openSupport(reopen);
         const i = md.querySelector('#gs-in'); if (i) i.onclick = () => go(i, storeSignIn);
         const sy = md.querySelector('#gs-sync'); if (sy) sy.onclick = async () => { sy.disabled = true; await storeSync(true); getSigils(back); };
         md.querySelector('#gs-give1').onclick = () => giveMercy(1);
@@ -4691,6 +4693,61 @@
     if (w) setTimeout(() => toast('flame', 'A fresh start', w === 'me' ? 'An admin reset your account. Your delve starts again from the top of the stair.' : 'The Deep has been reset for everyone. Every delver starts again from the top of the stair.', 'feat'), 1500);
   }
   function isAdmin() { return !!(sess && sess.id && String(claims(sess.id)['cognito:groups'] || '').includes('admins')); }
+  // Support tasks (v132, John 26 Nov 2026): one-time Sigil thanks for linking a Discord or itch.io account to the hero, checked and
+  // paid by the server. The player signs in in a pop-up (identity-only OAuth, implicit grant); oauth.html hands the token back here
+  // and POST /support/claim asks Discord or itch who it belongs to. Nothing rewards joining, following, collecting, rating, reviewing
+  // or commenting: those would break Discord's or itch.io's rules (John: never break a platform's terms).
+  const SUP_APP = { discord: '', itch: '' }; // OAuth client ids (public). Empty = that task shows as coming soon.
+  const SUP_CB = location.origin + '/oauth.html';
+  const SUP = [
+    { id: 'discord', icon: 'discord', name: 'Link your Discord', how: 'Sign in with Discord to link it to your hero. We only see your Discord name and id, nothing else. Our community is on the <a href="https://discord.gg/6G7E7rhGFu" target="_blank" rel="noopener">Born 2 Game Discord</a> if you want to say hi.', check: 'Link Discord',
+      auth: (id, st) => 'https://discord.com/oauth2/authorize?response_type=token&client_id=' + id + '&scope=identify&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
+    { id: 'itch', icon: 'star', name: 'Link your itch.io account', how: 'Sign in with itch.io to link it to your hero. We only see your public itch.io profile.', check: 'Link itch.io',
+      auth: (id, st) => 'https://itch.io/user/oauth?response_type=token&client_id=' + id + '&scope=profile%3Ame&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
+  ];
+  const SUP_ERR = { taken: 'That account is already linked to another hero.', done: 'You already have this one.',
+    floor: 'Reach floor 10 first, then try again.', hero: 'Play a little first so your hero is registered, then try again.', token: 'The sign-in did not go through. Try again.', remote: 'We could not reach them just now. Try again in a minute.' };
+  let supData = null, supBusy = false, supBack = null;
+  function supStart(task) {
+    const t = SUP.find(x => x.id === task); if (!t || !SUP_APP[task]) return;
+    const st = 'sup' + task + Math.random().toString(36).slice(2, 12);
+    try { localStorage.setItem('lh_oauth_st', st); localStorage.removeItem('lh_oauth'); } catch (e) {}
+    const w = window.open(t.auth(SUP_APP[task], st), 'lhoauth', 'width=520,height=760');
+    if (!w) location.href = t.auth(SUP_APP[task], st);
+  }
+  // oauth.html posts the token back to this window, or (when the pop-up was blocked) leaves it in localStorage and reloads the game.
+  async function supFinish(m) {
+    let want = null; try { want = localStorage.getItem('lh_oauth_st'); localStorage.removeItem('lh_oauth_st'); localStorage.removeItem('lh_oauth'); } catch (e) {}
+    if (!m || !m.token || !m.state || m.state !== want) return;
+    const task = m.state.startsWith('supdiscord') ? 'discord' : m.state.startsWith('supitch') ? 'itch' : '';
+    if (!task || supBusy) return; supBusy = true;
+    try { const r = await papi('POST', '/support/claim', { task, token: m.token }); if (supData) supData.mine = r.mine; if (prof && r.bal != null) prof.bal = r.bal; sfx.buy(); toast('star', '+' + r.add + ' ' + TOKEN, 'Thank you for supporting Lanternhold!', 'feat'); }
+    catch (e) { toast('lock', 'Not yet', SUP_ERR[e.code] || 'Try again in a moment.', 'warn'); }
+    supBusy = false; if (document.querySelector('#sp-x')) openSupport(supBack);
+  }
+  window.addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.lhOauth) supFinish(e.data.lhOauth); });
+  setTimeout(() => { let m = null; try { m = JSON.parse(localStorage.getItem('lh_oauth') || 'null'); } catch (e) {} if (m && Date.now() - (m.at || 0) < 6e5 && signedIn()) { openSupport(); supFinish(m); } }, 2500);
+  async function openSupport(back) {
+    supBack = back = typeof back === 'function' ? back : closeModal;
+    const row = t => { const c = supData && supData.mine[t.id], sig = supData ? supData.tasks[t.id] : null, live = !!SUP_APP[t.id];
+      return '<div class="supt"><div class="supth">' + icon(t.icon) + '<b>' + t.name + '</b>' + (sig ? '<span class="supsig">' + sigil + sig + '</span>' : '') + (c ? '<span class="tag once">Done</span>' : '') + '</div>' +
+        (c ? '<small>Thank you! The ' + TOKEN + ' are in your account.</small>' : '<small>' + t.how + '</small>' +
+          '<div class="supform"><button class="btn small" data-supgo="' + t.id + '"' + (supData && live ? '' : ' disabled') + '>' + (live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
+    modal('<div class="maphead"><div><h2>Support the game</h2><small>Link your accounts to your hero and get free ' + TOKEN + ', once each, paid right away.</small></div><button class="iconbtn" id="sp-x" aria-label="Close">&times;</button></div>' +
+      (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' : !supData ? '<p class="note">Loading…</p>' : '') +
+      '<div class="supts">' + SUP.map(row).join('') + '</div>' +
+      '<div class="supnote"><b>Reviews and comments</b><small>If you enjoy Lanternhold, an honest rating, review or comment on <a href="https://born2gamellc.itch.io/lanternhold" target="_blank" rel="noopener">itch.io</a> or anywhere you play helps new players find us. These never earn rewards or any in-game benefit, and we never penalize anyone for what they write or for not writing. We do not pay for likes, ratings, reviews or comments.</small></div>' +
+      '<p class="note small">Each one pays once per account, and each Discord or itch.io account can link to one hero. Your hero needs to reach floor 10 first. We never post anything for you.</p>' +
+      '<div class="row"><button class="btn ghost" id="sp-ok">Back</button></div>', md => {
+        md.className = 'sheet';
+        md.querySelector('#sp-x').onclick = closeModal; md.querySelector('#sp-ok').onclick = () => back();
+        md.querySelectorAll('[data-supgo]').forEach(b => b.onclick = () => supStart(b.dataset.supgo));
+      });
+    if (signedIn() && CL && !supData) {
+      try { supData = await papi('GET', '/support'); } catch (e) { const n = document.querySelector('#sp-x') && $('modalbody').querySelector('.note'); if (n) n.textContent = e.code === 404 || e.code === 'Not Found' ? 'Support tasks open with the next server update.' : 'Could not load your tasks. Try again in a moment.'; return; }
+      if (document.querySelector('#sp-x')) openSupport(back);
+    }
+  }
   async function adminApi(method, path, body) {
     const tok = await idToken(); if (!tok) throw new Error('Sign in first.');
     const r = await fetch(CL.api.replace(/\/$/, '') + path, { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -8263,5 +8320,5 @@
   requestAnimationFrame(render);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   window.addEventListener('pagehide', save);
-  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch, openProfile: id => profileModal(id), boardProfile: g => boardProfile(g) };
+  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch, openProfile: id => profileModal(id), boardProfile: g => boardProfile(g), openSupport, getSigils };
 })();

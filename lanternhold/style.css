@@ -2620,3 +2620,14 @@ body.atench.shopmin .stage .arena{display:none!important}
 .mtab td:last-child{text-align:right;width:1%}
 @media (max-width:520px){.mtab .tbar{display:none}.mtab td{padding:5px 4px}}
 .mtab td{display:table-cell!important}
+/* v132 Support the game: one-time Sigil tasks */
+.supts{display:grid;gap:10px;margin:8px 0 12px}
+.supt{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;border:1px solid var(--line2);background:var(--panel)}
+.supt small{color:var(--muted);font-size:13px;line-height:1.4}
+.supth{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.supth svg{width:18px;height:18px;color:var(--gold);flex:none}
+.supsig{display:inline-flex;align-items:center;gap:3px;margin-left:auto;font-weight:700;color:var(--gold)}.supsig .sigil{width:16px;height:16px}
+.supform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:2px}
+.supform input{flex:1 1 140px;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--line2);background:var(--bg2);color:var(--text);font:inherit}
+.supnote{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;border:1px dashed var(--line2);margin-bottom:8px}
+.supnote small{color:var(--muted);font-size:13px;line-height:1.4}.supnote a{color:var(--gold)}
+.supt small a{color:var(--gold)}
