@@ -1929,7 +1929,7 @@
       h += (open ? '<p class="note">' + open + (open === 1 ? ' seat is' : ' seats are') + ' open.</p>' : '<p class="note">Your party is full. When a player accepts your invite, you choose who steps out.</p>') +
         '<button class="btn small" id="b-find">' + (boardList ? 'Show other heroes' : 'Browse the guild') + '</button>';
       if (boardMsg) h += '<p class="note">' + esc(boardMsg) + '</p>';
-      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + ' &middot; reached floor ' + g.floor + '</div></div>' +
+      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + (g.floor ? ' &middot; reached floor ' + g.floor : '') + '</div></div>' +
         ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
       if ((S.guests || []).length) h += '<p class="note">To let a player’s hero go, press Dismiss on their seat.</p>';
     }
@@ -2816,48 +2816,153 @@
       });
   }
 
-  // ---------- companion profile ----------
+  // ---------- hero profile (v132 redesign, John 26 Nov 2026) ----------
+  // Your own hero has two tabs: My hero (the full character sheet, only you see it) and Public (what other players see
+  // in the Players Guild, with a switch for each part). Companions and borrowed heroes use the same sheet without tabs.
+  // Hidden parts are stored as pf.h on the profile; heroes.js leaves them out of GET /heroes, so it is enforced there.
   const SIDE_OF_MEMBER = id => { const m = L.memberById(id); if (id === 'you') return L.sideOf(S); return m.side || null; };
-  function profileModal(id) {
+  const PUB_PARTS = [
+    ['fl', 'Deepest floor', 'How far down you have been.'],
+    ['np', 'New Playthrough tier', 'Your NP+ badge and portrait ring.'],
+    ['on', 'Online now', 'Shows others when you are playing.'],
+    ['st', 'Combat stats', 'Damage, health and healing.'],
+    ['gr', 'Gear', 'What your hero wears.'],
+    ['rc', 'Records', 'Monsters, guardians, feats and time played.'],
+    ['pa', 'Party', 'Who fights beside you.'],
+    ['b', 'Bio', 'The line you wrote about your hero.'],
+    ['e', 'Emblems', 'The emblems on your card.'],
+    ['w', 'Grand War badge', 'Your commander rank and honors.'],
+  ];
+  let profTab = 'me', pubTimer = 0;
+  const pubHidden = () => (prof && prof.pf && Array.isArray(prof.pf.h) ? prof.pf.h : []);
+  const pubOff = k => pubHidden().includes(k);
+  const ptile = (k, v, cls) => '<div' + (cls ? ' class="' + cls + '"' : '') + '><span>' + k + '</span><b>' + v + '</b></div>';
+  // What your hero shows in the Players Guild beyond the card: sent with PUT /hero, trimmed by the server.
+  function myShowcase() {
+    const g = S.gear.you || {}, gear = [], st = S.stats || {};
+    for (const p of L.openPos(S, 'you')) { const it = g[p] && L.itemOf(S, g[p]); if (it && !(p === 'legs' && L.robeOn(S, 'you'))) gear.push([p, L.gearName(it).slice(0, 40), it.rar, it.up | 0]); }
+    return { s: { d: Math.round(L.steadyDps(S, 'you') || 0), h: Math.round(L.maxHpOf(S, 'you') || 0), hl: Math.round(L.healPerSec(S, 'you') || 0) },
+      g: gear.slice(0, 14), r: { k: Math.floor(st.kills || 0), b: Math.floor(st.bossKills || 0), c: Math.floor(st.chests || 0), t: Math.floor(st.playTime || 0), f: L.featCount(S), rk: Math.floor(st.rekindles || 0) },
+      pa: S.party.filter(x => x && x !== 'you').map(x => { const m = L.memberById(x); return m ? [String(m.name).slice(0, 20), m.cls] : null; }).filter(Boolean).slice(0, 4) };
+  }
+  // Your own public profile, with your switches applied the same way the server applies them.
+  function myPublic() {
+    const x = pubOff, pf = Object.assign({}, prof && prof.pf), ps = myShowcase();
+    if (x('b')) pf.b = ''; if (x('e')) pf.e = [];
+    if (x('st')) delete ps.s; if (x('gr')) delete ps.g; if (x('rc')) delete ps.r; if (x('pa')) delete ps.pa;
+    return { name: S.hero.name, cls: S.hero.cls, level: L.lvl(S, 'you'), floor: x('fl') ? 0 : S.maxFloorEver, np: x('np') ? 0 : L.npTier(S), on: !x('on'), wd: S.wd, pf, w: !x('w') && prof && prof.wv ? prof.wl : '', ps };
+  }
+  // The public profile: the looks card plus whatever the player chose to show.
+  function publicProfile(o) {
+    const ps = o.ps || {}, s = ps.s, r = ps.r, n = v => fmt(+v || 0);
+    let h = '<div class="pfwrap">' + looksCard(o) + '</div>';
+    if (s) h += '<div class="pubsec"><h4>Combat</h4><div class="pstats">' + ptile('Damage', n(s.d) + '/s') + ptile('Health', n(s.h)) + (s.hl ? ptile('Healing', n(s.hl) + '/s') : '') + '</div></div>';
+    if (r) h += '<div class="pubsec"><h4>Records</h4><div class="pstats">' + ptile('Monsters', n(r.k)) + ptile('Guardians', n(r.b)) + ptile('Feats', n(r.f)) + ptile('Time played', fmtTime(+r.t || 0)) + (r.rk ? ptile('Rekindles', n(r.rk)) : '') + ptile('Chests', n(r.c)) + '</div></div>';
+    if (ps.pa && ps.pa.length) h += '<div class="pubsec"><h4>Party</h4><div class="pparty">' + ps.pa.map(([n, c]) => '<span>' + esc(n) + ' ' + (L.CLASSES[c] ? classTag(c) : '') + '</span>').join('') + '</div></div>';
+    if (ps.g && ps.g.length) h += '<div class="pubsec"><h4>Gear</h4><ul class="pgear two">' + ps.g.map(([p, n, rar, up]) => '<li><span>' + esc(L.SLOT_NAME[p] || p) + '</span><b class="r-' + esc(rar) + '">' + esc(n) + (up ? ' +' + up : '') + '</b></li>').join('') + '</ul></div>';
+    return h;
+  }
+  function savePublic(md) {
+    clearTimeout(pubTimer);
+    const st = () => md.querySelector('#pv-st'); if (st()) st().textContent = 'Saving…';
+    pubTimer = setTimeout(async () => {
+      const p = prof.pf || {}, body = { b: p.b || '', t: p.t || '', f: p.f || '', c: p.c || '', g: p.g || '', e: (p.e || []).slice(), h: pubHidden().slice() };
+      let msg;
+      try {
+        const r = await papi('PUT', '/profile', body), ok = r.pf && Array.isArray(r.pf.h);
+        prof.pf = Object.assign({}, r.pf, { h: body.h });
+        msg = ok ? 'Saved. The Players Guild shows this now.' : 'Not saved yet: the server for this arrives with the next update.';
+        if (ok) publishHero();
+      } catch (e) { msg = 'Could not save right now. Try again in a moment.'; }
+      if (st()) st().textContent = msg;
+    }, 700);
+  }
+  function profileModal(id, tab) {
     const m = L.memberById(id); if (!m) return;
+    const me = id === 'you', tabs = me && CL;
+    profTab = tabs ? (tab || profTab) : 'me';
     const c = L.CLASSES[m.cls], now = Date.now(), side = SIDE_OF_MEMBER(id), sd = side && L.SIDES[side];
     const guest = L.isGuest(S, id), lv = L.lvl(S, id) || 1, inParty = S.party.includes(id), g0 = guest && (S.guests || []).find(x => x.id === id);
-    const stats = [['Level', lv], ['Health', fmt(L.maxHpOf(S, id))], ['Damage', fmt(L.memberDps(S, id, now) || 0) + '/s']];
-    if (m.cls === 'healer') stats.push(['Healing', fmt(L.healPerSec(S, id)) + '/s']);
-    if (c.armor) stats.push(['Blocks', Math.round(c.armor * 100) + '% of hits']);
-    if (c.dodge) stats.push(['Dodges', Math.round(c.dodge * 100) + '% of hits']);
-    if (c.drain) stats.push(['Life drain', 'heals party as it hits']);
-    const rk = L.resKind(id);
-    if (rk) stats.push([rk === 'mana' ? 'Mana' : 'Stamina', Math.round(L.resOf(S, id)) + ' / ' + L.RES_MAX + ', regen ' + L.resRegen(S, id).toFixed(1) + '/s']);
-    const wv = k => L.wearVal(S, id, k);
-    if (wv('leech')) stats.push(['Life steal', (wv('leech') * 100).toFixed(1) + '% of damage']);
-    if (wv('block')) stats.push(['Gear block', (wv('block') * 100).toFixed(1) + '% chance']);
-    if (wv('def')) stats.push(['Defense', (wv('def') * 100).toFixed(1) + '% less damage']);
-    stats.push(['Power', m.player ? 'Full (player hero)' : m.rar ? Math.round(m.pow * 100) + '% (' + L.npcRar(m.rar).name + ' hire)' : L.LEGENDS.includes(id) ? 'Legendary (lore companion, ' + Math.round(L.NPC_POWER * 100) + '% of a much stronger build)' : Math.round(L.NPC_POWER * 100) + '% (story companion)']);
-    if ((S.hires || {})[id]) stats.push(['Contract', L.shortHire(S, id) ? fmtTime(Math.max(0, (S.hires[id].until - Date.now()) / 1000)) + ' left, already paid' : fmt(L.wagePerHour(S, id)) + ' gold an hour']);
-    const gear = S.gear[id] || {};
-    const gearList = L.openPos(S, id).filter(sl => !(sl === 'legs' && L.robeOn(S, id))).map(sl => { const it = gear[sl] && L.itemOf(S, gear[sl]); return '<li><span>' + L.SLOT_NAME[sl] + '</span>' + (it ? '<b class="r-' + it.rar + '">' + esc(L.gearName(it)) + (it.up ? ' +' + it.up : '') + '</b>' : '<i>Empty</i>') + '</li>'; }).join('');
-    const bio = id === 'you' ? 'That is you. You took the lantern from Old Thessaly and carried it down the stair' + (sd ? ', under the banner of the ' + sd.name : '') + '.'
-      : guest ? 'Another player’s hero, lent to your party. They fight at the level their owner trained them to. You cannot change their gear or train them.'
-      : (m.bio || m.line);
-    modal('<div class="prof"><div class="profhead"><div class="profspr c-' + m.cls + '"></div><div><h2>' + esc(m.name) + '</h2><small>' + esc(m.title) + '</small><div class="tags">' + classTag(m.cls) + (sd ? '<span class="sidetag" style="--side:' + sd.color + '">' + sd.name + '</span>' : '') + (guest ? '<span class="you guest">Player</span>' : '') + '</div></div></div>' +
-      '<p class="bio">' + esc(bio) + '</p>' + (m.line && !guest && id !== 'you' ? '<p class="quote">“' + esc(m.line) + '”</p>' : '') +
-      (id === 'you' && L.warAura(S) ? '<h3 class="sub">Grand War aura</h3><div id="p-aura">' + auraBox() + '</div>' : id === 'you' && CL ? '<div id="p-aura"></div>' : '') +
-      (id === 'you' && CL ? '<h3 class="sub">Profile card</h3><p class="note">What other players see in the Players Guild.</p><div class="pfwrap" id="p-card">' + looksCard({ name: m.name, cls: m.cls, level: lv, floor: S.maxFloorEver, np: L.npTier(S), wd: S.wd, pf: prof && prof.pf, w: prof && prof.wv ? prof.wl : '' }) + '</div><div class="row left"><button class="btn small" id="p-looks">Customize profile</button>' + (wardOn() ? '<button class="btn small ghost" id="p-ward">Wardrobe</button>' : '') + '</div>' : '') +
-      (guest && g0 && (g0.pf || g0.w) ? '<div class="pfwrap">' + looksCard(Object.assign({}, g0, { name: m.name, cls: m.cls })) + '</div>' : '') +
-      '<h3 class="sub">' + c.name + '</h3><p class="note">' + esc(CLASS_BLURB[m.cls]) + '</p>' +
-      '<div class="ability"><b>' + c.ability.name + '</b> <span>every ' + c.ability.cd + 's</span><small>' + esc(c.ability.desc) + '</small></div>' +
-      '<div class="pstats">' + stats.map(([k, v]) => '<div><span>' + k + '</span><b>' + v + '</b></div>').join('') + '</div>' +
-      (sd ? '<p class="note">' + sd.name + ': “' + sd.motto + '” ' + esc(sd.desc) + '</p>' : '') +
-      (guest ? '' : '<h3 class="sub">Gear</h3><ul class="pgear">' + gearList + '</ul>') +
-      '<div class="row">' + (guest ? '' : '<button class="btn ghost" id="p-gear">Manage gear</button>') + (!inParty && !guest ? '<button class="btn" id="p-seat">Bring along</button>' : '') + '<button class="btn ghost" id="p-close">Close</button></div></div>', md => {
-        const box = md.querySelector('.profspr'); try { const img = SP.render(m.cls, 5, lookHue(m)); if (img) box.appendChild(img); } catch (e) {}
-        const g = md.querySelector('#p-gear'); if (g) g.onclick = () => { closeModal(); gearWho = id; switchTab('gear'); };
-        const st = md.querySelector('#p-seat'); if (st) st.onclick = () => { closeModal(); if (campGate(true)) pickSeat(id); };
-        md.querySelector('#p-close').onclick = closeModal;
-        const lk = md.querySelector('#p-looks'); if (lk) lk.onclick = openProfileEditor; const pw = md.querySelector('#p-ward'); if (pw) pw.onclick = () => openWardrobe('k', id);
-        if (id === 'you' && CL && signedIn() && !prof) Promise.all([loadProfile(), loadWar()]).then(() => { const c = md.querySelector('#p-card'); if (c && prof) c.innerHTML = looksCard({ name: m.name, cls: m.cls, level: lv, floor: S.maxFloorEver, np: L.npTier(S), wd: S.wd, pf: prof.pf, w: prof.wv ? prof.wl : '' }); const au = md.querySelector('#p-aura'); if (au && !au.innerHTML && L.warAura(S)) au.innerHTML = '<h3 class="sub">Grand War aura</h3>' + auraBox(); });
+    const head = '<div class="profhead"><div class="profspr c-' + m.cls + '"></div><div class="phid"><h2>' + esc(m.name) + '</h2><small>' + esc(guest ? 'Another player’s hero' : m.title) + '</small><div class="tags">' + classTag(m.cls) + (sd ? '<span class="sidetag" style="--side:' + sd.color + '">' + sd.name + '</span>' : '') + (me ? npBadge(L.npTier(S)) : '') + (guest ? '<span class="you guest">Player</span>' : '') + '</div></div></div>';
+    const seg = tabs ? '<div class="seg ptabs" role="tablist"><button data-ptab="me" class="' + (profTab === 'me' ? 'on' : '') + '" role="tab">My hero</button><button data-ptab="pub" class="' + (profTab === 'pub' ? 'on' : '') + '" role="tab">Public profile</button></div>' : '';
+    const sheet = () => {
+      const dmg = (L.steadyDps(S, id) || L.memberDps(S, id, now) || 0), hp = L.maxHpOf(S, id), heal = m.cls === 'healer' ? L.healPerSec(S, id) : 0;
+      const kpi = '<div class="pkpi">' + ptile('Power level', lv) + ptile('Damage', fmt(dmg) + '/s') + ptile('Health', fmt(hp)) +
+        (me ? ptile('Deepest floor', S.maxFloorEver || 1) : heal ? ptile('Healing', fmt(heal) + '/s') : ptile('Power', m.player ? 'Full' : m.rar ? Math.round(m.pow * 100) + '%' : Math.round(L.NPC_POWER * 100) + '%')) + '</div>';
+      let xpbar = '';
+      if (me) {
+        const hl = L.heroLevel(S), pc = Math.floor(hl.xp / hl.need * 100), pts = L.heroPoints(S);
+        xpbar = '<div class="pxp"><div class="pxprow"><b>Hero level ' + hl.lv + '</b><span>' + fmt(hl.xp) + ' / ' + fmt(hl.need) + ' XP</span></div><div class="bmbar"><i style="width:' + pc + '%"></i></div>' + (pts > 0 ? '<small>' + pts + (pts === 1 ? ' stat point' : ' stat points') + ' to spend in the Skills tab.</small>' : '') + '</div>';
+      }
+      const stats = [];
+      if (heal && me) stats.push(['Healing', fmt(heal) + '/s']);
+      if (c.armor) stats.push(['Blocks', Math.round(c.armor * 100) + '% of hits']);
+      if (c.dodge) stats.push(['Dodges', Math.round(c.dodge * 100) + '% of hits']);
+      if (c.drain) stats.push(['Life drain', 'Heals party as it hits']);
+      const rk = L.resKind(id);
+      if (rk) stats.push([rk === 'mana' ? 'Mana' : 'Stamina', Math.round(L.resOf(S, id)) + ' / ' + L.RES_MAX + ' (+' + L.resRegen(S, id).toFixed(1) + '/s)']);
+      const wv = k => L.wearVal(S, id, k);
+      if (wv('leech')) stats.push(['Life steal', (wv('leech') * 100).toFixed(1) + '%']);
+      if (wv('block')) stats.push(['Gear block', (wv('block') * 100).toFixed(1) + '%']);
+      if (wv('def')) stats.push(['Defense', (wv('def') * 100).toFixed(1) + '% less damage']);
+      const pc = L.pierceOf(S, id); if (pc) stats.push(['Piercing', Math.round(pc * 100) + '%']);
+      if (me) stats.push(['Critical hits', (L.critChance(S) * 100).toFixed(1) + '%']);
+      stats.push(['Power', m.player ? 'Full (player hero)' : m.rar ? Math.round(m.pow * 100) + '% (' + L.npcRar(m.rar).name + ' hire)' : L.LEGENDS.includes(id) ? 'Legendary companion' : Math.round(L.NPC_POWER * 100) + '% (story companion)']);
+      if ((S.hires || {})[id]) stats.push(['Contract', L.shortHire(S, id) ? fmtTime(Math.max(0, (S.hires[id].until - Date.now()) / 1000)) + ' left, paid' : fmt(L.wagePerHour(S, id)) + ' gold an hour']);
+      const sec = (title, body, open) => '<details class="psec"' + (open ? ' open' : '') + '><summary>' + title + '</summary>' + body + '</details>';
+      const bio = me ? 'You took the lantern from Old Thessaly and carried it down the stair' + (sd ? ', under the banner of the ' + sd.name : '') + '.'
+        : guest ? 'Lent to your party by its owner. It fights with their build. You cannot change its gear or train it.' : (m.bio || m.line);
+      let h = '<p class="bio">' + esc(bio) + '</p>' + (m.line && !guest && !me ? '<p class="quote">“' + esc(m.line) + '”</p>' : '') + kpi + xpbar;
+      h += sec('Combat', '<div class="pstats">' + stats.map(([k, v]) => ptile(k, v)).join('') + '</div>', true);
+      h += sec(c.name + ' ability', '<div class="ability"><b>' + c.ability.name + '</b> <span>every ' + c.ability.cd + 's</span><small>' + esc(c.ability.desc) + '</small></div><p class="note">' + esc(CLASS_BLURB[m.cls]) + '</p>', !me);
+      if (me) {
+        const st = S.stats || {}, lore = Object.keys(S.lore).filter(k => L.LORE.find(l => l.id === k)).length;
+        h += sec('Journey', '<div class="pstats">' + ptile('Floor now', S.floor || 1) + ptile('Deepest floor', S.maxFloorEver || 1) + (L.npTier(S) ? ptile('New Playthrough', 'NP+' + L.npTier(S)) : '') + ptile('Rekindles', fmt(st.rekindles || 0)) +
+          ptile('Monsters', fmt(st.kills || 0)) + ptile('Guardians', fmt(st.bossKills || 0)) + ptile('Chests', fmt(st.chests || 0)) + ptile('Gold earned', fmt(st.goldEarned || 0)) +
+          ptile('Feats', L.featCount(S) + ' / ' + featsShown().length) + ptile('Lore found', lore + ' / ' + L.LORE.length) + ptile('Time played', fmtTime(st.playTime || 0)) + '</div>', true);
+        h += sec('Attributes', '<div class="pstats attr">' + L.STATS.map(x => '<div title="' + esc(x.name) + '"><span>' + esc(x.name) + '</span><b>' + L.statScore(S, x.id) + '</b></div>').join('') + '</div>', false);
+      }
+      if (!guest) {
+        const gear = S.gear[id] || {};
+        h += sec('Gear', '<ul class="pgear two">' + L.openPos(S, id).filter(sl => !(sl === 'legs' && L.robeOn(S, id))).map(sl => { const it = gear[sl] && L.itemOf(S, gear[sl]); return '<li><span>' + L.SLOT_NAME[sl] + '</span>' + (it ? '<b class="r-' + it.rar + '" data-info="' + it.uid + '" role="button" tabindex="0">' + esc(L.gearName(it)) + (it.up ? ' +' + it.up : '') + '</b>' : '<i>Empty</i>') + '</li>'; }).join('') + '</ul>', true);
+      }
+      if (guest && g0 && (g0.pf || g0.w)) h += '<div class="pfwrap">' + looksCard(Object.assign({}, g0, { name: m.name, cls: m.cls })) + '</div>';
+      if (me && L.warAura(S)) h += sec('Grand War aura', auraBox(), false);
+      if (sd) h += sec(sd.name, '<p class="note">“' + sd.motto + '” ' + esc(sd.desc) + '</p>', false);
+      return h + '<div class="row">' + (guest ? '' : '<button class="btn ghost" id="p-gear">Manage gear</button>') + (!inParty && !guest ? '<button class="btn" id="p-seat">Bring along</button>' : '') + '<button class="btn ghost" data-pclose>Close</button></div>';
+    };
+    const pub = () => {
+      if (!signedIn()) return '<p class="note">Sign in to set up the profile other players see in the Players Guild.</p><div class="row"><button class="btn ghost" data-pclose>Close</button></div>';
+      if (!prof) return '<p class="note">Loading your profile…</p>';
+      return '<p class="note">This is what other players see when they open your hero in the Players Guild. Your name, class, power level and looks always show. Choose the rest.</p>' +
+        '<details class="psec" open><summary>Show in the Players Guild</summary><div class="pvlist">' + PUB_PARTS.map(([k, n, d]) => '<label class="setrow pvrow"><span>' + n + '<small>' + d + '</small></span><input type="checkbox" data-pv="' + k + '"' + (pubOff(k) ? '' : ' checked') + '></label>').join('') + '</div><p class="note" id="pv-st" aria-live="polite"></p></details>' +
+        '<details class="psec" open><summary>Preview</summary><div id="pv-card">' + publicProfile(myPublic()) + '</div></details>' +
+        '<div class="row"><button class="btn small" id="p-looks">Customize looks</button>' + (wardOn() ? '<button class="btn small ghost" id="p-ward">Wardrobe</button>' : '') + '<button class="btn small ghost" data-pclose>Close</button></div>';
+    };
+    modal('<div class="prof v2">' + head + seg + '<div id="p-body">' + (profTab === 'pub' ? pub() : sheet()) + '</div></div>', md => {
+      md.classList.add('profsheet');
+      const box = md.querySelector('.profspr'); try { const img = SP.render(m.cls, 5, lookHue(m)); if (img) box.appendChild(img); } catch (e) {}
+      const body = md.querySelector('#p-body');
+      const paint = () => { body.innerHTML = profTab === 'pub' ? pub() : sheet(); md.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('on', b.dataset.ptab === profTab)); };
+      md.querySelector('.prof').addEventListener('click', e => {
+        const t = e.target;
+        const pt = t.closest('[data-ptab]'); if (pt) { profTab = pt.dataset.ptab; paint(); return; }
+        if (t.closest('[data-pclose]')) { closeModal(); return; }
+        if (t.closest('#p-gear')) { closeModal(); gearWho = id; switchTab('gear'); return; }
+        if (t.closest('#p-seat')) { closeModal(); if (campGate(true)) pickSeat(id); return; }
+        if (t.closest('#p-looks')) { openProfileEditor(); return; }
+        if (t.closest('#p-ward')) { openWardrobe('k', id); return; }
+        const inf = t.closest('[data-info]'); if (inf) itemModal(inf.dataset.info);
       });
+      md.querySelector('.prof').addEventListener('change', e => {
+        const k = e.target.dataset && e.target.dataset.pv; if (!k || !prof) return;
+        const h = new Set(pubHidden()); e.target.checked ? h.delete(k) : h.add(k);
+        prof.pf = Object.assign({}, prof.pf, { h: PUB_PARTS.map(x => x[0]).filter(x => h.has(x)) });
+        const cd = md.querySelector('#pv-card'); if (cd) cd.innerHTML = publicProfile(myPublic());
+        savePublic(md);
+      });
+      if (me && CL && signedIn() && !prof) Promise.all([loadProfile(), loadWar()]).then(() => { if ($('modalbody') === md && md.querySelector('#p-body') === body && profTab === 'pub') paint(); });
+    });
   }
 
   // ---------- journal: story and lore ----------
@@ -3724,7 +3829,7 @@
   async function publishHero() {
     try {
       let ref = ''; try { ref = localStorage.getItem('lh_ref') || ''; } catch (e) {}
-      const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S) }, '/hero');
+      const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S), ps: myShowcase() }, '/hero');
       if (!prof) loadProfile();
       const n = r && r.recruits;
       if (n > 0) {
@@ -3968,14 +4073,14 @@
     const wb = o.wd && o.wd.b && BANNERS[o.wd.b] ? o.wd.b : '';
     return '<div class="pfcard bn-' + bn + (wb ? ' hasban' : '') + '">' + (wb ? '<div class="pfban">' + bannerSVG(wb) + '</div>' : '') + '<div class="pfava fr-' + fr + npRing(o.np) + '><div class="ic c-' + o.cls + ' player' + (ok ? ' dressed' : '') + '">' + (ok ? '<img src="' + SP.spriteURL(o.cls, 2, outfitHue(ok)) + '" alt="">' : icon(CLASS_ICON[o.cls])) + '</div></div>' +
       '<div class="pfmain"><b class="pfname nc-' + nc + '">' + esc(o.name) + '</b>' + (tt ? '<small class="pftitle' + ttCls(pf.t) + '">' + esc(tt) + '</small>' : '') +
-      '<div class="pftags">' + classTag(o.cls) + (o.level ? '<span class="pflv">Power level ' + o.level + (o.floor ? ' · floor ' + o.floor : '') + '</span>' : '') + '</div>' +
+      '<div class="pftags">' + classTag(o.cls) + (o.on ? '<span class="online">Online now</span>' : '') + (o.level ? '<span class="pflv">Power level ' + o.level + (o.floor ? ' · floor ' + o.floor : '') + '</span>' : '') + '</div>' +
       ((pf.e || []).length ? '<div class="pfemb">' + pf.e.map(emblem).join('') + '</div>' : '') + '</div></div>' +
       (pf.b ? '<p class="pfbio">' + esc(pf.b) + '</p>' : '') +
       (o.w ? '<div class="pfwar">' + warBadge(o.w, true) + '</div>' : '');
   }
   function boardProfile(g) {
     loadWar().then(() => {
-      modal('<div class="pfwrap">' + looksCard(g) + '<div class="row"><button class="btn ghost" id="bp-x">Close</button></div></div>', md => { md.querySelector('#bp-x').onclick = closeModal; });
+      modal('<div class="prof v2 pubview">' + publicProfile(g) + '<div class="row"><button class="btn ghost" id="bp-x">Close</button></div></div>', md => { md.classList.add('profsheet'); md.querySelector('#bp-x').onclick = closeModal; });
     });
   }
   // ---- the editor ----
@@ -3987,7 +4092,7 @@
     await Promise.all([loadProfile(), loadWar()]);
     if (!prof) { modal('<div class="center"><h2>Your profile</h2><p>The profile server could not be reached. Try again in a minute.</p><div class="row"><button class="btn ghost" id="pe-x">Close</button></div></div>', md => md.querySelector('#pe-x').onclick = closeModal); return; }
     const p = prof.pf || {};
-    draft = { b: p.b || '', t: p.t || '', f: p.f || '', c: p.c || '', g: p.g || '', e: (p.e || []).slice() };
+    draft = { b: p.b || '', t: p.t || '', f: p.f || '', c: p.c || '', g: p.g || '', e: (p.e || []).slice(), h: (p.h || []).slice() };
     paintEditor();
   }
   const owns = (k, id, price) => !price || prof.own.includes(k + '.' + id);
@@ -4850,7 +4955,7 @@
   // A Loot Goblin's Sack is rare enough to tell everyone: post it to Global chat with a link (signed-in players only).
   async function bragSack(it) {
     if (!CL || !signedIn() || !S.hero) return;
-    try { await chatCall('POST', '/chat', { ch: 'global', text: 'just pulled the Loot Goblin’s Sack off a Loot Goblin! ' + tokenOf(it), name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined }); } catch (e) {}
+    try { await chatCall('POST', '/chat', { ch: 'global', text: 'just pulled the Loot Goblin’s Sack off a Loot Goblin! ' + tokenOf(it), name: S.hero.name, cls: S.hero.cls, np: (!pubOff('np') && L.npTier(S)) || undefined }); } catch (e) {}
   }
   function linkItem(it) {
     if (!it || !CL) return false;
@@ -5135,7 +5240,7 @@
       if (chat.ch === 'dm' && !chat.dmTo) { chatNote('Pick who to whisper first: tap a player’s name in Global, Banner, Trade or Party and choose Whisper.', true); return; }
       inp.disabled = true;
       try {
-        await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined });
+        await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: (!pubOff('np') && L.npTier(S)) || undefined });
         inp.value = ''; chat.links = []; chatNote(); pollChat();
       } catch (err) {
         chatNote({ slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
@@ -5260,7 +5365,7 @@
       const inp = el.querySelector('input'), nt = el.querySelector('.cpnote'); let text = inp.value.trim(); if (!text) return;
       for (const l of chat.links) text = text.replace(l.label, l.token); text = text.replace(/\[\[(?!i:)/g, '[');
       inp.disabled = true;
-      try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
+      try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: (!pubOff('np') && L.npTier(S)) || undefined }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
       catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
       inp.disabled = false; inp.focus();
     });
@@ -6265,6 +6370,11 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 132, date: 'November 2026', title: 'A new hero profile', items: [
+      'Your hero profile is easier to read: power level, damage, health and deepest floor up top, then Combat, Journey, Attributes and Gear in sections you can fold.',
+      'New Public profile tab: choose what other players see in the Players Guild (floor, NP+ tier, online status, stats, gear, records, party, bio, emblems, Grand War badge).',
+      'Tap a name in the Players Guild to see that hero’s public profile.',
+    ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
       'Balance: past floor 100, gold per kill now grows 6% a floor instead of 10% or more. Floors 1 to 100 are unchanged. Upgrade and salvage prices follow.',
@@ -8057,5 +8167,5 @@
   requestAnimationFrame(render);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   window.addEventListener('pagehide', save);
-  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch };
+  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch, openProfile: id => profileModal(id), boardProfile: g => boardProfile(g) };
 })();
