@@ -210,12 +210,19 @@ ref({
   lede: 'Story companions join as you go deeper and rest by the campfire until you bring them along. They are a little weaker than other players’ heroes, by design.',
   body: () => {
     const tiers = [[0, 'The first five'], [1, 'Met deeper down']];
-    return tiers.map(([t, h]) => '<h2>' + h + '</h2><div class="grid2">' + L.MEMBERS.filter(m => m.tier === t).map(m => {
+    return tiers.map(([t, h]) => '<h2>' + h + '</h2><div class="grid2">' + L.MEMBERS.filter(m => m.tier === t && !m.uniq).map(m => {
       const side = L.SIDES[m.side];
       return card(m.id, esc(m.name), { pic: pic(m.cls, m.hue, m.name), style: '--acc:' + CLS[m.cls].color,
         sub: esc(m.title) + ' · ' + chip(esc(clsName(m.cls)), 'c') + (side ? ' ' + chip(esc(side.name), 's') : ''),
         body: '<p>' + esc(m.bio) + '</p>' + (m.line ? '<p class="quote">' + esc(m.line) + '</p>' : '') });
     }).join('') + '</div>').join('') +
+      '<h2 id="unique">Unique Legendaries</h2><p>Eight one-of-a-kind Legendary companions. Each gives a small extra bonus while working their own camp job, on top of the job itself. They draw a Legendary wage like any Legendary hire.</p><div class="grid2">' + L.MEMBERS.filter(m => m.uniq).map(m => {
+        const side = L.SIDES[m.side], u = L.UNIQ[m.id], post = u.job === 'any' ? 'any camp job' : L.JOBS.find(j => j.id === u.job).name;
+        const how = u.how === 'guild' ? 'Now and then on offer at the Guild Hall once you reach floor ' + u.floor + '.' : u.how === 'quest' ? 'Finish the side quest that opens on floor ' + u.floor + '. Joins for free.' : u.how === 'adv' ? 'Joins for free the first time you beat the floor ' + u.floor + ' guardian.' : 'Caged by a monster somewhere past floor ' + u.floor + '. Very rare: a Rogue in the party, the Mercy Corps banner and floors past 100 each make it likelier. Free him to have him join; if the monster gets away, he waits at the Guild Hall.';
+        return card(m.id, esc(m.name), { pic: pic(m.cls, m.hue, m.name), style: '--acc:' + CLS[m.cls].color,
+          sub: esc(m.title) + ' · ' + chip(esc(clsName(m.cls)), 'c') + (side ? ' ' + chip(esc(side.name), 's') : ''),
+          body: '<p>' + esc(m.bio) + '</p>' + kv([['Camp bonus', '<b>' + esc(u.perk) + '</b> as ' + esc(post) + ': ' + esc(u.text)], ['How to find', esc(how)]]) });
+      }).join('') + '</div>' +
       '<h2 id="traits">Companion traits</h2><p>Every story companion rolls three traits when they join: one for a seat, one for a class they fight beside, and one for camp. Traits come in Common, Fine and Rare grades.</p>' +
       table(['Kind', 'Names', 'What it can give'], [
         ['Position', L.POS_TRAIT_NAME.map((n, i) => esc(n) + ' <small>(' + L.POS_NAME[i] + ')</small>').join(', '), Object.values(L.TRAIT_FX).map(f => pct(f.lo, 1) + ' to ' + pct(f.hi, 1) + ' ' + f.n).join('; ')],

@@ -1080,6 +1080,10 @@
       case 'shufend': flog('party', 'Your line snaps back into marching order', 'shufend', 3000); break;
       case 'ambush': if (e.first) flog('fight', e.guarded ? nm(e.target) + ' guards the rear from an ambush' : '<b class="bad">Ambush!</b> ' + nm(e.target) + ' is hit from behind'); break;
       case 'mercy': flog('fight', '<b class="good">Mercy Corps:</b> ' + esc(e.who) + (e.kind === 'wounded' ? ' is wounded on the path' : ' is held captive')); break;
+      case 'cage': flog('fight', '<b class="good">A caged scout!</b> Defeat ' + esc(e.name) + ' within ' + L.CAGE_TIME + 's to free him'); break;
+      case 'cagefled': flog('fight', 'The caged scout’s captor got away'); break;
+      case 'relit': flog('fight', '<b class="good">Last light:</b> Grimsby relights the lantern'); break;
+      case 'uqjoin': flog('party', '<b class="good">' + esc(e.name) + '</b> ' + (e.camp ? 'joins you' : 'waits at the Guild Hall')); break;
       case 'rescued': flog('fight', '<b class="good">Rescued ' + esc(e.who) + '</b>: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' min'); break;
       case 'aided': flog('fight', '<b class="good">Healed ' + esc(e.who) + '</b>: +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' min'); break;
       case 'craftxp': flog('party', '+' + fmt(e.xp) + ' hero XP for ' + (e.why === 'merge' ? 'merging' : 'enchanting'), 'cx', 1500); break;
@@ -1274,6 +1278,20 @@
         sfx.relic(); floatText(e.kind === 'wounded' ? 'A wounded medic!' : 'A captive medic!', 'skill', 0.5, 0.2);
         if (e.kind === 'wounded') toast('cross', 'A Mercy Corps companion is hurt', esc(e.who) + ' lies wounded on the path. Your healers will mend them; Lantern Hymn and your taps help too. Heal them to full within ' + L.AID_TIME + ' seconds for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.', 'feat');
         else toast('cross', 'A Mercy Corps companion needs rescue', 'This monster is holding ' + esc(e.who) + ' captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.', 'feat');
+      } else if (e.type === 'uqjoin') {
+        sfx.relic(); floatText(e.name + '!', 'skill', 0.5, 0.2);
+        toast('crown', e.name + (e.camp ? ' joins you' : ' waits at the Guild Hall'), (e.camp ? 'A unique Legendary, at the Campfire now. ' : 'Your Campfire is full, so they wait at the Guild Hall. Sign them on for free when you have a spot. ') + (L.UNIQ[e.id] ? L.UNIQ[e.id].perk + ' as ' + uqPostName(e.id) + ': ' + L.UNIQ[e.id].text : ''), 'feat');
+        updateSeats(true); paintBoard();
+      } else if (e.type === 'uqquest' || e.type === 'uqstep') {
+        toast('map', e.type === 'uqquest' ? 'Side quest: ' + e.name : e.name, (e.type === 'uqstep' ? 'Next: ' : '') + e.text + '. Track it at the Guild Hall.', 'feat');
+      } else if (e.type === 'cage') {
+        sfx.relic(); floatText('A caged scout!', 'skill', 0.5, 0.2);
+        toast('cross', 'Someone is caged!', esc(e.name) + ' has a Mercy Corps scout locked in a cage. Defeat it within ' + L.CAGE_TIME + ' seconds to free him.', 'feat');
+      } else if (e.type === 'cagefled') {
+        toast('cross', 'The monster got away', 'The caged scout slipped free later and made his way to the Guild Hall. Hire ' + esc(e.name) + ' there.', 'warn');
+        paintBoard();
+      } else if (e.type === 'relit') {
+        floatText('Last light!', 'skill', 0.5, 0.2);
       } else if (e.type === 'rescued') {
         sfx.relic(); floatText('Rescued!', 'skill', FOE_X, 0.2);
         toast('cross', esc(e.who) + ' is free', 'The Mercy Corps thanks you: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.', 'feat');
@@ -1876,7 +1894,7 @@
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
     return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
       '<div class="lv">' + (m.title ? esc(m.title) : (side ? side.name + (o.need === 'banner' ? ' only' : '') : '')) + ' &middot; wage ' + fmt(wage) + ' gold/h' + (bench ? ' &middot; power level ' + o.lv + ' &middot; leaves in ' + fmtTime(Math.max(0, (o.until - Date.now()) / 1000)) : '') + (!bench && o.exp ? ' &middot; leaves in ' + fmtTime(Math.max(0, (o.exp - Date.now()) / 1000)) : '') + '</div>' +
-      (L.UNIQ[o.id] ? '<div class="jobline on">' + uqPerk(o.id) + ' <small>as ' + esc(uqPostName(o.id)) + '</small></div>' : '') +
+      (L.UNIQ[o.id] ? '<div class="jobline on uqline">' + uqPerk(o.id) + ' <small>as ' + esc(uqPostName(o.id)) + '</small></div>' : '') +
       '<div class="npcacts">' + acts + '</div></div></div>';
   }
   function npcGuildHtml() {
@@ -2923,7 +2941,8 @@
       if (wv('def')) stats.push(['Defense', (wv('def') * 100).toFixed(1) + '% less damage']);
       const pc = L.pierceOf(S, id); if (pc) stats.push(['Piercing', Math.round(pc * 100) + '%']);
       if (me) stats.push(['Critical hits', (L.critChance(S) * 100).toFixed(1) + '%']);
-      stats.push(['Power', m.player ? 'Full (player hero)' : m.rar ? Math.round(m.pow * 100) + '% (' + L.npcRar(m.rar).name + ' hire)' : L.LEGENDS.includes(id) ? 'Legendary companion' : Math.round(L.NPC_POWER * 100) + '% (story companion)']);
+      stats.push(['Power', m.player ? 'Full (player hero)' : m.rar ? Math.round(m.pow * 100) + '% (' + L.npcRar(m.rar).name + ' hire)' : L.LEGENDS.includes(id) ? (L.UNIQ[id] ? 'Unique Legendary companion' : 'Legendary companion') : Math.round(L.NPC_POWER * 100) + '% (story companion)']);
+      if (L.UNIQ[id]) stats.push(['Camp bonus', L.UNIQ[id].perk + ' as ' + uqPostName(id) + ': ' + L.UNIQ[id].text]);
       if ((S.hires || {})[id]) stats.push(['Contract', L.shortHire(S, id) ? fmtTime(Math.max(0, (S.hires[id].until - Date.now()) / 1000)) + ' left, paid' : fmt(L.wagePerHour(S, id)) + ' gold an hour']);
       const sec = (title, body, open) => '<details class="psec"' + (open ? ' open' : '') + '><summary>' + title + '</summary>' + body + '</details>';
       const bio = me ? 'You took the lantern from Old Thessaly and carried it down the stair' + (sd ? ', under the banner of the ' + sd.name : '') + '.'
@@ -3757,6 +3776,8 @@
     if (away >= 60) actPush([Date.now(), 'away', Math.round(away), Math.round(g)]);
     const wagesBefore = S.wagesPaid || 0, wev = [];
     L.payWages(S, sec, Date.now(), wev, true);
+    const drilled = L.uniqDrill(S, sec);
+    if (drilled) setTimeout(() => toast('shield', 'Marshal Greaves drilled the camp', drilled + ' power level' + (drilled === 1 ? '' : 's') + ' for idle companions while you were away.', 'feat'), 1200);
     const wpaid = (S.wagesPaid || 0) - wagesBefore;
     if (wev.length) setTimeout(() => { toastKind = 'hires'; for (const e of wev) toast('user', esc(e.name || 'A hire') + (e.why === 'short' ? '’s contract ended' : ' walked off unpaid'), 'While you were away. Their gear is back in your bag.' + (e.why === 'short' ? '' : ' They wait on the Guild Hall bench for 3 days.'), 'warn'); toastKind = null; updateSeats(true); paintBoard(); }, 1500);
     if (fromLoad && sec >= 60 && g > 0) {
@@ -6463,6 +6484,7 @@
       'Tap a name in the Players Guild to see that hero’s public profile.',
       'Party list: your banner and other players’ banners now show on their rows.',
       'New Support the dev button: buy the developer a coffee. Gives nothing in game, separate from Mercy Corps.',
+      'Eight unique Legendary companions to find: at the Guild Hall, through side quests, deep in the adventure, and one rare rescue. Each gives a small extra bonus on their own camp job.',
     ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',

@@ -895,9 +895,9 @@
   const UNIQ_DRILL_SEC = 3600, UNIQ_DRILL_N = 3, UNIQ_DRILL_CAP = 0.5, UNIQ_ALDER = 0.1, UNIQ_PELL = 0.25, UNIQ_ILSE = 0.05, UNIQ_GRIMSBY = 3, UNIQ_CORRA = 0.2, UNIQ_BRAMBLE = 0.25, UNIQ_THISTLE = 0.25;
   // Thistle's cage: from CAGE_FLOOR every new foe rolls CAGE_BASE x (1 + foes since the last cage / CAGE_GROW), at most
   // CAGE_MAX, times 1.5 for each of a Rogue in the party, the Mercy Corps banner, floor 100 or deeper (at most x3).
-  // At ~430 foes an hour that is about a 63% chance in 42 hours of play. The caged foe has 1.5x health and gets away
+  // At ~420 foes an hour with a Rogue along: half find him by ~34 h, 64% by 42 h (no Rogue: ~41 h). The caged foe has 1.5x health and gets away
   // after CAGE_TIME seconds or if the party falls.
-  const CAGE_FLOOR = 50, CAGE_BASE = 1e-5, CAGE_GROW = 2000, CAGE_MAX = 0.001, CAGE_TIME = 60;
+  const CAGE_FLOOR = 50, CAGE_BASE = 1e-5, CAGE_GROW = 3000, CAGE_MAX = 0.001, CAGE_TIME = 60;
   const UNIQ_QUESTS = {
     pell: { name: 'Tinker Pell’s lost toolkit', steps: [
       { text: 'Open 3 locked doors or chests', n: 3, st: s => s.stats.locks || 0 },
@@ -961,6 +961,7 @@
   function uniqTick(s, dt, now, events) {
     if (!s.hero) return;
     const q = uqOf(s), f = s.maxFloorEver || 1;
+    if (q.cageOn && !(s.foe && s.foe.cage)) cageFled(s, events); // the game closed (or the foe vanished) mid-rescue
     uniqDrill(s, dt, events);
     for (const id in UNIQ_QUESTS) {
       if (q.got[id] || f < UNIQ[id].floor) continue;
@@ -985,7 +986,7 @@
     if (s.floor >= 100) m *= 1.5;
     return Math.min(3, m);
   }
-  const cageChance = s => Math.min(CAGE_MAX, CAGE_BASE * (1 + (uqOf(s).tn || 0) / CAGE_GROW)) * cageMult(s);
+  const cageChance = s => Math.min(CAGE_MAX, CAGE_BASE * (1 + (uqOf(s).tn || 0) / CAGE_GROW) * cageMult(s));
   function thistleFoe(s, now, rng) {
     const r = rng || Math.random, f = s.floor;
     if (!s.hero || f < CAGE_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now)) return null;
@@ -993,13 +994,13 @@
     if (q.got.thistle || q.fled || uniqWaiting(s, 'thistle')) return null;
     if (r() >= cageChance(s)) { q.tn = (q.tn || 0) + 1; return null; }
     const foe = makeFoe(s, r); if (foe.boss || foe.chest || foe.goblin || foe.pack || foe.world || foe.lock) return foe;
-    q.tn = 0; s.stats.cages = (s.stats.cages || 0) + 1;
+    q.tn = 0; q.cageOn = 1; s.stats.cages = (s.stats.cages || 0) + 1;
     foe.cage = 'thistle'; foe.cageT = 0; foe.hp *= 1.5; foe.max = foe.hp;
     return foe;
   }
   // The caged foe got away: Thistle slips out later and waits at the Guild Hall (a paid hire).
   function cageFled(s, events) {
-    const q = uqOf(s); q.fled = Date.now();
+    const q = uqOf(s); q.fled = Date.now(); q.cageOn = 0;
     if (!uniqWaiting(s, 'thistle')) hallState(s).offers.push({ id: 'thistle', rar: 'legendary', legend: 1, keep: 1 });
     events && events.push({ type: 'cagefled', name: memberById('thistle').name });
   }
@@ -2784,7 +2785,7 @@
       events && events.push({ type: 'goblinkill', item: back || null });
       if ((rng || Math.random)() < GOBLIN_SACK_CHANCE) { const sack = rollGoblinSack(s, f, rng || Math.random); s.bag.push(sack); s.stats.sacks = (s.stats.sacks || 0) + 1; events && events.push({ type: 'goblinsack', item: sack }); }
     }
-    if (foe.cage) { s.stats.freed = (s.stats.freed || 0) + 1; uniqArrive(s, foe.cage, events, now); foe.cage = null; }
+    if (foe.cage) { s.stats.freed = (s.stats.freed || 0) + 1; uniqArrive(s, foe.cage, events, now); uqOf(s).cageOn = 0; foe.cage = null; }
     if (foe.rescue) { s.mercyXp = Math.max(now, s.mercyXp || 0) + MERCY_MIN * 60000; s.stats.rescues = (s.stats.rescues || 0) + 1; events && events.push({ type: 'rescued', who: foe.rescue }); }
     s.gold += g; s.stats.goldEarned += g; s.stats.kills++;
     qEv(s, 'kill', { foe, f, clean: !s.qdown, spare: foe.boss ? lanternTime(s) - (s.lantern || 0) : 0 });

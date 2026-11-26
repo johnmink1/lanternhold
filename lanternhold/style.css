@@ -2620,3 +2620,14 @@ body.atench.shopmin .stage .arena{display:none!important}
 .mtab td:last-child{text-align:right;width:1%}
 @media (max-width:520px){.mtab .tbar{display:none}.mtab td{padding:5px 4px}}
 .mtab td{display:table-cell!important}
+/* unique Legendaries: camp post bonus tags and Guild Hall side quests */
+.uqp{font-style:normal;font-size:11px;font-weight:800;color:var(--ember);white-space:nowrap;cursor:help}
+.job .uqp{display:block;margin-top:2px}
+.uqhint{font-size:11px;color:var(--muted);cursor:help}
+.uqt{display:block;color:var(--ember);font-weight:700;margin-top:2px}
+.uqlist{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.uqrow{display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line2);border-radius:10px;background:var(--panel2)}
+.uqrow img{width:32px;height:32px;image-rendering:pixelated;flex:none}
+.uqrow b{font-size:13px}.uqrow small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.jobline{flex-wrap:wrap}.jobline .uqhint,.jobline > .uqp{flex-basis:100%}
+.uqline > .uqp{flex-basis:auto}
