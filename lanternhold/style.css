@@ -1,4 +1,4 @@
-/* lh-build 202611260519 */
+/* lh-build 202611261742 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2465,8 +2465,9 @@ body.atench .achips{display:none}
 .dummy{flex:none;width:92px;height:92px;border-radius:14px;border:2px solid #8a6a3a;background:radial-gradient(circle at 50% 40%,#5a4328,#2a1f14);color:#e9c98a;display:grid;place-items:center;cursor:pointer;font-weight:700}
 .dummy svg{width:34px;height:34px}.dummy:active{transform:scale(.95)}
 .tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
+.tdown{color:var(--bad,#ff6b5a);font-size:11px;font-weight:600}.tnote{font-size:12px;margin:-4px 0 10px}.ttaps{color:var(--muted);font-size:13px;margin:2px 0 6px}.ttaps b{color:var(--text,#e8e6e3)}
 #tr-rows{overflow-x:auto}
-@media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}
+@media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6),.ttab .tbar{display:none}.ttab th,.ttab td{padding-left:4px;padding-right:4px}}
 /* v125 NP+ gold sinks: Pip's crates and Curio shelf, Gulp's sign, the goblin bar, Hold works */
 .holdtents.n7{grid-template-columns:repeat(7,1fr)}
 .holdtents.n7 button{padding:8px 2px;font-size:12px}
