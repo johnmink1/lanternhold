@@ -4697,7 +4697,8 @@
   // paid by the server. The player signs in in a pop-up (identity-only OAuth, implicit grant); oauth.html hands the token back here
   // and POST /support/claim asks Discord or itch who it belongs to. Nothing rewards joining, following, collecting, rating, reviewing
   // or commenting: those would break Discord's or itch.io's rules (John: never break a platform's terms).
-  const SUP_APP = { discord: '', itch: '' }; // OAuth client ids (public). Empty = that task shows as coming soon.
+  // OAuth client ids (public): Discord app 'Lanternhold' and itch.io app 'Lanternhold', both on Born 2 Game accounts (26 Nov 2026).
+  const SUP_APP = { discord: '1575569010945425418', itch: '411a6fe66ce95d4cd43404b039805d84' }; // empty = that task shows as coming soon
   const SUP_CB = location.origin + '/oauth.html';
   const SUP = [
     { id: 'discord', icon: 'discord', name: 'Link your Discord', how: 'Sign in with Discord to link it to your hero. We only see your Discord name and id, nothing else. Our community is on the <a href="https://discord.gg/6G7E7rhGFu" target="_blank" rel="noopener">Born 2 Game Discord</a> if you want to say hi.', check: 'Link Discord',
@@ -6526,6 +6527,7 @@
       'Training Grounds: healers always show Heal/s, and the dummy run shows your taps per second and tap damage.',
       'New damage meter under the fight log: who deals your damage over the last 30 seconds.',
       'Sigil shop: give $1 or any amount to our Extra Life team for children’s hospitals.',
+      'Sigil shop: Support the game gives free one-time Sigils for linking your Discord (10) or itch.io (5) account.',
       'New Support the dev button: buy the developer a coffee. It gives nothing in game.',
       'Balance: repeat guardian kills give at most 5 relics a day per hero. First clears are not capped.',
       'Balance: NP+ foes drop more gold (x2 at NP+1, x3 at NP+2, and so on).',
