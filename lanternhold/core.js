@@ -1,4 +1,4 @@
-/* lh-build 202611260143 */
+/* lh-build 202611260259 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -3072,6 +3072,7 @@
       s.minions = []; s.lantern = 0; s.dots = {}; s.res = {}; s.oom = {}; s.cc = {};
       return;
     }
+    if (s.foe && !atCamp(s, now)) samplePipIncome(s, now);
     // story recruits and revivals
     for (const id of s.party) if (id && s.down[id] && s.down[id] <= now) { delete s.down[id]; s.hp[id] = maxHpOf(s, id) * 0.4; }
     // mana and stamina come back over time; an out-of-mana healer wakes up again at RES_WAKE
@@ -3359,7 +3360,29 @@
   // Enchanter's Dust Press, and Gulp the Hoard Mimic (global, server: infra/lambda/gulp.js and goblin.js), whose
   // Golden Loot Goblin drops the Gilded rings (WB_SETS[GG]). Curios owned, renovations and decorations survive NP+.
   const npPlus = s => npTier(s) >= 1;
-  const incomeHour = s => Math.max(3600, offlineGoldPerSec(s) * 3600);
+  // Price income (hotfix, Kyvia on Discord 26 Nov 2026: prices moved with where you stood and who was in the party, so
+  // parking a Gold Find party in camp made crates cheap). Now: the best offline income seen while fighting in the dive
+  // this playthrough (pip.pk, sampled every 10 s and never lower), locked once a UTC day (pip.lk). Party swaps, camp
+  // jobs and gear changes can no longer lower a price. Before any sample: the floor's income at the 4 kills/s cap with
+  // your account-wide gold bonuses only (no gear or camp jobs).
+  const pipDay = now => new Date(now || Date.now()).toISOString().slice(0, 10);
+  function acctGoldPerSec(s) {
+    const f0 = Math.max(1, (s.maxFloor || 1) - 1), f = isBossFloor(f0) ? Math.max(1, f0 - 1) : f0;
+    return 4 * foeGold(f, false) * goldMult(s) / ((1 + gearGold(s)) * (1 + campBonus(s, 'gold'))) * 0.5 * (1 + relicVal(s, 'bell'));
+  }
+  function samplePipIncome(s, now) {
+    const p = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }), t = npTier(s);
+    if (p.pkAt && now - p.pkAt < 10000 && now >= p.pkAt) return; p.pkAt = now;
+    const v = offlineGoldPerSec(s); if (!(v > 0) || !isFinite(v)) return;
+    if (!p.pk || p.pk.t !== t) p.pk = { t, v }; else if (v > p.pk.v) p.pk.v = v;
+  }
+  function pipRate(s) {
+    const p = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }), t = npTier(s), d = pipDay(s.clock);
+    if (p.lk && p.lk.d === d && p.lk.t === t) return p.lk.v;
+    if (p.pk && p.pk.t === t && p.pk.v > 0) { p.lk = { d, t, v: p.pk.v }; return p.lk.v; }
+    return acctGoldPerSec(s);
+  }
+  const incomeHour = s => Math.max(3600, pipRate(s) * 3600);
   const priceH = (s, h) => Math.max(1, Math.round(incomeHour(s) * h));
   const sinkFloor = s => Math.max(1, s.maxFloor || s.floor || 1);
   // Pip the Dicer: three crates of gear (never Common) and a chance at a Curio. Gold only, never Sigils.
@@ -3528,7 +3551,7 @@
   }
 
   const api = {
-    npPlus, incomeHour, priceH, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
+    npPlus, incomeHour, priceH, pipRate, samplePipIncome, acctGoldPerSec, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
     steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
     NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
