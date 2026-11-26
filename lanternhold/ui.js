@@ -1,4 +1,4 @@
-/* lh-build 202611260045 */
+/* lh-build 202611260111 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -2079,34 +2079,33 @@
   const invSave = () => { try { localStorage.setItem('lh_inv', JSON.stringify(INV)); } catch (e) {} };
   const invKind = it => it.slot === 'main' ? 'weapon' : it.slot === 'off' ? 'off' : it.slot === 'ring' || it.slot === 'neck' ? 'jewel' : 'armor';
   const RAR_RANK = it => L.RARITY.findIndex(r => r.id === it.rar);
-  // v125 (Kyvia, Discord): "Who" can pick one hero in the party ('h:<id>'), not just a class: items that hero wears, or
-  // could wear now (class fits and power level is high enough). A saved hero who has left the party counts as Anyone.
+  // v127 (John, 26 Nov 2026): on the Enchanter and Armorer counters "Who" picks one party hero ('h:<id>') and shows only
+  // the gear that hero is wearing; "Class" is its own filter (who can use the item). A saved hero who left the party
+  // counts as Anyone. (v126 had both in one Who menu and showed what a hero could wear too.)
   const whoHeroes = () => S.party.filter(Boolean).map(id => L.memberById(id)).filter(Boolean);
-  function whoPass(who, it) {
-    if (!who || who === 'all') return true;
-    if (who.slice(0, 2) === 'h:') {
-      const id = who.slice(2), m = S.party.includes(id) && L.memberById(id); if (!m) return true;
-      return L.wearer(S, it.uid) === id || (L.usable(m.cls, it) && L.canWear(S, id, it));
-    }
-    return L.usable(who, it);
+  function wornPass(who, it) {
+    if (!who || who.slice(0, 2) !== 'h:') return true;
+    const id = who.slice(2); if (!S.party.includes(id)) return true;
+    return L.wearer(S, it.uid) === id;
   }
   const whoOpts = (cur) => whoHeroes().map(m => '<option value="h:' + m.id + '"' + (cur === 'h:' + m.id ? ' selected' : '') + '>' + esc(m.name) + ' (' + L.CLASSES[m.cls].name + ')</option>').join('');
   function invList(pack, m) {
     let l = pack.filter(it => (INV.kind === 'all' || invKind(it) === INV.kind) && (INV.rar === 'all' || it.rar === INV.rar) &&
-      (INV.who === 'me' ? L.usable(m.cls, it) : whoPass(INV.who, it)));
+      (INV.who === 'all' || L.usable(INV.who === 'me' ? m.cls : INV.who, it)));
     const by = { best: (a, b) => L.gearPct(b) - L.gearPct(a), level: (a, b) => L.reqLevel(b) - L.reqLevel(a) || L.gearPct(b) - L.gearPct(a), rarity: (a, b) => RAR_RANK(b) - RAR_RANK(a) || L.gearPct(b) - L.gearPct(a),
       type: (a, b) => (INV_KINDS.findIndex(k => k[0] === invKind(a)) - INV_KINDS.findIndex(k => k[0] === invKind(b))) || String(L.tyOf(a)).localeCompare(String(L.tyOf(b))) || L.gearPct(b) - L.gearPct(a), new: (a, b) => String(b.uid).localeCompare(String(a.uid)) };
     return l.sort(by[INV.sort] || by.best);
   }
   // v117: the same filters on the Armorer's and Enchanter's lists (John: "roll that same filtering into the armorer and
   // enchanter"). They keep their own saved choice so the pack and the counters don't fight. "Suggested" keeps each list's own order.
-  const SF = { kind: 'all', rar: 'all', who: 'all', sort: 'best' };
+  const SF = { kind: 'all', rar: 'all', who: 'all', cls: 'all', sort: 'best' };
   try { Object.assign(SF, JSON.parse(localStorage.getItem('lh_shopf') || '{}')); } catch (e) {}
+  if (SF.who !== 'all' && SF.who.slice(0, 2) !== 'h:') { SF.cls = SF.who; SF.who = 'all'; } // a class saved in Who before v127 moves to Class
   const sfSave = () => { try { localStorage.setItem('lh_shopf', JSON.stringify(SF)); } catch (e) {} };
   // noRar: the scrap lists pick rarities with their own chips and hide the Rarity menu, so a Rarity choice saved on
   // another counter tab must not apply there (v120 fix, John: "not able to scrap for gold": Rarity = Set from the Upgrade
   // tab emptied the scrap list while the Armour count still showed 51).
-  const sfPass = (it, noRar) => (SF.kind === 'all' || invKind(it) === SF.kind) && (noRar === true || SF.rar === 'all' || it.rar === SF.rar) && whoPass(SF.who, it);
+  const sfPass = (it, noRar) => (SF.kind === 'all' || invKind(it) === SF.kind) && (noRar === true || SF.rar === 'all' || it.rar === SF.rar) && wornPass(SF.who, it) && (!SF.cls || SF.cls === 'all' || L.usable(SF.cls, it));
   const SF_SORT = { level: (a, b) => L.reqLevel(b) - L.reqLevel(a), rarity: (a, b) => RAR_RANK(b) - RAR_RANK(a), type: (a, b) => (INV_KINDS.findIndex(k => k[0] === invKind(a)) - INV_KINDS.findIndex(k => k[0] === invKind(b))) || String(L.tyOf(a)).localeCompare(String(L.tyOf(b))), new: (a, b) => String(b.uid).localeCompare(String(a.uid)) };
   function sfApply(list, get, noSort) {
     get = get || (x => x); const l = list.filter(r => sfPass(get(r))), by = !noSort && SF_SORT[SF.sort];
@@ -2117,7 +2116,8 @@
     return '<div class="invbar sfbar"><div class="invkinds" role="tablist">' + INV_KINDS.map(([k, n]) => '<button class="' + (SF.kind === k ? 'on' : '') + '" data-sfk="' + k + '">' + n + ' <em>' + (k === 'all' ? items.length : items.filter(it => invKind(it) === k).length) + '</em></button>').join('') + '</div><div class="invsel">' +
       (o.noSort ? '' : '<label><span>Sort</span><select data-sfs="sort">' + [['best', 'Suggested']].concat(INV_SORTS.slice(1)).map(([k, n]) => opt('sort', k, n)).join('') + '</select></label>') +
       (o.noRar ? '' : '<label><span>Rarity</span><select data-sfs="rar">' + opt('rar', 'all', 'Any') + L.RARITY.filter(r => items.some(it => it.rar === r.id) || SF.rar === r.id).map(r => opt('rar', r.id, r.name)).join('') + '</select></label>') +
-      '<label><span>Who</span><select data-sfs="who">' + opt('who', 'all', 'Anyone') + whoOpts(SF.who) + L.CLASS_ORDER.map(c => opt('who', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
+      '<label title="Show only the gear this hero is wearing"><span>Who</span><select data-sfs="who">' + opt('who', 'all', 'Anyone') + whoOpts(SF.who) + '</select></label>' +
+      '<label title="Show gear this class can use"><span>Class</span><select data-sfs="cls">' + opt('cls', 'all', 'Any') + L.CLASS_ORDER.map(c => opt('cls', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
   }
   const sfList = (items, rows, empty, o) => sfBar(items, o) + ewList(rows, items.length && !rows.length ? 'Nothing here matches these filters. Try All or Anyone.' : empty);
   document.addEventListener('click', e => { const k = e.target.closest('[data-sfk]'); if (k) { e.stopPropagation(); SF.kind = k.dataset.sfk; sfSave(); paintEnchPanel(true); } }, true);
@@ -2219,7 +2219,7 @@
     let bh = '<div class="invbar"><div class="invkinds" role="tablist">' + INV_KINDS.map(([k, n]) => { const c = k === 'all' ? pack.length : pack.filter(it => invKind(it) === k).length; return '<button class="' + (INV.kind === k ? 'on' : '') + '" data-invk="' + k + '">' + n + ' <em>' + c + '</em></button>'; }).join('') + '</div>' +
       '<div class="invsel"><label><span>Sort</span><select data-invs="sort">' + INV_SORTS.map(([k, n]) => '<option value="' + k + '"' + (INV.sort === k ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>' +
       '<label><span>Rarity</span><select data-invs="rar"><option value="all">Any</option>' + L.RARITY.filter(r => pack.some(it => it.rar === r.id)).map(r => '<option value="' + r.id + '"' + (INV.rar === r.id ? ' selected' : '') + '>' + r.name + '</option>').join('') + '</select></label>' +
-      '<label><span>Who</span><select data-invs="who"><option value="all">Anyone</option><option value="me"' + (INV.who === 'me' ? ' selected' : '') + '>' + esc(m.name) + ' can use</option>' + whoOpts(INV.who) + L.CLASS_ORDER.map(c => '<option value="' + c + '"' + (INV.who === c ? ' selected' : '') + '>' + L.CLASSES[c].name + '</option>').join('') + '</select></label></div></div>';
+      '<label><span>Who</span><select data-invs="who"><option value="all">Anyone</option><option value="me"' + (INV.who === 'me' ? ' selected' : '') + '>' + esc(m.name) + ' can use</option>' + L.CLASS_ORDER.map(c => '<option value="' + c + '"' + (INV.who === c ? ' selected' : '') + '>' + L.CLASSES[c].name + '</option>').join('') + '</select></label></div></div>';
     bh += list.length ? '<div class="grid">' + list.map(it => tile(it, !L.usable(m.cls, it))).join('') + '</div>' : '<p class="note">Nothing in your pack matches. Try another filter.</p>';
     if (!pack.length) bh = '<p class="note">Your pack is empty. Gear your party wears shows on each character above. New gear drops from foes, chests and guardians.</p>';
     $('bag').innerHTML = bh;
@@ -6212,6 +6212,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 127, date: 'November 2026', title: 'Shop filters', items: [
+      'Enchanter and Armorer: Who now shows only the gear that hero is wearing. A new Class filter shows gear a class can use.',
+    ] },
     { v: 126, date: 'November 2026', title: 'Compact shops', items: [
       'Shops have a Compact button that hides the scene, so the counter fills the panel. Show scene brings it back.',
       'The Who filter on your gear and shop counters can pick one hero in your party, not just a class.',
