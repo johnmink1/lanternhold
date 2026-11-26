@@ -584,6 +584,24 @@
     let d = 0; for (const id of s.party) d += memberDps(s, id, now);
     return d + minionDps(s, now) * npMarkCls(s, 'necro', 0);
   }
+  // Damage meter (Kyvia, Discord 26 Nov 2026): who really deals the damage, counting abilities, skeletons and taps.
+  // Display only: a fading 30 s average of damage that landed, kept off the save and never read by the game rules.
+  const METER_TAU = 30, meters = new WeakMap();
+  function meterAdd(s, key, amt, now) {
+    if (!(amt > 0)) return;
+    let m = meters.get(s); if (!m) { m = { at: now, src: {} }; meters.set(s, m); }
+    const e = m.src[key] || (m.src[key] = { v: 0, t: now });
+    e.v = e.v * Math.exp(-Math.max(0, now - e.t) / 1000 / METER_TAU) + amt; e.t = Math.max(e.t, now);
+  }
+  // [{ key, dps }] strongest first. key is a party member id, 'skel', 'tap' or 'auto'.
+  function damageMeter(s, now) {
+    const m = meters.get(s); if (!m) return [];
+    now = now || Date.now();
+    const warm = 1 - Math.exp(-Math.max(1000, now - m.at) / 1000 / METER_TAU);
+    return Object.keys(m.src).map(key => { const e = m.src[key]; return { key, dps: e.v * Math.exp(-Math.max(0, now - e.t) / 1000 / METER_TAU) / (METER_TAU * warm) }; })
+      .filter(x => x.dps > 0.01).sort((a, b) => b.dps - a.dps);
+  }
+  function meterReset(s) { meters.delete(s); }
   // How much of a party member's damage gets through the foe's NP+ marks (1 when it has none).
   function npMarkCls(s, cls, pierce) {
     const m = s.foe && s.foe.mods; if (!m || !m.length || s.foe.world) return 1;
@@ -1286,7 +1304,7 @@
     let d = 0;
     if (fx.burst) { const c = CLASSES[heroCls(s)]; d = Math.max(c.dps, 1) * scale(s, 'you') * partyMult(s) * gearMult(s, 'you', 'dps') * (1 + sk(s, 'dps')) * fx.burst * wbMult(s, 'you'); }
     events && events.push({ type: 'ability', id: 'you', cls: heroCls(s), name: ab.name, dmg: d || undefined });
-    if (d) damageFoe(s, d, now, null, events);
+    if (d) damageFoe(s, d, now, null, events, 'you');
     return true;
   }
   function wantsSpec(s, ab, now) {
@@ -2538,19 +2556,20 @@
     return out;
   }
 
-  function damageFoe(s, amount, now, rng, events) {
+  function damageFoe(s, amount, now, rng, events, src) {
     if (s.foe && (s.foe.wounded || s.foe.lock)) return; // nobody fights a wounded Mercy Corps companion, or a lock
+    const mt = now || Date.now(), rec = !src ? () => {} : typeof src === 'string' ? x => meterAdd(s, src, x, mt) : x => { for (const k in src) meterAdd(s, k, x * src[k], mt); };
     let guard = 0;
     while (amount > 0 && guard++ < 60) {
       if (!s.foe) s.foe = makeFoe(s, rng);
       if (s.foe.lock || s.foe.wounded) return; // overkill never spills onto a lock
       const foe = s.foe, mult = (foe.boss ? 1 + relicVal(s, 'lens') : 1) * (1 + fxOn(s, 'vuln', now || Date.now())) * (1 + beastBonus(s, foe));
       let dmg = amount * mult;
-      if (foe.world) { if (s.wb.gob && gobDash(s, now || Date.now()) && !gobRogue(s)) return; s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); return; }
+      if (foe.world) { if (s.wb.gob && gobDash(s, now || Date.now()) && !gobRogue(s)) return; s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); rec(dmg); return; }
       if (foe.shield > 0) dmg *= 1 - SHIELD_CUT;
       if (foe.ward > 0) { const soak = Math.min(foe.ward, dmg); foe.ward -= soak; dmg -= soak; amount = dmg / mult; if (dmg <= 0) return; }
-      if (dmg < foe.hp) { foe.hp -= dmg; drain(s, dmg); return; }
-      amount -= foe.hp / mult; drain(s, foe.hp);
+      if (dmg < foe.hp) { foe.hp -= dmg; drain(s, dmg); rec(dmg); return; }
+      amount -= foe.hp / mult; drain(s, foe.hp); rec(foe.hp);
       killFoe(s, now, rng, events);
       if (s.foeGap > (now || Date.now())) return;
       if (s.foe && s.foe.boss) return;
@@ -2888,7 +2907,7 @@
     } else if (m.cls === 'rogue') {
       const d = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 12 * pw * wbMult(s, id);
       events && events.push({ type: 'ability', id, cls: m.cls, dmg: d });
-      damageFoe(s, d, now, null, events);
+      damageFoe(s, d, now, null, events, id);
       return true;
     } else if (m.cls === 'necro') {
       const each = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 0.6 * (sb >= 2 ? 1.3 : 1) * pw * wbMult(s, id);
@@ -3115,7 +3134,12 @@
       s.foeSwing += dt;
       while (s.foeSwing >= FOE_SWING && s.foe) { s.foeSwing -= FOE_SWING; foeAttack(s, now, rng, events); if (!alive(s).length) return; }
     }
-    damageFoe(s, totalDps(s, now) * dt, now, rng, events);
+    // Same sum as totalDps, split by who dealt it for the damage meter.
+    const parts = {}; let tot = 0;
+    for (const id of s.party) { const d = memberDps(s, id, now); if (d > 0) { parts[id] = (parts[id] || 0) + d; tot += d; } }
+    const skd = minionDps(s, now) * npMarkCls(s, 'necro', 0); if (skd > 0) { parts.skel = skd; tot += skd; }
+    if (tot > 0) for (const k in parts) parts[k] /= tot;
+    damageFoe(s, tot * dt, now, rng, events, tot > 0 ? parts : null);
   }
 
   // The Nexus Guardian: a soft, in-world brake on click bots (John, 2026-11-23).
@@ -3181,7 +3205,7 @@
     events && events.push({ type: 'hit', dmg, crit, auto });
     if (s.foe && s.foe.shield > 0 && !auto) { s.foe.shield = Math.max(0, s.foe.shield - SHIELD_TAP * (crit ? 2 : 1)); if (s.foe.shield <= 0) { s.stats.shields = (s.stats.shields || 0) + 1; qEv(s, 'shield'); events && events.push({ type: 'shieldbreak', tap: true }); } }
     const sc0 = s.wb ? s.wb.score : 0;
-    damageFoe(s, dmg, now, rng, events);
+    damageFoe(s, dmg, now, rng, events, auto ? 'auto' : 'tap');
     if (s.wb && !auto) s.wb.ck = (s.wb.ck || 0) + s.wb.score - sc0;
     return { dmg, crit };
   }
@@ -3914,7 +3938,7 @@
 
   const api = {
     npPlus, incomeHour, priceH, steadyPartyDps, pipRate, samplePipIncome, acctGoldPerSec, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
-    steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npGold, npIlvl, npOld, npReady, startNP,
+    steadyDps, damageMeter, meterReset, METER_TAU, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npGold, npIlvl, npOld, npReady, startNP,
     NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
