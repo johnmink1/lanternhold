@@ -2546,3 +2546,67 @@ body.atench.shopmin .stage .arena{display:none!important}
 .sethead{margin:18px 0 0;font-size:15px}
 .setnotif span{display:flex;flex-direction:column;gap:2px;padding-right:12px}
 .setnotif small{color:var(--muted);font-size:12px}
+
+/* v132 hero profile: My hero / Public profile tabs (John, 26 Nov 2026) */
+.prof.v2 .profhead{gap:14px}
+.prof.v2 .profspr{width:76px;height:94px}
+.prof.v2 .phid{min-width:0}
+.prof.v2 .phid h2{font-size:22px;line-height:1.15;overflow-wrap:anywhere}
+.prof.v2 .bio{margin:12px 0 10px;color:var(--muted);font-size:14px}
+.ptabs{margin:14px 0 2px;width:100%}
+.ptabs button{flex:1;padding:8px 10px;font-size:14px}
+.pkpi{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0 8px}
+.pkpi div{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 9%,var(--bg2)),var(--bg2));border:1px solid var(--line2);border-radius:10px;padding:8px 10px;min-width:0}
+.pkpi span{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pkpi b{display:block;font-size:19px;line-height:1.25;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pxp{margin:4px 0 12px}
+.pxprow{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:4px}
+.pxprow span{color:var(--dim);font-variant-numeric:tabular-nums}
+.pxp small{display:block;color:var(--accent);font-size:12.5px;margin-top:4px}
+.psec{border-top:1px solid var(--line);padding:2px 0}
+.psec>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:10px 2px;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.psec>summary::-webkit-details-marker{display:none}
+.psec>summary::after{content:'+';color:var(--dim);font-size:18px;font-weight:400;letter-spacing:0}
+.psec[open]>summary::after{content:'\2212'}
+.psec .pstats{margin:0 0 10px}
+.psec .ability{margin-bottom:6px}
+.prof.v2 .pstats b{font-variant-numeric:tabular-nums}
+.pstats.attr{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+.pgear.two{grid-template-columns:1fr 1fr;column-gap:16px;margin-bottom:10px}
+.pgear.two li{min-width:0;font-size:13.5px}
+.pgear.two b{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pgear b[data-info]{cursor:pointer}
+.pgear b[data-info]:hover{text-decoration:underline}
+.pgear .r-common{color:var(--text)}
+.pubsec{margin-top:10px}
+.pubsec h4{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.pubsec .pstats{margin:0}
+.pparty{display:flex;flex-wrap:wrap;gap:6px}
+.pparty span{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;font-weight:700}
+.pvlist{display:grid;grid-template-columns:1fr 1fr;column-gap:18px}
+.pvrow{gap:12px;cursor:pointer;padding:8px 0}
+.pvrow span{font-weight:700;font-size:14px}
+.pvrow small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.pvrow input{flex:none}
+#pv-st{min-height:1.2em;margin:6px 0 4px;font-size:13px}
+#pv-st:empty{display:none}
+.pftags .online{font-size:12.5px}
+@media (max-width:560px){
+  .pkpi{grid-template-columns:1fr 1fr}
+  .pgear.two,.pvlist{grid-template-columns:1fr}
+  .prof.v2 .profspr{width:64px;height:80px}
+}
+.modal .sheet.profsheet{max-width:640px}
+.pvbox{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:12px 0 4px}
+.pvbox>b{display:block;font-size:14px}
+.pvbox>small{display:block;color:var(--muted);font-size:12.5px;margin:2px 0 8px}
+.pvchips{display:flex;flex-wrap:wrap;gap:6px}
+.pvchip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--dim);font:700 13px var(--body);cursor:pointer;text-decoration:line-through;text-decoration-color:color-mix(in srgb,currentColor 50%,transparent)}
+.pvchip svg{width:14px;height:14px}
+.pvchip.on{color:var(--text);text-decoration:none;border-color:color-mix(in srgb,var(--good) 55%,transparent);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.pvchip.on svg{color:var(--good)}
+/* party rows: player banners (v132) */
+.seat.sbn{border-color:color-mix(in srgb,var(--line2) 70%,#f2c14e 30%)}
+.seat.sbn .lv{color:color-mix(in srgb,var(--text) 82%,transparent)}
+.sban{display:inline-block;width:16px;height:24px;flex:none;margin-left:2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.sban svg{width:100%;height:100%;display:block}
