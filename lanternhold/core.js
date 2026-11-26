@@ -1,4 +1,4 @@
-/* lh-build 202611261532 */
+/* lh-build 202611261905 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -42,7 +42,18 @@
     { id: 'varga',   name: 'Varga',     title: 'Tide Knife for Hire',  side: 'tide',     cls: 'rogue',  tier: 1, hue: 150,  bio: "Kestrel's older sister and a knife for hire who took Tide coin and Thessaly's coin at the same time. Family won in the end, narrowly.", line: 'Kestrel’s sister. Took Tide coin. Charges double for family.' },
     { id: 'brann',   name: 'Brann',     title: 'Covenant Runesmith',   side: 'covenant', cls: 'mage',   tier: 1, hue: 180,  bio: 'The Covenant runesmith who carved the seal-wards around the lantern. He knows exactly what they hold in and is trying to make up for it.', line: 'Carved the seal-wards that keep the Rift shut. Regrets some of them.' },
     { id: 'hollow',  name: 'The Hollow King', title: 'The First Bearer', side: 'unsworn', cls: 'necro', tier: 1, hue: 60, bio: 'The very first lantern-bearer, fed to the seal before the Grand War had a name. He came back hollow and crowned. He wants his name back.', line: 'The first lantern-bearer. Fed to the seal. Came back anyway.' },
+    // Unique Legendaries (John, 26 Nov 2026): one of each, found at the Guild Hall, through a side quest, on the
+    // adventure or (Thistle) by a rare rescue. Each has a small extra bonus while working their own camp post (UNIQ).
+    { id: 'greaves', name: 'Marshal Greaves', title: 'Covenant Drillmaster', side: 'covenant', cls: 'tank', tier: 1, uniq: 1, hue: 20, bio: 'A Covenant drillmaster who trained three generations of stair guards. Retired twice. Bored both times.', line: 'Drills anyone who sits still long enough.' },
+    { id: 'alder',   name: 'Sister Alder', title: 'Mercy Corps Field Surgeon', side: 'mercy', cls: 'healer', tier: 1, uniq: 1, hue: 90, bio: 'The Mercy Corps surgeon who runs the aid tents on the Lantern Deep front. She has stitched up soldiers from every banner, sometimes in the same afternoon.', line: 'Has patched up every banner in the war. Twice.' },
+    { id: 'pell',    name: 'Tinker Pell', title: 'Unsworn Lockwright', side: 'unsworn', cls: 'rogue', tier: 1, uniq: 1, hue: 200, bio: 'A cheerful Unsworn lockwright who lost her toolkit somewhere below floor sixty. She can open anything, as long as she has her picks back.', line: 'Opens any lock. Asks permission first. Usually.' },
+    { id: 'ilse',    name: 'Magister Ilse', title: 'Ascendancy Archivist', side: 'radiant', cls: 'mage', tier: 1, uniq: 1, hue: 260, bio: 'An Ascendancy archivist chasing the torn pages of an old guardian bestiary. Every guardian you fell gives her another page.', line: 'Knows where every guardian is weakest. It is in the footnotes.' },
+    { id: 'grimsby', name: 'Grimsby the Lampwright', title: 'Unsworn Lampwright', side: 'unsworn', cls: 'necro', tier: 1, uniq: 1, hue: 110, bio: 'An old lampwright who has lived beside the deep stair longer than anyone remembers. He talks to his lamps. Sometimes they listen.', line: 'Has never let a lamp go out. Not for long.' },
+    { id: 'corra',   name: 'Dame Corra', title: 'Covenant Rearguard', side: 'covenant', cls: 'tank', tier: 1, uniq: 1, hue: 330, bio: 'The Covenant knight who walks last in every column. Ambushers who try her once rarely try again.', line: 'Walks at the back so nobody else has to.' },
+    { id: 'bramble', name: 'Bramble', title: 'Tide Treasure Hunter', side: 'tide', cls: 'rogue', tier: 1, uniq: 1, hue: 40, bio: 'A Tide treasure hunter who sold maps of the deep vaults to anyone who would pay. Then she found out the maps were right.', line: 'Every locked door is a promise.' },
+    { id: 'thistle', name: 'Thistle', title: 'Mercy Corps Scout', side: 'mercy', cls: 'rogue', tier: 1, uniq: 1, hue: 140, bio: 'A Mercy Corps scout who went looking for lost travellers and got caged by a monster instead. If you find him, he will never forget it.', line: 'Finds the lost. Got lost once. Knows how it feels.' },
   ];
+  const LORE_COUNT = 10; // the story companions (Full Roster feat); the unique Legendaries come after them
   // The Grand War alliances, as they appear on the Lantern Deep front.
   const SIDES = {
     covenant: { name: 'Iron Covenant',       motto: 'Hold the line.',            color: '#9fb4c8', perk: '+15% party health',  desc: 'Seal the Rift at any cost. The Hold was a Covenant fortress once.' },
@@ -64,7 +75,7 @@
   const WARWIN_REVIVE = 10;
   const WAR_KEY = { covenant: 'covenant', ascendancy: 'radiant', tide: 'tide' };
   const warWinOn = s => !!(s && s.warWin && s.warWin.side && sideOf(s) === s.warWin.side);
-  const reviveMs = s => (warWinOn(s) ? WARWIN_REVIVE : REVIVE_TIME) * 1000;
+  const reviveMs = s => (warWinOn(s) ? WARWIN_REVIVE : REVIVE_TIME) * 1000 * (postOn(s, 'alder') ? 1 - UNIQ_ALDER : 1);
   // v125 Two-Headed Coin (Pip's Curio): a fallen hero has a 25% chance to be back up in 3 seconds.
   const downAt = (s, now) => now + (fxOnW(s, 'coin') && Math.random() < 0.25 ? 3000 : reviveMs(s));
   // Banner lantern (John, 2026-11-24): the more Grand War territories your banner holds right now, the bigger its buff:
@@ -255,7 +266,7 @@
     { id: 'c500',  name: 'Busy Hands',        desc: 'Strike 500 times',           test: s => s.stats.clicks >= 500 },
     { id: 'full',  name: 'A Full Table',      desc: 'Fill all five party seats',  test: s => s.party.filter(Boolean).length >= 5 },
     { id: 'h100',  name: 'Veteran',           desc: 'Train a companion to power level 100', test: s => Object.values(s.levels).some(l => l >= 100) },
-    { id: 'hall',  name: 'Full Roster',       desc: 'Meet all ten companions',    test: s => s.unlocked.length >= MEMBERS.length },
+    { id: 'hall',  name: 'Full Roster',       desc: 'Meet all ten companions',    test: s => s.unlocked.length >= LORE_COUNT },
     { id: 'guest', name: 'Strength in Numbers', desc: 'Recruit another player\u2019s hero', test: s => (s.guests || []).length >= 1 },
     { id: 'heal',  name: 'Not Today',         desc: 'Lift 25 fallen allies with the Lantern Hymn', test: s => s.stats.revives >= 25 },
     { id: 'r1',    name: 'Relighting',        desc: 'Rekindle the lantern once',  test: s => s.stats.rekindles >= 1 },
@@ -867,7 +878,142 @@
     { id: 'legendary', name: 'Legendary', pow: 0,   job: 0,    hireMin: 720, wage: 0.18, dust: 600, dustAlt: 0,   lvF: 1,    w: 3,  color: '#ff8a3d' },
   ];
   const npcRar = id => NPC_RAR.find(r => r.id === id) || NPC_RAR[0];
-  const LEGENDS = ['ashe', 'oracle', 'varga', 'brann', 'hollow'];
+  const LORE_LEGENDS = ['ashe', 'oracle', 'varga', 'brann', 'hollow'];
+  // ---------- unique Legendaries (John, 26 Nov 2026) ----------
+  // Eight one-of-a-kind Legendary companions, each with a small extra while they work their own camp post (Thistle:
+  // any post). They are hired like the lore Legendaries (Legendary wage) but join in four ways:
+  //   guild:  a UNIQ_GUILD chance each Guild Hall rotation that one of them is on offer, for UNIQ_OFFER_MS (paid hire)
+  //   quest:  a three-step side quest chain that opens at a floor; finishing it brings them for free
+  //   adv:    the first time you beat the guardian on their floor, they join for free
+  //   rescue: Thistle is caged by a monster (thistleFoe). Win and he joins free; let it get away and he waits at the Hall.
+  // A unique you lose (sent away, walked off) can come back through the Guild Hall roll.
+  // Sim (26 Nov 2026, bot on PR #60 economy, 36 h): Drill that also trained job workers raised gold 37-75% (job output
+  // grows with power level), so Drill only trains idle companions; then gold and pace stayed within the sim's noise.
+  const UNIQ = {
+    greaves: { how: 'guild', floor: 60, job: 'quarter', perk: 'Drill', text: 'Up to 3 idle companions at the Campfire each gain 1 power level an hour, never past half your strongest fighter’s power level. Works while you are away.' },
+    alder:   { how: 'guild', floor: 40, job: 'herb', perk: 'Field surgeon', text: 'Fallen companions get back up 10% sooner.' },
+    pell:    { how: 'quest', floor: 60, job: 'forage', perk: 'Sticky fingers', text: 'Locked chests give 25% more Dust.' },
+    ilse:    { how: 'quest', floor: 90, job: 'smith', perk: 'Seal-wards', text: 'The party deals 5% more damage to guardians.' },
+    grimsby: { how: 'adv', floor: 100, job: 'lamp', perk: 'Last light', text: 'Once each guardian fight, the lantern relights for 3 seconds after it goes out.' },
+    corra:   { how: 'adv', floor: 125, job: 'armor', perk: 'Hold the stair', text: 'Whoever guards the rear takes 20% less damage from ambushes.' },
+    bramble: { how: 'adv', floor: 150, job: 'prospect', perk: 'Double pay', text: 'Locked doors give 25% more gold.' },
+    thistle: { how: 'rescue', floor: 50, job: 'any', perk: 'Scout’s eye', text: 'Works any camp post. Mercy Corps rescues and wounded companions turn up 25% more often (still within the daily limit).' },
+  };
+  const UNIQ_IDS = Object.keys(UNIQ);
+  const LEGENDS = LORE_LEGENDS.concat(UNIQ_IDS);
+  const UNIQ_GUILD = 0.05, UNIQ_OFFER_MS = 24 * 3600e3;
+  const UNIQ_DRILL_SEC = 3600, UNIQ_DRILL_N = 3, UNIQ_DRILL_CAP = 0.5, UNIQ_ALDER = 0.1, UNIQ_PELL = 0.25, UNIQ_ILSE = 0.05, UNIQ_GRIMSBY = 3, UNIQ_CORRA = 0.2, UNIQ_BRAMBLE = 0.25, UNIQ_THISTLE = 0.25;
+  // Thistle's cage: from CAGE_FLOOR every new foe rolls CAGE_BASE x (1 + foes since the last cage / CAGE_GROW), at most
+  // CAGE_MAX, times 1.5 for each of a Rogue in the party, the Mercy Corps banner, floor 100 or deeper (at most x3).
+  // At ~420 foes an hour with a Rogue along: half find him by ~34 h, 64% by 42 h (no Rogue: ~41 h). The caged foe has 1.5x health and gets away
+  // after CAGE_TIME seconds or if the party falls.
+  const CAGE_FLOOR = 50, CAGE_BASE = 1e-5, CAGE_GROW = 3000, CAGE_MAX = 0.001, CAGE_TIME = 60;
+  const UNIQ_QUESTS = {
+    pell: { name: 'Tinker Pell’s lost toolkit', steps: [
+      { text: 'Open 3 locked doors or chests', n: 3, st: s => s.stats.locks || 0 },
+      { text: 'Open 5 treasure chests', n: 5, st: s => s.stats.chests || 0 },
+      { text: 'Defeat 5 guardians', n: 5, st: s => s.stats.bossKills || 0 } ] },
+    ilse: { name: 'The Magister’s missing pages', steps: [
+      { text: 'Defeat 1,000 foes', n: 1000, st: s => s.stats.kills || 0 },
+      { text: 'Rescue or aid a Mercy Corps companion', n: 1, st: s => (s.stats.rescues || 0) + (s.stats.aided || 0) },
+      { text: 'Defeat 10 guardians', n: 10, st: s => s.stats.bossKills || 0 } ] },
+  };
+  const uqOf = s => (s.uq = s.uq || { got: {}, q: {}, tn: 0, dt: 0 });
+  // Is this unique Legendary at camp working their own post right now?
+  function postOn(s, id) {
+    const u = UNIQ[id]; if (!u || !s || !s.jobs || !jobFree(s, id)) return false;
+    if (u.job === 'any') { for (const k in s.jobs) if (s.jobs[k] === id) return true; return false; }
+    return s.jobs[u.job] === id;
+  }
+  const uniqWaiting = (s, id) => s.unlocked.includes(id) || ((s.hall && s.hall.offers) || []).some(o => o.id === id) || ((s.hall && s.hall.bench) || []).some(b => b.id === id) || ((s.hall && s.hall.keep) || []).some(o => o.id === id);
+  // A unique earns their place (quest, adventure, rescue): they join free, straight to the Campfire if there is room,
+  // otherwise they wait at the Guild Hall, free to sign on.
+  function uniqArrive(s, id, events, now) {
+    now = now || Date.now();
+    const q = uqOf(s); q.got[id] = q.got[id] || now;
+    if (uniqWaiting(s, id)) return;
+    const h = hallState(s, now), o = { id, rar: 'legendary', legend: 1, keep: 1, free: 1 };
+    h.offers.push(o);
+    const r = companions(s).length < rosterCap(s) ? npcHire(s, id, 'sign', 'gold', now) : { ok: false };
+    events && events.push({ type: 'uqjoin', id, name: memberById(id).name, camp: !!r.ok });
+  }
+  // The Guild Hall roll, once per rotation: a unique whose floor you have reached, or one you had and lost.
+  function uniqGuildRoll(s, r, now) {
+    const q = uqOf(s), f = s.maxFloorEver || 1;
+    const pool = UNIQ_IDS.filter(id => !uniqWaiting(s, id) && (q.got[id] || (UNIQ[id].how === 'guild' && f >= UNIQ[id].floor)));
+    if (!pool.length || r() >= UNIQ_GUILD) return null;
+    return { id: pool[Math.floor(r() * pool.length)], rar: 'legendary', legend: 1, keep: 1, exp: now + UNIQ_OFFER_MS };
+  }
+  function uniqQuest(s, id) {
+    const Q = UNIQ_QUESTS[id], q = uqOf(s).q[id]; if (!Q || !q) return null;
+    if (q.done) return { name: Q.name, done: true, steps: Q.steps.length };
+    const st = Q.steps[q.step];
+    return { name: Q.name, step: q.step, steps: Q.steps.length, text: st.text, have: Math.min(st.n, st.st(s) - q.base), n: st.n };
+  }
+  // Drill (Marshal Greaves as Quartermaster): sec of time, in play or away.
+  function uniqDrill(s, sec, events) {
+    if (!postOn(s, 'greaves')) return 0;
+    const q = uqOf(s); q.dt = (q.dt || 0) + sec;
+    let n = 0;
+    while (q.dt >= UNIQ_DRILL_SEC) {
+      q.dt -= UNIQ_DRILL_SEC;
+      const top = Math.max(1, ...s.party.filter(Boolean).map(id => lvl(s, id)));
+      const cap = Math.floor(top * UNIQ_DRILL_CAP);
+      const idle = companions(s).filter(id => id !== 'greaves' && !s.party.includes(id) && !jobOf(s, id) && !isGuest(s, id) && lvl(s, id) < cap)
+        .sort((a, b) => lvl(s, a) - lvl(s, b)).slice(0, UNIQ_DRILL_N);
+      if (!idle.length) { q.dt = Math.min(q.dt, UNIQ_DRILL_SEC); break; }
+      for (const id of idle) { s.levels[id] = lvl(s, id) + 1; n++; }
+    }
+    if (n) { s.stats.drilled = (s.stats.drilled || 0) + n; events && events.push({ type: 'drill', n }); }
+    return n;
+  }
+  // Every tick: Drill, side quest chains and adventure arrivals.
+  function uniqTick(s, dt, now, events) {
+    if (!s.hero) return;
+    const q = uqOf(s), f = s.maxFloorEver || 1;
+    if (q.cageOn && !(s.foe && s.foe.cage)) cageFled(s, events); // the game closed (or the foe vanished) mid-rescue
+    uniqDrill(s, dt, events);
+    for (const id in UNIQ_QUESTS) {
+      if (q.got[id] || f < UNIQ[id].floor) continue;
+      const Q = UNIQ_QUESTS[id];
+      let c = q.q[id];
+      if (!c) { c = q.q[id] = { step: 0, base: Q.steps[0].st(s) }; events && events.push({ type: 'uqquest', id, name: Q.name, text: Q.steps[0].text }); }
+      if (c.done) continue;
+      const st = Q.steps[c.step];
+      if (st.st(s) - c.base >= st.n) {
+        c.step++;
+        if (c.step >= Q.steps.length) { c.done = 1; uniqArrive(s, id, events, now); }
+        else { c.base = Q.steps[c.step].st(s); events && events.push({ type: 'uqstep', id, name: Q.name, text: Q.steps[c.step].text }); }
+      }
+    }
+    for (const id of UNIQ_IDS) if (UNIQ[id].how === 'adv' && !q.got[id] && f > UNIQ[id].floor) uniqArrive(s, id, events, now);
+  }
+  // Thistle's cage, rolled as each new foe appears.
+  function cageMult(s) {
+    let m = 1;
+    if (s.party.some(id => id && (memberById(id) || {}).cls === 'rogue')) m *= 1.5;
+    if (sideOf(s) === 'mercy') m *= 1.5;
+    if (s.floor >= 100) m *= 1.5;
+    return Math.min(3, m);
+  }
+  const cageChance = s => Math.min(CAGE_MAX, CAGE_BASE * (1 + (uqOf(s).tn || 0) / CAGE_GROW) * cageMult(s));
+  function thistleFoe(s, now, rng) {
+    const r = rng || Math.random, f = s.floor;
+    if (!s.hero || f < CAGE_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now)) return null;
+    const q = uqOf(s);
+    if (q.got.thistle || q.fled || uniqWaiting(s, 'thistle')) return null;
+    if (r() >= cageChance(s)) { q.tn = (q.tn || 0) + 1; return null; }
+    const foe = makeFoe(s, r); if (foe.boss || foe.chest || foe.goblin || foe.pack || foe.world || foe.lock) return foe;
+    q.tn = 0; q.cageOn = 1; s.stats.cages = (s.stats.cages || 0) + 1;
+    foe.cage = 'thistle'; foe.cageT = 0; foe.hp *= 1.5; foe.max = foe.hp;
+    return foe;
+  }
+  // The caged foe got away: Thistle slips out later and waits at the Guild Hall (a paid hire).
+  function cageFled(s, events) {
+    const q = uqOf(s); q.fled = Date.now(); q.cageOn = 0;
+    if (!uniqWaiting(s, 'thistle')) hallState(s).offers.push({ id: 'thistle', rar: 'legendary', legend: 1, keep: 1 });
+    events && events.push({ type: 'cagefled', name: memberById('thistle').name });
+  }
   const NPC_ROTATE = 4 * 3600e3, NPC_OFFERS = 6, NPC_SHORT_MS = 2 * 3600e3, NPC_SHORT_MAX = 2, NPC_BENCH_MS = 3 * 86400e3, NPC_SHORT_PART = 0.25, NPC_REHIRE = 0.5;
   const NPC_NAMES = ['Tamsin', 'Odile', 'Corwin', 'Ysolde', 'Garrick', 'Petra', 'Jory', 'Mirela', 'Halden', 'Sable', 'Fenna', 'Rook', 'Isolt', 'Dacey', 'Orrin', 'Liesl', 'Tobin', 'Maren', 'Cass', 'Ulric', 'Nell', 'Aldous', 'Briar', 'Quill', 'Hesper', 'Joss', 'Wynn', 'Edda', 'Lorcan', 'Merrit', 'Saoirse', 'Dunstan', 'Ilse', 'Torvald', 'Junia', 'Cael'];
   const NPC_JOB = { tank: 'Shieldhand', healer: 'Field Medic', rogue: 'Sellsword', mage: 'Hedge Mage', necro: 'Bonecaller' };
@@ -919,6 +1065,7 @@
   // price no longer creeps up while you save for it (v119 fix, Tim/John 25 Nov 2026). Anyone who went to the bench
   // before prices were locked (entries not priced at release) comes back free: the full-rate away wages were our bug.
   function npcLock(s, o, bench) {
+    if (!bench && o.free) return { gold: 0, dust: 0, dustAlt: 0, free: 1 };
     if (bench || o.until) {
       if (!o.cr) { o.c = { gold: 0, dust: 0, dustAlt: 0, free: 1 }; o.cr = 1; }
     } else if (!o.c || o.ca !== (s.hall && s.hall.at) || o.cv !== 2) { o.c = npcCost(s, o.rar, 'sign', (memberById(o.id) || o).cls); o.ca = s.hall && s.hall.at; o.cv = 2; }
@@ -989,7 +1136,7 @@
   }
   function rollOffers(s, r) {
     r = r || Math.random;
-    const out = [], free = LEGENDS.filter(id => !s.unlocked.includes(id) && !(s.hall.bench || []).some(b => b.id === id));
+    const out = [], free = LORE_LEGENDS.filter(id => !s.unlocked.includes(id) && !(s.hall.bench || []).some(b => b.id === id));
     const tot = NPC_RAR.reduce((a, x) => a + x.w, 0);
     for (let i = 0; i < NPC_OFFERS; i++) {
       let x = r() * tot, rar = NPC_RAR[0];
@@ -1008,8 +1155,8 @@
     s.hall.bench = (s.hall.bench || []).filter(b => b.until > now);
     const win = Math.floor(now / NPC_ROTATE) * NPC_ROTATE;
     if (s.hall.at !== win || (s.hall.keep || []).length) {
-      const kept = (s.hall.offers || []).filter(o => o.keep).concat(s.hall.keep || []).filter((o, i, a) => !s.unlocked.includes(o.id) && a.findIndex(x => x.id === o.id) === i);
-      if (s.hall.at !== win) { s.hall.at = win; s.hall.rr = 0; s.hall.offers = rollOffers(s).filter(o => !kept.some(k => k.id === o.id)).concat(kept); }
+      const kept = (s.hall.offers || []).filter(o => o.keep && !(o.exp && o.exp <= now)).concat(s.hall.keep || []).filter((o, i, a) => !s.unlocked.includes(o.id) && a.findIndex(x => x.id === o.id) === i);
+      if (s.hall.at !== win) { s.hall.at = win; s.hall.rr = 0; s.hall.offers = rollOffers(s).filter(o => !kept.some(k => k.id === o.id)).concat(kept); const u = s.hero && uniqGuildRoll(s, Math.random, now); if (u) s.hall.offers.push(u); }
       else s.hall.offers = s.hall.offers.filter(o => !kept.some(k => k.id === o.id)).concat(kept);
       s.hall.keep = [];
     }
@@ -2387,7 +2534,7 @@
     const r = rng || Math.random, f = s.floor;
     if (f < MERCY_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now) || now < (s.mercyNext || 0) || !mercyActive(s, now) || !evOk(s, 'mercy', now)) return null;
     if (s.goblin && s.goblin.item && f >= s.goblin.floor) return null;
-    const who = MERCY_NAMES[Math.floor(r() * MERCY_NAMES.length)], roll = r(), heal = partyHeal(s);
+    const who = MERCY_NAMES[Math.floor(r() * MERCY_NAMES.length)], roll = r() / (postOn(s, 'thistle') ? 1 + UNIQ_THISTLE : 1), heal = partyHeal(s);
     if (heal > 0 && roll < WOUNDED_CHANCE) {
       const max = Math.max(200, heal * AID_SEC / 0.9);
       s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1; evUse(s, 'mercy', now);
@@ -2464,8 +2611,8 @@
   const LOCK_FLOOR = 10, LOCK_CHANCE = 0.01, LOCK_TIME = 5, LOCK_TAP = 0.35, LOCK_SKIP = 4, LOCK_SIGIL = 0.01, LOCK_GOLD = 8;
   const lockFoe = r => { const door = r() < 0.5; return { lock: door ? 'door' : 'chest', name: door ? 'Locked Door' : 'Locked Chest', sprite: door ? 'door' : 'lockbox', hp: 100, max: 100, atk: 0, mods: [], sp: null, pick: 0, wait: 0, hue: 0, ambush: 0, pack: 0, ward: 0, wardAt: 0 }; };
   const lockRogue = s => s.party.find(id => id && memberById(id).cls === 'rogue') || null;
-  const lockDust = (s, f) => Math.round((10 + f * 1.2) * npBonus(s));
-  const lockGold = (s, f) => foeGold(f, false) * goldMult(s) * npGold(s) * LOCK_GOLD;
+  const lockDust = (s, f) => Math.round((10 + f * 1.2) * npBonus(s) * (postOn(s, 'pell') ? 1 + UNIQ_PELL : 1));
+  const lockGold = (s, f) => foeGold(f, false) * goldMult(s) * npGold(s) * LOCK_GOLD * (postOn(s, 'bramble') ? 1 + UNIQ_BRAMBLE : 1);
   function lockDone(s, now) { s.foe = null; s.foeSwing = 0; s.foeGap = now + FOE_GAP * 1000; s.foeIdx++; }
   function lockTick(s, dt, now, rng, events) {
     const f = s.foe, rog = lockRogue(s);
@@ -2590,7 +2737,7 @@
     while (amount > 0 && guard++ < 60) {
       if (!s.foe) s.foe = makeFoe(s, rng);
       if (s.foe.lock || s.foe.wounded) return; // overkill never spills onto a lock
-      const foe = s.foe, mult = (foe.boss ? 1 + relicVal(s, 'lens') : 1) * (1 + fxOn(s, 'vuln', now || Date.now())) * (1 + beastBonus(s, foe));
+      const foe = s.foe, mult = (foe.boss ? (1 + relicVal(s, 'lens')) * (postOn(s, 'ilse') ? 1 + UNIQ_ILSE : 1) : 1) * (1 + fxOn(s, 'vuln', now || Date.now())) * (1 + beastBonus(s, foe));
       let dmg = amount * mult;
       if (foe.world) { if (s.wb.gob && gobDash(s, now || Date.now()) && !gobRogue(s)) return; s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); rec(dmg); return; }
       if (foe.shield > 0) dmg *= 1 - SHIELD_CUT;
@@ -2665,6 +2812,7 @@
       events && events.push({ type: 'goblinkill', item: back || null });
       if ((rng || Math.random)() < GOBLIN_SACK_CHANCE) { const sack = rollGoblinSack(s, f, rng || Math.random); s.bag.push(sack); s.stats.sacks = (s.stats.sacks || 0) + 1; events && events.push({ type: 'goblinsack', item: sack }); }
     }
+    if (foe.cage) { s.stats.freed = (s.stats.freed || 0) + 1; uniqArrive(s, foe.cage, events, now); uqOf(s).cageOn = 0; foe.cage = null; }
     if (foe.rescue) { s.mercyXp = Math.max(now, s.mercyXp || 0) + MERCY_MIN * 60000; s.stats.rescues = (s.stats.rescues || 0) + 1; events && events.push({ type: 'rescued', who: foe.rescue }); }
     s.gold += g; s.stats.goldEarned += g; s.stats.kills++;
     qEv(s, 'kill', { foe, f, clean: !s.qdown, spare: foe.boss ? lanternTime(s) - (s.lantern || 0) : 0 });
@@ -2730,6 +2878,7 @@
 
   function gotoFloor(s, f) {
     f = Math.max(1, Math.min(s.maxFloor, f, actTwoOpen() ? Infinity : ACT_ONE_END));
+    if (s.foe && s.foe.cage) cageFled(s); // the caged foe gets away when the party leaves or falls
     s.floor = f; s.foeIdx = 0; s.foe = null; s.lantern = 0; s.foeSwing = 0; s.qdown = 0;
     s.enchAt = 0; s.shopK = null; // travelling anywhere ends a shop visit (v104)
   }
@@ -2875,6 +3024,7 @@
       foe.ambush--;
       const guard = memberById(t).cls === 'tank';
       if (!guard) dmg *= 1.6;
+      if (postOn(s, 'corra')) dmg *= 1 - UNIQ_CORRA;
       events && events.push({ type: 'ambush', target: t, guarded: guard, first: foe.ambush === 1 });
     }
     if (t === 'minion') {
@@ -3077,6 +3227,7 @@
     if (s.shuf && (now >= s.shuf.until || !s.foe || !s.foe.shOn)) shufRestore(s, events); // the line snaps back
     nxTick(s, dt, now, events);
     payWages(s, dt, now, events);
+    uniqTick(s, dt, now, events);
     if (s.wb && (now >= s.wb.until || resting(s, now))) endAssault(s, events);
     if (s.unlocked.length && !(s.traits && s.unlocked.every(id => s.traits[id]))) for (const id of s.unlocked) traitsOf(s, id);
     if (visiting(s)) return;
@@ -3096,19 +3247,24 @@
     if (!alive(s).length) return; // nobody to fight
     if (nexusOn(s)) return; // the Nexus Guardian holds the floor: the foe behind it waits and nothing lands
     if ((s.foeGap || 0) > now) return; // the next foe is still on its way
-    if (!s.foe) { s.foe = mercyFoe(s, now, rng) || makeFoe(s, rng); if (s.foe.wounded || s.foe.rescue) events && events.push({ type: 'mercy', kind: s.foe.wounded ? 'wounded' : 'rescue', who: s.foe.who || s.foe.rescue }); if (s.foe.pack) events && events.push({ type: 'pack', n: s.foe.pack, name: s.foe.name }); }
+    if (!s.foe) { s.foe = thistleFoe(s, now, rng) || mercyFoe(s, now, rng) || makeFoe(s, rng); if (s.foe.cage) events && events.push({ type: 'cage', name: s.foe.name }); if (s.foe.wounded || s.foe.rescue) events && events.push({ type: 'mercy', kind: s.foe.wounded ? 'wounded' : 'rescue', who: s.foe.who || s.foe.rescue }); if (s.foe.pack) events && events.push({ type: 'pack', n: s.foe.pack, name: s.foe.name }); }
     if (s.retryAt && !s.autoAdvance && now >= s.retryAt) { s.autoAdvance = true; s.retryAt = 0; events && events.push({ type: 'retry' }); }
     if (s.foe.wounded) {
       s.foe.aidT += dt;
       if (s.foe.aidT >= AID_TIME) { const who = s.foe.who; s.foe = null; s.foeGap = now + 900; events && events.push({ type: 'mercyleft', who }); return; }
     }
     if (s.foe.lock) { lockTick(s, dt, now, rng, events); return; }
+    if (s.foe.cage) {
+      s.foe.cageT += dt;
+      if (s.foe.cageT >= CAGE_TIME) { s.foe = null; s.foeGap = now + 900; cageFled(s, events); return; }
+    }
     if (s.foe.goblin) {
       s.foe.flee += dt;
       if (s.foe.flee >= GOBLIN_TIME + (fxOnW(s, 'mouse') ? 5 : 0)) { goblinFlee(s, rng, events); return; }
     }
     if (s.foe.boss) {
       s.lantern += dt;
+      if (s.lantern >= lanternTime(s) && !s.foe.relit && postOn(s, 'grimsby')) { s.foe.relit = 1; s.lantern -= UNIQ_GRIMSBY; events && events.push({ type: 'relit' }); }
       if (s.lantern >= lanternTime(s)) {
         events && events.push({ type: 'bossfail', name: s.foe.name });
         s.autoAdvance = false; s.retryAt = now + RETRY_AFTER * 1000;
@@ -3966,7 +4122,7 @@
   const api = {
     npPlus, incomeHour, priceH, steadyPartyDps, pipRate, samplePipIncome, acctGoldPerSec, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
     steadyDps, damageMeter, meterReset, METER_TAU, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npGold, npIlvl, npOld, npReady, startNP,
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, LORE_LEGENDS, LORE_COUNT, UNIQ, UNIQ_IDS, UNIQ_QUESTS, UNIQ_GUILD, UNIQ_OFFER_MS, UNIQ_DRILL_SEC, CAGE_FLOOR, CAGE_BASE, CAGE_GROW, CAGE_MAX, CAGE_TIME, postOn, uniqArrive, uniqQuest, uniqDrill, uniqTick, cageChance, cageMult, thistleFoe, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
