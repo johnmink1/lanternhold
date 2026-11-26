@@ -6461,6 +6461,7 @@
       'Quests: the Bounty Board and daily quests now draw from 200 kinds across the game, picked for your hero. Many have a button that takes you there.',
       'New hero profile: key stats up top and sections you can fold. A Public profile tab lets you choose what other players see.',
       'Tap a name in the Players Guild to see that hero’s public profile. Banners now show on party rows.',
+      'Borrowed player heroes now keep up with their owner’s latest gear and power level on their own.',
       'New damage meter under the fight log: who deals your damage over the last 30 seconds.',
       'Sigil shop: give $1 or any amount to our Extra Life team for children’s hospitals.',
       'New Support the dev button: buy the developer a coffee. It gives nothing in game.',
