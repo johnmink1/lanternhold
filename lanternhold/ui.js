@@ -1117,6 +1117,7 @@
   }
   setInterval(paintFlog, 700);
   document.addEventListener('click', e => { const b = e.target.closest('[data-ff]'); if (!b) return; flogFilter = b.dataset.ff; try { localStorage.setItem('lh_flogf', flogFilter); } catch (x) {} paintFlog(true); });
+  document.addEventListener('toggle', e => { if (e.target.id === 'meterbox' && e.target.open) paintMeter(Date.now()); }, true);
   document.addEventListener('toggle', e => { if (e.target.id === 'flogbox') { try { localStorage.setItem('lh_flog', e.target.open ? '1' : ''); } catch (x) {} paintFlog(true); } }, true);
   try { if (localStorage.getItem('lh_flog') && $('flogbox')) $('flogbox').open = true; } catch (e) {}
   function handleEvents() {
@@ -3229,8 +3230,22 @@
     }
   }
 
+  // Damage meter (v132): a collapsed box under the fight log, repainted once a second while open.
+  const METER_NAME = { skel: ['Skeletons', 'necro'], tap: ['Your taps', ''], auto: ['Auto strikes', ''] };
+  function paintMeter(now) {
+    const box = $('meterbox'), el = $('meter'); if (!box || !el || !box.open) return;
+    const rows = L.damageMeter(S, now), tot = rows.reduce((a, x) => a + x.dps, 0);
+    let h;
+    if (!rows.length) h = '<p class="note small mempty">No damage yet. Fight for a few seconds to fill it in.</p>';
+    else h = '<table class="ttab mtab"><tbody>' + rows.map(x => {
+      const m = METER_NAME[x.key] ? null : L.memberById(x.key), nm = m ? esc(m.name) + ' ' + classTag(m.cls) : METER_NAME[x.key][0] + (METER_NAME[x.key][1] ? ' ' + classTag(METER_NAME[x.key][1]) : ''), pct = Math.round(x.dps / tot * 100);
+      return '<tr><td>' + nm + '</td><td>' + fmt(x.dps) + '/s</td><td><span class="tbar"><i style="width:' + pct + '%"></i></span> ' + pct + '%</td></tr>'; }).join('') +
+      '</tbody></table><p class="tsum">Total <b>' + fmt(tot) + '</b> damage/s over the last 30 s <button class="btn ghost small" id="meter-reset">Reset</button></p>';
+    if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; const r = el.querySelector('#meter-reset'); if (r) r.onclick = () => { L.meterReset(S); el.dataset.h = ''; paintMeter(Date.now()); }; }
+  }
   function updatePanel(force) {
     const now = Date.now();
+    if (force || now - (updatePanel.meterAt || 0) > 1000) { updatePanel.meterAt = now; paintMeter(now); }
     if (force) paintTabLocks();
     $('gold').textContent = fmt(S.gold);
     if (now - (updatePanel.tipAt || 0) > 2000) { updatePanel.tipAt = now; paintMoneyTips(); }

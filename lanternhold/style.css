@@ -2544,3 +2544,14 @@ body.atench.shopmin .stage .arena{display:none!important}
 .sethead{margin:18px 0 0;font-size:15px}
 .setnotif span{display:flex;flex-direction:column;gap:2px;padding-right:12px}
 .setnotif small{color:var(--muted);font-size:12px}
+
+/* Damage meter (v132) */
+#meter{padding:4px 10px 8px}
+.mtab td:nth-child(2){text-align:right;font-variant-numeric:tabular-nums}
+.mtab td:first-child{white-space:normal}
+#meter .tsum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+#meter .tsum .btn{margin-left:auto}
+.mtab{table-layout:auto}
+.mtab td:last-child{text-align:right;width:1%}
+@media (max-width:520px){.mtab .tbar{display:none}.mtab td{padding:5px 4px}}
+.mtab td{display:table-cell!important}
