@@ -1734,8 +1734,9 @@
         btn = '<button class="buy anywhere" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button>' + '<div class="minirow"><button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' + (id !== 'you' ? '<button class="rest icon" data-unseat="' + i + '" title="Send ' + esc(m.name) + ' to the campfire to free this seat" aria-label="Send ' + esc(m.name) + ' to the campfire">' + icon('flame') + '</button>' : '') + '</div>';
       } else btn = '<button class="btn ghost small" data-dismiss="' + id + '">Dismiss</button>';
       const mv = '<div class="mv"><button class="mini up" data-move="' + i + ':-1"' + (i === 0 ? ' disabled' : '') + ' title="Move forward" aria-label="Move ' + esc(m.name) + ' forward">&#9650;</button><button class="mini dn" data-move="' + i + ':1"' + (i === L.PARTY_SIZE - 1 ? ' disabled' : '') + ' title="Move back" aria-label="Move ' + esc(m.name) + ' back">&#9660;</button></div>';
-      html += '<div class="seat' + (down ? ' down' : '') + (m.player ? ' mine' : '') + '"><span class="pos">' + (i + 1) + '<small>' + L.POS_NAME[i] + '</small></span>' + mv + portrait(id) +
-        '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + (id === 'you' ? '<span class="you">You</span>' : guest ? '<span class="you guest">Player</span>' : '') + '</div>' +
+      const lk = seatLooks(id), sbg = lk && lk.g && lk.g !== 'night' ? cosOf('g', lk.g)[0] : '';
+      html += '<div class="seat' + (down ? ' down' : '') + (m.player ? ' mine' : '') + (sbg ? ' sbn bn-' + sbg : '') + '"><span class="pos">' + (i + 1) + '<small>' + L.POS_NAME[i] + '</small></span>' + mv + portrait(id) +
+        '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + (id === 'you' ? '<span class="you">You</span>' : guest ? '<span class="you guest">Player</span>' : '') + (lk && lk.b && BANNERS[lk.b] ? '<span class="sban" title="' + esc(BANNERS[lk.b][0]) + '">' + seatBanner(lk.b) + '</span>' : '') + '</div>' +
         '<div class="lv">' + (down ? 'Fallen. Back up in ' + Math.ceil((down - now) / 1000) + 's' : memberStatsLine(id, now)) + '</div>' +
         traitChips(id, 'seat') +
         '<div class="hpbar"><i data-hp="' + id + '"></i></div>' + (L.resKind(id) ? '<div class="resbar r-' + L.resKind(id) + '" title="' + (L.resKind(id) === 'mana' ? 'Mana' : 'Stamina') + '"><i data-res="' + id + '"></i></div>' : '') + '</div><div class="acts">' + btn + '</div></div>';
@@ -1939,7 +1940,9 @@
   const guestIdsQ = () => { const ids = (S.guests || []).map(g => String(g.id).replace(/^p_/, '')).filter(x => /^[0-9a-f]{16}$/.test(x)); return '/heroes' + (ids.length ? '?ids=' + ids.join(',') : ''); };
   function applyGuestCards(r) {
     if (!r) return; let n = 0;
-    for (const g of (r.party || []).concat(r.heroes || [])) if (L.refreshGuest(S, { id: 'p_' + g.id, level: g.level, bp: g.bp })) n++;
+    for (const g of (r.party || []).concat(r.heroes || [])) if (L.refreshGuest(S, { id: 'p_' + g.id, level: g.level, bp: g.bp })) {
+      n++; const gg = (S.guests || []).find(x => x.id === 'p_' + g.id); if (gg) { if (g.pf) gg.pf = g.pf; if (g.wd) gg.wd = g.wd; if (g.w != null) gg.w = g.w; }
+    }
     if (n) { save(); updateSeats(true); }
   }
   async function refreshGuests() {
@@ -2816,6 +2819,16 @@
       });
   }
 
+  // Party rows show a player's profile banner as the row background and their war banner by the name (John, 26 Nov 2026).
+  // Your own comes from your profile and Wardrobe; a borrowed player's from the Players Guild data (looks are always public).
+  function seatLooks(id) {
+    if (id === 'you') return { g: prof && prof.pf && prof.pf.g, b: S.wd && S.wd.b };
+    const gg = L.isGuest(S, id) && (S.guests || []).find(x => x.id === id);
+    return gg ? { g: gg.pf && gg.pf.g, b: gg.wd && gg.wd.b } : null;
+  }
+  // bannerSVG makes fresh gradient ids on every call, which would make the seat list repaint each tick; keep one per banner.
+  const seatBanCache = {};
+  const seatBanner = b => seatBanCache[b] || (seatBanCache[b] = bannerSVG(b, 'ban'));
   // ---------- hero profile (v132 redesign, John 26 Nov 2026) ----------
   // Your own hero has two tabs: My hero (the full character sheet, only you see it) and Public (what other players see
   // in the Players Guild, with a switch for each part). Companions and borrowed heroes use the same sheet without tabs.
@@ -6370,6 +6383,7 @@
       'Your hero profile is easier to read: power level, damage, health and deepest floor up top, then Combat, Journey, Attributes and Gear in sections you can fold.',
       'New Public profile tab: choose what other players see in the Players Guild (floor, NP+ tier, online status, stats, gear, records, party, bio, emblems, Grand War badge).',
       'Tap a name in the Players Guild to see that hero’s public profile.',
+      'Party list: your banner and other players’ banners now show on their rows.',
     ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',

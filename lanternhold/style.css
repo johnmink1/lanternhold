@@ -2603,3 +2603,8 @@ body.atench.shopmin .stage .arena{display:none!important}
 .pvchip svg{width:14px;height:14px}
 .pvchip.on{color:var(--text);text-decoration:none;border-color:color-mix(in srgb,var(--good) 55%,transparent);background:color-mix(in srgb,var(--good) 12%,transparent)}
 .pvchip.on svg{color:var(--good)}
+/* party rows: player banners (v132) */
+.seat.sbn{border-color:color-mix(in srgb,var(--line2) 70%,#f2c14e 30%)}
+.seat.sbn .lv{color:color-mix(in srgb,var(--text) 82%,transparent)}
+.sban{display:inline-block;width:16px;height:24px;flex:none;margin-left:2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.sban svg{width:100%;height:100%;display:block}
