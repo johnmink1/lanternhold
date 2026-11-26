@@ -32,3 +32,7 @@ Players reaching floor 150, NP+ starts per tier, market listing volume and media
 ## NP+ marks (John, 26 Nov 2026)
 
 From NP+2 monsters can carry marks (`NP_MODS` in core.js, rolled by `npMark` in `makeFoe`): Stoneskin (Tank/Rogue damage −60%), Spellproof (Mage/Necromancer/Healer damage −60%), Plague Aura (party healing and life steal −60%), Ironclad (takes 10% damage from a hero without Piercing; the new per-wearer Piercing enchant, +10% per tier up to 90%, rolls only on gear that dropped at NP+2 or deeper; Rogues pierce 25% on their own; players' guest heroes have no gear, so they pierce only as Rogues). Normal foes: 15% per tier past 1 (max 75%), two marks from NP+6. Guardians: always 1, 2 from NP+5, 3 from NP+8. Stoneskin and Spellproof never come together. World boss untouched. Sim (mage bot, no party swaps): NP+2 floor 50 in 8.8 h without marks, 12.1 h with them.
+
+## NP+ training costs (John, 26 Nov 2026)
+
+Gold training cost ×(1 + `NP_TRAIN` 0.5 × tier). From NP+2 (`NP_TDUST_TIER`), Healers, Necromancers and Mages (hero, companions and hires) also pay Dust for each power level past 100 (`NP_TDUST_LV`): `NP_TDUST` 5 × (tier − 1) × level / 100 per level (`trainDust`). Sim, 33 h on NP+2 with a mage hero: floor 60 → 50, casters at power level 158–205 → 111–157, and 666 Dust went to training (about 30% of the Dust from scrapping).
