@@ -649,7 +649,7 @@
     if (!s.evd || s.evd.d !== d) s.evd = { d, n: {} };
     return s.evd;
   }
-  // relic: repeat-guardian relics a day (John's pick pending, 26 Nov 2026 PvE audit: farming a beaten guardian paid ~58 relic levels an hour).
+  // relic: repeat-guardian relics a day (John picked this 26 Nov 2026 after the PvE audit: farming a beaten guardian paid ~58 relic levels an hour).
   const evOk = (s, k, now) => (evDay(s, now).n[k] || 0) < EV_DAY[k];
   function evUse(s, k, now) { const e = evDay(s, now); e.n[k] = (e.n[k] || 0) + 1; }
   function abilityDuration(s, ab) { return ab.dur * (1 + relicVal(s, 'hourglass')); }
