@@ -2,14 +2,15 @@
 // raises an extremely rare chance that the Golden Loot Goblin bursts out). NP+ heroes only (hero row np >= 1).
 // Rows in the boss table: w='gulp' s='#' the counter { fed, m, cyc, last, stir, gid, gu, prev }; w='gulpc#<cyc>' s=<pid>
 // feeders this cycle { m, w, nm, c }; w='gulpd#<day>' s=<pid> morsels today { n }; w='gob#<gid>' s='#' { total, hp, cy, gu }.
-// Each morsel up to DAY a day rolls p = min(2%, B + K x morsels since the last goblin). A hit "stirs" Gulp (at most
+// Each morsel up to DAY a day rolls p = min(2%, B + K x morsels since the last goblin); B = K = 2.5e-6 (John, 26 Nov
+// 2026: rarer, ~800 morsels a goblin, about 16-22 days with 3-4 heroes feeding 12 a day). A hit "stirs" Gulp (at most
 // one goblin per GAP); the goblin bursts out when an NP+ hero is online (seen in the last 3 minutes), within STIR.
 // It lasts LIFE with health HPX maxed assaults per NP+ hero online. The fight and loot are in goblin.js.
 const D = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
 const db = new D.DynamoDBClient({}), { BOSS: T, HEROES: H } = process.env;
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) }), S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
 const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
-const DAY = 12, B = 1e-5, K = 1e-5, CAPP = .02, GAP = 72 * 36e5, STIR = 48 * 36e5, LIFE = 30 * 6e4, HPX = 2.5, CEIL = 150;
+const DAY = 12, B = 2.5e-6, K = 2.5e-6, CAPP = .02, GAP = 72 * 36e5, STIR = 48 * 36e5, LIFE = 30 * 6e4, HPX = 2.5, CEIL = 150;
 const M = Math.max, mn = Math.min, fh = f => 10 * (1.22 ** (f - 1) * 1.03 ** M(0, f - 60) * 1.04 ** M(0, f - 140)) ** .4 * 1.0108 ** (M(0, f - 15) + M(0, f - 40));
 const n = (i, k) => i && i[k] ? +i[k].N : 0;
 const get = async (w, s) => (await db.send(new D.GetItemCommand({ TableName: T, Key: { w: S(w), s: S(s) } }))).Item;
