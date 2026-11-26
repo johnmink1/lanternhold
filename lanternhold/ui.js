@@ -2869,12 +2869,15 @@
   // ---------- New Playthrough (NP+, v122, John 25 Nov 2026) ----------
   // The server grants the tier and its Sigils (POST /np) and owns the tier number; the game then resets itself.
   let npSrv = null; // { np, npAt, next } from GET /np
+  // 'x2 health on floor 1, rising to x5 by floor 150 (damage x1.5 to x2.1)'
+  const npX = v => '\u00d7' + (Math.round(v * 10) / 10);
+  const npFoeText = t => npX(L.npFoeHp({ np: t }, 1)) + ' health on floor 1, rising to ' + npX(L.npFoeHp({ np: t }, L.ACT_ONE_END)) + ' by floor ' + L.ACT_ONE_END + ' (damage ' + npX(L.npFoeAtk({ np: t }, 1)) + ' to ' + npX(L.npFoeAtk({ np: t }, L.ACT_ONE_END)) + ')';
   function paintNp() {
     const box = $('npbox'); if (!box) return;
     const t = L.npTier(S), ready = L.npReady(S), next = npSrv && npSrv.next > Date.now() ? npSrv.next : 0;
     const tb = $('nptier'); tb.hidden = !t; tb.textContent = 'NP+' + t;
     $('npgain').innerHTML = t >= L.NP_MAX ? 'You have reached the last tier, <b>NP+' + L.NP_MAX + '</b>' : 'Next: <b>NP+' + (t + 1) + '</b> and <b>+' + L.NP_SIGILS + '</b> Sigils';
-    const now = t ? 'Now on NP+' + t + ': monsters +' + Math.round(L.NP_FOE * t * 100) + '% health and damage, gear +' + Math.round(L.NP_ILVL * t * 100) + '% item level, you +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. ' : '';
+    const now = t ? 'Now on NP+' + t + ': monsters ' + npFoeText(t) + ', gear +' + Math.round(L.NP_ILVL * t * 100) + '% item level, you +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. ' : '';
     $('npnote').textContent = now + (t >= L.NP_MAX ? '' : !ready ? 'Beat the Lampmother, the floor ' + L.ACT_ONE_END + ' guardian, to open the next tier.'
       : !CL || !signedIn() ? 'Sign in to start a New Playthrough. The server keeps your tier and pays the Sigils.'
       : next ? 'The next tier opens ' + new Date(next).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (at most one tier a week).'
@@ -2898,7 +2901,7 @@
       '<p>This starts the whole story over from floor 1. It can not be undone.</p></div>' +
       '<div class="npcols"><div><h3>Resets</h3><ul><li>Gold and Dust</li><li>Floors, power levels, hero level, XP and stat points</li><li>Skills and Kindling</li><li>All gear and your pack</li><li>Embers and relics</li><li>Companions and Guild Hall hires</li><li>The story</li><li>Your market listings, offers and unclaimed mail</li></ul></div>' +
       '<div><h3>Kept</h3><ul><li>Everything bought with Sigils: Wardrobe, Bag of Holding, campfire spots, Lanternholder, tonics</li><li>Your profile and looks</li><li>Journal lore and feats</li><li>Ember Ring rating and Rift tokens</li><li>Your hero’s name, class and alliance</li></ul></div></div>' +
-      '<p class="note">At NP+' + t + ': monsters +' + Math.round(L.NP_FOE * t * 100) + '% health and damage, gear drops +' + Math.round(L.NP_ILVL * t * 100) + '% item level, and you keep +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. You get <b>+' + L.NP_SIGILS + ' Sigils</b> and the NP+' + t + ' badge. Trading opens 24 hours after you start, with heroes on the same tier.</p>' +
+      '<p class="note">At NP+' + t + ': monsters ' + npFoeText(t) + ', gear drops +' + Math.round(L.NP_ILVL * t * 100) + '% item level, and you keep +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. You get <b>+' + L.NP_SIGILS + ' Sigils</b> and the NP+' + t + ' badge. Trading opens 24 hours after you start, with heroes on the same tier.</p>' +
       '<label class="field">Type NP+' + t + ' to confirm<input id="np-type" autocomplete="off"></label>' +
       '<div class="row"><button class="btn" id="m-yes" disabled>Start NP+' + t + '</button><button class="btn ghost" id="m-no">Not yet</button></div>', m => {
       const inp = m.querySelector('#np-type'), yes = m.querySelector('#m-yes');

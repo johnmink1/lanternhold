@@ -8,7 +8,7 @@ John approved this design on 25 Nov 2026 ("Yes, as designed"). Build it in one b
 - **Resets:** gold, Dust, floors, power levels, hero level/XP and stat points, skills, gear and bag, Embers and relics, companions and NPC hires, the story.
 - **Keeps:** everything bought with Sigils (wardrobe, Bag of Holding, bag/roster spots bought with Sigils, pass), profile and cosmetics, journal lore, feats, Ember Ring rating.
 - **Reward:** +25 Sigils, and the tier goes up: NP+1, NP+2 … NP+10 (cap). The tier shows as a badge on the profile card, the leaderboard and in chat.
-- **Per tier n:** monsters ×(1 + 0.25n) health and damage; gear drops at +10%·n item level; permanent +2%·n damage, health and gold (max +20% at NP+10).
+- **Per tier n:** monsters ×(1 + n)·(1 + n·floor/100) health and ×(1 + 0.5n)·(1 + n·floor/200) damage (v125, John 26 Nov 2026; was ×(1 + 0.25n)); gear drops at +10%·n item level; permanent +2%·n damage, health and gold (max +20% at NP+10).
 - **Versus Rekindle:** Rekindle stays the short loop (floors, gold, training → Embers). NP+ is the long loop (everything → tier + Sigils).
 
 ## Market safeguards (server enforced)

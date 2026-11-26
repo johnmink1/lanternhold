@@ -477,12 +477,18 @@
   function emberMult(s) { return 1 + EMBER_PER * s.embers; }
   // ---------- New Playthrough (NP+, John 25 Nov 2026, docs/NP-PLUS.md) ----------
   // After the floor 150 guardian a hero can start over at the next tier, NP+1 to NP+10. Each tier makes foes
-  // NP_FOE x tier tougher, gear drops NP_ILVL x tier higher, and gives +NP_PER x tier damage, health and gold.
+  // foes tougher (npFoeHp/npFoeAtk), gear drops NP_ILVL x tier higher, and gives +NP_PER x tier damage, health and gold.
   // The server (infra/lambda/np.js) grants NP_SIGILS once per tier, at least NP_GAP apart, and owns the tier.
-  const NP_MAX = 10, NP_FOE = 0.25, NP_ILVL = 0.1, NP_PER = 0.02, NP_SIGILS = 25, NP_GAP = 7 * 864e5, NP_LOCK = 864e5;
+  const NP_MAX = 10, NP_ILVL = 0.1, NP_PER = 0.02, NP_SIGILS = 25, NP_GAP = 7 * 864e5, NP_LOCK = 864e5;
   function npTier(s) { return Math.max(0, Math.min(NP_MAX, (s && s.np) | 0)); }
   function npT(s) { return npTier(s) || undefined; }
-  function npFoe(s) { return 1 + NP_FOE * npTier(s); }
+  // v125 (John 26 Nov 2026: NP+ must make players build gear, stats and party combos, not blast through): foe health
+  // x(1 + NP_HP x tier) on floor 1, growing with depth by (1 + NP_HP_DEPTH x tier x floor); damage half as steep.
+  // NP+1: health x2 on floor 1, x5 by floor 150. NP+10: x11 on floor 1, about x176 by floor 150.
+  const NP_HP = 1, NP_HP_DEPTH = 0.01, NP_ATK = 0.5, NP_ATK_DEPTH = 0.005;
+  function npFoeHp(s, f) { const n = npTier(s); return n ? (1 + NP_HP * n) * (1 + NP_HP_DEPTH * n * Math.max(1, f || 1)) : 1; }
+  function npFoeAtk(s, f) { const n = npTier(s); return n ? (1 + NP_ATK * n) * (1 + NP_ATK_DEPTH * n * Math.max(1, f || 1)) : 1; }
+  function npFoe(s) { return npFoeHp(s, s && s.floor); }
   function npBonus(s) { return 1 + NP_PER * npTier(s); }
   function npIlvl(s, f) { return npTier(s) ? Math.round(f * (1 + NP_ILVL * npTier(s))) : f; }
   // Gear from an earlier tier can't be worn (no stashing gear on an alt before starting over).
@@ -776,7 +782,7 @@
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    return Math.min(4, d / (foeHp(f, false) * npFoe(s))) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
+    return Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f))) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
   const incCache = new WeakMap();
   function npcIncomeMin(s, now) {
@@ -2190,10 +2196,10 @@
     s.mercyAid = Math.max(now, s.mercyAid || 0) + MERCY_MIN * 60000; s.stats.aided = (s.stats.aided || 0) + 1;
     s.foe = null; s.foeGap = now + 900; events && events.push({ type: 'aided', who: f.who }); return true;
   }
-  // NP+: every foe outside the shared world boss fight is NP_FOE x tier tougher and hits that much harder.
+  // NP+: every foe outside the shared world boss fight is tougher and hits harder (npFoeHp / npFoeAtk).
   function makeFoe(s, rng) {
-    const foe = makeFoe0(s, rng), m = npFoe(s);
-    if (m > 1 && foe && !foe.world && !foe.wounded && !foe.lock) { foe.hp *= m; foe.max *= m; foe.atk *= m; }
+    const foe = makeFoe0(s, rng), mh = npFoeHp(s, s.floor), ma = npFoeAtk(s, s.floor);
+    if (mh > 1 && foe && !foe.world && !foe.wounded && !foe.lock) { foe.hp *= mh; foe.max *= mh; foe.atk *= ma; }
     return foe;
   }
   function makeFoe0(s, rng) {
@@ -3182,7 +3188,7 @@
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    const killsPerSec = Math.min(4, d / (foeHp(f, false) * npFoe(s)));
+    const killsPerSec = Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f)));
     return killsPerSec * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
 
@@ -3225,7 +3231,7 @@
   }
 
   const api = {
-    steadyDps, NP_MAX, NP_FOE, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
+    steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
     NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
