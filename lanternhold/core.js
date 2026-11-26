@@ -543,6 +543,8 @@
   function npFoeAtk(s, f) { const n = npTier(s); return n ? (1 + NP_ATK * n) * (1 + NP_ATK_DEPTH * n * Math.max(1, f || 1)) : 1; }
   function npFoe(s) { return npFoeHp(s, s && s.floor); }
   function npBonus(s) { return 1 + NP_PER * npTier(s); }
+  // NP+ foes drop gold x(1 + NP_HP x tier), matching their floor-1 health bump, so training keeps pace with the tougher fights.
+  function npGold(s) { return 1 + NP_HP * npTier(s); }
   function npIlvl(s, f) { return npTier(s) ? Math.round(f * (1 + NP_ILVL * npTier(s))) : f; }
   // Gear from an earlier tier can't be worn (no stashing gear on an alt before starting over).
   function npOld(s, it) { return !!it && ((it.t | 0) < npTier(s)); }
@@ -623,12 +625,13 @@
   function chestChance(s) { return Math.min(CHEST_MAX, CHEST_BASE + Math.min(MOTH_MAX, relicVal(s, 'moth')) + sk(s, 'chest')); }
   // Daily caps on random events, per hero, reset at UTC midnight like the daily quests. Once a cap is hit that event
   // stops showing up until tomorrow (a normal foe takes its place). The Admin event spawner ignores the caps.
-  const EV_DAY = { chest: 40, pack: 60, lock: 20, goblin: 6, ghost: 12, merchant: 8, mercy: 6 };
+  const EV_DAY = { chest: 40, pack: 60, lock: 20, goblin: 6, ghost: 12, merchant: 8, mercy: 6, relic: 5 };
   function evDay(s, now) {
     const d = new Date(now || s.clock || Date.now()).toISOString().slice(0, 10);
     if (!s.evd || s.evd.d !== d) s.evd = { d, n: {} };
     return s.evd;
   }
+  // relic: repeat-guardian relics a day (John's pick pending, 26 Nov 2026 PvE audit: farming a beaten guardian paid ~58 relic levels an hour).
   const evOk = (s, k, now) => (evDay(s, now).n[k] || 0) < EV_DAY[k];
   function evUse(s, k, now) { const e = evDay(s, now); e.n[k] = (e.n[k] || 0) + 1; }
   function abilityDuration(s, ab) { return ab.dur * (1 + relicVal(s, 'hourglass')); }
@@ -865,7 +868,7 @@
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    return Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f))) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
+    return Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f))) * foeGold(f, false) * goldMult(s) * npGold(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
   const incCache = new WeakMap();
   function npcIncomeMin(s, now) {
@@ -2413,7 +2416,7 @@
   const lockFoe = r => { const door = r() < 0.5; return { lock: door ? 'door' : 'chest', name: door ? 'Locked Door' : 'Locked Chest', sprite: door ? 'door' : 'lockbox', hp: 100, max: 100, atk: 0, mods: [], sp: null, pick: 0, wait: 0, hue: 0, ambush: 0, pack: 0, ward: 0, wardAt: 0 }; };
   const lockRogue = s => s.party.find(id => id && memberById(id).cls === 'rogue') || null;
   const lockDust = (s, f) => Math.round((10 + f * 1.2) * npBonus(s));
-  const lockGold = (s, f) => foeGold(f, false) * goldMult(s) * LOCK_GOLD;
+  const lockGold = (s, f) => foeGold(f, false) * goldMult(s) * npGold(s) * LOCK_GOLD;
   function lockDone(s, now) { s.foe = null; s.foeSwing = 0; s.foeGap = now + FOE_GAP * 1000; s.foeIdx++; }
   function lockTick(s, dt, now, rng, events) {
     const f = s.foe, rog = lockRogue(s);
@@ -2702,7 +2705,7 @@
   }
   function killFoe(s, now, rng, events) {
     const foe = s.foe, f = s.floor;
-    let g = foeGold(f, foe.boss) * goldMult(s);
+    let g = foeGold(f, foe.boss) * goldMult(s) * npGold(s);
     if (foe.chest) { g *= 10 * (1 + relicVal(s, 'tooth')); s.stats.chests++; }
     if (foe.elite) { g *= 3; unlockLore(s, 'war_' + foe.side, events); const rn = regionNo(f); s.mastE = s.mastE || {}; s.mastE[rn] = (s.mastE[rn] || 0) + 1; if (s.mastE[rn] >= MASTERY_ELITES) masteryMark(s, rn, 2, events); if (rn < REGIONS - 1 && (rn + 1) * 10 + 1 > s.maxFloorEver && s.mastE[rn] <= TRIAL_ELITES) events && events.push({ type: 'trial', region: rn, elites: s.mastE[rn], guardian: trialOf(s, rn).guardian }); }
     if (foe.pack) { g *= foe.pack * PACK_GOLD * (1 + sk(s, 'spoils')); s.stats.packs = (s.stats.packs || 0) + 1; s.stats.kills += foe.pack - 1; }
@@ -2735,7 +2738,8 @@
       const firstClear = f >= s.maxFloorEver && !regionNeed(s, f + 1);
       const chance = f < 10 ? 0 : (firstClear ? 0.35 : 0.03);
       const r = rng || Math.random;
-      if (r() < chance) {
+      if (r() < chance && (firstClear || evOk(s, 'relic', now))) {
+        if (!firstClear) evUse(s, 'relic', now);
         const rel = RELICS[Math.floor(r() * RELICS.length)];
         s.relics[rel.id] = (s.relics[rel.id] || 0) + 1;
         events && events.push({ type: 'relic', relic: rel, level: s.relics[rel.id] });
@@ -3394,7 +3398,7 @@
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
     const killsPerSec = Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f)));
-    return killsPerSec * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
+    return killsPerSec * foeGold(f, false) * goldMult(s) * npGold(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
 
   function migrate(o) {
@@ -3452,7 +3456,7 @@
   const PIP_TAU = 3 * 3600e3, PIP_STEP = 10e3, PIP_GAP = 60e3, PIP_READY = 1800e3;
   function acctGoldPerSec(s) {
     const f0 = Math.max(1, (s.maxFloor || 1) - 1), f = isBossFloor(f0) ? Math.max(1, f0 - 1) : f0;
-    return 4 * foeGold(f, false) * goldMult(s) / ((1 + gearGold(s)) * (1 + campBonus(s, 'gold'))) * 0.5 * (1 + relicVal(s, 'bell'));
+    return 4 * foeGold(f, false) * goldMult(s) * npGold(s) / ((1 + gearGold(s)) * (1 + campBonus(s, 'gold'))) * 0.5 * (1 + relicVal(s, 'bell'));
   }
   function pipOf(s) { const p = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }); if (p.pk || p.lk) { delete p.pk; delete p.lk; delete p.pkAt; } return p; }
   function samplePipIncome(s, now) {
@@ -3639,7 +3643,7 @@
 
   const api = {
     npPlus, incomeHour, priceH, steadyPartyDps, pipRate, samplePipIncome, acctGoldPerSec, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
-    steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
+    steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npGold, npIlvl, npOld, npReady, startNP,
     NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
