@@ -4062,6 +4062,18 @@
     ['c19c183a-a27a-4918-8d3c-f94e684fb2d8', 2400, '$19.99', '20% bonus'], ['27c5a9e9-b7fb-48d9-90c8-a450b85e083a', 6500, '$49.99', 'Best value']];
   // Lanternholder: the one recurring plan. $4.99 a month until the player cancels in their store account.
   const SUB_PLAN = '36118cbb-d4f6-48ce-be59-65a2b9b82a13', SUB_PRICE = '$4.99', SUB_MANAGE = 'https://www.born2gamellc.com/account/my-subscriptions';
+  // Mercy Corps donations (John, 26 Nov 2026): the buttons open John's Extra Life page, so the money goes straight to
+  // Children's Miracle Network (donor gets the receipt) and never passes through the store. The bot's Extra Life feed
+  // credits the verified Grand War commander named as '#WarName' in the donation message and announces it in Discord.
+  // DonorDrive takes ?amount= to preset the amount; it has no message parameter, so the game copies the tag.
+  const EL_DONATE = 'https://dd.extra-life.org/participants/566739/donate';
+  const warTag = () => prof && prof.wv && prof.wl ? '#' + String(prof.wl).toLowerCase().replace(/[^a-z0-9]+/g, '') : '';
+  function giveMercy(amt) {
+    window.open(EL_DONATE + (amt ? '?amount=' + amt : ''), '_blank', 'noopener');
+    const tag = warTag();
+    if (tag) { try { navigator.clipboard.writeText(tag).catch(() => {}); } catch (e) {} toast('cross', 'Thank you, medic', 'Add ' + esc(tag) + ' to the donation message (tap Add a message) so your alliance gets the credit.', 'feat'); }
+    else toast('cross', 'Thank you, medic', 'Every gift helps the kids. To credit your alliance, link your Grand War commander in your profile and add #YourWarName to the message.', 'feat');
+  }
   const subOn = () => S.sub > Date.now();
   const subDate = () => new Date(S.sub - 864e5).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
   const homeUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '');
@@ -4181,6 +4193,11 @@
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' :
         linked ? '<div class="storelink"><span>Store account: <b>' + esc(w.n || 'linked') + '</b></span><button class="btn small ghost" id="gs-sync">Check for purchases</button><button class="btn small ghost" id="gs-out">Unlink</button></div>' :
         '<div class="storelink"><span>Packs and memberships are sold in the Born 2 Game store. Sign in there once and every purchase lands on this hero.</span><button class="btn small" id="gs-in">Sign in with Born 2 Game</button></div>') +
+      // 4. Mercy Corps: real donations to Extra Life, paid on Extra Life's own page
+      '<div class="shopsec subbox mercygive"><h3>Give to the Mercy Corps <span class="tag">Charity</span></h3>' +
+      '<p class="shopsub">Donate to our Extra Life team for Children’s Miracle Network Hospitals. Gifts also light Mercy’s Blessing for every hero' + (warTag() ? ' and credit your alliance (' + esc(warTag()) + ')' : '') + '.</p>' +
+      '<div class="row left"><button class="btn" id="gs-give1">Give $1</button><button class="btn ghost" id="gs-giveo">Other amount</button></div>' +
+      '<p class="note small">Opens Extra Life’s secure page. The money goes straight to the charity, never to the game, and you get the receipt.</p></div>' +
       '<p class="note small">Payment is handled by the Born 2 Game store at born2gamellc.com. Every account starts with 100 ' + TOKEN + ', and the team hands more out at Grand War events.</p>' +
       '<div class="row"><button class="btn ghost" id="gs-ok">Back</button></div>', md => {
         md.querySelector('#gs-x').onclick = closeModal; md.querySelector('#gs-ok').onclick = () => back();
@@ -4197,6 +4214,8 @@
         const mk = md.querySelector('#gs-mkt'); if (mk) mk.onclick = () => { closeModal(); openTrade('sigils'); };
         const i = md.querySelector('#gs-in'); if (i) i.onclick = () => go(i, storeSignIn);
         const sy = md.querySelector('#gs-sync'); if (sy) sy.onclick = async () => { sy.disabled = true; await storeSync(true); getSigils(back); };
+        md.querySelector('#gs-give1').onclick = () => giveMercy(1);
+        md.querySelector('#gs-giveo').onclick = () => giveMercy(0);
         const o = md.querySelector('#gs-out'); if (o) o.onclick = () => { wixPut(null); toast('user', 'Store account unlinked', 'This device no longer checks it for purchases.', ''); getSigils(back); };
       });
     if (signedIn() && !prof && CL) loadProfile().then(() => { if (prof && document.querySelector('#gs-x')) getSigils(back); }).catch(() => {});
@@ -6265,6 +6284,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 132, date: 'November 2026', title: 'Give to the Mercy Corps', items: [
+      'Sigil shop: Give $1 or any amount to our Extra Life team for children’s hospitals. Add your #WarName to credit your alliance.',
+    ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
       'Balance: past floor 100, gold per kill now grows 6% a floor instead of 10% or more. Floors 1 to 100 are unchanged. Upgrade and salvage prices follow.',
