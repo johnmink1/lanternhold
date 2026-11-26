@@ -1,6 +1,7 @@
 // Market: list an item for gold, browse by class, buy, cancel. Listings live under mkt#<cls> with a
 // pointer under sell#<seller>, written and removed together in transactions. Gold is paid into the
-// seller's mailbox (inbox#<seller>) as a 'sale' letter they claim.
+// seller's mailbox (inbox#<seller>) as a 'sale' letter they claim. v125 (John, 25 Nov 2026, NP+ gold sinks): NP+ market
+// sales pay the seller 95%; the 5% leaves the game.
 const { DynamoDBClient, GetItemCommand, QueryCommand, TransactWriteItemsCommand } = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
 const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES;
 const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'], SLOT = 'main off head neck chest robe legs feet ring'.split(' '), RAR = ['common', 'fine', 'rare', 'epic', 'set'], JOB = 'forage smith herb armor prospect lamp'.split(' ');
@@ -16,7 +17,7 @@ function item(i) {
   if (set ? SET[set] !== i.cls || i.rar !== 'set' : js ? !JOB.includes(js) || i.rar !== 'set' : i.rar === 'set') return null;
   const ilvl = Math.floor(+i.ilvl), up = Math.floor(+i.up || 0);
   if (!(ilvl >= 1 && ilvl <= 1e6 && up >= 0 && up <= 10)) return null;
-  return { cls: i.cls, slot: i.slot, rar: i.rar, set: set || undefined, jset: js || undefined, aff: JOB.includes(a.j) && a.v > 0 && a.v <= 0.5 ? { j: a.j, v: +a.v } : undefined, en: /^([a-l][1-9]){0,4}$/.test(i.en) ? i.en : undefined, ty: /^\w{3,11}$/.test(i.ty) ? i.ty : undefined, t: i.t >= 1 && i.t <= 10 ? i.t | 0 : undefined, ilvl, up };
+  return { cls: i.cls, slot: i.slot, rar: i.rar, set: set || undefined, jset: js || undefined, aff: JOB.includes(a.j) && a.v > 0 && a.v <= 0.5 ? { j: a.j, v: +a.v } : undefined, en: /^([a-m][1-9]){0,4}$/.test(i.en) ? i.en : undefined, ty: /^\w{3,11}$/.test(i.ty) ? i.ty : undefined, t: i.t >= 1 && i.t <= 10 ? i.t | 0 : undefined, ilvl, up };
 }
 const okName = n => /^[A-Za-z][A-Za-z '\-]{1,15}$/.test(n) && !BAD.test(n.replace(/[^a-z]/gi, ''));
 const price = p => { p = Math.floor(+p); return p >= 1 && p < 1e60 ? p : 0; };
@@ -65,7 +66,7 @@ exports.handler = async (e) => {
     const ops = [
       { Delete: { TableName: T, Key: { pk: S(mk(cls)), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } },
       { Delete: { TableName: T, Key: { pk: S('sell#' + L.seller), sk: S(id) } } }];
-    if (buy) ops.push({ Put: { TableName: T, Item: { pk: S('inbox#' + L.seller), sk: S(newId()), type: S('sale'), from: S(me), fromName: S(b.name), item: S(JSON.stringify(L.item)), gold: S(L.price), at: { N: '' + now } } } });
+    if (buy) ops.push({ Put: { TableName: T, Item: { pk: S('inbox#' + L.seller), sk: S(newId()), type: S('sale'), from: S(me), fromName: S(b.name), item: S(JSON.stringify(L.item)), gold: S(np ? Math.floor(L.price * .95) : L.price), at: { N: '' + now } } } });
     try { await db.send(new TransactWriteItemsCommand({ TransactItems: ops })); }
     catch (x) { if (x.name === 'TransactionCanceledException') return res(404, { error: 'gone' }); throw x; }
     return res(200, { ok: true, item: L.item, price: L.price });

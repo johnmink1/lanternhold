@@ -1,4 +1,4 @@
-/* lh-build 202611251638 */
+/* lh-build 202611260007 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2217,6 +2217,10 @@ body.atench #ghostlamp,body.atench #merchant,body.atench #spwarn,body.atench .fl
 .r-legend{--rc:#ff8a3d}.pgear .r-legend{color:#ff8a3d}.ilink.r-legend{--rc:#ff8a3d}.mkname.r-legend{color:#ffa463}
 .tile.r-legend{box-shadow:inset 0 0 12px rgba(0,0,0,.6),0 0 12px rgba(255,138,61,.45)}
 .mkcard.r-legend{border-color:rgba(255,138,61,.45)}
+.r-mythic{--rc:#ff3d6e}.pgear .r-mythic{color:#ff3d6e}.ilink.r-mythic{--rc:#ff3d6e}.mkname.r-mythic{color:#ff6b8f}
+.tile.r-mythic{box-shadow:inset 0 0 12px rgba(0,0,0,.6),0 0 14px rgba(255,61,110,.6)}
+.mkcard.r-mythic{border-color:rgba(255,61,110,.5)}
+.iset.legset{border-color:#ff3d6e66;background:linear-gradient(180deg,#24101a,#120a0e)}.iset.legset b{color:#ff6b8f}
 .iset.legset{border-color:#ff8a3d66;background:linear-gradient(180deg,#22160f,#120d0a)}.iset.legset b{color:#ffa463}
 .ewcost.legc{color:#ffa463}
 .shtile{display:grid;place-items:center;--sc:#ff8a3d;color:var(--sc);box-shadow:inset 0 0 10px rgba(0,0,0,.6),0 0 8px color-mix(in srgb,var(--sc) 35%,transparent)}
@@ -2463,3 +2467,55 @@ body.atench .achips{display:none}
 .tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
 #tr-rows{overflow-x:auto}
 @media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}
+/* v125 NP+ gold sinks: Pip's crates and Curio shelf, Gulp's sign, the goblin bar, Hold works */
+.holdtents.n7{grid-template-columns:repeat(7,1fr)}
+.holdtents.n7 button{padding:8px 2px;font-size:12px}
+@media (max-width:720px){.holdtents.n7{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:520px){.holdtents.n7{grid-template-columns:1fr 1fr}.holdtents.n7 button:last-child{grid-column:auto}}
+.cushelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:6px 0 10px}
+.cuitem{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px dashed var(--line2);border-radius:10px;background:#0f1420;color:var(--muted)}
+.cuitem b{font-size:13px;color:var(--muted)}.cuitem small{font-size:11.5px;line-height:1.35}
+.cuitem.own{border-style:solid;border-color:#c0392b88;background:color-mix(in srgb,#c0392b 10%,#0f1420);color:var(--text)}
+.cuitem.own b{color:#ffd9a8}.cuitem .btn{align-self:flex-start;margin-top:2px}
+.gulpsign{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;padding:8px;border:2px solid #a87418;border-radius:10px;background:linear-gradient(#5a3a22,#3a2614);text-align:center}
+.gulpsign small{display:block;color:#f5e6c8;font-size:11px}.gulpsign b{display:block;color:#ffd36b;font-size:18px;font-variant-numeric:tabular-nums}
+.gulpbtns{flex-wrap:wrap;gap:6px}
+.shopperk.gob{border-color:#f5c242;background:color-mix(in srgb,#f5c242 12%,transparent)}
+.gobbar{border-color:#a87418;background:linear-gradient(90deg,#2a1c06,#3a2808);color:#ffe9b0}
+.gobbar svg{color:#f5c242}.gobbar em{background:#f5c242;color:#2a1c06}.gobbar em.wait{background:transparent;color:#f5c242;border-color:#a87418}
+.gobbar:hover,.gobbar.on{border-color:#f5c242}.gobbar.on{box-shadow:0 0 0 1px #f5c24255,0 0 18px #f5c24244}
+.pill.ok{padding:3px 10px;border-radius:999px;background:#1f5c3c;color:#c8f7d4;font-size:12px;font-weight:700}
+/* v125: with Pip and Gulp the shop header has six buttons; let them wrap on narrow screens */
+@media (max-width:720px){.shophead .shopbtns{flex:1 1 100%;flex-wrap:wrap;gap:6px}.shophead .shopbtns .btn{padding:5px 9px}}
+/* v125 admin activity log (View Log) */
+.modal .sheet.logsheet{max-width:880px;width:calc(100vw - 32px)}
+.plog h2{margin-bottom:4px}
+.plog-v{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;margin:8px 0 10px;border:1px solid var(--line);font-size:14px}
+.plog-v svg{width:18px;height:18px;flex:none}
+.plog-v.ok{background:rgba(110,190,110,.12);border-color:rgba(110,190,110,.5)}
+.plog-v.warn{background:rgba(240,180,60,.13);border-color:rgba(240,180,60,.55)}
+.plog-v.bad{background:rgba(230,80,70,.15);border-color:rgba(230,80,70,.6)}
+.plog-views{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px}
+.plog-list{display:flex;flex-direction:column;gap:4px;max-height:min(56vh,620px);overflow:auto;padding-right:2px}
+.plog-day{margin:8px 0 2px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.plog-r{display:flex;gap:10px;padding:7px 10px;border-radius:9px;background:#0e121a;border:1px solid var(--line);font-size:13px;line-height:1.4}
+.plog-r.quiet{background:transparent;border-style:dashed;color:var(--muted);font-size:12px;padding:4px 10px}
+.plog-r.warn{border-color:rgba(240,180,60,.6);background:rgba(240,180,60,.07)}
+.plog-r.bad{border-color:rgba(230,80,70,.75);background:rgba(230,80,70,.09)}
+.plog-t{flex:none;width:118px;color:var(--muted);font-variant-numeric:tabular-nums}
+.plog-c{flex:1;min-width:0;overflow-wrap:anywhere}
+.plog-c small{color:var(--muted)}
+.plog-f{margin-top:4px;display:flex;gap:6px;align-items:flex-start}
+.plog-f svg{width:14px;height:14px;flex:none;margin-top:2px}
+.plog-f.bad{color:#ff8f84}.plog-f.warn{color:#f3c460}.plog-f.info{color:#9fc6e8}
+.plog-a{margin:4px 0 0;padding-left:16px;color:#cfc6b0;font-size:12px}
+.plog-a li{margin:1px 0}
+.plog-a li small{display:block;color:var(--muted)}
+.plog-a li.away{color:#9fc6e8}
+.plog .row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px}
+@media (max-width:560px){.plog-r{flex-direction:column;gap:2px}.plog-t{width:auto}.modal .sheet.logsheet{width:calc(100vw - 16px);padding:16px}}
+/* NP+ marks (v125) */
+.foemods .m-stone{background:#2a2620;border-color:#8a7a5a;color:#e8dcc0}
+.foemods .m-runed{background:#1d1438;border-color:#7a5ac8;color:#d8c8ff}
+.foemods .m-plague{background:#16240e;border-color:#5a8a2a;color:#cfeeb0}
+.foemods .m-iron{background:#1e242c;border-color:#8a9aac;color:#e4ecf4}

@@ -8,7 +8,7 @@ John approved this design on 25 Nov 2026 ("Yes, as designed"). Build it in one b
 - **Resets:** gold, Dust, floors, power levels, hero level/XP and stat points, skills, gear and bag, Embers and relics, companions and NPC hires, the story.
 - **Keeps:** everything bought with Sigils (wardrobe, Bag of Holding, bag/roster spots bought with Sigils, pass), profile and cosmetics, journal lore, feats, Ember Ring rating.
 - **Reward:** +25 Sigils, and the tier goes up: NP+1, NP+2 … NP+10 (cap). The tier shows as a badge on the profile card, the leaderboard and in chat.
-- **Per tier n:** monsters ×(1 + 0.25n) health and damage; gear drops at +10%·n item level; permanent +2%·n damage, health and gold (max +20% at NP+10).
+- **Per tier n:** monsters ×(1 + n)·(1 + n·floor/100) health and ×(1 + 0.5n)·(1 + n·floor/200) damage (v125, John 26 Nov 2026; was ×(1 + 0.25n)); gear drops at +10%·n item level; permanent +2%·n damage, health and gold (max +20% at NP+10).
 - **Versus Rekindle:** Rekindle stays the short loop (floors, gold, training → Embers). NP+ is the long loop (everything → tier + Sigils).
 
 ## Market safeguards (server enforced)
@@ -28,3 +28,7 @@ Players reaching floor 150, NP+ starts per tier, market listing volume and media
 - Safeguard 1 is done by clearing instead of paying 0: when NP+ starts, `infra/lambda/np.js` deletes the player's listings, sent offers and every inbox letter (so no old sale or payment gold can be claimed) and returns offers from other players to them.
 - The 25 Sigils also need the hero board to show floor 151+ (`fl`), which the game publishes right before asking.
 - Extra, from Chipplin's Discord idea: a gold portrait ring with the tier on profile cards.
+
+## NP+ marks (John, 26 Nov 2026)
+
+From NP+2 monsters can carry marks (`NP_MODS` in core.js, rolled by `npMark` in `makeFoe`): Stoneskin (Tank/Rogue damage −60%), Spellproof (Mage/Necromancer/Healer damage −60%), Plague Aura (party healing and life steal −60%), Ironclad (takes 10% damage from a hero without Piercing; the new per-wearer Piercing enchant, +10% per tier up to 90%, rolls only on gear that dropped at NP+2 or deeper; Rogues pierce 25% on their own; players' guest heroes have no gear, so they pierce only as Rogues). Normal foes: 15% per tier past 1 (max 75%), two marks from NP+6. Guardians: always 1, 2 from NP+5, 3 from NP+8. Stoneskin and Spellproof never come together. World boss untouched. Sim (mage bot, no party swaps): NP+2 floor 50 in 8.8 h without marks, 12.1 h with them.
