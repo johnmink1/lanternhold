@@ -1,4 +1,4 @@
-/* lh-build 202611260519 */
+/* lh-build 202611261532 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -1200,6 +1200,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .quest>div{flex:1;min-width:0}.quest b{display:block}.quest small{color:var(--muted);font-size:12px}
 .quest.done{border-color:var(--gold)}.quest.got{opacity:.7}
 .quest .sigil{width:14px;height:14px;vertical-align:-2px;margin-right:2px}
+.quest .qgorow{margin-top:6px}
 .qbar{height:6px;border-radius:6px;background:var(--line);margin:6px 0 3px;overflow:hidden}.qbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ffd970)}
 .qok{color:var(--violet);font-weight:800;white-space:nowrap}
 .quest.bonus{background:linear-gradient(180deg,rgba(232,121,249,.08),var(--panel))}
