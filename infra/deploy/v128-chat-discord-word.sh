@@ -13,7 +13,7 @@ if grep -qF "$NEW" index.js; then echo "already done"; exit 0; fi
 python3 - "$OLD" "$NEW" <<'PY'
 import sys; p='index.js'; s=open(p).read(); s=s.replace(sys.argv[1], sys.argv[2], 1); open(p,'w').write(s)
 PY
-node -e "require('./index.js')" && zip -qr ../chat.zip . && cd ..
+node --check index.js && zip -qr ../chat.zip . && cd ..
 aws lambda update-function-code --function-name $F --zip-file fileb://chat.zip >/dev/null
 aws lambda wait function-updated --function-name $F
 echo "done. Undo: aws lambda update-function-code --function-name $F --zip-file fileb://$HOME/lhbak/$F-$TS.zip"
