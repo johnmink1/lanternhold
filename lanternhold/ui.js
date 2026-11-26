@@ -6213,9 +6213,9 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 126, date: 'November 2026', title: 'Compact shops', items: [
-      'Compact shops: a new Compact button in every shop\u2019s header hides the shop scene so the counter and your gear list get the whole panel. Show scene brings it back, and the game remembers your choice (Kyvia\u2019s idea).',
-      'The Who filter on your gear and on every shop counter can now pick one hero in your party, not just a class: it shows what that hero wears or can wear right now, so two heroes of the same class are easy to tell apart (Kyvia\u2019s idea).',
-      'On phones the shop header buttons wrap onto a second row instead of running off the screen.',
+      'Shops have a Compact button that hides the scene, so the counter fills the panel. Show scene brings it back.',
+      'The Who filter on your gear and shop counters can pick one hero in your party, not just a class.',
+      'On phones the shop buttons wrap onto a second row instead of running off the screen.',
     ] },
     { v: 125, date: 'November 2026', title: 'Mythic gear, rarer events and NP+ gold sinks', items: [
       'World boss gear is now Mythic, above Legendary. Pieces you own upgrade, with more power and an extra enchant socket.',
