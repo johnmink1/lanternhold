@@ -11,7 +11,7 @@
 // discord/fonts (Google Fonts would need two more mappings and <link> tags are not rewritten). Outside links go through
 // Discord's openExternalLink, which asks the player before leaving Discord.
 (function () {
-  var CLIENT_ID = '1575569010945425418';
+  var CLIENT_ID = '1575635134277886114';
   var SITE = 'https://lanternhold.born2gamellc.com/';
   var MAPS = [
     { prefix: '/lh-api', target: 'nyu3u8gc73.execute-api.us-east-1.amazonaws.com' },
