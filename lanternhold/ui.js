@@ -1,4 +1,4 @@
-/* lh-build 202611260336 */
+/* lh-build 202611260408 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6265,7 +6265,8 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 131, date: 'November 2026', title: 'Deep gold', items: [
+    { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
+      'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
       'Balance: past floor 100, gold per kill now grows 6% a floor instead of 10% or more. Floors 1 to 100 are unchanged. Upgrade and salvage prices follow.',
     ] },
     { v: 130, date: 'November 2026', title: 'Notification settings', items: [
