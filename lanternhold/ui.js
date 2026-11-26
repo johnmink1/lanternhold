@@ -2821,18 +2821,12 @@
   // in the Players Guild, with a switch for each part). Companions and borrowed heroes use the same sheet without tabs.
   // Hidden parts are stored as pf.h on the profile; heroes.js leaves them out of GET /heroes, so it is enforced there.
   const SIDE_OF_MEMBER = id => { const m = L.memberById(id); if (id === 'you') return L.sideOf(S); return m.side || null; };
+  // John (26 Nov 2026): fewer switches. Seven chips, each covering one or two of the server's hide keys.
   const PUB_PARTS = [
-    ['fl', 'Deepest floor', 'How far down you have been.'],
-    ['np', 'New Playthrough tier', 'Your NP+ badge and portrait ring.'],
-    ['on', 'Online now', 'Shows others when you are playing.'],
-    ['st', 'Combat stats', 'Damage, health and healing.'],
-    ['gr', 'Gear', 'What your hero wears.'],
-    ['rc', 'Records', 'Monsters, guardians, feats and time played.'],
-    ['pa', 'Party', 'Who fights beside you.'],
-    ['b', 'Bio', 'The line you wrote about your hero.'],
-    ['e', 'Emblems', 'The emblems on your card.'],
-    ['w', 'Grand War badge', 'Your commander rank and honors.'],
+    [['fl', 'np'], 'Floor & NP+'], [['on'], 'Online'], [['st'], 'Stats'], [['gr'], 'Gear'],
+    [['rc', 'pa'], 'Records & party'], [['b', 'e'], 'Bio & emblems'], [['w'], 'Grand War'],
   ];
+  const PUB_KEYS = PUB_PARTS.flatMap(x => x[0]);
   let profTab = 'me', pubTimer = 0;
   const pubHidden = () => (prof && prof.pf && Array.isArray(prof.pf.h) ? prof.pf.h : []);
   const pubOff = k => pubHidden().includes(k);
@@ -2934,8 +2928,7 @@
     const pub = () => {
       if (!signedIn()) return '<p class="note">Sign in to set up the profile other players see in the Players Guild.</p><div class="row"><button class="btn ghost" data-pclose>Close</button></div>';
       if (!prof) return '<p class="note">Loading your profile…</p>';
-      return '<p class="note">This is what other players see when they open your hero in the Players Guild. Your name, class, power level and looks always show. Choose the rest.</p>' +
-        '<details class="psec" open><summary>Show in the Players Guild</summary><div class="pvlist">' + PUB_PARTS.map(([k, n, d]) => '<label class="setrow pvrow"><span>' + n + '<small>' + d + '</small></span><input type="checkbox" data-pv="' + k + '"' + (pubOff(k) ? '' : ' checked') + '></label>').join('') + '</div><p class="note" id="pv-st" aria-live="polite"></p></details>' +
+      return         '<div class="pvbox"><b>Show in the Players Guild</b><small>What others see when they open your hero. Name, class, power level and looks always show.</small><div class="pvchips">' + PUB_PARTS.map(([ks, n], i) => { const on = !ks.some(pubOff); return '<button type="button" class="pvchip' + (on ? ' on' : '') + '" data-pv="' + i + '" aria-pressed="' + on + '">' + icon(on ? 'eye' : 'lock') + n + '</button>'; }).join('') + '</div><p class="note" id="pv-st" aria-live="polite"></p></div>' +
         '<details class="psec" open><summary>Preview</summary><div id="pv-card">' + publicProfile(myPublic()) + '</div></details>' +
         '<div class="row"><button class="btn small" id="p-looks">Customize looks</button>' + (wardOn() ? '<button class="btn small ghost" id="p-ward">Wardrobe</button>' : '') + '<button class="btn small ghost" data-pclose>Close</button></div>';
     };
@@ -2947,6 +2940,15 @@
       md.querySelector('.prof').addEventListener('click', e => {
         const t = e.target;
         const pt = t.closest('[data-ptab]'); if (pt) { profTab = pt.dataset.ptab; paint(); return; }
+        const pv = t.closest('[data-pv]');
+        if (pv && prof) {
+          const ks = PUB_PARTS[+pv.dataset.pv][0], h = new Set(pubHidden()), show = ks.some(k => h.has(k));
+          ks.forEach(k => show ? h.delete(k) : h.add(k));
+          prof.pf = Object.assign({}, prof.pf, { h: PUB_KEYS.filter(k => h.has(k)) });
+          pv.classList.toggle('on', show); pv.setAttribute('aria-pressed', show); pv.innerHTML = icon(show ? 'eye' : 'lock') + PUB_PARTS[+pv.dataset.pv][1];
+          const cd = md.querySelector('#pv-card'); if (cd) cd.innerHTML = publicProfile(myPublic());
+          savePublic(md); return;
+        }
         if (t.closest('[data-pclose]')) { closeModal(); return; }
         if (t.closest('#p-gear')) { closeModal(); gearWho = id; switchTab('gear'); return; }
         if (t.closest('#p-seat')) { closeModal(); if (campGate(true)) pickSeat(id); return; }
@@ -2954,13 +2956,7 @@
         if (t.closest('#p-ward')) { openWardrobe('k', id); return; }
         const inf = t.closest('[data-info]'); if (inf) itemModal(inf.dataset.info);
       });
-      md.querySelector('.prof').addEventListener('change', e => {
-        const k = e.target.dataset && e.target.dataset.pv; if (!k || !prof) return;
-        const h = new Set(pubHidden()); e.target.checked ? h.delete(k) : h.add(k);
-        prof.pf = Object.assign({}, prof.pf, { h: PUB_PARTS.map(x => x[0]).filter(x => h.has(x)) });
-        const cd = md.querySelector('#pv-card'); if (cd) cd.innerHTML = publicProfile(myPublic());
-        savePublic(md);
-      });
+
       if (me && CL && signedIn() && !prof) Promise.all([loadProfile(), loadWar()]).then(() => { if ($('modalbody') === md && md.querySelector('#p-body') === body && profTab === 'pub') paint(); });
     });
   }

@@ -2595,3 +2595,11 @@ body.atench.shopmin .stage .arena{display:none!important}
   .prof.v2 .profspr{width:64px;height:80px}
 }
 .modal .sheet.profsheet{max-width:640px}
+.pvbox{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:12px 0 4px}
+.pvbox>b{display:block;font-size:14px}
+.pvbox>small{display:block;color:var(--muted);font-size:12.5px;margin:2px 0 8px}
+.pvchips{display:flex;flex-wrap:wrap;gap:6px}
+.pvchip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--dim);font:700 13px var(--body);cursor:pointer;text-decoration:line-through;text-decoration-color:color-mix(in srgb,currentColor 50%,transparent)}
+.pvchip svg{width:14px;height:14px}
+.pvchip.on{color:var(--text);text-decoration:none;border-color:color-mix(in srgb,var(--good) 55%,transparent);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.pvchip.on svg{color:var(--good)}
