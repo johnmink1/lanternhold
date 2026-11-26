@@ -167,7 +167,7 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: [dynamodb:UpdateItem, dynamodb:Scan]
+                Action: [dynamodb:UpdateItem, dynamodb:Scan, dynamodb:GetItem]
                 Resource: !GetAtt HeroesTable.Arn
               - Effect: Allow
                 Action: [dynamodb:PutItem]
