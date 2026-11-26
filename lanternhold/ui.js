@@ -1,4 +1,4 @@
-/* lh-build 202611260111 */
+/* lh-build 202611260118 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -2114,7 +2114,7 @@
   function sfBar(items, o) {
     o = o || {}; const opt = (k, v, n) => '<option value="' + v + '"' + (SF[k] === v ? ' selected' : '') + '>' + n + '</option>';
     return '<div class="invbar sfbar"><div class="invkinds" role="tablist">' + INV_KINDS.map(([k, n]) => '<button class="' + (SF.kind === k ? 'on' : '') + '" data-sfk="' + k + '">' + n + ' <em>' + (k === 'all' ? items.length : items.filter(it => invKind(it) === k).length) + '</em></button>').join('') + '</div><div class="invsel">' +
-      (o.noSort ? '' : '<label><span>Sort</span><select data-sfs="sort">' + [['best', 'Suggested']].concat(INV_SORTS.slice(1)).map(([k, n]) => opt('sort', k, n)).join('') + '</select></label>') +
+      (o.noSort ? '' : '<label><span>Sort</span><select data-sfs="sort">' + [['best', 'Suggested']].concat(INV_SORTS.slice(1), o.ench ? [['ench', 'Enchant name']] : []).map(([k, n]) => opt('sort', k, n)).join('') + '</select></label>') +
       (o.noRar ? '' : '<label><span>Rarity</span><select data-sfs="rar">' + opt('rar', 'all', 'Any') + L.RARITY.filter(r => items.some(it => it.rar === r.id) || SF.rar === r.id).map(r => opt('rar', r.id, r.name)).join('') + '</select></label>') +
       '<label title="Show only the gear this hero is wearing"><span>Who</span><select data-sfs="who">' + opt('who', 'all', 'Anyone') + whoOpts(SF.who) + '</select></label>' +
       '<label title="Show gear this class can use"><span>Class</span><select data-sfs="cls">' + opt('cls', 'all', 'Any') + L.CLASS_ORDER.map(c => opt('cls', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
@@ -2491,6 +2491,9 @@
     const out = []; for (const x of S.bag) if (x.uid !== excl && enchSpare(x)) L.enchList(x).forEach((e, i) => out.push({ x, e, i }));
     return out.sort((p, q) => q.e.t - p.e.t || L.enchCost(p.e) - L.enchCost(q.e));
   }
+  // Items sorted by their enchants' names (then tier), for the "Enchant name" sort; other sorts as usual.
+  const ewEnchKey = x => L.enchList(x).slice().sort((p, q) => L.ENCH[p.id].name.localeCompare(L.ENCH[q.id].name) || q.t - p.t)[0];
+  const ewByEnch = l => SF.sort === 'ench' ? sfApply(l, null, true).sort((a, b) => { const p = ewEnchKey(a), q = ewEnchKey(b); return L.ENCH[p.id].name.localeCompare(L.ENCH[q.id].name) || q.t - p.t; }) : sfApply(l);
   function ewList(rows, empty) { return rows.length ? '<div class="ewlist">' + rows.join('') + '</div>' : '<p class="ewempty">' + empty + '</p>'; }
   function ewItemRow(x, attr, sub, right) {
     return '<button class="ewrow r-' + x.rar + '" ' + attr + '>' + ewTile(x) + '<span class="ewt"><b>' + ewName(x) + '</b><small>' + sub + '</small></span>' + (right || '') + '</button>';
@@ -2541,8 +2544,10 @@
       } else if (!mv) {
         cur = 1;
         const src = ewSources(B.uid);
+        // v128 (Kyvia, Discord): "Enchant name" sort groups every Finder, Fortune and so on together, strongest first.
+        const srcRows = SF.sort === 'ench' ? sfApply(src, r => r.x, true).sort((p, q) => L.ENCH[p.e.id].name.localeCompare(L.ENCH[q.e.id].name) || q.e.t - p.e.t) : sfApply(src, r => r.x);
         body = '<h3 class="ewq">Which enchant should go on it?</h3><p class="ewhint">These come from your spare gear. The spare item is used up.</p>' +
-          sfList(src.map(r => r.x).filter((x, i, a) => a.indexOf(x) === i), sfApply(src, r => r.x).slice(0, 80).map(r => ewItemRow(r.x, 'data-ewsrc="' + r.x.uid + '" data-ewi="' + r.i + '"', '<span class="ewen">' + enchName(r.e) + '</span> ' + L.enchText(r.e) + ' &middot; from ' + ewName(r.x), ewCost(r.e))), 'No spare enchants. Enchants come on found gear; keep a spare piece that has one and it will show up here.');
+          sfList(src.map(r => r.x).filter((x, i, a) => a.indexOf(x) === i), srcRows.slice(0, SF.sort === 'ench' ? 400 : 80).map(r => ewItemRow(r.x, 'data-ewsrc="' + r.x.uid + '" data-ewi="' + r.i + '"', '<span class="ewen">' + enchName(r.e) + '</span> ' + L.enchText(r.e) + ' &middot; from ' + ewName(r.x), ewCost(r.e))), 'No spare enchants. Enchants come on found gear; keep a spare piece that has one and it will show up here.', { ench: true });
       }
     } else {
       steps = ['Spare item', 'Where it goes', 'Confirm'];
@@ -2551,7 +2556,7 @@
       if (!A) {
         cur = 0;
         body = '<h3 class="ewq">Which spare item do you want to break down?</h3><p class="ewhint">You keep one of its enchants and move it to another item. The spare item is used up.</p>' +
-          (l => sfList(l, sfApply(l).slice(0, 60).map(x => ewItemRow(x, 'data-ewsrcitem="' + x.uid + '"', L.enchList(x).map(e => '<span class="ewen">' + enchName(e) + '</span>').join(', '), '')), 'Nothing to disenchant. Spare items with enchants show up here. Worn and locked items do not.'))(S.bag.filter(x => enchSpare(x) && L.enchList(x).length));
+          (l => sfList(l, ewByEnch(l).slice(0, SF.sort === 'ench' ? 400 : 60).map(x => ewItemRow(x, 'data-ewsrcitem="' + x.uid + '"', L.enchList(x).map(e => '<span class="ewen">' + enchName(e) + '</span>').join(', '), '')), 'Nothing to disenchant. Spare items with enchants show up here. Worn and locked items do not.', { ench: true }))(S.bag.filter(x => enchSpare(x) && L.enchList(x).length));
       } else if (!mv) {
         cur = 0;
         body = '<h3 class="ewq">Which enchant do you want to keep?</h3><div class="ewchips">' + la.map((e, i) => '<button class="ewchip" data-ewidx="' + i + '"><b>' + enchName(e) + '</b><small>' + L.enchText(e) + '</small>' + ewCost(e) + '</button>').join('') + '</div>';
@@ -4780,6 +4785,12 @@
     if (!r.ok) throw Object.assign(new Error(j.error || 'chat'), { status: r.status, code: j.error });
     return j;
   }
+  // v128 (John, Discord bugs 25 Nov 2026: "not sure where the link is"): name the word the chat server read as a link.
+  // Matches the old server LINK too (it blocked the plain word "discord" until the v128 server fix in infra/chat/index.js).
+  function linkMsg(text) {
+    const m = String(text || '').replace(/\[\[i:[^\]]*\]\]/g, ' ').match(/\S*(https?:|www\.|\.(com|net|org|gg|io|ly|xyz)\b|discord)\S*/i);
+    return 'Links aren\u2019t allowed in chat' + (m ? ': \u201c' + m[0].slice(0, 40) + '\u201d looks like one.' : '.');
+  }
   function chatNote(t, warn) { const n = $('chatnote'); n.textContent = t || 'Be kind. No web links. Ctrl+click an item to link it. Tap a name to whisper, mute or report.'; n.classList.toggle('warn', !!warn); }
   // Item links: Ctrl/Cmd+click an item (or use Link in chat) to drop it into the message.
   const ITEM_TOKEN = /\[\[i:(tank|healer|rogue|mage|necro),(weapon|armor|trinket|main|off|head|neck|chest|robe|legs|feet|ring),(common|fine|rare|epic|set|goblin),([a-z]{0,8}),(\d{1,6}),(\d{1,2})\]\]/g;
@@ -5087,7 +5098,7 @@
         await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined });
         inp.value = ''; chat.links = []; chatNote(); pollChat();
       } catch (err) {
-        chatNote({ slow: 'Easy there. One message every few seconds.', links: 'Links aren’t allowed in chat.', name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
+        chatNote({ slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
       }
       inp.disabled = false; inp.focus();
     });
@@ -5210,7 +5221,7 @@
       for (const l of chat.links) text = text.replace(l.label, l.token); text = text.replace(/\[\[(?!i:)/g, '[');
       inp.disabled = true;
       try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
-      catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: 'Links aren’t allowed in chat.', name: 'Your hero’s name can’t be used in chat.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
+      catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
       inp.disabled = false; inp.focus();
     });
     addEventListener('resize', () => paintDock()); dockPaint = paintDock;
@@ -6212,6 +6223,10 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 128, date: 'November 2026', title: 'Enchant sort and chat', items: [
+      'Enchanter: sort by Enchant name to see every Finder, Fortune and so on together, strongest first.',
+      'Chat: when a message is blocked as a link, it now says which word looked like one.',
+    ] },
     { v: 127, date: 'November 2026', title: 'Shop filters', items: [
       'Enchanter and Armorer: Who now shows only the gear that hero is wearing. A new Class filter shows gear a class can use.',
     ] },

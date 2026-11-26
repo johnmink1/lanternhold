@@ -1,7 +1,7 @@
 const D = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
 const db = new D.DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES;
 const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard)/gi;
-const LINK = /(https?:|www\.|\.(com|net|org|gg|io|ly|xyz)\b|discord)/i;
+const LINK = /(https?:|www\.|\.(com|net|org|gg|io|ly|xyz)\b|discord(app)?\s*\.\s*\w|discord\s*\/)/i; // v128: the plain word "discord" is fine; invite links are not
 const res = (c, b) => ({ statusCode: c, headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
 const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
 const S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
