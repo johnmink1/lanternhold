@@ -1,4 +1,4 @@
-/* lh-build 202611260308 */
+/* lh-build 202611260321 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6254,6 +6254,7 @@
     { v: 130, date: 'November 2026', title: 'Notification settings', items: [
       'Settings: a new Notifications section lets you turn each kind of corner pop-up on or off. Switched-off ones still go to the bell.',
       'Fix: Pip, Gulp, the Armorer’s reforge, the Dust Press and Hold works now price from your usual income in the deep (a slow average), set once a day. Swapping your party, gear or camp jobs no longer changes prices.',
+      'Fix: away income is now the same in camp and in the deep. It uses your party’s steady damage, with Necromancer skeletons and Mage spells counted for the share of time they are up.',
     ] },
     { v: 129, date: 'November 2026', title: 'NP+ training', items: [
       'NP+ training costs more gold each tier. From NP+2, Healers, Necromancers and Mages past power level 100 also need Dust to train.',
