@@ -18,7 +18,7 @@ ROLE=$(aws lambda get-function-configuration --function-name lanternhold-wixlogi
 TABLE=$(aws lambda get-function-configuration --function-name lanternhold-wixlogin --query Environment.Variables.TABLE --output text)
 POOL=$(aws lambda get-function-configuration --function-name lanternhold-wixlogin --query Environment.Variables.POOL --output text)
 CLIENT=$(aws lambda get-function-configuration --function-name lanternhold-wixlogin --query Environment.Variables.CLIENT --output text)
-ENVV="Variables={TABLE=$TABLE,POOL=$POOL,CLIENT=$CLIENT,DC_ID=1575569010945425418,DC_SECRET=$DC_SECRET}"
+ENVV="Variables={TABLE=$TABLE,POOL=$POOL,CLIENT=$CLIENT,DC_ID=1575635134277886114,DC_SECRET=$DC_SECRET}"
 # 3. the Lambda
 if aws lambda get-function --function-name $F >/dev/null 2>&1; then
   aws lambda update-function-code --function-name $F --zip-file fileb://dc.zip >/dev/null

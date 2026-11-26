@@ -1,4 +1,4 @@
-/* lh-build 202611262028 */
+/* lh-build 202611262215 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4791,7 +4791,7 @@
   // and POST /support/claim asks Discord or itch who it belongs to. Nothing rewards joining, following, collecting, rating, reviewing
   // or commenting: those would break Discord's or itch.io's rules (John: never break a platform's terms).
   // OAuth client ids (public): Discord app 'Lanternhold' and itch.io app 'Lanternhold', both on Born 2 Game accounts (26 Nov 2026).
-  const SUP_APP = { discord: '1575569010945425418', itch: '411a6fe66ce95d4cd43404b039805d84' }; // empty = that task shows as coming soon
+  const SUP_APP = { discord: '1575635134277886114', itch: '411a6fe66ce95d4cd43404b039805d84' }; // empty = that task shows as coming soon
   const SUP_CB = location.origin + '/oauth.html';
   const SUP = [
     { id: 'discord', icon: 'discord', name: 'Link your Discord', how: 'Sign in with Discord to link it to your hero. We only see your Discord name and id, nothing else. Our community is on the <a href="https://discord.gg/6G7E7rhGFu" target="_blank" rel="noopener">Born 2 Game Discord</a> if you want to say hi.', check: 'Link Discord',
