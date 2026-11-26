@@ -1,4 +1,4 @@
-/* lh-build 202611260111 */
+/* lh-build 202611260125 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2529,3 +2529,12 @@ body.atench.shopmin .stage .arena{display:none!important}
 /* v126: five header buttons on a phone wrap to a second row instead of running off the screen */
 .shopbtns{flex-wrap:wrap;justify-content:flex-end}
 @media (max-width:600px){.shopbtns{flex:1 1 100%}}
+/* The First Dawn: hidden one-of-a-kind feat and the Dawnbringer title (26 Nov 2026) */
+.feat.secret.got{border-color:#ffb347;background:linear-gradient(90deg,rgba(255,179,71,.14),var(--bg2) 70%)}
+.feat.secret.got .medal{background:radial-gradient(circle at 40% 35%,#fff4c2,#ff9a3c 70%,#c8572a);box-shadow:0 0 12px rgba(255,170,70,.6)}
+.tt-dawn{color:#ffc76a!important;font-style:normal;font-weight:700;letter-spacing:.03em;text-shadow:0 0 8px rgba(255,170,70,.55)}
+.dawnwin{max-width:380px;margin:0 auto}
+.dawnwin .dawnsun{width:64px;height:64px;margin:6px auto 10px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 40% 35%,#fff4c2,#ff9a3c 70%,#c8572a);box-shadow:0 0 28px rgba(255,170,70,.7);color:#3a1d08}
+.dawnwin .dawnsun svg{width:32px;height:32px}
+.dawnwin small{display:block;color:#ffc76a;text-transform:uppercase;letter-spacing:.12em;font-size:11px}
+.dawnwin h2{margin:4px 0 10px}

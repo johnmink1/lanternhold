@@ -1,4 +1,4 @@
-/* lh-build 202611260111 */
+/* lh-build 202611260125 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1913,7 +1913,7 @@
       h += (open ? '<p class="note">' + open + (open === 1 ? ' seat is' : ' seats are') + ' open.</p>' : '<p class="note">Your party is full. When a player accepts your invite, you choose who steps out.</p>') +
         '<button class="btn small" id="b-find">' + (boardList ? 'Show other heroes' : 'Browse the guild') + '</button>';
       if (boardMsg) h += '<p class="note">' + esc(boardMsg) + '</p>';
-      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + ' &middot; reached floor ' + g.floor + '</div></div>' +
+      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + ' &middot; reached floor ' + g.floor + '</div></div>' +
         ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
       if ((S.guests || []).length) h += '<p class="note">To let a player’s hero go, press Dismiss on their seat.</p>';
     }
@@ -2114,7 +2114,7 @@
   function sfBar(items, o) {
     o = o || {}; const opt = (k, v, n) => '<option value="' + v + '"' + (SF[k] === v ? ' selected' : '') + '>' + n + '</option>';
     return '<div class="invbar sfbar"><div class="invkinds" role="tablist">' + INV_KINDS.map(([k, n]) => '<button class="' + (SF.kind === k ? 'on' : '') + '" data-sfk="' + k + '">' + n + ' <em>' + (k === 'all' ? items.length : items.filter(it => invKind(it) === k).length) + '</em></button>').join('') + '</div><div class="invsel">' +
-      (o.noSort ? '' : '<label><span>Sort</span><select data-sfs="sort">' + [['best', 'Suggested']].concat(INV_SORTS.slice(1)).map(([k, n]) => opt('sort', k, n)).join('') + '</select></label>') +
+      (o.noSort ? '' : '<label><span>Sort</span><select data-sfs="sort">' + [['best', 'Suggested']].concat(INV_SORTS.slice(1), o.ench ? [['ench', 'Enchant name']] : []).map(([k, n]) => opt('sort', k, n)).join('') + '</select></label>') +
       (o.noRar ? '' : '<label><span>Rarity</span><select data-sfs="rar">' + opt('rar', 'all', 'Any') + L.RARITY.filter(r => items.some(it => it.rar === r.id) || SF.rar === r.id).map(r => opt('rar', r.id, r.name)).join('') + '</select></label>') +
       '<label title="Show only the gear this hero is wearing"><span>Who</span><select data-sfs="who">' + opt('who', 'all', 'Anyone') + whoOpts(SF.who) + '</select></label>' +
       '<label title="Show gear this class can use"><span>Class</span><select data-sfs="cls">' + opt('cls', 'all', 'Any') + L.CLASS_ORDER.map(c => opt('cls', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
@@ -2491,6 +2491,9 @@
     const out = []; for (const x of S.bag) if (x.uid !== excl && enchSpare(x)) L.enchList(x).forEach((e, i) => out.push({ x, e, i }));
     return out.sort((p, q) => q.e.t - p.e.t || L.enchCost(p.e) - L.enchCost(q.e));
   }
+  // Items sorted by their enchants' names (then tier), for the "Enchant name" sort; other sorts as usual.
+  const ewEnchKey = x => L.enchList(x).slice().sort((p, q) => L.ENCH[p.id].name.localeCompare(L.ENCH[q.id].name) || q.t - p.t)[0];
+  const ewByEnch = l => SF.sort === 'ench' ? sfApply(l, null, true).sort((a, b) => { const p = ewEnchKey(a), q = ewEnchKey(b); return L.ENCH[p.id].name.localeCompare(L.ENCH[q.id].name) || q.t - p.t; }) : sfApply(l);
   function ewList(rows, empty) { return rows.length ? '<div class="ewlist">' + rows.join('') + '</div>' : '<p class="ewempty">' + empty + '</p>'; }
   function ewItemRow(x, attr, sub, right) {
     return '<button class="ewrow r-' + x.rar + '" ' + attr + '>' + ewTile(x) + '<span class="ewt"><b>' + ewName(x) + '</b><small>' + sub + '</small></span>' + (right || '') + '</button>';
@@ -2541,8 +2544,10 @@
       } else if (!mv) {
         cur = 1;
         const src = ewSources(B.uid);
+        // v128 (Kyvia, Discord): "Enchant name" sort groups every Finder, Fortune and so on together, strongest first.
+        const srcRows = SF.sort === 'ench' ? sfApply(src, r => r.x, true).sort((p, q) => L.ENCH[p.e.id].name.localeCompare(L.ENCH[q.e.id].name) || q.e.t - p.e.t) : sfApply(src, r => r.x);
         body = '<h3 class="ewq">Which enchant should go on it?</h3><p class="ewhint">These come from your spare gear. The spare item is used up.</p>' +
-          sfList(src.map(r => r.x).filter((x, i, a) => a.indexOf(x) === i), sfApply(src, r => r.x).slice(0, 80).map(r => ewItemRow(r.x, 'data-ewsrc="' + r.x.uid + '" data-ewi="' + r.i + '"', '<span class="ewen">' + enchName(r.e) + '</span> ' + L.enchText(r.e) + ' &middot; from ' + ewName(r.x), ewCost(r.e))), 'No spare enchants. Enchants come on found gear; keep a spare piece that has one and it will show up here.');
+          sfList(src.map(r => r.x).filter((x, i, a) => a.indexOf(x) === i), srcRows.slice(0, SF.sort === 'ench' ? 400 : 80).map(r => ewItemRow(r.x, 'data-ewsrc="' + r.x.uid + '" data-ewi="' + r.i + '"', '<span class="ewen">' + enchName(r.e) + '</span> ' + L.enchText(r.e) + ' &middot; from ' + ewName(r.x), ewCost(r.e))), 'No spare enchants. Enchants come on found gear; keep a spare piece that has one and it will show up here.', { ench: true });
       }
     } else {
       steps = ['Spare item', 'Where it goes', 'Confirm'];
@@ -2551,7 +2556,7 @@
       if (!A) {
         cur = 0;
         body = '<h3 class="ewq">Which spare item do you want to break down?</h3><p class="ewhint">You keep one of its enchants and move it to another item. The spare item is used up.</p>' +
-          (l => sfList(l, sfApply(l).slice(0, 60).map(x => ewItemRow(x, 'data-ewsrcitem="' + x.uid + '"', L.enchList(x).map(e => '<span class="ewen">' + enchName(e) + '</span>').join(', '), '')), 'Nothing to disenchant. Spare items with enchants show up here. Worn and locked items do not.'))(S.bag.filter(x => enchSpare(x) && L.enchList(x).length));
+          (l => sfList(l, ewByEnch(l).slice(0, SF.sort === 'ench' ? 400 : 60).map(x => ewItemRow(x, 'data-ewsrcitem="' + x.uid + '"', L.enchList(x).map(e => '<span class="ewen">' + enchName(e) + '</span>').join(', '), '')), 'Nothing to disenchant. Spare items with enchants show up here. Worn and locked items do not.', { ench: true }))(S.bag.filter(x => enchSpare(x) && L.enchList(x).length));
       } else if (!mv) {
         cur = 0;
         body = '<h3 class="ewq">Which enchant do you want to keep?</h3><div class="ewchips">' + la.map((e, i) => '<button class="ewchip" data-ewidx="' + i + '"><b>' + enchName(e) + '</b><small>' + L.enchText(e) + '</small>' + ewCost(e) + '</button>').join('') + '</div>';
@@ -2986,9 +2991,11 @@
     }).join('');
     $('relcount').textContent = Object.keys(S.relics).length + '/' + L.RELICS.length;
   }
+  // Hidden feats stay out of the list and the count until earned.
+  const featsShown = () => L.FEATS.filter(f => !f.hidden || S.feats[f.id]);
   function updateFeats() {
-    $('feats').innerHTML = L.FEATS.map(f => '<div class="feat ' + (S.feats[f.id] ? 'got' : '') + '"><div class="medal">' + icon('star') + '</div><div><b>' + f.name + '</b><small>' + f.desc + '</small></div></div>').join('');
-    $('featcount').textContent = L.featCount(S) + '/' + L.FEATS.length;
+    $('feats').innerHTML = featsShown().map(f => '<div class="feat ' + (S.feats[f.id] ? 'got' : '') + (f.hidden ? ' secret' : '') + '"><div class="medal">' + icon('star') + '</div><div><b>' + f.name + '</b><small>' + f.desc + '</small></div></div>').join('');
+    $('featcount').textContent = L.featCount(S) + '/' + featsShown().length;
   }
   function updateLedger() {
     const st = S.stats, rows = [
@@ -3220,7 +3227,7 @@
     if (tab === 'rekindle') updateRekindle();
     lastRelicCount = Object.keys(S.relics).length; lastFeatCount = L.featCount(S);
     $('relcount').textContent = lastRelicCount + '/' + L.RELICS.length;
-    $('featcount').textContent = lastFeatCount + '/' + L.FEATS.length;
+    $('featcount').textContent = lastFeatCount + '/' + featsShown().length;
     $('gearcount').textContent = L.packCount(S) || '';
     $('lorecount').textContent = Object.keys(S.lore).filter(k => L.LORE.find(l => l.id === k)).length + '/' + L.LORE.length;
     updateAbilities();
@@ -3864,11 +3871,12 @@
   };
   const COSMETICS = {
     f: { label: 'Frame', items: [['plain', 'Plain Iron', 0], ['iron', 'Covenant Iron', 150], ['radiant', 'Radiant Gilt', 150], ['tide', 'Tide Maw', 150], ['mercy', 'Mercy Laurel', 150], ['ember', 'Ember Ring', 250], ['rift', 'Riftglass', 400], ['nexus', 'Nexus Crown', 600]] },
-    t: { label: 'Title', items: [['delver', 'Delver', 0], ['lampbearer', 'Lampbearer', 80], ['ashborn', 'Ashborn', 120], ['nightwatch', 'of the Night Watch', 120], ['riftwalker', 'Rift-Walker', 200], ['warden', 'Warden of the Hold', 200], ['stormcaller', 'Stormcaller', 200], ['oathkeeper', 'Oathkeeper', 250], ['heir', 'Heir of the Lamp', 400]] },
+    t: { label: 'Title', items: [['delver', 'Delver', 0], ['lampbearer', 'Lampbearer', 80], ['ashborn', 'Ashborn', 120], ['nightwatch', 'of the Night Watch', 120], ['riftwalker', 'Rift-Walker', 200], ['warden', 'Warden of the Hold', 200], ['stormcaller', 'Stormcaller', 200], ['oathkeeper', 'Oathkeeper', 250], ['heir', 'Heir of the Lamp', 400], ['dawn', 'Dawnbringer', -1, 'hidden']] },
     c: { label: 'Name color', items: [['none', 'Plain', 0], ['gold', 'War Gold', 100], ['violet', 'Nyx Violet', 100], ['ember', 'Ember', 100], ['frost', 'Frost', 100], ['verdant', 'Verdant', 100], ['rift', 'Riftlight', 300]] },
     g: { label: 'Banner', items: [['night', 'Night Watch', 0], ['forge', 'Cinder Forge', 150], ['crypt', 'Mosswater', 150], ['glass', 'Glass Wastes', 150], ['storm', 'Stormglass', 200], ['rift', 'The Rift', 350], ['nexus', 'The Nexus', 500]] },
     e: { label: 'Emblems', items: [['lantern', 'Lantern', 0], ['shield', 'Shield', 0], ['sword', 'Sword', 0], ['skull', 'Skull', 40], ['flame', 'Flame', 40], ['wave', 'Wave', 40], ['sun', 'Sun', 40], ['moon', 'Moon', 40], ['star', 'Star', 40], ['key', 'Key', 40], ['anvil', 'Anvil', 40], ['crown', 'Crown', 60], ['eye', 'Eye', 60], ['rose', 'Rose', 60], ['raven', 'Raven', 80], ['rift', 'Rift', 100]] },
   };
+  const ttCls = id => id === 'dawn' ? ' tt-dawn' : ''; // the one-of-a-kind title glows
   const cosOf = (k, id) => (COSMETICS[k].items.find(x => x[0] === id) || COSMETICS[k].items[0]);
   const emblem = id => EMB[id] ? '<svg viewBox="0 0 24 24" class="emb"><path d="' + EMB[id] + '"/></svg>' : '';
   const sigil = '<svg viewBox="0 0 24 24" class="sigil"><path d="M12 2l3 5 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1z"/></svg>';
@@ -3888,6 +3896,12 @@
     if ((prof.pass || 0) !== (S.pass || 0) || (prof.sub || 0) !== (S.sub || 0)) { S.pass = prof.pass || 0; S.sub = prof.sub || 0; save(); updatePanel(true); updateSeats(true); }
     if (!!prof.boh !== !!S.boh) { S.boh = !!prof.boh; save(); updateGear(true); }
     if (prof.own) syncRoster(prof.own);
+    // The First Dawn: the server gives the title to the one player who started NP+1 first. Grant the hidden feat once.
+    if (prof.own && prof.own.includes('t.dawn') && !S.feats.dawn) {
+      S.feats.dawn = Date.now(); save();
+      toast('star', 'Hidden feat: The First Dawn', 'You were the first delver ever to begin NP+1. Title unlocked: Dawnbringer. Wear it from your profile. (+1% party damage)', 'feat dawn');
+      modal('<div class="center dawnwin"><div class="dawnsun">' + icon('star') + '</div><small>Hidden feat unlocked</small><h2>The First Dawn</h2><p>No delver had ever carried the lantern into a second dawn. You were the first, and no one else ever can be.</p><p>Title unlocked: <b class="tt-dawn">Dawnbringer</b>. Wear it from your profile.</p><div class="row"><button class="btn" id="dw-ok">Onward</button></div></div>', md => { md.querySelector('#dw-ok').onclick = closeModal; });
+    }
     // A verified commander link turns on the hero's Grand War aura.
     const had = JSON.stringify(S.war || null);
     if (prof.wv && prof.wl) { await loadWar(); const c = commander(prof.wl); if (c) S.war = { n: c.n, lv: c.lv | 0, h: c.h.slice(0, 12) }; }
@@ -3922,7 +3936,7 @@
     const pf = o.pf || {}, ok = o.wd && o.wd.k && o.wd.k.you, fr = cosOf('f', pf.f)[0], bn = cosOf('g', pf.g)[0], nc = cosOf('c', pf.c)[0], tt = pf.t ? cosOf('t', pf.t)[1] : '';
     const wb = o.wd && o.wd.b && BANNERS[o.wd.b] ? o.wd.b : '';
     return '<div class="pfcard bn-' + bn + (wb ? ' hasban' : '') + '">' + (wb ? '<div class="pfban">' + bannerSVG(wb) + '</div>' : '') + '<div class="pfava fr-' + fr + npRing(o.np) + '><div class="ic c-' + o.cls + ' player' + (ok ? ' dressed' : '') + '">' + (ok ? '<img src="' + SP.spriteURL(o.cls, 2, outfitHue(ok)) + '" alt="">' : icon(CLASS_ICON[o.cls])) + '</div></div>' +
-      '<div class="pfmain"><b class="pfname nc-' + nc + '">' + esc(o.name) + '</b>' + (tt ? '<small class="pftitle">' + esc(tt) + '</small>' : '') +
+      '<div class="pfmain"><b class="pfname nc-' + nc + '">' + esc(o.name) + '</b>' + (tt ? '<small class="pftitle' + ttCls(pf.t) + '">' + esc(tt) + '</small>' : '') +
       '<div class="pftags">' + classTag(o.cls) + (o.level ? '<span class="pflv">Power level ' + o.level + (o.floor ? ' · floor ' + o.floor : '') + '</span>' : '') + '</div>' +
       ((pf.e || []).length ? '<div class="pfemb">' + pf.e.map(emblem).join('') + '</div>' : '') + '</div></div>' +
       (pf.b ? '<p class="pfbio">' + esc(pf.b) + '</p>' : '') +
@@ -3953,11 +3967,11 @@
     let body = '';
     if (COSMETICS[edTab]) {
       const k = edTab, multi = k === 'e';
-      body = (multi ? '<p class="note">Pick up to 6 emblems for your card. ' + draft.e.length + ' of 6 chosen.</p>' : '') + '<div class="cosgrid">' + COSMETICS[k].items.map(([id, name, price]) => {
+      body = (multi ? '<p class="note">Pick up to 6 emblems for your card. ' + draft.e.length + ' of 6 chosen.</p>' : '') + '<div class="cosgrid">' + COSMETICS[k].items.filter(x => !x[3] || owns(k, x[0], x[2])).map(([id, name, price, hid]) => {
         const have = owns(k, id, price), on = multi ? draft.e.includes(id) : (draft[k] || COSMETICS[k].items[0][0]) === id;
         const sw = k === 'f' ? '<span class="cs-f fr-' + id + '"><i></i></span>' : k === 'c' ? '<span class="cs-c nc-' + id + '">Aa</span>' : k === 'g' ? '<span class="cs-g bn-' + id + '"></span>' : k === 'e' ? emblem(id) : '<span class="cs-t">' + esc(name) + '</span>';
         return '<button class="cos' + (on ? ' on' : '') + (have ? '' : ' locked') + '" data-cos="' + id + '">' + sw + (k === 't' ? '' : '<b>' + esc(name) + '</b>') +
-          '<small>' + (have ? (on ? (multi ? 'Shown' : 'Equipped') : 'Owned') : sigil + price) + '</small></button>';
+          '<small>' + (have ? (on ? (multi ? 'Shown' : 'Equipped') : hid ? 'One of a kind' : 'Owned') : sigil + price) + '</small></button>';
       }).join('') + '</div>';
     } else if (edTab === 'b') {
       body = '<label class="note" for="pe-bio">A line or two about your hero. Other players see it on your card. No links.</label><textarea id="pe-bio" maxlength="140" rows="3" placeholder="Sworn to the lantern since the first floor.">' + esc(draft.b) + '</textarea><small class="note" id="pe-bc">' + draft.b.length + ' / 140</small>';
@@ -4780,6 +4794,12 @@
     if (!r.ok) throw Object.assign(new Error(j.error || 'chat'), { status: r.status, code: j.error });
     return j;
   }
+  // v128 (John, Discord bugs 25 Nov 2026: "not sure where the link is"): name the word the chat server read as a link.
+  // Matches the old server LINK too (it blocked the plain word "discord" until the v128 server fix in infra/chat/index.js).
+  function linkMsg(text) {
+    const m = String(text || '').replace(/\[\[i:[^\]]*\]\]/g, ' ').match(/\S*(https?:|www\.|\.(com|net|org|gg|io|ly|xyz)\b|discord)\S*/i);
+    return 'Links aren\u2019t allowed in chat' + (m ? ': \u201c' + m[0].slice(0, 40) + '\u201d looks like one.' : '.');
+  }
   function chatNote(t, warn) { const n = $('chatnote'); n.textContent = t || 'Be kind. No web links. Ctrl+click an item to link it. Tap a name to whisper, mute or report.'; n.classList.toggle('warn', !!warn); }
   // Item links: Ctrl/Cmd+click an item (or use Link in chat) to drop it into the message.
   const ITEM_TOKEN = /\[\[i:(tank|healer|rogue|mage|necro),(weapon|armor|trinket|main|off|head|neck|chest|robe|legs|feet|ring),(common|fine|rare|epic|set|goblin),([a-z]{0,8}),(\d{1,6}),(\d{1,2})\]\]/g;
@@ -4876,7 +4896,7 @@
   function chatName(m) {
     const lk = looksCache[m.from], c = lk && lk.c && lk.c !== 'none' ? lk.c : '', t = lk && lk.t ? (COSMETICS.t.items.find(x => x[0] === lk.t) || [])[1] : '';
     const bn = lk && lk.b && BANNERS[lk.b] ? lk.b : '';
-    return (bn ? bannerSVG(bn, 'chatban') : '') + (c ? '<span class="nc-' + esc(c) + '">' + esc(m.name) + '</span>' : esc(m.name)) + (t ? '<small class="ctitle">' + esc(t) + '</small>' : '') + npBadge(m.np);
+    return (bn ? bannerSVG(bn, 'chatban') : '') + (c ? '<span class="nc-' + esc(c) + '">' + esc(m.name) + '</span>' : esc(m.name)) + (t ? '<small class="ctitle' + ttCls(lk.t) + '">' + esc(t) + '</small>' : '') + npBadge(m.np);
   }
   const msgLine = m => m.from === 'sys' ? '<div class="msg sys ' + esc(m.cls) + '">' + icon('flame') + '<span>' + esc(m.text) + '</span></div>' : '<div class="msg' + (m.from === chat.me ? ' mine' : '') + (mentionsMe(m) ? ' ment' + (chat.flash && chat.flash.has(m.id) ? ' flash' : '') : '') + '"><button class="who c-' + esc(m.cls) + '" data-from="' + esc(m.from) + '" data-id="' + esc(m.id) + '" data-name="' + esc(m.name) + '">' + chatName(m) + '</button><span>' + renderText(m.text) + '</span></div>';
   function paintChat() {
@@ -5087,7 +5107,7 @@
         await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined });
         inp.value = ''; chat.links = []; chatNote(); pollChat();
       } catch (err) {
-        chatNote({ slow: 'Easy there. One message every few seconds.', links: 'Links aren’t allowed in chat.', name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
+        chatNote({ slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
       }
       inp.disabled = false; inp.focus();
     });
@@ -5210,7 +5230,7 @@
       for (const l of chat.links) text = text.replace(l.label, l.token); text = text.replace(/\[\[(?!i:)/g, '[');
       inp.disabled = true;
       try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
-      catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: 'Links aren’t allowed in chat.', name: 'Your hero’s name can’t be used in chat.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
+      catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
       inp.disabled = false; inp.focus();
     });
     addEventListener('resize', () => paintDock()); dockPaint = paintDock;
@@ -6212,6 +6232,10 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 128, date: 'November 2026', title: 'Enchant sort and chat', items: [
+      'Enchanter: sort by Enchant name to see every Finder, Fortune and so on together, strongest first.',
+      'Chat: when a message is blocked as a link, it now says which word looked like one.',
+    ] },
     { v: 127, date: 'November 2026', title: 'Shop filters', items: [
       'Enchanter and Armorer: Who now shows only the gear that hero is wearing. A new Class filter shows gear a class can use.',
     ] },

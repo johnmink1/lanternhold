@@ -30,6 +30,13 @@ exports.handler = async (e) => {
       .then(r => { w.bal = r.Attributes.bal; });
   } catch (x) { if (x.name === 'ConditionalCheckFailedException') return res(409, { error: 'race' }); throw x; }
   await send(new D.UpdateItemCommand({ TableName: H, Key: { pid: S(me) }, UpdateExpression: 'SET np = :t, npAt = :a', ExpressionAttributeValues: { ':t': N(t), ':a': N(now) } }));
+  // The First Dawn (John, 26 Nov 2026): one row records the only player who ever starts NP+1 first; they get the title.
+  let first = false;
+  if (t === 1) try {
+    await send(new D.PutItemCommand({ TableName: T, Item: { pk: S('first#np1'), sk: S('0'), pid: S(me), uid: S(cl.sub), at: N(now) }, ConditionExpression: 'attribute_not_exists(pk)' }));
+    await send(new D.UpdateItemCommand({ TableName: W, Key: K, UpdateExpression: 'ADD own :d', ExpressionAttributeValues: { ':d': { SS: ['t.dawn'] } } }));
+    first = true;
+  } catch (x) { if (x.name !== 'ConditionalCheckFailedException') throw x; }
   let n = 0;
   for (const i of await q('sell#' + me)) { await del('sell#' + me, i.sk); await del('mkt#' + i.cls.S + (np ? '#' + np : ''), i.sk); n++; }
   for (const i of await q('out#' + me)) { await del('out#' + me, i.sk); await del('inbox#' + i.to.S, i.sk); n++; }
@@ -39,5 +46,5 @@ exports.handler = async (e) => {
     await del('out#' + i.from.S, i.sk);
     await send(new D.PutItemCommand({ TableName: T, Item: { pk: S('inbox#' + i.from.S), sk: S(now.toString(36).padStart(9, '0') + crypto.randomBytes(3).toString('hex')), type: S('return'), from: S(me), fromName: i.toName, item: i.item, gold: S(0), at: N(now), ttl: N(Math.floor(now / 1000) + 5184000) } }));
   }
-  return res(200, { ok: true, np: t, npAt: now, bal: +w.bal.N, cleared: n });
+  return res(200, { ok: true, np: t, npAt: now, bal: +w.bal.N, cleared: n, first });
 };
