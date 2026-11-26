@@ -1,4 +1,4 @@
-/* lh-build 202611252355 */
+/* lh-build 202611260003 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -2999,12 +2999,15 @@
   // ---------- New Playthrough (NP+, v122, John 25 Nov 2026) ----------
   // The server grants the tier and its Sigils (POST /np) and owns the tier number; the game then resets itself.
   let npSrv = null; // { np, npAt, next } from GET /np
+  // 'x2 health on floor 1, rising to x5 by floor 150 (damage x1.5 to x2.1)'
+  const npX = v => '\u00d7' + (Math.round(v * 10) / 10);
+  const npFoeText = t => npX(L.npFoeHp({ np: t }, 1)) + ' health on floor 1, rising to ' + npX(L.npFoeHp({ np: t }, L.ACT_ONE_END)) + ' by floor ' + L.ACT_ONE_END + ' (damage ' + npX(L.npFoeAtk({ np: t }, 1)) + ' to ' + npX(L.npFoeAtk({ np: t }, L.ACT_ONE_END)) + ')';
   function paintNp() {
     const box = $('npbox'); if (!box) return;
     const t = L.npTier(S), ready = L.npReady(S), next = npSrv && npSrv.next > Date.now() ? npSrv.next : 0;
     const tb = $('nptier'); tb.hidden = !t; tb.textContent = 'NP+' + t;
     $('npgain').innerHTML = t >= L.NP_MAX ? 'You have reached the last tier, <b>NP+' + L.NP_MAX + '</b>' : 'Next: <b>NP+' + (t + 1) + '</b> and <b>+' + L.NP_SIGILS + '</b> Sigils';
-    const now = t ? 'Now on NP+' + t + ': monsters +' + Math.round(L.NP_FOE * t * 100) + '% health and damage, gear +' + Math.round(L.NP_ILVL * t * 100) + '% item level, you +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. ' : '';
+    const now = t ? 'Now on NP+' + t + ': monsters ' + npFoeText(t) + ', gear +' + Math.round(L.NP_ILVL * t * 100) + '% item level, you +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. ' : '';
     $('npnote').textContent = now + (t >= L.NP_MAX ? '' : !ready ? 'Beat the Lampmother, the floor ' + L.ACT_ONE_END + ' guardian, to open the next tier.'
       : !CL || !signedIn() ? 'Sign in to start a New Playthrough. The server keeps your tier and pays the Sigils.'
       : next ? 'The next tier opens ' + new Date(next).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (at most one tier a week).'
@@ -3028,7 +3031,7 @@
       '<p>This starts the whole story over from floor 1. It can not be undone.</p></div>' +
       '<div class="npcols"><div><h3>Resets</h3><ul><li>Gold and Dust</li><li>Floors, power levels, hero level, XP and stat points</li><li>Skills and Kindling</li><li>All gear and your pack</li><li>Embers and relics</li><li>Companions and Guild Hall hires</li><li>The story</li><li>Your market listings, offers and unclaimed mail</li></ul></div>' +
       '<div><h3>Kept</h3><ul><li>Everything bought with Sigils: Wardrobe, Bag of Holding, campfire spots, Lanternholder, tonics</li><li>Your profile and looks</li><li>Journal lore and feats</li><li>Ember Ring rating and Rift tokens</li><li>Your hero’s name, class and alliance</li></ul></div></div>' +
-      '<p class="note">At NP+' + t + ': monsters +' + Math.round(L.NP_FOE * t * 100) + '% health and damage, gear drops +' + Math.round(L.NP_ILVL * t * 100) + '% item level, and you keep +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. You get <b>+' + L.NP_SIGILS + ' Sigils</b> and the NP+' + t + ' badge. Trading opens 24 hours after you start, with heroes on the same tier.</p>' +
+      '<p class="note">At NP+' + t + ': monsters ' + npFoeText(t) + ', gear drops +' + Math.round(L.NP_ILVL * t * 100) + '% item level, and you keep +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. You get <b>+' + L.NP_SIGILS + ' Sigils</b> and the NP+' + t + ' badge. Trading opens 24 hours after you start, with heroes on the same tier.</p>' +
       '<label class="field">Type NP+' + t + ' to confirm<input id="np-type" autocomplete="off"></label>' +
       '<div class="row"><button class="btn" id="m-yes" disabled>Start NP+' + t + '</button><button class="btn ghost" id="m-no">Not yet</button></div>', m => {
       const inp = m.querySelector('#np-type'), yes = m.querySelector('#m-yes');
@@ -6205,6 +6208,7 @@
       'Set pieces are rarer again: region set pieces drop half as often as before, and class and job set pieces a quarter as often. One region piece still earns that region\u2019s mastery star.',
       'NPC Guild wages have a ceiling: a hire never costs more than a set share of your income an hour (Common 3%, Uncommon 6%, Rare 15%, Epic 30%, Legendary 40%). Parties whose power level ran ahead of their floor can keep an Epic again.',
       'Wage relief: every region with all three mastery stars takes 2% off every hire\u2019s wage, Charisma takes some off, and the new Quartermaster camp job (best for Tanks) haggles it down further. Up to 50% in all. See it in the NPC Guild.',
+      'New Playthrough is now a real climb: on NP+ monsters get tougher the deeper you go (NP+1: double health on floor 1, five times by floor 150), so gear, stats and party combos matter.',
       'New for New Playthrough heroes (NP+1 and up), and all priced in hours of your own gold income so it stays worth thinking about at any depth:',
       'Pip the Dicer (John\u2019s idea) sets up his wagon outside the Hold. Buy a Lucky Crate with gold: a Pouch (30 minutes of income), a Coffer (3 hours) or a Casket (12 hours). Each crate holds a piece of gear, with better odds in bigger crates, and Coffers and Caskets can also hold one of 8 Curios, small trinkets with odd little perks. Every 10th Casket without a Curio is sure to have one. Crates take gold only, never Sigils.',
       'Gulp the Hoard Mimic (John\u2019s idea) lives in the yard and is always hungry. Feed it morsels of gold (10 minutes of income each, 12 a day) and watch the fed counter climb for everyone on NP+. Now and then it burps something back up.',
