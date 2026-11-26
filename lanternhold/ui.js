@@ -1,4 +1,4 @@
-/* lh-build 202611260321 */
+/* lh-build 202611260336 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6255,6 +6255,7 @@
       'Settings: a new Notifications section lets you turn each kind of corner pop-up on or off. Switched-off ones still go to the bell.',
       'Fix: Pip, Gulp, the Armorer’s reforge, the Dust Press and Hold works now price from your usual income in the deep (a slow average), set once a day. Swapping your party, gear or camp jobs no longer changes prices.',
       'Fix: away income is now the same in camp and in the deep. It uses your party’s steady damage, with Necromancer skeletons and Mage spells counted for the share of time they are up.',
+      'Fix: feeding Gulp works again, and each hero can feed up to 12 morsels a day. Your loot bonus now counts what you feed.',
     ] },
     { v: 129, date: 'November 2026', title: 'NP+ training', items: [
       'NP+ training costs more gold each tier. From NP+2, Healers, Necromancers and Mages past power level 100 also need Dust to train.',
@@ -7439,13 +7440,13 @@
     const head = '<div class="ephead"><b>Gulp the Hoard Mimic</b>' + gold + '</div>' + (DW.done ? '<div class="ewdone">' + icon('star') + '<span>' + DW.done + '</span></div>' : '');
     if (!st) return head + '<h3 class="ewq">Gulp is fast asleep.</h3><p class="ewhint">' + (!signedIn() ? 'Sign in to feed Gulp. Every NP+ hero feeds the same mimic.' : gp.err ? 'Gulp is snoring. He wakes up once the Hold’s new server piece is live. Check back soon.' : 'Waking him up…') + '</p>';
     const mine = st.mine || { m: 0, today: 0 }, left = Math.max(0, L.GULP_DAY - (mine.today || 0)), bonus = Math.min(30, Math.round(2 * (mine.m || 0) * (L.fxOnW(S, 'tooth') ? 1.5 : 1)));
-    const btn = n => '<button class="btn small" data-feed="' + n + '"' + (S.gold < mc * n || gp.busy ? ' disabled' : '') + '>Feed ' + n + ' (' + fmt(mc * n) + ' gold)</button>';
+    const btn = n => '<button class="btn small" data-feed="' + n + '"' + (S.gold < mc * n || gp.busy || n > left ? ' disabled' : '') + '>Feed ' + n + ' (' + fmt(mc * n) + ' gold)</button>';
     const g = gobLive();
     return head + '<div class="gulpsign"><div><small>Gold fed since the last goblin</small><b>' + fmt(st.fed || 0) + '</b></div><div><small>Morsels</small><b>' + fmt(st.m || 0) + '</b></div><div><small>Mood</small><b>' + gulpMood(st.m || 0) + '</b></div></div>' +
       (g ? '<p class="shopperk gob">' + icon('crown') + '<span><b>The Golden Loot Goblin is loose!</b> It runs off in ' + wbDur(g.until - Date.now()) + '. <button class="linkbtn" data-gobgo="1">Join the hunt</button></span></p>' : st.stir ? '<p class="shopperk gob">' + icon('star') + '<span>Something is stirring inside Gulp… it glows gold.</span></p>' : '') +
       '<h3 class="ewq">Feed Gulp?</h3><p class="ewhint">One morsel is ' + hrs(L.MORSEL_H) + ' of your income (' + fmt(mc) + ' gold). Every NP+ hero feeds the same Gulp, and every morsel fed makes the Golden Loot Goblin a little likelier to burst out. Now and then Gulp coughs something up.</p>' +
-      '<div class="row gulpbtns">' + [1, 3, 12].map(btn).join('') + '</div>' +
-      '<p class="note small">Today: ' + (mine.today || 0) + ' morsels fed, ' + left + ' more count toward waking the goblin (' + L.GULP_DAY + ' a day). Your goblin loot bonus: <b>+' + bonus + '%</b> ring chance from ' + (mine.m || 0) + ' morsels since the last goblin (up to +30%).</p>' +
+      (left > 0 ? '<div class="row gulpbtns">' + [1, 3, left].filter((x, i, a) => x <= left && a.indexOf(x) === i).map(btn).join('') + '</div>' : '<p class="shopperk">' + icon('star') + '<span><b>Gulp is full for today.</b> Each hero can feed ' + L.GULP_DAY + ' morsels a day. Come back tomorrow.</span></p>') +
+      '<p class="note small">Today: ' + Math.min(L.GULP_DAY, mine.today || 0) + ' of ' + L.GULP_DAY + ' morsels fed. Your goblin loot bonus: <b>+' + bonus + '%</b> ring chance from ' + (mine.m || 0) + ' morsels since the last goblin (up to +30%).</p>' +
       (st.top && st.top.length ? '<h3 class="sub">Gulp’s favourite feeders</h3><ol class="wbtop">' + st.top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + fmt(t.m) + ' morsels</b></li>').join('') + '</ol>' : '') +
       '<p class="note small">The goblin wears the Golden Goblin’s Hoard: ' + L.GG_RINGS.map(x => esc(x.name)).join(', ') + '. It runs off ' + L.GOB_TIME / 60 + ' minutes after it appears, so hunt it together.</p>';
   }
@@ -7462,7 +7463,7 @@
       DW.done = 'Gulp gobbled ' + n + (n === 1 ? ' morsel' : ' morsels') + ' (' + fmt(f.cost) + ' gold). ' + (f.burps.length ? 'Burp! Out came ' + f.burps.map(esc).join(', ') + '.' : 'Om nom nom.');
       if (f.burps.length) toast('star', 'Gulp coughed something up', f.burps.join(', ') + '.', 'feat');
       if (r.gob) loadGulp();
-    } catch (x) { toast('lock', 'Gulp didn’t eat that', 'The server could not take the morsels. Your gold is untouched. Try again in a moment.', 'warn'); }
+    } catch (x) { toast('lock', 'Gulp didn’t eat that', (x && /409/.test(x.message || '') ? 'Gulp is full for today. ' : 'The server could not take the morsels. ') + 'Your gold is untouched.', 'warn'); loadGulp(); }
     gp.busy = false; paintEnchPanel(true); paintCamp();
   });
   // The goblin bar above the fight, the assault and the claim.

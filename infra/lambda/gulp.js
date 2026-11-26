@@ -44,12 +44,16 @@ exports.handler = async (e) => {
   if (e.routeKey === 'POST /gulp/feed') {
     const k = Math.floor(+b.n), gold = M(0, mn(1e300, +b.g || 0));
     if (!(k >= 1 && k <= 50)) return res(400, { error: 1 });
-    const d = await upd(day, me, 'ADD n :k', { ':k': N(k) });
-    const rolls = M(0, mn(k, DAY - (n(d.Attributes, 'n') - k)));
+    // Hotfix 26 Nov 2026 (Kyvia): the feeder row wrote its weight to 'w', the table's key, so every feed failed after
+    // the counters had moved (gold was never taken). Weight is now 'wt', the feeder row is written first, and a hero
+    // can feed at most DAY morsels a day (the cap is checked before anything is written).
+    const d = await tryU(day, me, 'ADD n :k', { ':k': N(k), ':c': N(DAY - k) }, 'attribute_not_exists(n) OR n <= :c');
+    if (!d) return res(409, { error: 'day' });
+    try { await upd('gulpc#' + n(g, 'cyc'), me, 'SET nm=:n, c=:c ADD m :k, wt :w', { ':n': h.name, ':c': h.cls || S(''), ':k': N(k), ':w': N(k * (b.t ? 1.5 : 1)) }); }
+    catch (x) { await upd(day, me, 'ADD n :k', { ':k': N(-k) }); throw x; }
     g = (await upd('gulp', '#', 'ADD fed :g, m :k', { ':g': N(gold), ':k': N(k) })).Attributes;
-    await upd('gulpc#' + n(g, 'cyc'), me, 'SET nm=:n, c=:c ADD m :k, #w :w', { ':n': h.name, ':c': h.cls, ':k': N(k), ':w': N(k * (b.t ? 1.5 : 1)) }, undefined, { '#w': 'w' });
     const m0 = n(g, 'm') - k;
-    for (let i = 0; i < rolls; i++) if (crypto.randomInt(1e9) / 1e9 < mn(CAPP, B + K * (m0 + i))) roll = 1;
+    for (let i = 0; i < k; i++) if (crypto.randomInt(1e9) / 1e9 < mn(CAPP, B + K * (m0 + i))) roll = 1;
     if (roll && !g.gid && !g.stir && now - n(g, 'last') >= GAP) g = (await tryU('gulp', '#', 'SET stir=:t', { ':t': N(now) }, 'attribute_not_exists(stir) AND attribute_not_exists(gid)')) || g;
   } else if (e.routeKey !== 'GET /gulp') return res(404, { error: 1 });
   g = await tick(g, now);
@@ -58,6 +62,6 @@ exports.handler = async (e) => {
   let gob = null, prev = null;
   if (g.gid) { const id = g.gid.S, ev = await get('gob#' + id, '#'), my = await get('gob#' + id, me); gob = { id, until: n(g, 'gu'), hp: n(ev, 'hp'), total: n(ev, 'total'), me: { last: n(my, 'last'), score: n(my, 'score') } }; }
   if (g.prev) { const id = g.prev.S, ev = await get('gob#' + id, '#'), my = await get('gob#' + id, me); prev = { id, killed: n(ev, 'total') >= n(ev, 'hp'), me: { score: n(my, 'score'), cl: !!(my && my.cl) } }; }
-  return res(200, { ok: true, fed: n(g, 'fed'), m: n(g, 'm'), stir: !!g.stir, gob, prev, mine: { m: n(mine, 'm'), w: n(mine, 'w'), today: n(td, 'n') },
+  return res(200, { ok: true, fed: n(g, 'fed'), m: n(g, 'm'), stir: !!g.stir, gob, prev, mine: { m: n(mine, 'm'), w: n(mine, 'wt'), today: n(td, 'n') },
     top: feeders.sort((x, y) => n(y, 'm') - n(x, 'm')).slice(0, 10).map(i => ({ name: i.nm.S, cls: i.c.S, m: n(i, 'm') })) });
 };
