@@ -140,6 +140,7 @@
   let R = 3;
   function resize() {
     const r = arena.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return; // hidden (compact shop): keep the last size, never draw a 0-height room
     W = 240; H = Math.round(240 * r.height / Math.max(1, r.width));
     R = Math.max(2, Math.min(6, Math.round(r.width * (window.devicePixelRatio || 1) / 240 * 2) / 2));
     cv.width = Math.round(W * R); cv.height = Math.round(H * R); bgKey = ''; campKey = '';
@@ -1971,9 +1972,21 @@
   const invSave = () => { try { localStorage.setItem('lh_inv', JSON.stringify(INV)); } catch (e) {} };
   const invKind = it => it.slot === 'main' ? 'weapon' : it.slot === 'off' ? 'off' : it.slot === 'ring' || it.slot === 'neck' ? 'jewel' : 'armor';
   const RAR_RANK = it => L.RARITY.findIndex(r => r.id === it.rar);
+  // v125 (Kyvia, Discord): "Who" can pick one hero in the party ('h:<id>'), not just a class: items that hero wears, or
+  // could wear now (class fits and power level is high enough). A saved hero who has left the party counts as Anyone.
+  const whoHeroes = () => S.party.filter(Boolean).map(id => L.memberById(id)).filter(Boolean);
+  function whoPass(who, it) {
+    if (!who || who === 'all') return true;
+    if (who.slice(0, 2) === 'h:') {
+      const id = who.slice(2), m = S.party.includes(id) && L.memberById(id); if (!m) return true;
+      return L.wearer(S, it.uid) === id || (L.usable(m.cls, it) && L.canWear(S, id, it));
+    }
+    return L.usable(who, it);
+  }
+  const whoOpts = (cur) => whoHeroes().map(m => '<option value="h:' + m.id + '"' + (cur === 'h:' + m.id ? ' selected' : '') + '>' + esc(m.name) + ' (' + L.CLASSES[m.cls].name + ')</option>').join('');
   function invList(pack, m) {
     let l = pack.filter(it => (INV.kind === 'all' || invKind(it) === INV.kind) && (INV.rar === 'all' || it.rar === INV.rar) &&
-      (INV.who === 'all' || L.usable(INV.who === 'me' ? m.cls : INV.who, it)));
+      (INV.who === 'me' ? L.usable(m.cls, it) : whoPass(INV.who, it)));
     const by = { best: (a, b) => L.gearPct(b) - L.gearPct(a), level: (a, b) => L.reqLevel(b) - L.reqLevel(a) || L.gearPct(b) - L.gearPct(a), rarity: (a, b) => RAR_RANK(b) - RAR_RANK(a) || L.gearPct(b) - L.gearPct(a),
       type: (a, b) => (INV_KINDS.findIndex(k => k[0] === invKind(a)) - INV_KINDS.findIndex(k => k[0] === invKind(b))) || String(L.tyOf(a)).localeCompare(String(L.tyOf(b))) || L.gearPct(b) - L.gearPct(a), new: (a, b) => String(b.uid).localeCompare(String(a.uid)) };
     return l.sort(by[INV.sort] || by.best);
@@ -1986,7 +1999,7 @@
   // noRar: the scrap lists pick rarities with their own chips and hide the Rarity menu, so a Rarity choice saved on
   // another counter tab must not apply there (v120 fix, John: "not able to scrap for gold": Rarity = Set from the Upgrade
   // tab emptied the scrap list while the Armour count still showed 51).
-  const sfPass = (it, noRar) => (SF.kind === 'all' || invKind(it) === SF.kind) && (noRar === true || SF.rar === 'all' || it.rar === SF.rar) && (SF.who === 'all' || L.usable(SF.who, it));
+  const sfPass = (it, noRar) => (SF.kind === 'all' || invKind(it) === SF.kind) && (noRar === true || SF.rar === 'all' || it.rar === SF.rar) && whoPass(SF.who, it);
   const SF_SORT = { level: (a, b) => L.reqLevel(b) - L.reqLevel(a), rarity: (a, b) => RAR_RANK(b) - RAR_RANK(a), type: (a, b) => (INV_KINDS.findIndex(k => k[0] === invKind(a)) - INV_KINDS.findIndex(k => k[0] === invKind(b))) || String(L.tyOf(a)).localeCompare(String(L.tyOf(b))), new: (a, b) => String(b.uid).localeCompare(String(a.uid)) };
   function sfApply(list, get, noSort) {
     get = get || (x => x); const l = list.filter(r => sfPass(get(r))), by = !noSort && SF_SORT[SF.sort];
@@ -1997,7 +2010,7 @@
     return '<div class="invbar sfbar"><div class="invkinds" role="tablist">' + INV_KINDS.map(([k, n]) => '<button class="' + (SF.kind === k ? 'on' : '') + '" data-sfk="' + k + '">' + n + ' <em>' + (k === 'all' ? items.length : items.filter(it => invKind(it) === k).length) + '</em></button>').join('') + '</div><div class="invsel">' +
       (o.noSort ? '' : '<label><span>Sort</span><select data-sfs="sort">' + [['best', 'Suggested']].concat(INV_SORTS.slice(1)).map(([k, n]) => opt('sort', k, n)).join('') + '</select></label>') +
       (o.noRar ? '' : '<label><span>Rarity</span><select data-sfs="rar">' + opt('rar', 'all', 'Any') + L.RARITY.filter(r => items.some(it => it.rar === r.id) || SF.rar === r.id).map(r => opt('rar', r.id, r.name)).join('') + '</select></label>') +
-      '<label><span>Who</span><select data-sfs="who">' + opt('who', 'all', 'Anyone') + L.CLASS_ORDER.map(c => opt('who', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
+      '<label><span>Who</span><select data-sfs="who">' + opt('who', 'all', 'Anyone') + whoOpts(SF.who) + L.CLASS_ORDER.map(c => opt('who', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
   }
   const sfList = (items, rows, empty, o) => sfBar(items, o) + ewList(rows, items.length && !rows.length ? 'Nothing here matches these filters. Try All or Anyone.' : empty);
   document.addEventListener('click', e => { const k = e.target.closest('[data-sfk]'); if (k) { e.stopPropagation(); SF.kind = k.dataset.sfk; sfSave(); paintEnchPanel(true); } }, true);
@@ -2099,7 +2112,7 @@
     let bh = '<div class="invbar"><div class="invkinds" role="tablist">' + INV_KINDS.map(([k, n]) => { const c = k === 'all' ? pack.length : pack.filter(it => invKind(it) === k).length; return '<button class="' + (INV.kind === k ? 'on' : '') + '" data-invk="' + k + '">' + n + ' <em>' + c + '</em></button>'; }).join('') + '</div>' +
       '<div class="invsel"><label><span>Sort</span><select data-invs="sort">' + INV_SORTS.map(([k, n]) => '<option value="' + k + '"' + (INV.sort === k ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>' +
       '<label><span>Rarity</span><select data-invs="rar"><option value="all">Any</option>' + L.RARITY.filter(r => pack.some(it => it.rar === r.id)).map(r => '<option value="' + r.id + '"' + (INV.rar === r.id ? ' selected' : '') + '>' + r.name + '</option>').join('') + '</select></label>' +
-      '<label><span>Who</span><select data-invs="who"><option value="all">Anyone</option><option value="me"' + (INV.who === 'me' ? ' selected' : '') + '>' + esc(m.name) + ' can use</option>' + L.CLASS_ORDER.map(c => '<option value="' + c + '"' + (INV.who === c ? ' selected' : '') + '>' + L.CLASSES[c].name + '</option>').join('') + '</select></label></div></div>';
+      '<label><span>Who</span><select data-invs="who"><option value="all">Anyone</option><option value="me"' + (INV.who === 'me' ? ' selected' : '') + '>' + esc(m.name) + ' can use</option>' + whoOpts(INV.who) + L.CLASS_ORDER.map(c => '<option value="' + c + '"' + (INV.who === c ? ' selected' : '') + '>' + L.CLASSES[c].name + '</option>').join('') + '</select></label></div></div>';
     bh += list.length ? '<div class="grid">' + list.map(it => tile(it, !L.usable(m.cls, it))).join('') + '</div>' : '<p class="note">Nothing in your pack matches. Try another filter.</p>';
     if (!pack.length) bh = '<p class="note">Your pack is empty. Gear your party wears shows on each character above. New gear drops from foes, chests and guardians.</p>';
     $('bag').innerHTML = bh;
@@ -2530,22 +2543,26 @@
     }
   }
   $('enchpanel') && $('enchpanel').addEventListener('change', e => { const c = e.target.closest('[data-ewopt]'); if (c) { scrapOpts[c.dataset.ewopt] = c.checked; paintEnchPanel(true); } });
+  // v125 compact counter (Kyvia, Discord: the shop scene takes a third of the screen when you only want the gear list):
+  // the header's Compact button hides the scene in every shop; the choice is saved per browser (lh_shopmin).
+  function shopMin() { try { return localStorage.getItem('lh_shopmin') === '1'; } catch (e) { return false; } }
+  function setShopMin(on) { try { localStorage.setItem('lh_shopmin', on ? '1' : '0'); } catch (e) {} }
   // In the shop the stage header names the shop and holds the way out. Everything else is in the counter panel.
   function paintEnchOv() {
     const on = L.visiting(S), kind = shopKind(), arm = on && kind === 'arm';
     const SHOPS = { ench: ['enchanter', 'The Enchanter', 'Enchanter'], arm: ['armorer', 'The Armorer', 'Armorer'], store: ['quartermaster', 'The Store', 'Store'], portal: ['riftkeeper', 'The Rift Gate', 'Rift Gate'] };
-    document.body.classList.toggle('atench', on);
+    document.body.classList.toggle('atench', on); document.body.classList.toggle('shopmin', on && shopMin());
     let hd = $('shophead');
     if (!hd && on) {
       hd = document.createElement('div'); hd.id = 'shophead'; hd.className = 'shophead';
-      hd.addEventListener('click', e => { if (e.target.closest('[data-ev="leave"]')) leaveEnch(); const sw = e.target.closest('[data-ev="swap"]'); if (sw) { if (sw.dataset.k === 'arm') awReset(); else if (sw.dataset.k === 'store') SW.mode = 'ton'; else ewReset(); visitEnch(sw.dataset.k); } });
+      hd.addEventListener('click', e => { if (e.target.closest('[data-ev="scene"]')) { setShopMin(!shopMin()); paintEnchOv(); return; } if (e.target.closest('[data-ev="leave"]')) leaveEnch(); const sw = e.target.closest('[data-ev="swap"]'); if (sw) { if (sw.dataset.k === 'arm') awReset(); else if (sw.dataset.k === 'store') SW.mode = 'ton'; else ewReset(); visitEnch(sw.dataset.k); } });
       const sh = document.querySelector('.stagehead'); sh && sh.insertBefore(hd, sh.firstChild);
     }
     if (hd) {
       hd.hidden = !on;
       const me = SHOPS[kind] || SHOPS.ench;
       const h = '<img src="' + SP.spriteURL(me[0], 2, 0) + '" alt=""><div><b>' + me[1] + '</b><small>Your dive is paused on floor ' + S.floor + '</small></div><span class="shopbtns">' +
-        Object.keys(SHOPS).filter(k => k !== kind).map(k => '<button class="btn ghost small" data-ev="swap" data-k="' + k + '">' + SHOPS[k][2] + '</button>').join('') + '<button class="btn small leave" data-ev="leave">Leave</button></span>';
+        Object.keys(SHOPS).filter(k => k !== kind).map(k => '<button class="btn ghost small" data-ev="swap" data-k="' + k + '">' + SHOPS[k][2] + '</button>').join('') + '<button class="btn ghost small" data-ev="scene" title="' + (shopMin() ? 'Show the shop scene again' : 'Hide the shop scene so the counter gets the whole panel') + '">' + (shopMin() ? 'Show scene' : 'Compact') + '</button><button class="btn small leave" data-ev="leave">Leave</button></span>';
       if (on && hd.dataset.h !== h) { hd.innerHTML = h; hd.dataset.h = h; }
     }
     const old = $('enchov'); if (old) old.remove();
@@ -5959,6 +5976,9 @@
   const PATCH_NOTES = [
     { v: 125, date: 'November 2026', title: 'Fixes from Discord', items: [
       'Fixed: after you banked the day\u2019s 15 found Sigils, the game kept popping up \u201cDaily find limit reached\u201d every few seconds. It now tells you once, keeps any extra Sigils for the next day (UTC), and a new find says they are saved for tomorrow (thanks for the report, Kyvia).',
+      'Compact shops: a new Compact button in the Enchanter, Armorer, Store and Rift Gate header hides the shop scene so the counter and your gear list get the whole panel. Show scene brings it back, and the game remembers your choice (Kyvia\u2019s idea).',
+      'The Who filter on your gear and on every shop counter can now pick one hero in your party, not just a class: it shows what that hero wears or can wear right now, so two heroes of the same class are easy to tell apart (Kyvia\u2019s idea).',
+      'On phones the shop header buttons wrap onto a second row instead of running off the screen.',
     ] },
     { v: 124, date: 'November 25, 2026', title: 'Hard feats', items: [
       'Fixed: past about 97 levels of the Moth-wing Charm every fight turned into a Treasure Chest, so some heroes got stuck opening chests at the bottom of Act One. The charm now tops out at +20% (treasure chests at most 25% of fights), and re-beating the Lampmother no longer counts as a first clear for relic finds.',
@@ -7569,5 +7589,5 @@
   requestAnimationFrame(render);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   window.addEventListener('pagehide', save);
-  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss };
+  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch };
 })();
