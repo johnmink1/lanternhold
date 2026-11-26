@@ -6251,6 +6251,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 131, date: 'November 2026', title: 'Deep gold', items: [
+      'Balance: past floor 100, gold per kill now grows 6% a floor instead of 10% or more. Floors 1 to 100 are unchanged. Upgrade and salvage prices follow.',
+    ] },
     { v: 130, date: 'November 2026', title: 'Notification settings', items: [
       'Settings: a new Notifications section lets you turn each kind of corner pop-up on or off. Switched-off ones still go to the bell.',
       'Fix: Pip, Gulp, the Armorer’s reforge, the Dust Press and Hold works now price from your usual income in the deep (a slow average), set once a day. Swapping your party, gear or camp jobs no longer changes prices.',
