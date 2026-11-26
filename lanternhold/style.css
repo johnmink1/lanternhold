@@ -2529,3 +2529,4 @@ body.atench.shopmin .stage .arena{display:none!important}
 /* v126: five header buttons on a phone wrap to a second row instead of running off the screen */
 .shopbtns{flex-wrap:wrap;justify-content:flex-end}
 @media (max-width:600px){.shopbtns{flex:1 1 100%}}
+.buy .tdust em{color:#d8c8ff}

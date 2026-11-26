@@ -61,6 +61,8 @@
     return s + 's';
   }
   const coin = '<svg viewBox="0 0 24 24"><use href="#i-coin"/></svg>';
+  // NP+2 and up: casters past power level 100 also pay Dust to train.
+  const trainDustTag = d => d > 0 ? '<span class="tdust" data-tip="On NP+' + L.NP_TDUST_TIER + ' and up, Healers, Necromancers and Mages past power level ' + L.NP_TDUST_LV + ' also need Dust to train. Scrap spare gear for Dust.">' + icon('dust') + '<em>' + fmt(d) + '</em></span>' : '';
   const icon = id => '<svg viewBox="0 0 24 24"><use href="#i-' + id + '"/></svg>';
 
   // ---------- sound ----------
@@ -1714,8 +1716,8 @@
       let btn = '';
       if (!guest) {
         const n = buyN() === 'max' ? Math.max(1, L.maxAffordable(S, id)) : buyN();
-        const cost = L.trainCost(S, id, n);
-        btn = '<button class="buy anywhere" data-train="' + id + '"' + (cost > S.gold ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span></button>' + '<div class="minirow"><button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' + (id !== 'you' ? '<button class="rest icon" data-unseat="' + i + '" title="Send ' + esc(m.name) + ' to the campfire to free this seat" aria-label="Send ' + esc(m.name) + ' to the campfire">' + icon('flame') + '</button>' : '') + '</div>';
+        const cost = L.trainCost(S, id, n), td = L.trainDust(S, id, n);
+        btn = '<button class="buy anywhere" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button>' + '<div class="minirow"><button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' + (id !== 'you' ? '<button class="rest icon" data-unseat="' + i + '" title="Send ' + esc(m.name) + ' to the campfire to free this seat" aria-label="Send ' + esc(m.name) + ' to the campfire">' + icon('flame') + '</button>' : '') + '</div>';
       } else btn = '<button class="btn ghost small" data-dismiss="' + id + '">Dismiss</button>';
       const mv = '<div class="mv"><button class="mini up" data-move="' + i + ':-1"' + (i === 0 ? ' disabled' : '') + ' title="Move forward" aria-label="Move ' + esc(m.name) + ' forward">&#9650;</button><button class="mini dn" data-move="' + i + ':1"' + (i === L.PARTY_SIZE - 1 ? ' disabled' : '') + ' title="Move back" aria-label="Move ' + esc(m.name) + ' back">&#9660;</button></div>';
       html += '<div class="seat' + (down ? ' down' : '') + (m.player ? ' mine' : '') + '"><span class="pos">' + (i + 1) + '<small>' + L.POS_NAME[i] + '</small></span>' + mv + portrait(id) +
@@ -1745,10 +1747,10 @@
     }).join('') + '</div>');
     let benchHtml = jobsHtml + bench.map(id => {
       const m = L.memberById(id), job = L.jobOf(S, id);
-      const n = buyN() === 'max' ? Math.max(1, L.maxAffordable(S, id)) : buyN(), cost = L.trainCost(S, id, n);
+      const n = buyN() === 'max' ? Math.max(1, L.maxAffordable(S, id)) : buyN(), cost = L.trainCost(S, id, n), td = L.trainDust(S, id, n);
       return '<div class="seat bench">' + portrait(id) + '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + '</div><div class="lv">Power level ' + L.lvl(S, id) + ' &middot; ' + esc(m.title) + '</div>' +
         '<div class="jobline' + (job ? ' on' : '') + '">' + (job ? icon(job.icon) + '<b>' + job.name + '</b> ' + L.jobText(job, L.jobValue(S, job, id)) : 'No camp job yet') + '</div>' + traitChips(id, true) + '</div>' +
-        '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span></button><div class="minis">' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
+        '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button><div class="minis">' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
         '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button><button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] ? '<button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button>' : '') + '</div></div></div>';
     }).join('');
     if (!bench.length) benchHtml = jobsHtml + '<p class="note">No one is at the fire. Companions who rest here can take a job that helps the whole party.</p>';
