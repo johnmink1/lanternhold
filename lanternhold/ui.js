@@ -1,4 +1,4 @@
-/* lh-build 202611260007 */
+/* lh-build 202611260016 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6195,7 +6195,7 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 125, date: 'November 2026', title: 'Mythic gear, rarer events and NP+ gold sinks', items: [
-      'World boss gear is now <b>Mythic</b>, a new tier above Legendary and the strongest gear in the game. Pieces you already own become Mythic, with more power, an extra enchant socket and higher enchant tiers.',
+      'World boss gear is now Mythic, a new tier above Legendary and the strongest gear in the game. Pieces you already own become Mythic, with more power, an extra enchant socket and higher enchant tiers.',
       'Mythic sets are stronger: +20% with 2 pieces (+30% gold for the Leviathan set) and +45% damage and health with all 4.',
       'They are meant to be a long grind. A Mythic drop after a world boss is rare: under 3% a weekend even for the strongest delvers, and full odds still need 3 phases broken.',
       'Warden Sable at the Rift Gate now asks 150 Rift tokens for a piece, and upgrading a Mythic costs twice the boss shards it did.',
@@ -6235,7 +6235,7 @@
       'Resets: gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story. Kept: everything bought with Sigils (Wardrobe, Bag of Holding, campfire spots, Lanternholder, tonics), your profile, journal lore, feats, Ember Ring rating and Rift tokens.',
       'Fair trading: each tier has its own market, mail only goes between heroes on the same tier, trading opens 24 hours after you start, gear from an earlier tier can not be worn, and your old listings, offers and unclaimed mail are cleared when you start. One tier a week at most.',
       'Your tier also shows as a gold ring around your profile picture, brighter at every tier (thanks for the idea, Chipplin).',
-      'New: <b>Training Grounds</b> on the Party tab. See each seated member’s steady damage, damage against guardians, share, healing and health, then run a 10 second test on a practice dummy (strike it too) to compare gear, seats and skills.',
+      'New: Training Grounds on the Party tab. See each seated member’s steady damage, damage against guardians, share, healing and health, then run a 10 second test on a practice dummy (strike it too) to compare gear, seats and skills.',
     ] },
     { v: 121, date: 'November 25, 2026', title: 'Rarer set pieces and steadier filters', items: [
       'Set pieces are rarer: every chance to find a region, class or job set piece is halved. A guardian now drops a set piece about 1 time in 18 (was about 1 in 9). The map’s drop chances show the new odds.',
