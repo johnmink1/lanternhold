@@ -45,6 +45,12 @@ This repo also publishes the site: `.github/workflows/deploy.yml` builds `lanter
 6. Merging publishes: `deploy.yml` runs on the push to `main` (a minute or two). If it doesn't start or fails, run it with workflow_dispatch, ref `main`; a deploy-pages hiccup sometimes needs a second run.
 7. Verify by fetching `https://lanternhold.born2gamellc.com/version.json?t=<now>` and matching the build number.
 
+Every numbered release must show its patch notes pop-up ("What's new") once to every player:
+- The new `PATCH_NOTES` entry goes first, with a higher `v` than the live one (the pop-up fires when `S.notesShown < PATCH_NOTES[0].v`).
+- Test it before merging: load a save with `notesShown` and `seenNotes` at the previous version (tutorial done, and again with it unfinished on a hero older than a day). The pop-up must open within a few seconds.
+- A hotfix that adds no new `PATCH_NOTES` entry does not show the pop-up.
+- Since v132 (26 Nov 2026), `notesShown` is set only when the window really opens. The old `seenNotes` gate also skipped every hero who never finished the tutorial.
+
 House rules:
 - Family-friendly content.
 - Never show a bare "Level": say "power level" (training) or "hero level" (XP).
