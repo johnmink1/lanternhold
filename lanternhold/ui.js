@@ -1688,7 +1688,7 @@
     parts.push(fmt(L.memberDps(S, id, now) || 0) + ' dmg/s');
     parts.push(fmt(L.maxHpOf(S, id)) + ' hp');
     // A borrowed hero stronger than GUEST_CAP x your hero fights at that cap; say so, or it looks out of date.
-    if (L.isGuest(S, id) && L.guestK(S, id) < 0.999) parts.push('<span class="muted" title="Borrowed heroes fight at up to ' + L.GUEST_CAP + 'x your hero’s damage and health. Grow your hero to raise the cap.">capped at ' + L.GUEST_CAP + 'x you</span>');
+    if (L.isGuest(S, id) && L.guestK(S, id) < 0.999) parts.push('<span class="muted" title="Borrowed heroes fight at up to ' + L.GUEST_CAP + 'x your hero’s damage and ' + L.GUEST_CAP + 'x its health, each on its own. Grow your hero to raise the cap.">capped at ' + L.GUEST_CAP + 'x you</span>');
     return parts.join(' &middot; ');
   }
 

@@ -489,16 +489,18 @@
   const guestRec = (s, id) => isGuest(s, id) ? (s.guests || []).find(x => x.id === id) : null;
   const cardOf = (s, id) => { const g = guestRec(s, id); return g && g.bp && g.bp.d >= 0 ? g.bp : null; };
   let gkCache = { s: null, t: -1, v: {} };
-  function guestK(s, id) {
+  // v132 (John, 26 Nov 2026: separate caps): damage ('d') and health ('h') are each capped on their own, so a hero with
+  // big health still hits up to GUEST_CAP x your damage. Healing (no kind) keeps the stricter shared factor.
+  function guestK(s, id, kind) {
     const bp = cardOf(s, id); if (!bp) return 1;
     const t = s.clock || 0; if (gkCache.s !== s || gkCache.t !== t) gkCache = { s, t, v: {} };
-    if (gkCache.v[id] != null) return gkCache.v[id];
-    gkCache.v[id] = 1; // guards re-entry while your own numbers are worked out
-    const yd = s.hero ? steadyDps(s, 'you') : 0, yh = s.hero ? maxHpOf(s, 'you') : 0;
-    let k = 1;
-    if (bp.d > 0) k = Math.min(k, GUEST_CAP * yd / bp.d);
-    if (bp.h > 0) k = Math.min(k, GUEST_CAP * yh / bp.h);
-    return (gkCache.v[id] = Math.max(0, k));
+    let c = gkCache.v[id];
+    if (c == null) {
+      gkCache.v[id] = { d: 1, h: 1 }; // guards re-entry while your own numbers are worked out
+      const yd = s.hero ? steadyDps(s, 'you') : 0, yh = s.hero ? maxHpOf(s, 'you') : 0;
+      c = gkCache.v[id] = { d: bp.d > 0 ? Math.max(0, Math.min(1, GUEST_CAP * yd / bp.d)) : 1, h: bp.h > 0 ? Math.max(0, Math.min(1, GUEST_CAP * yh / bp.h)) : 1 };
+    }
+    return kind === 'd' ? c.d : kind === 'h' ? c.h : Math.min(c.d, c.h);
   }
   const friendsSeated = s => Math.min(FRIEND_MAX, (s.party || []).filter(id => id && isGuest(s, id)).length);
   const friendMult = s => 1 + FRIEND_PER * friendsSeated(s);
@@ -550,7 +552,7 @@
   const scale = (s, id) => { const m = memberById(id), L = lvl(s, id); return Math.pow(L * milestoneMult(L) * TIER[m.tier].stat * (m.player ? 1 : (m.pow || NPC_POWER)), POW); };
 
   function maxHpOf(s, id) {
-    const bp = cardOf(s, id); if (bp) return Math.max(1, bp.h * guestK(s, id));
+    const bp = cardOf(s, id); if (bp) return Math.max(1, bp.h * guestK(s, id, 'h'));
     const m = memberById(id);
     return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * npBonus(s) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)) * (1 + renoVal(s, 'hp') + (fxOnW(s, 'globe') ? 0.05 : 0) + (fxOnW(s, 'g2') ? 0.05 : 0)));
   }
@@ -565,7 +567,7 @@
   function memberDps(s, id, now) {
     if (!id || s.down[id] || !lvl(s, id)) return 0;
     const bp = cardOf(s, id);
-    if (bp) { const cc = s.cc && ccOf(s, id, now); return bp.d * guestK(s, id) * (cc ? (cc.k === 'stun' ? 0 : CC.disarm.dmg) : 1) * (1 - ghostSap(s, 'dps', now)) * wbMult(s, id); }
+    if (bp) { const cc = s.cc && ccOf(s, id, now); return bp.d * guestK(s, id, 'd') * (cc ? (cc.k === 'stun' ? 0 : CC.disarm.dmg) : 1) * (1 - ghostSap(s, 'dps', now)) * wbMult(s, id); }
     const m = memberById(id), c = CLASSES[m.cls];
     let d = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps');
     if (id === 'you') { d *= (HERO_DPS[m.cls] || 1) * (1 + sk(s, 'dps')); const fu = fxOn(s, 'fury', now); if (fu) d *= fu; }
@@ -853,7 +855,7 @@
   // so the price can't be lowered by unseating companions and doesn't swing mid-fight (v119 fix, John 25 Nov 2026).
   function steadyDps(s, id) {
     if (!id || !lvl(s, id)) return 0;
-    const bp = cardOf(s, id); if (bp) return bp.d * guestK(s, id);
+    const bp = cardOf(s, id); if (bp) return bp.d * guestK(s, id, 'd');
     const m = memberById(id); if (!m) return 0;
     let d = CLASSES[m.cls].dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps');
     if (id === 'you') d *= (HERO_DPS[m.cls] || 1) * (1 + sk(s, 'dps'));
