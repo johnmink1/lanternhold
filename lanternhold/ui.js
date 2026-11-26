@@ -1,4 +1,4 @@
-/* lh-build 202611261905 */
+/* lh-build 202611261948 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4449,13 +4449,13 @@
       '<div class="packs">' + tiles + '</div>' +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' :
         linked ? '<div class="storelink"><span>Store account: <b>' + esc(w.n || 'linked') + '</b></span><button class="btn small ghost" id="gs-sync">Check for purchases</button><button class="btn small ghost" id="gs-out">Unlink</button></div>' :
-        '<div class="storelink"><span>Packs and memberships are sold in the Born 2 Game store. Sign in there once and every purchase lands on this hero.</span><button class="btn small" id="gs-in">Sign in with Born 2 Game</button></div>') +
+        '<div class="storelink"><span>Packs and memberships are sold in the Born 2 Game store. Sign in there once and every purchase lands on this hero.</span><button class="btn small" id="gs-in">Sign in with Born 2 Game</button></div>')) +
       // 4. Mercy Corps: real donations to Extra Life, paid on Extra Life's own page
       '<div class="shopsec subbox mercygive"><h3>Give to the Mercy Corps <span class="tag">Charity</span></h3>' +
       '<p class="shopsub">Donate to our Extra Life team for Children’s Miracle Network Hospitals. Gifts also light Mercy’s Blessing for every hero' + (warTag() ? ' and credit your alliance (' + esc(warTag()) + ')' : '') + '.</p>' +
       '<div class="row left"><button class="btn" id="gs-give1">Give $1</button><button class="btn ghost" id="gs-giveo">Other amount</button></div>' +
       '<p class="note small">Opens Extra Life’s secure page. The money goes straight to the charity, never to the game, and you get the receipt.</p></div>' +
-      '<p class="note small">Payment is handled by the Born 2 Game store at born2gamellc.com. Every account starts with 100 ' + TOKEN + ', and the team hands more out at Grand War events.</p>' +
+      '<p class="note small">' + (DC ? '' : 'Payment is handled by the Born 2 Game store at born2gamellc.com. ') + 'Every account starts with 100 ' + TOKEN + ', and the team hands more out at Grand War events.</p>' +
       '<div class="row"><button class="btn ghost" id="gs-ok">Back</button></div>', md => {
         md.querySelector('#gs-x').onclick = closeModal; md.querySelector('#gs-ok').onclick = () => back();
         const go = async (b, f) => { b.disabled = true; try { await f(); } catch (e) { b.disabled = false; toast('lock', 'Could not reach the store', 'Check your connection and try again.', 'warn'); } };
@@ -4804,6 +4804,7 @@
   let supData = null, supBusy = false, supBack = null;
   function supStart(task) {
     const t = SUP.find(x => x.id === task); if (!t || !SUP_APP[task]) return;
+    if (DC) { if (task === 'discord' && dcTok) supClaim('discord', dcTok); return; }
     const st = 'sup' + task + Math.random().toString(36).slice(2, 12);
     try { localStorage.setItem('lh_oauth_st', st); localStorage.removeItem('lh_oauth'); } catch (e) {}
     const w = window.open(t.auth(SUP_APP[task], st), 'lhoauth', 'width=520,height=760');
@@ -4814,8 +4815,11 @@
     let want = null; try { want = localStorage.getItem('lh_oauth_st'); localStorage.removeItem('lh_oauth_st'); localStorage.removeItem('lh_oauth'); } catch (e) {}
     if (!m || !m.token || !m.state || m.state !== want) return;
     const task = m.state.startsWith('supdiscord') ? 'discord' : m.state.startsWith('supitch') ? 'itch' : '';
+    supClaim(task, m.token);
+  }
+  async function supClaim(task, token) {
     if (!task || supBusy) return; supBusy = true;
-    try { const r = await papi('POST', '/support/claim', { task, token: m.token }); if (supData) supData.mine = r.mine; if (prof && r.bal != null) prof.bal = r.bal; sfx.buy(); toast('star', '+' + r.add + ' ' + TOKEN, 'Thank you for supporting Lanternhold!', 'feat'); }
+    try { const r = await papi('POST', '/support/claim', { task, token }); if (supData) supData.mine = r.mine; if (prof && r.bal != null) prof.bal = r.bal; sfx.buy(); toast('star', '+' + r.add + ' ' + TOKEN, 'Thank you for supporting Lanternhold!', 'feat'); }
     catch (e) { toast('lock', 'Not yet', SUP_ERR[e.code] || 'Try again in a moment.', 'warn'); }
     supBusy = false; if (document.querySelector('#sp-x')) openSupport(supBack);
   }
@@ -4826,7 +4830,7 @@
     const row = t => { const c = supData && supData.mine[t.id], sig = supData ? supData.tasks[t.id] : null, live = !!SUP_APP[t.id];
       return '<div class="supt"><div class="supth">' + icon(t.icon) + '<b>' + t.name + '</b>' + (sig ? '<span class="supsig">' + sigil + sig + '</span>' : '') + (c ? '<span class="tag once">Done</span>' : '') + '</div>' +
         (c ? '<small>Thank you! The ' + TOKEN + ' are in your account.</small>' : '<small>' + t.how + '</small>' +
-          '<div class="supform"><button class="btn small" data-supgo="' + t.id + '"' + (supData && live ? '' : ' disabled') + '>' + (live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
+          '<div class="supform"><button class="btn small" data-supgo="' + t.id + '"' + (supData && live && !(DC && t.id !== 'discord') ? '' : ' disabled') + '>' + (DC && t.id !== 'discord' ? 'On the website' : live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
     modal('<div class="maphead"><div><h2>Support the game</h2><small>Link your accounts to your hero and get free ' + TOKEN + ', once each, paid right away.</small></div><button class="iconbtn" id="sp-x" aria-label="Close">&times;</button></div>' +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' : !supData ? '<p class="note">Loading…</p>' : '') +
       '<div class="supts">' + SUP.map(row).join('') + '</div>' +
