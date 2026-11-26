@@ -50,14 +50,16 @@ exports.handler = async (e) => {
     return res(200, { ok: true, id: me, recruits: old ? Number(old.N) : 0 });
   }
   if (rk === 'GET /heroes') {
-    const r = await db.send(new ScanCommand({ TableName: T, Limit: 300 }));
+    const qs = e.queryStringParameters || {};
+    // ?p=1: only the party's own rows, for the game's timed card refresh (v132), so it never scans the board.
+    const r = qs.p === '1' ? { Items: [] } : await db.send(new ScanCommand({ TableName: T, Limit: 300 }));
     const cut = Date.now() - 30 * 864e5;
     let list = (r.Items || []).filter(i => i.pid.S !== me && i.name && i.seen && Number(i.seen.N) > cut)
       .map(heroOut);
     for (let k = list.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [list[k], list[j]] = [list[j], list[k]]; }
     list.sort((a, c) => c.on - a.on);
     // ?ids=a,b: fresh cards for heroes already in the asker's party, even if the scan missed them.
-    const ids = String((e.queryStringParameters && e.queryStringParameters.ids) || '').split(',').filter(x => /^[0-9a-f]{16}$/.test(x) && x !== me).slice(0, 4);
+    const ids = String(qs.ids || '').split(',').filter(x => /^[0-9a-f]{16}$/.test(x) && x !== me).slice(0, 4);
     const party = [];
     for (const id of ids) { try { const g = await db.send(new GetItemCommand({ TableName: T, Key: { pid: { S: id } } })); if (g.Item && g.Item.name) party.push(heroOut(g.Item)); } catch (x) {} }
     return res(200, { heroes: list.slice(0, 10), party });

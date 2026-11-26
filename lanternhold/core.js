@@ -2277,13 +2277,30 @@
     const f = friendMult(s) * keeperMult(s);
     return { d: steadyDps(s, 'you') / f, h: maxHpOf(s, 'you'), hl: heroCls(s) === 'healer' ? healPerSec0(s, 'you') / f : 0, pc: pierceOf(s, 'you'), t: npTier(s) };
   }
-  // A newer card or level for a hero already in your party (from the Players Guild).
-  function refreshGuest(s, g) {
+  // A newer card or level for a hero already in your party (from the Players Guild). The game asks for fresh cards
+  // every GUEST_REFRESH and on each camp return (John, 26 Nov 2026: no more dismiss and re-invite to update them).
+  // Growth lands at once. A weaker card (gear stripped or swapped to Gold Find, a reset) waits GUEST_DROP_HOLD and only
+  // lands if it is still the newest card then, so a quick swap or a strip timed to a refresh changes nothing.
+  const GUEST_REFRESH = 5 * 6e4, GUEST_DROP_HOLD = 30 * 6e4;
+  const cardLower = (a, b) => !!(a && b && (a.d < b.d * 0.999 || a.h < b.h * 0.999 || a.hl < (b.hl || 0) * 0.999));
+  function refreshGuest(s, g, now) {
     const x = (s.guests || []).find(y => y.id === g.id); if (!x) return false;
-    if (g.level) x.level = Math.max(1, Math.floor(g.level));
-    const c = cleanCard(g.bp); if (c) x.bp = c;
+    now = now || Date.now();
+    const was = JSON.stringify([x.level, x.bp, x.drop]);
+    const c = cleanCard(g.bp);
+    if (c && x.bp && cardLower(c, x.bp)) {
+      // Hold the weaker card (and the level that came with it) until it has stood for GUEST_DROP_HOLD.
+      // The clock starts at the first weaker card; later weaker cards replace it without restarting the clock.
+      x.drop = { bp: c, lv: g.level ? Math.max(1, Math.floor(g.level)) : x.level, at: x.drop && x.drop.at <= now ? x.drop.at : now };
+      if (now - x.drop.at >= GUEST_DROP_HOLD) { x.bp = x.drop.bp; x.level = x.drop.lv; delete x.drop; }
+    } else {
+      if (g.level) x.level = Math.max(1, Math.floor(g.level));
+      if (c) x.bp = c;
+      delete x.drop;
+    }
+    gkCache = { s: null, t: -1, v: {} }; // the cap is worked out again from the new card
     if (s.hp[x.id] != null) s.hp[x.id] = Math.min(s.hp[x.id], maxHpOf(s, x.id));
-    return true;
+    return JSON.stringify([x.level, x.bp, x.drop]) !== was;
   }
   function addGuest(s, g) {
     // g: { id, name, cls, level } from the hero board
@@ -3644,7 +3661,7 @@
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
     STATS, STAT_CLASS, STAT_BASE, STAT_AFFINITY, STAT_MAX, RESPEC_COST, statSpent, xpNeed, heroLevel, pointsFor, heroPoints, statScore, addStat, resetStats, statVal, PACK_CHANCE, PACK_GOLD,
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
-    newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
+    newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, GUEST_REFRESH, GUEST_DROP_HOLD, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
     clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
     offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };
