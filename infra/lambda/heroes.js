@@ -1,4 +1,4 @@
-const { DynamoDBClient, UpdateItemCommand, ScanCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, UpdateItemCommand, ScanCommand, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
 const crypto = require('crypto');
 const db = new DynamoDBClient({});
 const T = process.env.TABLE, CH = process.env.CHAT;
@@ -10,6 +10,12 @@ const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|pus
 // Short words that are rude alone but sit inside real names (Cumberland), so only whole words count (v125).
 const BADW = /(^|[ '\-])(cum+s?|cumming|tits?|boobs?|anal|sexy?)([ '\-]|$)/i;
 const res = (c, b) => ({ statusCode: c, headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+// Build card (v130, John 26 Nov 2026): a hero's steady damage, health, healing and Piercing, so a borrowed copy fights
+// like the real hero. Saves live on the player's device, so only finite numbers are kept; the borrowing game also caps
+// a card at 2x its own hero (GUEST_CAP in core.js), so a faked card can't carry anyone.
+const num = v => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(v, 1e300) : 0);
+const cardOf = b => { if (!b || typeof b !== 'object') return null; const c = { d: num(b.d), h: num(b.h), hl: num(b.hl), pc: Math.min(1, num(b.pc)), t: Math.min(10, num(b.t) | 0) }; return c.h > 0 ? JSON.stringify(c) : null; };
+const heroOut = i => ({ id: i.pid.S, name: i.name.S, cls: i.cls.S, level: Number(i.lv.N), floor: Number(i.fl.N), side: i.sd ? i.sd.S : 'unsworn', on: Date.now() - Number(i.seen.N) < 18e4, pf: i.pf ? JSON.parse(i.pf.S) : null, wd: i.wd ? JSON.parse(i.wd.S) : null, w: i.wv && i.wv.N === '1' ? i.wl.S : '', np: i.np ? +i.np.N : 0, bp: i.bp ? JSON.parse(i.bp.S) : null });
 const pidOf = sub => crypto.createHash('sha256').update('lh:' + sub).digest('hex').slice(0, 16);
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
@@ -24,14 +30,14 @@ exports.handler = async (e) => {
     if (!CLS.includes(b.cls)) return res(400, { error: 'class' });
     const floor = Math.max(1, Math.min(100000, Math.floor(Number(b.floor) || 1)));
     const level = Math.max(1, Math.min(50 + floor * 8, Math.floor(Number(b.level) || 1)));
-    const side = SIDES.includes(b.side) ? b.side : 'unsworn';
+    const side = SIDES.includes(b.side) ? b.side : 'unsworn', card = cardOf(b.bp);
     let r;
     try {
       r = await db.send(new UpdateItemCommand({ TableName: T, Key: { pid: { S: me } },
-        UpdateExpression: 'SET #n = :n, cls = :c, lv = :l, fl = :f, sd = :s, seen = :t, recruits = :z, u = :u, rf = if_not_exists(rf, :r)',
+        UpdateExpression: 'SET #n = :n, cls = :c, lv = :l, fl = :f, sd = :s, seen = :t, recruits = :z, u = :u, rf = if_not_exists(rf, :r)' + (card ? ', bp = :bp' : ''),
         ConditionExpression: 'attribute_not_exists(ban)',
         ExpressionAttributeNames: { '#n': 'name' },
-        ExpressionAttributeValues: { ':n': { S: name }, ':c': { S: b.cls }, ':l': { N: String(level) }, ':f': { N: String(floor) }, ':s': { S: side }, ':t': { N: String(Date.now()) }, ':z': { N: '0' }, ':u': { S: cl.sub }, ':r': { S: /^[a-z0-9_-]{1,24}$/.test(b.ref || '') ? b.ref : '-' } },
+        ExpressionAttributeValues: Object.assign(card ? { ':bp': { S: card } } : {}, { ':n': { S: name }, ':c': { S: b.cls }, ':l': { N: String(level) }, ':f': { N: String(floor) }, ':s': { S: side }, ':t': { N: String(Date.now()) }, ':z': { N: '0' }, ':u': { S: cl.sub }, ':r': { S: /^[a-z0-9_-]{1,24}$/.test(b.ref || '') ? b.ref : '-' } }),
         ReturnValues: 'UPDATED_OLD' }));
     } catch (x) { if (x.name === 'ConditionalCheckFailedException') return res(403, { error: 'banned' }); throw x; }
     // A brand-new hero is announced in Global chat with their alliance.
@@ -47,10 +53,14 @@ exports.handler = async (e) => {
     const r = await db.send(new ScanCommand({ TableName: T, Limit: 300 }));
     const cut = Date.now() - 30 * 864e5;
     let list = (r.Items || []).filter(i => i.pid.S !== me && i.name && i.seen && Number(i.seen.N) > cut)
-      .map(i => ({ id: i.pid.S, name: i.name.S, cls: i.cls.S, level: Number(i.lv.N), floor: Number(i.fl.N), side: i.sd ? i.sd.S : 'unsworn', on: Date.now() - Number(i.seen.N) < 18e4, pf: i.pf ? JSON.parse(i.pf.S) : null, wd: i.wd ? JSON.parse(i.wd.S) : null, w: i.wv && i.wv.N === '1' ? i.wl.S : '', np: i.np ? +i.np.N : 0 }));
+      .map(heroOut);
     for (let k = list.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [list[k], list[j]] = [list[j], list[k]]; }
     list.sort((a, c) => c.on - a.on);
-    return res(200, { heroes: list.slice(0, 10) });
+    // ?ids=a,b: fresh cards for heroes already in the asker's party, even if the scan missed them.
+    const ids = String((e.queryStringParameters && e.queryStringParameters.ids) || '').split(',').filter(x => /^[0-9a-f]{16}$/.test(x) && x !== me).slice(0, 4);
+    const party = [];
+    for (const id of ids) { try { const g = await db.send(new GetItemCommand({ TableName: T, Key: { pid: { S: id } } })); if (g.Item && g.Item.name) party.push(heroOut(g.Item)); } catch (x) {} }
+    return res(200, { heroes: list.slice(0, 10), party });
   }
   if (rk === 'POST /recruit') {
     const id = String(b.heroId || '');

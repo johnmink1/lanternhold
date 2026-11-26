@@ -1935,9 +1935,20 @@
     }
     w.innerHTML = h + '</div>';
   }
+  // Borrowed heroes fight with their owner's latest build card; ask for the party's cards along with the board.
+  const guestIdsQ = () => { const ids = (S.guests || []).map(g => String(g.id).replace(/^p_/, '')).filter(x => /^[0-9a-f]{16}$/.test(x)); return '/heroes' + (ids.length ? '?ids=' + ids.join(',') : ''); };
+  function applyGuestCards(r) {
+    if (!r) return; let n = 0;
+    for (const g of (r.party || []).concat(r.heroes || [])) if (L.refreshGuest(S, { id: 'p_' + g.id, level: g.level, bp: g.bp })) n++;
+    if (n) { save(); updateSeats(true); }
+  }
+  async function refreshGuests() {
+    if (!CL || !signedIn() || !(S.guests || []).length) return;
+    try { applyGuestCards(await api('GET', null, guestIdsQ())); } catch (e) {}
+  }
   async function findHeroes() {
     boardMsg = 'Searching the guild…'; paintBoard();
-    try { const r = await api('GET', null, '/heroes'); await loadWar(); boardList = (r && r.heroes) || []; boardMsg = boardList.length ? '' : 'The guild hall is quiet right now. Check back soon.'; }
+    try { const r = await api('GET', null, guestIdsQ()); await loadWar(); boardList = (r && r.heroes) || []; applyGuestCards(r); boardMsg = boardList.length ? '' : 'The guild hall is quiet right now. Check back soon.'; }
     catch (e) { boardMsg = 'Could not reach the Players Guild. Try again in a moment.'; }
     paintBoard();
   }
@@ -1971,7 +1982,7 @@
   // Seat a player's hero, asking who steps out when the party is full.
   function seatGuest(g) {
     const join = () => {
-      L.addGuest(S, { id: 'p_' + g.id, name: g.name, cls: g.cls, side: g.side, level: g.level });
+      L.addGuest(S, { id: 'p_' + g.id, name: g.name, cls: g.cls, side: g.side, level: g.level, bp: g.bp });
       const gg = (S.guests || []).find(x => x.id === 'p_' + g.id); if (gg) { gg.pf = g.pf || null; gg.w = g.w || ''; gg.wd = g.wd || null; }
       sfx.buy(); toast('users', g.name + ' joins your party', 'They accepted your invite. A ' + L.CLASSES[g.cls].name + ' at level ' + g.level + '.', 'feat');
       updateSeats(true); updateAbilities(true); paintBoard();
@@ -3713,7 +3724,7 @@
   async function publishHero() {
     try {
       let ref = ''; try { ref = localStorage.getItem('lh_ref') || ''; } catch (e) {}
-      const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref }, '/hero');
+      const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S) }, '/hero');
       if (!prof) loadProfile();
       const n = r && r.recruits;
       if (n > 0) {
@@ -3912,6 +3923,7 @@
     try { prof = await papi('GET', '/profile'); } catch (e) { return prof; }
     try { localStorage.setItem('lh_bal', String(prof.bal)); } catch (e) {}
     if (!npSrv) syncNp();
+    refreshGuests();
     if ((prof.pass || 0) !== (S.pass || 0) || (prof.sub || 0) !== (S.sub || 0)) { S.pass = prof.pass || 0; S.sub = prof.sub || 0; save(); updatePanel(true); updateSeats(true); }
     if (!!prof.boh !== !!S.boh) { S.boh = !!prof.boh; save(); updateGear(true); }
     if (prof.own) syncRoster(prof.own);
@@ -5912,6 +5924,8 @@
         'Sign in, open the <b>Guild</b> tab, press <b>Invite</b>.',
         'They <b>accept or decline</b>. Accepted heroes join at camp.',
         'Invites to <i>you</i> show at the top with <b>Accept</b> and <b>Decline</b>. Accepting lends a copy of your hero and earns you gold.',
+        'Borrowed heroes bring their own gear, stats and skills, up to <b>2×</b> your own hero’s damage and health. They update each time you play.',
+        'Each player hero in your party adds <b>+5%</b> party damage and gold (up to two). They never ask for wages.',
         '<b>Dismiss</b> on a seat lets a hero go.']],
       ['Your banner', 'i:flare', 'Your hero flies one of five banners, each with a perk.', [
         'Iron Covenant <b>+15% health</b>. Radiant Ascendancy <b>+12% damage</b>. Devouring Tide <b>+15% gold</b>. Mercy Corps <b>+15% healing</b>. Unsworn <b>+5%</b> to all three.',
@@ -7585,7 +7599,7 @@
     rg.busy = true; rg.err = '';
     try {
       // The hero board row must exist first (it holds the name); publishing is quick and harmless.
-      if (Date.now() - rg.sent > 5 * 6e4) { try { await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref: '' }, '/hero'); } catch (e) {} await api('PUT', ringBuild(), '/arena'); rg.sent = Date.now(); }
+      if (Date.now() - rg.sent > 5 * 6e4) { try { await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref: '', bp: L.buildCard(S) }, '/hero'); } catch (e) {} await api('PUT', ringBuild(), '/arena'); rg.sent = Date.now(); }
       const st = await api('GET', null, '/arena'); if (!st) throw 0; rg.st = st; rg.at = Date.now();
       fetchLooks((st.foes || []).map(f => f.id).concat((st.top || []).map(t => t.id))).then(n => { if (n) paintRing(); });
       ringDefenseNews();
