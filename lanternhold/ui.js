@@ -1688,6 +1688,8 @@
     if (m.cls === 'healer') parts.push(fmt(L.healPerSec(S, id)) + ' heal/s');
     parts.push(fmt(L.memberDps(S, id, now) || 0) + ' dmg/s');
     parts.push(fmt(L.maxHpOf(S, id)) + ' hp');
+    // A borrowed hero stronger than GUEST_CAP x your hero fights at that cap; say so, or it looks out of date.
+    if (L.isGuest(S, id) && L.guestK(S, id) < 0.999) parts.push('<span class="muted" title="Borrowed heroes fight at up to ' + L.GUEST_CAP + 'x your hero’s damage and health. Grow your hero to raise the cap.">capped at ' + L.GUEST_CAP + 'x you</span>');
     return parts.join(' &middot; ');
   }
 
@@ -1946,10 +1948,21 @@
     }
     if (n) { save(); updateSeats(true); }
   }
+  // Borrowed heroes keep up on their own (John, 26 Nov 2026): fresh cards every L.GUEST_REFRESH while the page is open
+  // and on each return to camp (at most once a minute). '&p=1' asks only for the party's rows, not the whole board.
+  let guestAt = 0, guestBusy = false, wasCamp = null;
   async function refreshGuests() {
-    if (!CL || !signedIn() || !(S.guests || []).length) return;
-    try { applyGuestCards(await api('GET', null, guestIdsQ())); } catch (e) {}
+    if (!CL || !signedIn() || !(S.guests || []).length || guestBusy) return;
+    const q = guestIdsQ(); if (q.indexOf('?') < 0) return;
+    guestBusy = true; guestAt = Date.now();
+    try { applyGuestCards(await api('GET', null, q + '&p=1')); } catch (e) {} finally { guestBusy = false; }
   }
+  setInterval(() => {
+    const camp = L.atCamp(S), back = camp && wasCamp === false; wasCamp = camp;
+    if (document.hidden || !(S.guests || []).length) return;
+    const since = Date.now() - guestAt;
+    if (since >= L.GUEST_REFRESH || (back && since >= 6e4)) refreshGuests();
+  }, 15000);
   async function findHeroes() {
     boardMsg = 'Searching the guild…'; paintBoard();
     try { const r = await api('GET', null, guestIdsQ()); await loadWar(); boardList = (r && r.heroes) || []; applyGuestCards(r); boardMsg = boardList.length ? '' : 'The guild hall is quiet right now. Check back soon.'; }
