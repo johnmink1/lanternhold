@@ -160,6 +160,14 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
     - v125 rarer events + daily limits (John 25 Nov 2026: "Chests should have a really low spawn rate... All events should have a low spawn rate. Even a percentage a day cap"; found while checking TheRedMenace's floor 50 trial report): `CHEST_BASE` 1% (was 3%), Moth-wing Charm 0.1%/level `MOTH_MAX` 2%, Lockpick 1%, `CHEST_MAX` 4%; `GOBLIN_CHANCE` 0.3%, `LOCK_CHANCE` 1%, `GHOST_EVERY` 960/`GHOST_COOL` 600, `MERCH_EVERY` 3000; `PACK_CHANCE` stays 6% (John raised it 24 Nov). `EV_DAY` caps per hero per UTC day (`s.evd`, `evOk`/`evUse`, counted when the event appears): chest 40, pack 60, lock 20, goblin 6, ghost 12, merchant 8, mercy 6. Admin spawner ignores caps. Daily chest quest 10 -> 5. Elites (`ELITE_CHANCE` 12%) untouched so region trials keep their pace. Baseline (sim, floor 49, ~560 fights/h, 24 h): chests 20/h -> 1.2/h, with 100 Moth levels 172/h -> 1.4/h; elites ~44/h -> ~47/h; gold/h -31%.
     - Party tab redesign: John asked for mockups 25 Nov 2026 (in project files lanternhold/party-redesign/), then said to forget it. Do not build unless he asks again.
 
+    - v126 (John, 26 Nov 2026, from Kyvia's Discord ideas): shop header **Compact** button hides the scene (`shopMin`/`setShopMin`, localStorage `lh_shopmin`, `body.shopmin`; `resize()` skips a 0-size arena). Who filter on the Gear tab and shop counters lists party heroes (`h:<id>`, `whoPass`/`whoOpts`: worn by them, or usable + `canWear` now). `.shopbtns` wrap on phones. `LHDebug.visitEnch` for tests. v125 also got the Sigil cap fix (`sigCapped`, `lh_sigcap`: one toast and no claims until the next UTC day).
+
+## Discord feedback (bugs and feature requests)
+
+- Lanternhold's 🐛︱bugs and 💡︱feature-requests channels (Born 2 Game server, 🏮 Lanternhold category) are read through the Born 2 Game bot, not a Discord login: born2game-bot `lanternholdfeedback.py` copies them every 15 min into the admin-only Wix CMS collection `LanternholdFeedback` (site ecac49db-e491-426a-a292-00abaf698ccd). Read it with the Wix connector (`/wix-data/v2/items/query`).
+- Replies go out through the bot's `scheduled_posts.json` with `channel: "feedback:bugs"` or `"feedback:feature-requests"` and `reply_to`, only after John OKs the exact text.
+- John's standing rule (26 Nov 2026): fix real bugs; build easy, safe cosmetic or visual requests without asking; anything that changes game mechanics needs his approve or deny first.
+
 ## Open asks and things to watch
 
 - **John's verdict on v102.** He rejected the v98 and v99 shop screens ("horrible", "hard to follow"). v102 follows mockup Option A, the Hold view, and In the Deep option 2.
