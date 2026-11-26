@@ -1,4 +1,4 @@
-/* lh-build 202611261948 */
+/* lh-build 202611262028 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6083,7 +6083,7 @@
     { id: 'end', title: 'You are ready', text: 'That is the basics. The story will introduce new companions as you descend. Open the Guide (the ? at the top) any time for the details.', target: '#btn-guide', ready: () => true },
   ];
   let coachCtx = null, coachEl = null;
-  function tutState() { if (!S.tut) { S.tut = { i: 0, done: false }; S.seenNotes = NOTES_V; } return S.tut; }
+  function tutState() { if (!S.tut) { S.tut = { i: 0, done: false }; S.seenNotes = S.notesShown = NOTES_V; } return S.tut; }
   function coachHide() { $('coach').hidden = true; if (coachEl) coachEl.classList.remove('tut-hi'); coachEl = null; }
   function coachShow(step, i) {
     if (step.tab && tab !== step.tab) switchTab(step.tab);
@@ -7268,14 +7268,18 @@
   const NOTES_V = PATCH_NOTES[0].v;
   try { const ve = $('ver'), b = window.LH_BUILD || ''; if (ve) { ve.textContent = 'v' + NOTES_V + (b ? ' \u00b7 build ' + b.slice(4, 8) + '.' + b.slice(8) : ''); ve.dataset.tip = 'Version ' + NOTES_V + (b ? ', build ' + b + ' (UTC). The game updates itself when a new build is out.' : ''); } } catch (e) {}
   function openNotes() {
-    S.seenNotes = NOTES_V; save();
+    S.seenNotes = S.notesShown = NOTES_V; save();
     modal('<div class="maphead"><div><h2>What’s new</h2><small>Patch notes for Lanternhold.</small></div><button class="iconbtn" id="n-x" aria-label="Close">&times;</button></div><div class="notes">' +
       PATCH_NOTES.map((n, i) => '<section' + (i ? '' : ' class="latest"') + '><div class="nh"><b>' + esc(n.title) + '</b><span>' + esc(n.date) + (i ? '' : ' · Latest') + '</span></div><ul>' + n.items.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></section>').join('') +
       '</div><div class="row"><button class="btn" id="n-ok">Back to the Deep</button></div>', md => { md.querySelector('#n-x').onclick = closeModal; md.querySelector('#n-ok').onclick = closeModal; });
   }
-  // Show once after an update, when nothing else is on screen. Brand-new players get the tutorial instead.
-  if (S.hero && !S.seenNotes && S.tut && !S.tut.done) S.seenNotes = NOTES_V;
-  setInterval(() => { if (S.hero && (S.seenNotes || 0) < NOTES_V && $('modal').hidden && !sceneOpen && !(S.tut && !S.tut.done)) openNotes(); }, 3000);
+  // Show once after every update, when nothing else is on screen. `notesShown` is set only when the window really
+  // opens (v132 fix, John 26 Nov 2026: players got no pop-up). Before, a hero who never finished or skipped the
+  // tutorial never saw patch notes, and `seenNotes` could be set without the window showing. Only heroes in their
+  // first day with the tutorial still running are skipped; they get the tutorial instead.
+  if (S.hero && !S.notesShown && S.tut && !S.tut.done && Date.now() - (S.created || 0) < 864e5) S.notesShown = NOTES_V;
+  const tutBusy = () => S.tut && !S.tut.done && Date.now() - (S.created || 0) < 864e5;
+  setInterval(() => { if (S.hero && (S.notesShown || 0) < NOTES_V && $('modal').hidden && !sceneOpen && !tutBusy()) openNotes(); }, 3000);
   // ---------- trading post: market and player mail ----------
   // Items and gold live in each player's save, so the client moves them; the server keeps
   // listings, offers and letters so both sides see the same thing.
