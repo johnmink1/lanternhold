@@ -1,4 +1,4 @@
-/* lh-build 202611260519 */
+/* lh-build 202611261532 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1982,7 +1982,7 @@
   // Seat a player's hero, asking who steps out when the party is full.
   function seatGuest(g) {
     const join = () => {
-      L.addGuest(S, { id: 'p_' + g.id, name: g.name, cls: g.cls, side: g.side, level: g.level, bp: g.bp });
+      L.addGuest(S, { id: 'p_' + g.id, name: g.name, cls: g.cls, side: g.side, level: g.level, bp: g.bp }); L.qEv(S, 'guest', { id: g.id });
       const gg = (S.guests || []).find(x => x.id === 'p_' + g.id); if (gg) { gg.pf = g.pf || null; gg.w = g.w || ''; gg.wd = g.wd || null; }
       sfx.buy(); toast('users', g.name + ' joins your party', 'They accepted your invite. A ' + L.CLASSES[g.cls].name + ' at level ' + g.level + '.', 'feat');
       updateSeats(true); updateAbilities(true); paintBoard();
@@ -4374,32 +4374,39 @@
     } catch (e) {}
     claiming = false;
   }
+  // Quest book (26 Nov 2026): each quest can point at the place that does it.
+  const QGO = { ring: ['To the Ring', () => document.querySelector('.tabs [data-tab="ring"]').click()], guild: ['To the Guild', () => document.querySelector('.tabs [data-tab="guild"]').click()],
+    market: ['To the Market', () => document.querySelector('.tabs [data-tab="market"]').click()], armor: ['Armorer', () => visitEnch('arm')], ench: ['Enchanter', () => visitEnch('ench')],
+    store: ['Store', () => openStore()], pip: ['Pip\u2019s wagon', () => visitEnch('dicer')], gulp: ['Gulp', () => visitEnch('gulp')], rift: ['Rift Gate', () => visitEnch('portal')],
+    works: ['Hold works', () => openWorks()], dummy: ['Training', () => openTraining()] };
+  const qgoBtn = k => QGO[k] ? '<button class="btn small ghost" data-qgo="' + k + '">' + QGO[k][0] + '</button>' : '';
+  const qCtx = () => { try { L.questCtx({ on: !!(CL && signedIn()), gob: !!(typeof gp !== 'undefined' && gp.st && gp.st.gob && Date.now() < gp.st.gob.until) }); } catch (e) {} };
   const bountyReady = () => { try { return L.bountyState(S, Date.now()).list.filter(b => b.have >= b.n && !b.got).length; } catch (e) { return 0; } };
-  const questsReady = () => { const q = L.questState(S); const got = S.daily.got; return q.filter(x => x.done && !x.got).length + (q.every(x => x.got) && !(got & 8) ? 1 : 0) + bountyReady(); };
+  const questsReady = () => { qCtx(); const q = L.questState(S); const got = S.daily.got; return q.filter(x => x.done && !x.got).length + (q.every(x => x.got) && !(got & 8) ? 1 : 0) + bountyReady(); };
   function paintQuests() {
-    const q = L.questState(S), b = $('quests'); if (!b) return;
+    qCtx(); const q = L.questState(S), b = $('quests'); if (!b) return;
     const n = q.filter(x => x.got).length, rd = questsReady(), all = n === 3 && (S.daily.got & 8);
     $('questct').innerHTML = rd ? 'Claim ' + rd : '<small class="ql">Quests </small>' + (all ? 'done' : n + '/3');
     b.classList.toggle('ready', rd > 0); b.classList.toggle('done', !rd && !!all);
     b.title = rd ? 'Daily quests: ' + rd + (rd === 1 ? ' reward' : ' rewards') + ' ready to claim' : all ? 'Daily quests: all done for today' : 'Daily quests: ' + n + ' of 3 done';
   }
   function bountyHtml() {
-    const st = L.bountyState(S, Date.now()), left = (st.w + 1) * L.BOUNTY_MS - Date.now();
+    qCtx(); const st = L.bountyState(S, Date.now()), left = (st.w + 1) * L.BOUNTY_MS - Date.now();
     if (st.paid && st.paid.length) { const g = st.paid.reduce((a, x) => a + x.gold, 0), d = st.paid.reduce((a, x) => a + x.dust, 0); toast('star', 'Bounties paid out', 'Finished bounties from the last board: +' + fmt(g) + ' gold, +' + fmt(d) + ' Dust.', 'loot'); delete st.paid; save(); }
     const rows = st.list.map((b, i) => {
       const rw = L.bountyReward(S, b), done = b.have >= b.n, go = b.a && !b.got && !done ? Math.min(S.maxFloor, b.a === b.b ? b.a : Math.max(b.a, Math.min(b.b, S.floor >= b.a && S.floor <= b.b ? S.floor : b.a))) : 0;
       return '<li class="quest bounty' + (b.got ? ' got' : done ? ' done' : '') + '"><div><b>' + esc(L.bountyText(b)) + '</b><div class="qbar"><i style="width:' + Math.round(b.have / b.n * 100) + '%"></i></div><small>' + b.have + ' / ' + b.n + ' · ' + fmt(rw.gold) + ' gold + ' + rw.dust + ' Dust</small></div>' +
-        (b.got ? '<span class="qok">Paid</span>' : done ? '<button class="btn small" data-bty="' + i + '">Claim</button>' : go ? '<button class="btn small ghost" data-farm="' + go + '">' + (S.floor === go ? 'Farming here' : 'Go to floor ' + go) + '</button>' : '') + '</li>';
+        (b.got ? '<span class="qok">Paid</span>' : done ? '<button class="btn small" data-bty="' + i + '">Claim</button>' : go ? '<button class="btn small ghost" data-farm="' + go + '">' + (S.floor === go ? 'Farming here' : 'Go to floor ' + go) + '</button>' : qgoBtn(L.bountyGo(b))) + '</li>';
     }).join('');
     if (st.locked) return '<h3 class="sub">Bounty board</h3><p class="note small">The bounty board opens when you reach floor ' + L.BOUNTY_FLOOR + '.</p>';
-    return '<h3 class="sub">Bounty board</h3><p class="note small">New bounties in ' + Math.floor(left / 36e5) + 'h ' + Math.floor(left % 36e5 / 6e4) + 'm. Built from the floors you have reached. Finished ones you forget to claim are paid when the board changes. Rewards: gold, Dust and sometimes a tonic.</p><ul class="quests">' + rows + '</ul>';
+    return '<h3 class="sub">Bounty board</h3><p class="note small">New bounties in ' + Math.floor(left / 36e5) + 'h ' + Math.floor(left % 36e5 / 6e4) + 'm. Built for your hero from every part of the game you have opened. Finished ones you forget to claim are paid when the board changes. Rewards: gold, Dust and sometimes a tonic.</p><ul class="quests">' + rows + '</ul>';
   }
   function openQuests() {
-    const q = L.questState(S), got = S.daily.got, allGot = q.every(x => x.got), msLeft = Date.parse(L.questDay() + 'T00:00:00Z') + 864e5 - Date.now();
+    qCtx(); const q = L.questState(S), got = S.daily.got, allGot = q.every(x => x.got), msLeft = Date.parse(L.questDay() + 'T00:00:00Z') + 864e5 - Date.now();
     const pct = v => (Math.round(v * 10000) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + '%';
-    const row = x => '<li class="quest' + (x.got ? ' got' : x.done ? ' done' : '') + '"><div><b>' + esc(x.text) + '</b><div class="qbar"><i style="width:' + Math.round(x.have / x.n * 100) + '%"></i></div><small>' + x.have.toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US') + '</small></div>' +
+    const row = x => '<li class="quest' + (x.got ? ' got' : x.done ? ' done' : '') + '"><div><b>' + esc(x.text) + '</b><div class="qbar"><i style="width:' + Math.round(x.have / x.n * 100) + '%"></i></div><small>' + x.have.toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US') + '</small>' + (!x.got && !x.done && x.go ? '<div class="qgorow">' + qgoBtn(x.go) + '</div>' : '') + '</div>' +
       (x.got ? '<span class="qok">' + sigil + '+' + L.QUEST_REWARD + '</span>' : '<button class="btn small" data-q="' + x.i + '"' + (x.done ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_REWARD + '</button>') + '</li>';
-    modal('<div class="maphead"><div><h2>Quests and bounties</h2><small>New quests in ' + Math.max(1, Math.floor(msLeft / 36e5)) + 'h ' + Math.floor(msLeft % 36e5 / 6e4) + 'm. Same quests for every hero.</small></div><button class="iconbtn" id="dq-x" aria-label="Close">&times;</button></div>' +
+    modal('<div class="maphead"><div><h2>Quests and bounties</h2><small>New quests in ' + Math.max(1, Math.floor(msLeft / 36e5)) + 'h ' + Math.floor(msLeft % 36e5 / 6e4) + 'm. Picked for your hero, and never the same twice in a row.</small></div><button class="iconbtn" id="dq-x" aria-label="Close">&times;</button></div>' +
       bountyHtml() + '<h3 class="sub">Daily quests</h3>' +
       '<ul class="quests">' + q.map(row).join('') +
       '<li class="quest bonus' + (got & 8 ? ' got' : allGot ? ' done' : '') + '"><div><b>Finish all three</b><small>A bonus for clearing the day.</small></div>' + (got & 8 ? '<span class="qok">' + sigil + '+' + L.QUEST_BONUS + '</span>' : '<button class="btn small" data-q="3"' + (allGot ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_BONUS + '</button>') + '</li></ul>' +
@@ -4414,6 +4421,7 @@
           openQuests();
         });
         md.querySelectorAll('[data-farm]').forEach(btn => btn.addEventListener('click', () => setTimeout(closeModal, 50)));
+        md.querySelectorAll('[data-qgo]').forEach(btn => btn.onclick = () => { const g = QGO[btn.dataset.qgo]; closeModal(); if (g) g[1](); });
         md.querySelectorAll('[data-q]').forEach(btn => btn.onclick = async () => {
           if (!signedIn()) { toast('user', 'Sign in first', 'Quest rewards go to your account wallet.', 'warn'); return; }
           const i = +btn.dataset.q; btn.disabled = true;
@@ -4953,7 +4961,7 @@
         live.innerHTML = '<p><b>' + t.toFixed(1) + ' s</b> &middot; party ' + fmt(r.party) + ' &middot; strikes ' + fmt(r.taps) + ' (' + r.n + (r.crit ? ', ' + r.crit + ' critical' : '') + ')</p><p class="tbig">' + fmt(all / Math.max(0.1, t)) + ' <small>damage/s</small></p>' + (r.done ? '<p class="note">Done. Change gear or seats and run it again to compare.</p>' : ''); };
       const step = () => { const r = trainRun; if (!r || r.done || !document.body.contains(live)) return; const now = Date.now(), dt = Math.min(0.5, (now - r.last) / 1000); r.last = now; r.party += L.totalDps(S, now) * dt;
         if (now - r.at >= 10000) { r.done = true; go.disabled = false; go.textContent = 'Run again'; } paint(); if (!r.done) setTimeout(step, 100); };
-      go.onclick = () => { trainRun = { at: Date.now(), last: Date.now(), party: 0, taps: 0, n: 0, crit: 0 }; go.disabled = true; md.querySelector('#tr-rows').innerHTML = trainRows(); step(); };
+      go.onclick = () => { L.qEv(S, 'dummy'); trainRun = { at: Date.now(), last: Date.now(), party: 0, taps: 0, n: 0, crit: 0 }; go.disabled = true; md.querySelector('#tr-rows').innerHTML = trainRows(); step(); };
       md.querySelector('#tr-hit').onclick = () => { const r = trainRun; if (!r || r.done) return; const c = Math.random() < L.critChance(S); r.taps += L.clickDamage(S, Date.now()) * (c ? 5 : 1); r.n++; if (c) r.crit++; try { sfx.hit && sfx.hit(); } catch (e) {} paint(); };
       md.querySelector('#tr-x').onclick = () => { trainRun = null; closeModal(); };
     });
@@ -5999,8 +6007,9 @@
         'Tap the merchant to see the deal: two tonics, Campfire Draughts or Lantern Oil, or a pile of Dust, all at ' + Math.round(L.MERCH_OFF * 100) + '% off.',
         'Buy it or let it go. Missing the merchant costs nothing.']],
       ['Bounty board', 'i:star', 'Three bounties at a time, new every ' + L.BOUNTY_HOURS + ' hours. Open it from the Quests button.', [
-        'Bounties are built for your hero from the floors you have reached: hunt a kind of monster on certain floors, beat a guardian a few times, open chests, defeat alliance elites or break monster shields.',
-        'Some send you back up to older floors. Tap <b>Go to floor</b> on a bounty to farm there (Descend automatically turns off).',
+        'Bounties and daily quests come from about ' + Math.floor(L.QDEFS.length / 10) * 10 + ' kinds across the whole game: hunts and guardians, monster tricks, the Grand War, crafting at the Armorer and Enchanter, training, the Guild, Ember Ring duels, the Market, world boss weekends, and for NP+ heroes Pip, Gulp and the Hold.',
+        'You are only offered what your hero can do right now, the three on show are always from different parts of the game, and a kind you saw lately waits its turn.',
+        'Some send you back up to older floors. Tap <b>Go to floor</b> on a bounty to farm there (Descend automatically turns off). Others have a button that takes you to the right place.',
         'Each pays gold and Dust, sometimes a tonic too. Finished bounties you forget to claim are paid when the board changes.']],
       ['The Lantern Keeper', 'i:lantern', 'When the store owner is online, every hero gets a boost.', [
         'While the Lantern Keeper is online, every hero gets <b>+' + Math.round(L.KEEPER * 100) + '%</b> damage, healing, gold, hero XP and gear finds.',
@@ -6308,6 +6317,9 @@
     { v: 132, date: 'November 2026', title: 'One name per player', items: [
       'Hero names are now one per player, ignoring capitals, spaces and hyphens. If your name is taken, the game asks you to pick a new one.',
       'Sigil shop: Give $1 or any amount to our Extra Life team for children’s hospitals. Add your #WarName to credit your alliance.',
+      'Quests: the Bounty Board and daily quests now draw from 200 kinds across the whole game, from Ember Ring duels and Guild hires to crafting, world boss weekends, Pip and Gulp.',
+      'You only get quests your hero can do, the three on show always come from different parts of the game, and a kind you just had waits days before it comes back.',
+      'Many quests have a button that takes you straight to the right place. Bounty gold is the same as before on average.',
     ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
@@ -7154,7 +7166,7 @@
     if (bagFull()) { toast('bag', 'Your pack is full', 'Salvage something first.', 'warn'); return; }
     if (l.price > S.gold) return;
     const r = await chatCall('POST', '/market/buy', { id: l.id, cls: l.cls, name: S.hero.name });
-    S.gold -= r.price; S.bag.push(fromServer(r.item)); afterTrade(); sfx.coin();
+    S.gold -= r.price; S.bag.push(fromServer(r.item)); L.qEv(S, 'mbuy', { g: r.price }); afterTrade(); sfx.coin();
     toast('bag', 'Bought ' + L.gearName(L.normItem(r.item)), 'It is in your pack now.', 'feat'); loadMarket();
   });
   const doCancel = (id, cls) => tradeAct(async () => {
@@ -7223,7 +7235,7 @@
         if (l.type === 'return' && bagFull()) { toast('bag', 'Your pack is full', 'Salvage something to collect returned gear.', 'warn'); break; }
         const r = await chatCall('POST', '/mail/claim', { id });
         const L2 = r.letter;
-        if (L2.type === 'return') { S.bag.push(fromServer(L2.item)); items++; } else { const g2 = nowGold(L2.gold, L2.at); S.gold += g2; S.stats.goldEarned += g2; gold += g2; }
+        if (L2.type === 'return') { S.bag.push(fromServer(L2.item)); items++; } else { const g2 = nowGold(L2.gold, L2.at); S.gold += g2; S.stats.goldEarned += g2; gold += g2; if (L2.type === 'sale') L.qEv(S, 'msold'); }
       }
       afterTrade(); sfx.coin();
       toast('coin', 'Collected', [gold ? '+' + fmt(gold) + ' gold' : '', items ? items + (items === 1 ? ' item' : ' items') + ' back in your pack' : ''].filter(Boolean).join(', ') || 'Done.', 'feat');
@@ -7664,6 +7676,7 @@
     try { localStorage.setItem('lh_ringdef', JSON.stringify({ dw: me.dw, dl: me.dl })); } catch (e) {}
     if (!old) return;
     const w = me.dw - old.dw, l = me.dl - old.dl;
+    if (w > 0) { L.qEv(S, 'ringdef', { n: w }); save(); }
     if (w > 0 || l > 0) toast('shield', 'Your hero held the Ring', (w ? w + (w === 1 ? ' challenger beaten' : ' challengers beaten') : '') + (w && l ? ', ' : '') + (l ? l + ' lost' : '') + ' while you were away.' + (w ? ' +' + (w * 2) + ' Laurels.' : ''), w >= l ? 'feat' : '');
   }
   function ringFig(cls, hue, size) { return '<img class="ringspr" src="' + SP.spriteURL(cls, size || 3, hue || 0) + '" alt="">'; }
@@ -7741,7 +7754,7 @@
     if (rg.busy) return; rg.busy = true; if (btn) btn.disabled = true;
     try {
       const r = await api('POST', { id }, '/arena/skill'); if (!r || !r.me) throw 0;
-      const was = (rg.st.me.sk || {})[id] || 0; rg.st.me = r.me; sfx.buy();
+      const was = (rg.st.me.sk || {})[id] || 0; rg.st.me = r.me; sfx.buy(); L.qEv(S, 'ringskill'); save();
       const s = ringSkill(id), lo = r.me.lo;
       toast('star', s.n + (was ? ' rank ' + (was + 1) : ' learned'), was ? 'Stronger in every duel it is equipped for.' : 'Equip it in your loadout to take it into duels.', 'feat');
       // A first ability or passive goes straight into an empty slot.
@@ -7772,7 +7785,7 @@
     try {
       const r = await api('POST', { p: i }, '/arena/kit');
       if (!r || !r.me) throw 0;
-      rg.st.me = r.me; sfx.buy();
+      rg.st.me = r.me; sfx.buy(); L.qEv(S, 'ringkit'); save();
       const p = RING_KIT[i], k = r.me.k[i];
       toast('shield', RING_TIER(k)[0] + ' ' + (p.id === 'arms' ? RING_ARMS[L.memberById('you').cls] : p.name) + ' +' + k, 'Your Ringwarden kit grows stronger. It only counts in the Ring.', 'feat');
     } catch (e) { toast('lock', 'Could not upgrade', 'Check your Laurels and try again in a moment.', 'warn'); }
@@ -7787,6 +7800,7 @@
     try { if (Date.now() - rg.sent > 5 * 6e4) { await api('PUT', ringBuild(), '/arena'); rg.sent = Date.now(); } r = await api('POST', { id }, '/arena/fight'); if (!r || !r.log) throw 0; }
     catch (e) { rg.busy = false; if (btn) btn.disabled = false; toast('lock', 'The duel did not start', 'The Ring could not be reached. Your challenge was not spent.', 'warn'); return; }
     rg.st.me = r.me; rg.busy = false;
+    try { const A = r.a, B = r.b, q = ringPower(B.s) / ringPower(A.s); L.qEv(S, 'duel', { id: B.id, cls: B.c, win: !!r.win, up: B.r > A.r, edge: ringEdge(A.c, B.c), even: q >= 0.75 && q <= 1.35, top10: (rg.st.top || []).slice(0, 10).some(t => t.id === B.id) }); save(); } catch (e) {}
     playDuel(r);
   }
   function playDuel(r) {
