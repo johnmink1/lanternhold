@@ -76,7 +76,7 @@ exports.handler = async (e) => {
     } catch (x) { if (x.name === CF) return res(409, { error: 'claimed' }); throw x; }
     // Sigils once per account per event (Normal and Hardcore heroes share one wallet).
     try {
-      await db.send(new D.PutItemCommand({ TableName: T, Item: { w: S(id), s: S('a#' + pidOf(cl.sub)), at: N(now) }, ConditionExpression: 'attribute_not_exists(s)' }));
+      await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(id), s: S('a#' + pidOf(cl.sub)) }, UpdateExpression: 'SET #a=:t', ConditionExpression: 'attribute_not_exists(#a)', ExpressionAttributeNames: { '#a': 'at' }, ExpressionAttributeValues: { ':t': N(now) } }));
     } catch (x) { if (x.name !== CF) throw x; sig = 0; }
     const r = await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal=if_not_exists(bal,:g)+:a', ExpressionAttributeValues: { ':g': N(100), ':a': N(sig) }, ReturnValues: 'UPDATED_NEW' }));
     return res(200, { ok: true, sig, bal: +r.Attributes.bal.N, rank, n: ps.length, phases: ph });

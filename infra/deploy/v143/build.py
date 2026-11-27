@@ -14,7 +14,13 @@ FN = {
   'lanternhold-exchange': ('lambda/exchange.js', ['sigsell#']),
   'lanternhold-market':   ('lambda/market.js',   ['mkt#', '#hc']),
   'lanternhold-mail':     ('lambda/mail.js',     ['payment', 'hc']),
+  # Hardcore thread (world boss, boss loot, Hall of Fame, Ember Ring for Hardcore heroes)
+  'lanternhold-worldboss': ('lambda/worldboss.js', ['POST /boss/claim', 'POST /boss/hit']),
+  'lanternhold-loot':     ('lambda/loot.js',     ['POST /shards/buy', 'sh#']),
+  'lanternhold-hof':      ('lambda/hof.js',      ['admins', 'hf']),
+  'lanternhold-arena':    ('ring/index.js',      ['season#', 'POST /arena/fight']),
 }
+OPTIONAL = {'lanternhold-hof'}  # skipped (not created) when the Hall of Fame function isn't there
 os.makedirs(os.path.join(here, 'dist'), exist_ok=True)
 rows = []
 for fn, (src, fp) in FN.items():
@@ -33,6 +39,10 @@ out = ['''# Lanternhold v143 server (John, 27 Nov 2026). Paste into AWS CloudShe
 #   exchange  shut to Hardcore heroes; a buy is checked against the gold the server trusts (like Market and Mail).
 #             Gets env SAVES (+ TRUSTCHECK copied from lanternhold-market) and read access to the saves table.
 #   market, mail   Hardcore NP+ markets (mkt#<cls>#hc#<tier>); no item above deepest floor + 10 (raised by NP+)
+#   worldboss Hardcore heroes fight the weekend boss on the same bar (own row, HC tag); world boss Sigils once per account
+#   loot      Hardcore heroes roll their own boss loot; Hardcore-only shard market
+#   hof       a Hardcore Hall of Fame next to the main one (skipped if the Hall of Fame function isn't there)
+#   arena     Hardcore heroes enter the Ember Ring with their own row (HC tag), one shared Ring
 #   saves table    point-in-time recovery switched on (35 days of rolling backups; a few cents a month)
 # Code comes from GitHub at commit ''' + commit + ''' and is checked by md5. Each live function is checked to be the
 # version we expect BEFORE anything changes and backed up to ~/lhbak. Safe to run twice. Prints the undo commands.
@@ -43,13 +53,14 @@ echo "1/4 fetching the new code"''']
 for fn, md5, fp, n in rows:
     out.append('curl -sf -o ' + fn + '.js "${RAW}' + fn + '.js" && [ "$(md5sum < ' + fn + '.js | cut -c1-32)" = "' + md5 + '" ] || { echo "' + fn + ': download failed or changed. Stopping; nothing changed."; exit 1; }')
 out.append('''echo "2/4 checking the live code"
+SKIP=""
 for F in ''' + names + '''; do
-  aws lambda get-function --function-name $F >/dev/null 2>&1 || { echo "$F missing. Stopping; nothing changed."; exit 1; }
+  if ! aws lambda get-function --function-name $F >/dev/null 2>&1; then case " ''' + ' '.join(sorted(OPTIONAL)) + ''' " in *" $F "*) SKIP="$SKIP $F"; echo "$F: not there, skipped"; continue;; esac; echo "$F missing. Stopping; nothing changed."; exit 1; fi
   curl -s -o ~/lhbak/$F-$TS.zip "$(aws lambda get-function --function-name $F --query Code.Location --output text)"
   rm -rf live-$F && mkdir live-$F && unzip -q -o ~/lhbak/$F-$TS.zip -d live-$F
 done
 chk() { # chk <function> <strings...>: live code must contain each string, or already be this version
-  F=$1; shift
+  F=$1; shift; case " $SKIP " in *" $F "*) return;; esac
   [ "$(md5sum < live-$F/index.js | cut -c1-32)" = "$(md5sum < $F.js | cut -c1-32)" ] && { echo "$F: already v143"; return; }
   for s in "$@"; do grep -qF -- "$s" live-$F/index.js || { echo "$F: live code is not the version this script expects (no '$s'). Stopping; nothing changed. Ask Claude."; exit 1; }; done
 }''')
@@ -70,6 +81,7 @@ echo "exchange: SAVES set, TRUSTCHECK=$TC"
 echo "4/4 updating code"
 UNDO="\\naws lambda update-function-configuration --function-name lanternhold-exchange --environment file://$HOME/lhbak/lanternhold-exchange-env-$TS.json"
 for F in ''' + names + '''; do
+  case " $SKIP " in *" $F "*) continue;; esac
   rm -f $F.zip index.js && cp $F.js index.js && zip -qj $F.zip index.js
   aws lambda update-function-code --function-name $F --zip-file fileb://$F.zip >/dev/null
   aws lambda wait function-updated --function-name $F
