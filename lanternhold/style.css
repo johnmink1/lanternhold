@@ -2863,3 +2863,16 @@ details.howto p{margin:6px 0 0}
   .stagehead .pips{gap:3px;max-width:100%;overflow:hidden}.stagehead .pips i{width:10px}
   .stagehead .flsub .biome{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 }
+/* v141 Ember Ring: seasons and Ring Mastery */
+.raward{margin-left:4px;color:#ffd27a;border-color:#c8952a}
+.rseasonbox{margin:0 0 10px;padding:8px 10px;border:1px solid var(--line,#2a3346);border-radius:10px;font-size:13px}
+.rseasonbox summary{cursor:pointer}
+.rseasonbox summary svg{display:inline-block;width:14px;height:14px;vertical-align:-2px}
+.rseasonbox summary *{display:inline}
+.rseasonbox p{margin:6px 0 0}
+.rslast{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0 0 10px;font-size:13px}
+.rslast i{font-style:normal;font-weight:700;color:#ffd27a;margin-right:4px}
+.rmastery .tile{display:grid;place-items:center}
+.rmastery .tile svg{width:22px;height:22px}
+.fr-emberchamp{border-color:transparent;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,conic-gradient(from var(--fa,0deg),#ff8a3d,#ffd27a,#c8452a,#ff8a3d) border-box;animation:frnexus 3s linear infinite}
+@media (prefers-reduced-motion:reduce){.fr-emberchamp{animation:none}}
