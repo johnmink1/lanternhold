@@ -6827,7 +6827,7 @@
         '<b>Rogue</b>: most damage, dodges a quarter of attacks. Backstab hits hard.',
         '<b>Mage</b>: Ember Storm quadruples damage for a few seconds.',
         '<b>Necromancer</b>: raises skeletons that fight and soak blows.',
-        '<b>Paladin</b> (a ' + TOKEN + ' class, your hero only): plate and a small steady party heal. Oath of Dawn heals the party and shields it for a few seconds. A sidegrade, never stronger.']],
+        '<b>Paladin</b> (a Sigil class, your hero only): plate and a small steady party heal. Oath of Dawn heals the party and shields it for a few seconds. A sidegrade, never stronger.']],
       ['Marching order', 's:tank,rogue,healer,mage,necro', 'The top of the Party list stands in front, nearest the monster.', [
         'A <b>tank</b> in the front two draws attacks.',
         'Heals get <b>15% weaker per step</b> of distance, so healers go in the middle.',
