@@ -10,6 +10,14 @@
 //   the player sets, when they make sense) and 2 passives.
 // Laurels are earned only by fighting. Sigils and real money never touch any of this.
 //
+// Team battles (John, 27 Nov 2026): the hero plus two of the player's own companions (never borrowed player
+// heroes) against another player's saved team, 3 vs 3. Front, Middle and Back: the front fighter takes most of
+// the blows, rogues go for the weakest foe, healers mend the weakest teammate. Companions bring their class's
+// free Ring ability and class nature, and wear a companion Ring kit (Arms, Mail, Charm, 10 ranks, Laurels) that
+// stays with that companion. Team battles share the 10 challenges, have their own team rating and standings,
+// and pay a little more Laurels than duels. No new routes: the team rides on the existing ones
+// (PUT /arena with tl, POST /arena/kit with cid, POST /arena/fight with team: 1).
+//
 // Unlike the other functions this one is not inlined into the template; `aws cloudformation package` uploads it.
 // Routes: GET /arena, PUT /arena, POST /arena/kit, POST /arena/skill, POST /arena/loadout, POST /arena/fight.
 const D = require('@aws-sdk/client-dynamodb');
@@ -84,6 +92,17 @@ const SKB = Object.fromEntries(SK.map(s => [s.id, s]));
 const FREE = { tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain' };
 const SKCOST = [150, 300, 600]; // Laurels for rank 1, 2, 3
 const LO_A = 2, LO_P = 2;
+
+// ---- team battles ----
+// Companion Ring kit per rank: [Resolve, Edge, +hp share, +attack share] for Arms, Mail, Charm. 10 ranks;
+// ranks 6-10 need a best team rating of 1300. Keep in step with TEAM_KIT in the game's ui.js.
+const CKIT = [[0, 6, 0, .02], [6, 0, .02, 0], [3, 3, .01, .01]];
+const CMAX = 10, cgate = r => r >= 5 ? 1300 : 0, ccost = r => 40 + 20 * r;
+const TPOS = [.6, .25, .15];          // share of blows aimed at Front, Middle, Back
+const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'];
+// A companion id: a story/unique companion (letters) or a hired NPC ('n' + base 36). Never a player id (16 hex).
+const CID = /^(?:[a-z]{2,12}|n[0-9a-z]{1,8})$/;
+const cname = x => String(x || '').replace(/[^A-Za-z .'-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24);
 
 function stats(x) {
   let R = 0, E = 0, hp = 1, at = 1;
@@ -180,17 +199,133 @@ function duel(A, B, rnd) {
   return { win, log, first };
 }
 
+// ---- team battles: fighters and the fight ----
+// A companion: the log of its own dungeon damage (m) and health (v), like the hero, plus its companion kit.
+function cstats(x, k) {
+  let R = 0, E = 0, hp = 1, at = 1;
+  (k || [0, 0, 0]).forEach((r, i) => { const p = CKIT[i]; R += p[0] * r; E += p[1] * r; hp += p[2] * r; at += p[3] * r; });
+  return { hp: Math.round((800 + 28 * x.v) * hp), at: Math.round((100 + 4 * x.m) * at), E, R, c: x.c };
+}
+const ckOf = (row, id) => ((row.ck || {})[id] || '0.0.0').split('.').map(Number).slice(0, 3);
+// The saved lineup as it will fight: [{id, n, c, s, lo}] with the hero ('you') filled in from the hero's row.
+function team(row) {
+  const tl = Array.isArray(row.tl) ? row.tl : [];
+  return tl.map(e => e.id === 'you'
+    ? { id: 'you', n: row.n, c: row.c, s: stats(row), lo: loadout(row), hero: 1 }
+    : { id: e.id, n: e.n, c: e.c, s: cstats(e, ckOf(row, e.id)), lo: { a: [FREE[e.c]], p: [] }, k: ckOf(row, e.id) });
+}
+const hasTeam = row => Array.isArray(row.tl) && row.tl.length === 3;
+function tfighter(t, row) {
+  let f;
+  if (t.hero) f = fighter(row);
+  else {
+    f = Object.assign({}, t.s);
+    f.P = Object.assign({}, NATURE[t.c]);
+    f.ab = [{ s: SKB[FREE[t.c]], v: SKB[FREE[t.c]].v[0], cd: 0 }];
+  }
+  return Object.assign(f, { h: f.hp, sh: 0, dot: [], weak: 0, wv: 0, ward: 0, wdv: 0, ev: 0, stun: false, und: f.P.undying || 0 });
+}
+// 3 vs 3. Sides take turns; on a side's turn its next standing fighter (Front, Middle, Back, round and round) acts.
+// Log entries: [side, slot, target side, target slot, damage, flag, heal, tag, ...health of all six].
+// Flags as in duels: 0 hit, 1 crit, 2 miss, 3 stunned, 4 poison ticking, 5 survives a killing blow.
+function teamFight(A, B, rowA, rowB, rnd) {
+  const T = [team(rowA).map(t => tfighter(t, rowA)), team(rowB).map(t => tfighter(t, rowB))];
+  const log = [], first = rnd() < .5 ? 0 : 1, nx = [0, 0];
+  const P = (x, k) => x.P[k] || 0, up = x => x.h > 0;
+  const hps = () => T[0].concat(T[1]).map(x => Math.max(0, Math.round(x.h)));
+  const push = (sd, i, ts, ti, d, fl, hl, tag) => log.push([sd, i, ts, ti, Math.round(d), fl, Math.round(hl), tag || ''].concat(hps()));
+  const heal = (x, v) => { const h = Math.max(0, Math.min(x.hp - x.h, v)); x.h += h; return h; };
+  const alive = sd => T[sd].map((x, i) => i).filter(i => up(T[sd][i]));
+  function aim(a, sd) {
+    const live = alive(sd); if (!live.length) return -1;
+    // rogues slip past the front line to the weakest foe
+    if (a.c === 'rogue') return live.slice().sort((x, y) => T[sd][x].h / T[sd][x].hp - T[sd][y].h / T[sd][y].hp)[0];
+    let w = live.reduce((t, i) => t + TPOS[i], 0), r = rnd() * w;
+    for (const i of live) { r -= TPOS[i]; if (r <= 0) return i; }
+    return live[live.length - 1];
+  }
+  function strike(a, d, mult, o, t) {
+    if (d.ev > 0) { d.ev--; return [0, 2]; }
+    if (!o.sure && rnd() < .08 + P(d, 'dodge')) return [0, 2];
+    const cr = rnd() < .1 + P(a, 'crit');
+    let x = a.at * (.75 + .5 * rnd()) * mult * (cr ? (a.c === 'rogue' ? 1.8 : 1.5) : 1) * (1 + a.E / (a.E + 300));
+    if (!o.pierce) x *= (1 - .5 * d.R / (d.R + 300)) * (1 - P(d, 'armor'));
+    if (BEATS[a.c].includes(d.c)) x *= 1 + ADV; else if (BEATS[d.c].includes(a.c)) x *= 1 - ADV;
+    if (a.weak > 0) x *= 1 - a.wv;
+    if (d.ward > 0) { x *= 1 - d.wdv; d.ward--; }
+    if (d.h < d.hp * .3) x *= 1 + P(a, 'execute');
+    if (o.ab) x *= 1 + P(a, 'power');
+    if (t >= 40) x *= 1.5; // a long battle: the crowd wants blood
+    const ab = Math.min(d.sh, x); d.sh -= ab;
+    d.h -= x - ab;
+    if (P(d, 'reflect')) a.h -= x * P(d, 'reflect');
+    return [x, cr ? 1 : 0];
+  }
+  const fell = x => { if (x.h > 0) return false; if (x.und) { x.h = x.hp * x.und; x.und = 0; return 'und'; } return true; };
+  for (let t = 0; t < 120 && alive(0).length && alive(1).length; t++) {
+    const sd = (t + first) % 2, os = 1 - sd;
+    // the side's next standing fighter, in lineup order
+    let i = -1; for (let k = 0; k < 3; k++) { const j = (nx[sd] + k) % 3; if (T[sd][j] && up(T[sd][j])) { i = j; break; } }
+    if (i < 0) break; nx[sd] = (i + 1) % 3;
+    const a = T[sd][i];
+    if (a.dot.length) {
+      let x = 0; for (const p of a.dot) { x += p.v; p.n--; } a.dot = a.dot.filter(p => p.n > 0);
+      a.h -= x; const u = fell(a); push(os, -1, sd, i, x, 4, 0, 'dot');
+      if (u === 'und') push(sd, i, sd, i, 0, 5, 0, 'und'); else if (u) continue;
+    }
+    if (a.stun) { a.stun = false; push(sd, i, sd, i, 0, 3, 0, 'stun'); continue; }
+    for (const b of a.ab) if (b.cd > 0) b.cd--;
+    if (a.weak > 0) a.weak--;
+    const ti = aim(a, os); if (ti < 0) break;
+    const d = T[os][ti];
+    // the weakest standing teammate, for heals
+    const low = alive(sd).map(j => T[sd][j]).sort((x, y) => x.h / x.hp - y.h / y.hp)[0];
+    const b = a.ab.find(b => b.cd <= 0 && (b.s.fx === 'heal' ? low.h < low.hp * .7 : b.s.fx === 'shield' ? a.sh <= 0 : b.s.fx === 'ward' ? a.ward <= 0 : b.s.fx === 'evade' ? a.ev <= 0 : b.s.fx === 'weaken' ? d.weak <= 0 : b.s.fx === 'dot' ? !d.dot.length : true));
+    let dmg = 0, fl = 0, hl = 0, tag = '', hs = sd, hi = ti, hts = os;
+    if (b) {
+      b.cd = b.s.cd; tag = b.s.id;
+      const v = b.v, pw = 1 + P(a, 'power'), fx = b.s.fx;
+      if (fx === 'heal') { hl = heal(low, low.hp * v * pw); hi = T[sd].indexOf(low); hts = sd; }
+      else if (fx === 'shield' || fx === 'ward' || fx === 'evade') {
+        if (fx === 'shield') a.sh = a.hp * v * pw; else if (fx === 'ward') { a.ward = 3; a.wdv = v; } else a.ev = v;
+        [dmg, fl] = strike(a, d, .6, {}, t);
+      }
+      else if (fx === 'weaken') { d.weak = 4; d.wv = v; [dmg, fl] = strike(a, d, .8, {}, t); }
+      else if (fx === 'dot') { d.dot.push({ v: a.at * v * pw, n: 3 }); [dmg, fl] = strike(a, d, .7, {}, t); }
+      else {
+        [dmg, fl] = strike(a, d, v, { ab: 1, pierce: fx === 'pierce', sure: fx === 'pierce' }, t);
+        if (fx === 'stun' && fl !== 2) d.stun = true;
+        if (fx === 'drain') hl = heal(a, dmg);
+      }
+    } else [dmg, fl] = strike(a, d, 1, {}, t);
+    hl += heal(a, dmg * P(a, 'leech') + a.hp * P(a, 'regen'));
+    const u = hts === os ? fell(d) : false;
+    push(sd, i, hts, hi, dmg, fl, hl, tag);
+    if (u === 'und') push(os, ti, os, ti, 0, 5, 0, 'und');
+    if (a.h <= 0 && fell(a) === 'und') push(sd, i, sd, i, 0, 5, 0, 'und');
+  }
+  const share = sd => T[sd].reduce((t, x) => t + Math.max(0, x.h) / x.hp, 0);
+  const win = !alive(1).length && alive(0).length ? true : !alive(0).length ? false : share(0) >= share(1);
+  return { win, log, first };
+}
+
 // ---- storage ----
 const n = (i, k, d) => i && i[k] ? +i[k].N : d;
 const js = (i, k) => { try { return i && i[k] ? JSON.parse(i[k].S) : null; } catch (e) { return null; } };
 const row = i => ({ id: i.pid.S, n: i.n.S, c: i.c.S, sd: i.sd.S, lv: n(i, 'lv', 1), m: n(i, 'm', 0), v: n(i, 'v', 0), k: (i.k ? i.k.S : '0.0.0.0.0').split('.').map(Number),
   r: n(i, 'r', START), pk: n(i, 'pk', START), w: n(i, 'w', 0), l: n(i, 'l', 0), dw: n(i, 'dw', 0), dl: n(i, 'dl', 0), ll: n(i, 'll', 0), et: n(i, 'et', 0), fd: i.fd ? i.fd.S : '',
-  sk: js(i, 'sk') || {}, lo: js(i, 'lo'), rp: js(i, 'rp') || {} });
+  sk: js(i, 'sk') || {}, lo: js(i, 'lo'), rp: js(i, 'rp') || {},
+  // team battles: lineup, companion kits, team rating, best, wins, losses, defense wins/losses, first team win day, repeats
+  tl: js(i, 'tl'), ck: js(i, 'ck') || {}, tr: n(i, 'tr', START), tp: n(i, 'tp', START), tw: n(i, 'tw', 0), tx: n(i, 'tx', 0),
+  tdw: n(i, 'tdw', 0), tdl: n(i, 'tdl', 0), tfd: i.tfd ? i.tfd.S : '', trp: js(i, 'trp') || {} });
 // Repeat duels (John): fighting the same hero again within a day pays less each time, then nothing.
 // rc (per foe, for the client): [duels in the last day, when a rematch pays something again].
 const REP = [1, .5, .25, 0], REPW = 864e5;
-const reps = (x, now) => { const o = {}; for (const k in x.rp) { const t = x.rp[k].filter(v => now - v < REPW); if (t.length) o[k] = t; } return o; };
+const reps = (x, now, key) => { const o = {}, src = x[key || 'rp'] || {}; for (const k in src) { const t = src[k].filter(v => now - v < REPW); if (t.length) o[k] = t; } return o; };
 const pub = x => ({ id: x.id, n: x.n, c: x.c, sd: x.sd, lv: x.lv, r: x.r, w: x.w, l: x.l, k: x.k, s: stats(x), lo: loadout(x), sk: owned(x) });
+// A team as others see it: the three fighters with their Ring stats, plus team rating and record.
+const tpub = x => ({ id: x.id, n: x.n, c: x.c, sd: x.sd, tr: x.tr, tw: x.tw, tx: x.tx, t: team(x).map(t => ({ id: t.id, n: t.n, c: t.c, s: t.s, k: t.k, lo: t.lo, hero: t.hero || 0 })) });
+const TEAM = { kit: CKIT, max: CMAX, gate: 1300, pos: TPOS };
 const MATCH = { beats: BEATS, adv: ADV, why: WHY, nature: NATURE };
 const SKILLS = SK.map(s => ({ id: s.id, c: s.c, k: s.k, n: s.n, fx: s.fx, v: s.v, cd: s.cd || 0 }));
 
@@ -201,7 +336,9 @@ exports.handler = async (e) => {
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400, { error: 1 }); }
   const get = async (t, p) => (await db.send(new D.GetItemCommand({ TableName: t, Key: K(p), ConsistentRead: true }))).Item;
   const up = (p, x, v, c) => db.send(new D.UpdateItemCommand(Object.assign({ TableName: T, Key: K(p), UpdateExpression: x, ExpressionAttributeValues: v, ReturnValues: 'ALL_NEW' }, c ? { ConditionExpression: c } : {})));
-  const mine = x => { if (!x) return x; const rp = reps(x, now), rc = {}; for (const k in rp) { const t = rp[k].slice().sort((x, y) => x - y); rc[k] = [t.length, t[Math.max(0, t.length - REP.length + 1)] + REPW]; } return Object.assign(pub(x), { pk: x.pk, dw: x.dw, dl: x.dl, ll: x.ll, en: Math.max(0, EMAX - Math.ceil(Math.max(0, x.et - now) / EINT)), et: x.et, rc, rep: REP }); };
+  const mine = x => { if (!x) return x; const rp = reps(x, now), rc = {}; for (const k in rp) { const t = rp[k].slice().sort((x, y) => x - y); rc[k] = [t.length, t[Math.max(0, t.length - REP.length + 1)] + REPW]; } const tp = reps(x, now, 'trp'), trc = {}; for (const k in tp) { const t = tp[k].slice().sort((x, y) => x - y); trc[k] = [t.length, t[Math.max(0, t.length - REP.length + 1)] + REPW]; }
+    return Object.assign(pub(x), { pk: x.pk, dw: x.dw, dl: x.dl, ll: x.ll, en: Math.max(0, EMAX - Math.ceil(Math.max(0, x.et - now) / EINT)), et: x.et, rc, rep: REP,
+      tl: x.tl || null, ck: x.ck, tr: x.tr, tp: x.tp, tw: x.tw, tx: x.tx, tdw: x.tdw, tdl: x.tdl, team: hasTeam(x) ? tpub(x).t : [], trc }); };
   try {
     if (rk === 'GET /arena') {
       const all = [];
@@ -209,18 +346,49 @@ exports.handler = async (e) => {
       const m = all.find(x => x.id === me), r0 = m ? m.r : START;
       const top = all.slice().sort((x, y) => y.r - x.r || y.w - x.w), foes = all.filter(x => x.id !== me).sort((x, y) => Math.abs(x.r - r0) - Math.abs(y.r - r0)).slice(0, 8);
       for (let i = foes.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [foes[i], foes[j]] = [foes[j], foes[i]]; }
-      return res(200, { me: mine(m), rank: m ? top.indexOf(m) + 1 : 0, n: all.length, top: top.slice(0, 25).map(pub), foes: foes.slice(0, 4).map(pub), skills: SKILLS, skcost: SKCOST, slots: [LO_A, LO_P], match: MATCH });
+      // team battles: teams that have a full lineup, nearest team rating first
+      const teams = all.filter(hasTeam), t0 = m ? m.tr : START;
+      const fought = x => x.tw + x.tx + x.tdw + x.tdl > 0, ttop = teams.filter(fought).sort((x, y) => y.tr - x.tr || y.tw - x.tw);
+      const tfoes = teams.filter(x => x.id !== me).sort((x, y) => Math.abs(x.tr - t0) - Math.abs(y.tr - t0)).slice(0, 8);
+      for (let i = tfoes.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [tfoes[i], tfoes[j]] = [tfoes[j], tfoes[i]]; }
+      return res(200, { me: mine(m), rank: m ? top.indexOf(m) + 1 : 0, n: all.length, top: top.slice(0, 25).map(pub), foes: foes.slice(0, 4).map(pub), skills: SKILLS, skcost: SKCOST, slots: [LO_A, LO_P], match: MATCH,
+        tfoes: tfoes.slice(0, 4).map(tpub), ttop: ttop.slice(0, 25).map(tpub), trank: m && hasTeam(m) && fought(m) ? ttop.indexOf(m) + 1 : 0, tn: ttop.length, tkit: TEAM });
     }
     if (rk === 'PUT /arena') {
       // The build: the hero's name, class and banner come from the hero board; m and v are the log of the
       // hero's dungeon damage and health without tonics, so deeper delvers are tougher, but only a little.
       const h = await get(H, me), c = x => Math.max(0, Math.min(60, Math.round((+x || 0) * 10) / 10));
       if (!h || !h.name || h.ban) return res(403, { error: 'hero' });
-      const r = await up(me, 'SET n = :n, c = :c, sd = :s, lv = :l, m = :m, v = :v, t = :t, r = if_not_exists(r, :r), pk = if_not_exists(pk, :r)', { ':n': h.name, ':c': h.cls, ':s': h.sd || S('unsworn'), ':l': h.lv, ':m': N(c(b.m)), ':v': N(c(b.v)), ':t': N(now), ':r': N(START) });
+      // The team lineup (optional): exactly the hero ('you') once and two different companions of the player's own,
+      // each with class, name and the log of its own damage and health. Player heroes (16 hex ids) can never join.
+      let tl = null;
+      if (Array.isArray(b.tl)) {
+        const ids = b.tl.map(e => e && String(e.id || ''));
+        const ok = b.tl.length === 3 && ids.filter(x => x === 'you').length === 1 && new Set(ids).size === 3 &&
+          b.tl.every(e => e && (e.id === 'you' || (CID.test(String(e.id)) && CLS.includes(e.c) && cname(e.n))));
+        if (!ok) return res(400, { error: 'team' });
+        tl = b.tl.map(e => e.id === 'you' ? { id: 'you' } : { id: String(e.id), n: cname(e.n), c: e.c, m: c(e.m), v: c(e.v) });
+      }
+      const r = await up(me, 'SET n = :n, c = :c, sd = :s, lv = :l, m = :m, v = :v, t = :t, r = if_not_exists(r, :r), pk = if_not_exists(pk, :r)' + (tl ? ', tl = :tl, tr = if_not_exists(tr, :r), tp = if_not_exists(tp, :r)' : ''),
+        Object.assign({ ':n': h.name, ':c': h.cls, ':s': h.sd || S('unsworn'), ':l': h.lv, ':m': N(c(b.m)), ':v': N(c(b.v)), ':t': N(now), ':r': N(START) }, tl ? { ':tl': S(JSON.stringify(tl)) } : {}));
       return res(200, { me: mine(row(r.Attributes)) });
     }
     const x = await get(T, me), my = x && row(x);
     if (!my) return res(409, { error: 'build' });
+    if (rk === 'POST /arena/kit' && b.cid != null) {
+      // A companion Ring kit rank. Only for a companion in the saved team lineup; the kit stays with that companion.
+      const id = String(b.cid), p = Math.floor(b.p);
+      if (!CID.test(id) || !(p >= 0 && p < 3) || !(my.tl || []).some(e => e.id === id)) return res(400, { error: 'piece' });
+      const k = ckOf(my, id), r = k[p];
+      if (r >= CMAX) return res(400, { error: 'piece' });
+      if (my.tp < cgate(r)) return res(409, { error: 'rating', need: cgate(r) });
+      if (my.ll < ccost(r)) return res(409, { error: 'laurels' });
+      const ck = Object.assign({}, my.ck); k[p]++; ck[id] = k.join('.');
+      // at most 40 companions keep a kit; the oldest unused ones drop off
+      const keys = Object.keys(ck); if (keys.length > 40) for (const x of keys) { if (Object.keys(ck).length <= 40) break; if (!(my.tl || []).some(e => e.id === x)) delete ck[x]; }
+      const a = await up(me, 'SET ck = :k, ll = ll - :c', { ':k': S(JSON.stringify(ck)), ':c': N(ccost(r)), ':o': S(JSON.stringify(my.ck)) }, 'll >= :c AND (ck = :o OR attribute_not_exists(ck))');
+      return res(200, { me: mine(row(a.Attributes)) });
+    }
     if (rk === 'POST /arena/kit') {
       const p = Math.floor(b.p), r = my.k[p];
       if (!(p >= 0 && p < 5) || r >= 15) return res(400, { error: 'piece' });
@@ -249,6 +417,24 @@ exports.handler = async (e) => {
       const a = await up(me, 'SET lo = :l', { ':l': S(JSON.stringify({ a: b.a, p: b.p })) });
       return res(200, { me: mine(row(a.Attributes)) });
     }
+    if (rk === 'POST /arena/fight' && b.team) {
+      const id = String(b.id || ''), y = /^[0-9a-f]{16}$/.test(id) && id !== me && await get(T, id), fo = y && row(y);
+      if (!fo || !hasTeam(fo)) return res(404, { error: 'foe' });
+      if (!hasTeam(my)) return res(409, { error: 'team' });
+      if (my.et > now + (EMAX - 1) * EINT) return res(429, { error: 'tired' });
+      let s = crypto.randomBytes(4).readUInt32LE(0);
+      const rnd = () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+      const d = teamFight(null, null, my, fo, rnd), w = d.win ? 1 : 0, ex = 1 / (1 + Math.pow(10, (fo.tr - my.tr) / 400));
+      const rp = reps(my, now, 'trp'), seen = (rp[id] || []).length, q = REP[Math.min(seen, REP.length - 1)];
+      rp[id] = (rp[id] || []).concat(now); const ks = Object.keys(rp).sort((x, y) => Math.max(...rp[y]) - Math.max(...rp[x])).slice(0, 40), rp2 = {}; ks.forEach(k => rp2[k] = rp[k]);
+      const dr = Math.round(32 * (w - ex) * q), fr = Math.round(16 * (w - ex) * q), day = new Date(now).toISOString().slice(0, 10), fw = w && q > 0 && my.tfd !== day;
+      // Team battles pay a little more than duels (John OK'd 27 Nov 2026): a win 10, up to 14 against a stronger team, a loss 4, the day's first team win +10.
+      const ll = Math.round((w ? 10 + Math.min(4, Math.max(0, Math.round((fo.tr - my.tr) / 50))) : 4) * q) + (fw ? 10 : 0), dl = Math.round(2 * q);
+      const a = await up(me, 'SET tr = :r, tp = :pk, et = :et, tfd = :fd, trp = :rp ADD ' + (w ? 'tw' : 'tx') + ' :one, ll :ll',
+        { ':r': N(Math.max(0, my.tr + dr)), ':pk': N(Math.max(my.tp, my.tr + dr)), ':et': N(Math.max(my.et, now) + EINT), ':fd': S(fw ? day : my.tfd || '-'), ':rp': S(JSON.stringify(rp2)), ':one': N(1), ':ll': N(ll), ':o': N(my.et) }, 'et = :o OR attribute_not_exists(et)');
+      await up(id, 'SET tr = :r ADD ' + (w ? 'tdl :one' : 'tdw :one, ll :d'), Object.assign({ ':r': N(Math.max(0, fo.tr - fr)), ':one': N(1) }, w ? {} : { ':d': N(dl) }));
+      return res(200, { team: 1, win: !!w, log: d.log, first: d.first, dr, ll, fw: !!fw, q, a: tpub(my), b: tpub(fo), me: mine(row(a.Attributes)) });
+    }
     if (rk === 'POST /arena/fight') {
       const id = String(b.id || ''), y = /^[0-9a-f]{16}$/.test(id) && id !== me && await get(T, id), fo = y && row(y);
       if (!fo) return res(404, { error: 'foe' });
@@ -270,4 +456,4 @@ exports.handler = async (e) => {
   } catch (x) { if (x.name === 'ConditionalCheckFailedException') return res(409, { error: 'state' }); throw x; }
   return res(404, { error: 1 });
 };
-exports._test = { duel, stats, owned, loadout, SK, BEATS };
+exports._test = { duel, stats, owned, loadout, SK, BEATS, teamFight, team, cstats, CKIT, ccost, cgate, tpub };

@@ -66,8 +66,11 @@ exports.handler = async (event) => {
   if (method === 'GET') {
     const r = await db.send(new D.GetItemCommand({ TableName: TABLE, Key }));
     if (!r.Item) return res(404, { error: 'no save' });
+    const dv = r.Item.dv ? r.Item.dv.S : '';
+    // ?peek=1: only who plays and when it last saved, so a device coming back can check without downloading the save.
+    if (event.queryStringParameters && event.queryStringParameters.peek) return res(200, { updated: Number(r.Item.updated.N), dv });
     // rst: an admin reset this player; games created before it start over
-    return res(200, { data: r.Item.data.S, updated: Number(r.Item.updated.N), rst: r.Item.rst ? Number(r.Item.rst.N) : 0 });
+    return res(200, { data: r.Item.data.S, updated: Number(r.Item.updated.N), rst: r.Item.rst ? Number(r.Item.rst.N) : 0, dv });
   }
   if (method === 'PUT') {
     let body = event.body || '';
@@ -76,15 +79,22 @@ exports.handler = async (event) => {
     let b; try { b = JSON.parse(body); } catch (e) { return res(400, { error: 'bad json' }); }
     if (typeof b.data !== 'string') return res(400, { error: 'missing data' });
     const now = Date.now();
-    // UpdateItem keeps an admin reset stamp (rst); saves from games created before it are refused
+    // UpdateItem keeps an admin reset stamp (rst); saves from games created before it are refused.
+    // One device plays at a time (John, 26 Nov 2026: no races between web, phone and Discord). dv is the game's random
+    // device id. A game claims the account when it opens (claim: 1, after it picked the newer save); from then on a save
+    // from any other device is refused with 409 'moved', and that device pauses until the player presses Play here.
+    const dv = String(b.dv || '').slice(0, 24), claim = !!b.claim && !!dv;
+    let cond = '(attribute_not_exists(rst) OR rst <= :c)', vals = { ':d': { S: b.data }, ':u': { N: String(now) }, ':f': { N: String(Number(b.floor) || 0) }, ':c': { N: String(Number(b.created) || 0) } };
+    let upd = 'SET #d = :d, updated = :u, floor = :f';
+    if (dv) { upd += ', dv = :v'; vals[':v'] = { S: dv }; if (!claim) cond += ' AND (attribute_not_exists(dv) OR dv = :v)'; }
     try {
-      await db.send(new D.UpdateItemCommand({ TableName: TABLE, Key, UpdateExpression: 'SET #d = :d, updated = :u, floor = :f',
-        ConditionExpression: 'attribute_not_exists(rst) OR rst <= :c', ExpressionAttributeNames: { '#d': 'data' },
-        ExpressionAttributeValues: { ':d': { S: b.data }, ':u': { N: String(now) }, ':f': { N: String(Number(b.floor) || 0) }, ':c': { N: String(Number(b.created) || 0) } } }));
+      await db.send(new D.UpdateItemCommand({ TableName: TABLE, Key, UpdateExpression: upd,
+        ConditionExpression: cond, ExpressionAttributeNames: { '#d': 'data' }, ExpressionAttributeValues: vals }));
     } catch (e) {
       if (e.name !== 'ConditionalCheckFailedException') throw e;
       const r = await db.send(new D.GetItemCommand({ TableName: TABLE, Key }));
-      return res(409, { error: 'reset', rst: Number(r.Item.rst.N) });
+      if (r.Item && r.Item.rst && Number(r.Item.rst.N) > (Number(b.created) || 0)) return res(409, { error: 'reset', rst: Number(r.Item.rst.N) });
+      return res(409, { error: 'moved', updated: r.Item ? Number(r.Item.updated.N) : 0 });
     }
     const sv = (TRADE || HEROES) && parse(b.data);
     if (TRADE) try { await logSave(sub, now, sv, b); } catch (e) { console.log('activity log', e.name || e); }
