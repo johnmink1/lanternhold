@@ -1,4 +1,4 @@
-/* lh-build 202611270632 */
+/* lh-build 202611271613 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -7486,6 +7486,17 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
+      'Edit layout (Settings): move or hide parts of the screen, pin the damage meter or fight log under the fight, and pick your phone\'s bottom bar tabs.',
+      'Ember Ring seasons: monthly, Season 1 ends 31 Dec. The top 3 win the Ember Champion title and frame, the top 25 the Season Laurel emblem.',
+      'Ring Mastery: after a full Ringwarden kit, Laurels buy +1% Ring health and attack per rank, up to 10.',
+      'Each class starts the Ring with its own health and attack, and dungeon power no longer counts there.',
+      'Ember Ring: tap Edge, Resolve, health or attack to see what they do. After a duel, see what Edge added and Resolve blocked.',
+      'Guild hires from your own faction cost 20% less to sign on and 10% less in wages.',
+      'Story companions can go back to the Guild Hall from the Campfire to free their spot.',
+      'Phones: tap gold, damage, Embers or Dust for the numbers. Damage lists each party member.',
+      'Phones: the chat button slides away while you scroll, long pop-ups open in full on a tap, and Guild cards say what you still need.',
+    ] },
     { v: 140, date: 'November 2026', title: 'Safer saves and a fresh Guide', items: [
       'Your account keeps a daily copy of your save for 35 days, and the server checks every save, Market buy and Mail payment.',
       'Settings: turn off party invites to play solo, replay the tutorial, open the wiki.',
@@ -7622,20 +7633,6 @@
     { v: 121, date: 'November 25, 2026', title: 'Rarer set pieces and steadier filters', items: [
       'Set pieces are rarer: every chance to find a region, class or job set piece is halved. A guardian now drops a set piece about 1 time in 18 (was about 1 in 9). The map’s drop chances show the new odds.',
       'The Sort, Rarity and Who dropdowns in your inventory (and on the Armorer and Enchanter counters) no longer snap shut while gold ticks in.',
-    ] },
-    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate and a crafting log', items: [
-      'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
-      'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
-      'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
-      'New Legendary loot: when a world boss ends, everyone who fought rolls their own chance at a Legendary (2% to 20%, higher with more damage, full odds once 3 phases break). Several delvers can win.',
-      'You also get boss shards and Rift tokens for your damage. Take 40 Rift tokens to Warden Sable at the new Rift Gate, a portal just outside the Hold (Map > The Hold, or the shop buttons), and trade them for a Legendary piece of any boss set.',
-      'This week\'s preview boss keeps its scores until it ends on Friday, and pays out under the new loot rules.',
-      'The bell has a new Crafting tab. Every merge, upgrade, mass merge, scrap, smelt and enchant at the Armorer or the Enchanter (or in the field) writes an entry showing what happened, what you gained and what you lost.',
-      'Gained lists the finished item with its stats and enchants, plus gold, Dust and hero XP. Lost lists every piece that went in, as it was before, and the gold, Dust or shards spent.',
-      'Fixed: beating a region guardian (like floor 50) before its region trial is done sent your party back a floor with no reason on screen after the first time. Now every time it happens you see why: a toast and a "Region trial 3/10 elites" note in the arena.',
-      'While you wait at a guardian, the goal line under the floor shows the trial: how many alliance elites you have (out of 10) and the floor they open. Hover it for the full rule.',
-      'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
-      'Mages, necromancers and healers now cost Dust when they sign on, on top of gold. Wages are still gold only.',
     ] },
   ];
   const NOTES_V = PATCH_NOTES[0].v;
