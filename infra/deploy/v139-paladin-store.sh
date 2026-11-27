@@ -40,10 +40,10 @@ for F in lanternhold-store lanternhold-perks; do
   ROLE=$(aws lambda get-function-configuration --function-name $F --query Role --output text | awk -F/ '{print $NF}')
   aws iam put-role-policy --role-name "$ROLE" --policy-name lanternhold-v139-heroes --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"dynamodb:GetItem\",\"Resource\":\"$HT\"}]}"
   aws lambda get-function-configuration --function-name $F --query Environment > env-$F.json
-  python3 -c "import json,sys; e=json.load(open('env-$F.json')) or {}; v=e.get('Variables',{}); v['HEROES']='lanternhold-heroes'; print(json.dumps({'Variables':v}))" > env2-$F.json
+  python3 -c "import json,sys; e=json.load(open('env-$F.json')) or {}; v=e.get('Variables',{}); v['HEROES']='lanternhold-heroes'; v['STARTER']='d1873d91-0d6c-4311-89af-1125d21a3cf6'; print(json.dumps({'Variables':v}))" > env2-$F.json
   aws lambda update-function-configuration --function-name $F --environment file://env2-$F.json >/dev/null
   aws lambda wait function-updated --function-name $F
-  echo "env HEROES set on $F"
+  echo "env HEROES + STARTER set on $F"
 done
 # smoke tests: public routes answer, signed-in routes still say 401 without a token
 curl -s -o /dev/null -w "GET /surge: %{http_code} (200 is right)\n" https://nyu3u8gc73.execute-api.us-east-1.amazonaws.com/surge

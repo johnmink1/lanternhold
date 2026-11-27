@@ -1,4 +1,4 @@
-/* lh-build 202611270416 */
+/* lh-build 202611270424 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4717,8 +4717,8 @@
   const PACKS = [['7c5854d4-49f8-4244-8ec3-6c27caaa6e59', 500, '$4.99', ''], ['57d4ee44-c741-4616-96ff-9350734b19da', 1100, '$9.99', '10% bonus'],
     ['c19c183a-a27a-4918-8d3c-f94e684fb2d8', 2400, '$19.99', '20% bonus'], ['27c5a9e9-b7fb-48d9-90c8-a450b85e083a', 6500, '$49.99', 'Best value']];
   // v139 Starter pack: one per account, $2.99 for 300 Sigils, the Lantern Scout outfit and 7 days of Lanternholder.
-  // Empty until the plan exists in the Born 2 Game store (then also set STARTER on the store Lambda).
-  const STARTER_PLAN = '', STARTER_PRICE = '$2.99';
+  // Wix plan "Lanternhold: Starter pack" ($2.99, one per member); the store Lambda has the same id as STARTER.
+  const STARTER_PLAN = 'd1873d91-0d6c-4311-89af-1125d21a3cf6', STARTER_PRICE = '$2.99';
   // Lanternholder: the one recurring plan. $4.99 a month until the player cancels in their store account.
   const SUB_PLAN = '36118cbb-d4f6-48ce-be59-65a2b9b82a13', SUB_PRICE = '$4.99', SUB_MANAGE = 'https://www.born2gamellc.com/account/my-subscriptions';
   // Mercy Corps donations (John, 26 Nov 2026): the buttons open John's Extra Life page, so the money goes straight to
@@ -4779,7 +4779,7 @@
       });
   }
   async function buyPack(id) {
-    shopTrack('checkout', (PACKS.find(p => p[0] === id) || [0, id === SUB_PLAN ? 'member' : id.slice(0, 8)])[1]);
+    shopTrack('checkout', (PACKS.find(p => p[0] === id) || [0, id === SUB_PLAN ? 'member' : id === STARTER_PLAN ? 'starter' : id.slice(0, 8)])[1]);
     const tok = await wixToken();
     if (!tok) return storeIntro(id);
     await wixGo({ paidPlansCheckout: { planId: id }, callbacks: { postFlowUrl: homeUrl() + '?store=back', thankYouPageUrl: homeUrl() + '?store=paid' } }, tok);
