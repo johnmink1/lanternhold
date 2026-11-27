@@ -2,9 +2,10 @@
 // another player's hero (async, like the rest of the multiplayer). The server fights every duel.
 //
 // What decides a duel:
-// - the hero's base strength (the log of its dungeon damage and health, so delving helps only a little),
+// - the same base strength for every hero (800 health, 100 attack): dungeon power never counts (John, 27 Nov 2026:
+//   keep PvP and PvE separate, so no dungeon exploit can carry into the Ring; the old m/v were sent by the client),
 // - the Ringwarden kit: PvP-only gear with Edge (more damage to heroes) and Resolve (less damage from heroes),
-// - the class matchup: every class has the edge on two classes (+12% damage) and is countered by two others,
+// - the class matchup: every class has the advantage over two classes (+4% damage) and is countered by two others,
 // - the class's own nature (tanks are sturdy, healers mend, rogues crit, mages hit hard with spells, necromancers leech),
 // - the Ring skills the player bought with Laurels and chose for their loadout: 2 abilities (used in the order
 //   the player sets, when they make sense) and 2 passives.
@@ -22,7 +23,7 @@
 // Routes: GET /arena, PUT /arena, POST /arena/kit, POST /arena/skill, POST /arena/loadout, POST /arena/fight.
 const D = require('@aws-sdk/client-dynamodb');
 const crypto = require('crypto');
-const db = new D.DynamoDBClient({}), { ARENA: T, HEROES: H } = process.env;
+const db = new D.DynamoDBClient({}), { ARENA: T, HEROES: H, WALLETS: W } = process.env;
 const res = (c, b) => ({ statusCode: c, headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
 const S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
 const pidOf = sub => crypto.createHash('sha256').update('lh:' + sub).digest('hex').slice(0, 16);
@@ -31,6 +32,24 @@ const pidOf = sub => crypto.createHash('sha256').update('lh:' + sub).digest('hex
 // Per rank: [Resolve, Edge, +hp share, +attack share]. Ranks 6-10 need a best rating of 1300, 11-15 need 1600.
 const KIT = [[5, 0, .02, 0], [7, 0, .015, 0], [0, 5, 0, .015], [3, 3, .01, .01], [0, 7, 0, .02]];
 const gate = r => r >= 10 ? 1600 : r >= 5 ? 1300 : 0, cost = r => 60 + 30 * r;
+// v141 (John, 27 Nov 2026): dungeon power never counts. Each class starts from its own Ring base [health, attack],
+// tuned in the sim so every class still wins about half its duels with equal kits; then only Ring kit and skills change it.
+// Sim 27 Nov 2026 (best loadouts, kit ranks 0/5/15): class win rates 42-59%; the old shared base gave 36-66%.
+const RBASE = { tank: [1420, 115], healer: [1250, 140], rogue: [970, 205], mage: [1000, 195], necro: [1140, 150], paladin: [1250, 155] };
+const rbase = c => RBASE[c] || RBASE.necro;
+// ---- Ring Mastery (v141, John 27 Nov 2026): once all five kit pieces are at rank 15, Laurels keep buying Mastery ranks,
+// each +1% Ring health and attack, up to 10. Counts only in the Ring (the hero in duels and team battles).
+const MS = { max: 10, cost: 500, per: .01 };
+// ---- Seasons (v141, John 27 Nov 2026): one calendar month each (UTC); Season 1 runs from launch to the end of December 2026.
+// When a season ends, every duel and team rating moves halfway back to 1,000 (best rating pk, which opens kit tiers, stays).
+// The final duel standings are saved once as 'season#YYYY-MM'; the top 3 win the Ember Champion title and frame, the top 25
+// the Season Laurel emblem (cosmetics on the wallet, so they show on the profile card). Rows reset lazily, on read.
+const SEASON0 = '2026-12', AWARD = [[3, ['t.emberchamp', 'f.emberchamp', 'e.laurel']], [25, ['e.laurel']]];
+const seasonOf = now => { const s = new Date(now).toISOString().slice(0, 7); return s < SEASON0 ? SEASON0 : s; };
+const prevSeason = s => { let [y, m] = s.split('-').map(Number); if (--m < 1) { m = 12; y--; } return y + '-' + String(m).padStart(2, '0'); };
+const seasonNo = s => { const [y, m] = s.split('-').map(Number); return (y - 2026) * 12 + m - 11; };
+const seasonEnd = s => { const [y, m] = s.split('-').map(Number); return Date.UTC(y, m, 1); };
+const soft = r => Math.round(START + (r - START) / 2);
 const EMAX = 10, EINT = 30 * 6e4, START = 1000;
 
 // ---- classes ----
@@ -117,7 +136,8 @@ const cname = x => String(x || '').replace(/[^A-Za-z .'-]/g, '').replace(/\s+/g,
 function stats(x) {
   let R = 0, E = 0, hp = 1, at = 1;
   x.k.forEach((r, i) => { const p = KIT[i]; R += p[0] * r; E += p[1] * r; hp += p[2] * r; at += p[3] * r; });
-  return { hp: Math.round((800 + 28 * x.v) * hp), at: Math.round((100 + 4 * x.m) * at), E, R, c: x.c };
+  const mm = 1 + MS.per * Math.min(MS.max, x.ms || 0);
+  return { hp: Math.round(rbase(x.c)[0] * hp * mm), at: Math.round(rbase(x.c)[1] * at * mm), E, R, c: x.c };
 }
 // Skills a hero owns ({id: rank}), with the class's free ability.
 function owned(x) {
@@ -210,11 +230,11 @@ function duel(A, B, rnd) {
 }
 
 // ---- team battles: fighters and the fight ----
-// A companion: the log of its own dungeon damage (m) and health (v), like the hero, plus its companion kit.
+// A companion: the same base as every hero (dungeon power never counts), plus its companion kit.
 function cstats(x, k) {
   let R = 0, E = 0, hp = 1, at = 1;
   (k || [0, 0, 0]).forEach((r, i) => { const p = CKIT[i]; R += p[0] * r; E += p[1] * r; hp += p[2] * r; at += p[3] * r; });
-  return { hp: Math.round((800 + 28 * x.v) * hp), at: Math.round((100 + 4 * x.m) * at), E, R, c: x.c };
+  return { hp: Math.round(rbase(x.c)[0] * hp), at: Math.round(rbase(x.c)[1] * at), E, R, c: x.c };
 }
 const ckOf = (row, id) => ((row.ck || {})[id] || '0.0.0').split('.').map(Number).slice(0, 3);
 // The saved lineup as it will fight: [{id, n, c, s, lo}] with the hero ('you') filled in from the hero's row.
@@ -322,12 +342,24 @@ function teamFight(A, B, rowA, rowB, rnd) {
 // ---- storage ----
 const n = (i, k, d) => i && i[k] ? +i[k].N : d;
 const js = (i, k) => { try { return i && i[k] ? JSON.parse(i[k].S) : null; } catch (e) { return null; } };
-const row = i => ({ id: i.pid.S, n: i.n.S, c: i.c.S, sd: i.sd.S, lv: n(i, 'lv', 1), m: n(i, 'm', 0), v: n(i, 'v', 0), k: (i.k ? i.k.S : '0.0.0.0.0').split('.').map(Number),
+const row0 = i => ({ id: i.pid.S, n: i.n.S, c: i.c.S, sd: i.sd.S, lv: n(i, 'lv', 1), m: n(i, 'm', 0), v: n(i, 'v', 0), k: (i.k ? i.k.S : '0.0.0.0.0').split('.').map(Number),
   r: n(i, 'r', START), pk: n(i, 'pk', START), w: n(i, 'w', 0), l: n(i, 'l', 0), dw: n(i, 'dw', 0), dl: n(i, 'dl', 0), ll: n(i, 'll', 0), et: n(i, 'et', 0), fd: i.fd ? i.fd.S : '',
   sk: js(i, 'sk') || {}, lo: js(i, 'lo'), rp: js(i, 'rp') || {},
   // team battles: lineup, companion kits, team rating, best, wins, losses, defense wins/losses, first team win day, repeats
   tl: js(i, 'tl'), ck: js(i, 'ck') || {}, tr: n(i, 'tr', START), tp: n(i, 'tp', START), tw: n(i, 'tw', 0), tx: n(i, 'tx', 0),
-  tdw: n(i, 'tdw', 0), tdl: n(i, 'tdl', 0), tfd: i.tfd ? i.tfd.S : '', trp: js(i, 'trp') || {} });
+  tdw: n(i, 'tdw', 0), tdl: n(i, 'tdl', 0), tfd: i.tfd ? i.tfd.S : '', trp: js(i, 'trp') || {},
+  // v141: Ring Mastery ranks, the season this row's ratings belong to, last season's final ratings, season awards
+  ms: n(i, 'ms', 0), sn: i.sn ? i.sn.S : SEASON0, ps: n(i, 'ps', 0), psn: i.psn ? i.psn.S : '', tps: n(i, 'tps', 0), sa: i.sa ? i.sa.SS : [] });
+const row = i => season(row0(i), Date.now());
+// A row from an older season: keep its final ratings as last season's, and move both ratings halfway back to 1,000.
+function season(x, now) {
+  const cur = seasonOf(now);
+  if (x.sn !== cur) Object.assign(x, { ps: x.r, tps: x.tr, psn: x.sn, r: soft(x.r), tr: soft(x.tr), sn: cur });
+  return x;
+}
+// The season fields to write with any rating change, so the stored row is in the current season too. k is the rating the
+// caller writes itself ('r' or 'tr'); the other one is written here, already reset if the season changed.
+const sv = (x, k) => { const o = k === 'r' ? 'tr' : 'r'; return [', sn = :sn, ps = :ps, psn = :psn, tps = :tps, ' + o + ' = :so', { ':sn': S(x.sn), ':ps': N(x.ps), ':psn': S(x.psn || '-'), ':tps': N(x.tps), ':so': N(x[o]) }]; };
 // Repeat duels (John): fighting the same hero again within a day pays less each time, then nothing.
 // rc (per foe, for the client): [duels in the last day, when a rematch pays something again].
 const REP = [1, .5, .25, 0], REPW = 864e5;
@@ -346,14 +378,34 @@ exports.handler = async (e) => {
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400, { error: 1 }); }
   const get = async (t, p) => (await db.send(new D.GetItemCommand({ TableName: t, Key: K(p), ConsistentRead: true }))).Item;
   const up = (p, x, v, c) => db.send(new D.UpdateItemCommand(Object.assign({ TableName: T, Key: K(p), UpdateExpression: x, ExpressionAttributeValues: v, ReturnValues: 'ALL_NEW' }, c ? { ConditionExpression: c } : {})));
+  // A season award: noted on the Ring row, and its cosmetics added to the wallet (by the hero's account) when WALLETS is set.
+  const award = async (pid, s, p) => {
+    await db.send(new D.UpdateItemCommand({ TableName: T, Key: K(pid), UpdateExpression: 'ADD sa :a', ConditionExpression: 'attribute_exists(pid)', ExpressionAttributeValues: { ':a': { SS: [s + ':' + p] } } })).catch(() => {});
+    const items = (AWARD.find(a => p <= a[0]) || [0, []])[1], h = W && items.length && await get(H, pid);
+    if (h && h.u) await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: h.u }, UpdateExpression: 'ADD own :o', ExpressionAttributeValues: { ':o': { SS: items } } })).catch(e => console.log('award wallet', pid, e.name));
+  };
   const mine = x => { if (!x) return x; const rp = reps(x, now), rc = {}; for (const k in rp) { const t = rp[k].slice().sort((x, y) => x - y); rc[k] = [t.length, t[Math.max(0, t.length - REP.length + 1)] + REPW]; } const tp = reps(x, now, 'trp'), trc = {}; for (const k in tp) { const t = tp[k].slice().sort((x, y) => x - y); trc[k] = [t.length, t[Math.max(0, t.length - REP.length + 1)] + REPW]; }
-    return Object.assign(pub(x), { pk: x.pk, dw: x.dw, dl: x.dl, ll: x.ll, en: Math.max(0, EMAX - Math.ceil(Math.max(0, x.et - now) / EINT)), et: x.et, rc, rep: REP,
+    return Object.assign(pub(x), { ms: x.ms, sa: x.sa, pk: x.pk, dw: x.dw, dl: x.dl, ll: x.ll, en: Math.max(0, EMAX - Math.ceil(Math.max(0, x.et - now) / EINT)), et: x.et, rc, rep: REP,
       tl: x.tl || null, ck: x.ck, tr: x.tr, tp: x.tp, tw: x.tw, tx: x.tx, tdw: x.tdw, tdl: x.tdl, team: hasTeam(x) ? tpub(x).t : [], trc }); };
   try {
     if (rk === 'GET /arena') {
       const all = [];
       let k; do { const r = await db.send(new D.ScanCommand({ TableName: T, ExclusiveStartKey: k })); all.push(...(r.Items || []).filter(i => i.n).map(row)); k = r.LastEvaluatedKey; } while (k);
       const m = all.find(x => x.id === me), r0 = m ? m.r : START;
+      const cur = seasonOf(now), prev = prevSeason(cur);
+      let last = null;
+      if (prev >= SEASON0) {
+        const rec = await get(T, 'season#' + prev);
+        if (rec) last = js(rec, 'top') || [];
+        else {
+          const fin = all.filter(x => x.psn === prev && x.w + x.l > 0).sort((x, y) => y.ps - x.ps || y.w - x.w).slice(0, 25).map((x, i) => ({ id: x.id, n: x.n, c: x.c, r: x.ps, p: i + 1 }));
+          try {
+            await db.send(new D.UpdateItemCommand({ TableName: T, Key: K('season#' + prev), UpdateExpression: 'SET #t = :t, at = :a', ConditionExpression: 'attribute_not_exists(pid)', ExpressionAttributeNames: { '#t': 'top' }, ExpressionAttributeValues: { ':t': S(JSON.stringify(fin)), ':a': N(now) } }));
+            for (const f of fin) await award(f.id, prev, f.p);
+          } catch (x) { if (x.name !== 'ConditionalCheckFailedException') throw x; }
+          last = fin;
+        }
+      }
       const top = all.slice().sort((x, y) => y.r - x.r || y.w - x.w), foes = all.filter(x => x.id !== me).sort((x, y) => Math.abs(x.r - r0) - Math.abs(y.r - r0)).slice(0, 8);
       for (let i = foes.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [foes[i], foes[j]] = [foes[j], foes[i]]; }
       // team battles: teams that have a full lineup, nearest team rating first
@@ -362,11 +414,12 @@ exports.handler = async (e) => {
       const tfoes = teams.filter(x => x.id !== me).sort((x, y) => Math.abs(x.tr - t0) - Math.abs(y.tr - t0)).slice(0, 8);
       for (let i = tfoes.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [tfoes[i], tfoes[j]] = [tfoes[j], tfoes[i]]; }
       return res(200, { me: mine(m), rank: m ? top.indexOf(m) + 1 : 0, n: all.length, top: top.slice(0, 25).map(pub), foes: foes.slice(0, 4).map(pub), skills: SKILLS, skcost: SKCOST, slots: [LO_A, LO_P], match: MATCH,
-        tfoes: tfoes.slice(0, 4).map(tpub), ttop: ttop.slice(0, 25).map(tpub), trank: m && hasTeam(m) && fought(m) ? ttop.indexOf(m) + 1 : 0, tn: ttop.length, tkit: TEAM });
+        tfoes: tfoes.slice(0, 4).map(tpub), ttop: ttop.slice(0, 25).map(tpub), trank: m && hasTeam(m) && fought(m) ? ttop.indexOf(m) + 1 : 0, tn: ttop.length, tkit: TEAM, mastery: MS,
+        season: { no: seasonNo(cur), ends: seasonEnd(cur), awards: AWARD.map(a => [a[0], a[1]]), last: last ? { no: seasonNo(prev), top: last.slice(0, 10) } : null } });
     }
     if (rk === 'PUT /arena') {
-      // The build: the hero's name, class and banner come from the hero board; m and v are the log of the
-      // hero's dungeon damage and health without tonics, so deeper delvers are tougher, but only a little.
+      // The build: the hero's name, class and banner come from the hero board. m and v (the log of dungeon damage
+      // and health) are still stored for old clients but no longer count in any fight (v141).
       const h = await get(H, me), c = x => Math.max(0, Math.min(60, Math.round((+x || 0) * 10) / 10));
       if (!h || !h.name || h.ban) return res(403, { error: 'hero' });
       // The team lineup (optional): exactly the hero ('you') once and two different companions of the player's own,
@@ -397,6 +450,13 @@ exports.handler = async (e) => {
       // at most 40 companions keep a kit; the oldest unused ones drop off
       const keys = Object.keys(ck); if (keys.length > 40) for (const x of keys) { if (Object.keys(ck).length <= 40) break; if (!(my.tl || []).some(e => e.id === x)) delete ck[x]; }
       const a = await up(me, 'SET ck = :k, ll = ll - :c', { ':k': S(JSON.stringify(ck)), ':c': N(ccost(r)), ':o': S(JSON.stringify(my.ck)) }, 'll >= :c AND (ck = :o OR attribute_not_exists(ck))');
+      return res(200, { me: mine(row(a.Attributes)) });
+    }
+    if (rk === 'POST /arena/kit' && b.p === 'm') {
+      // A Ring Mastery rank: only once every kit piece is at rank 15.
+      if (!my.k.every(r => r >= 15) || my.ms >= MS.max) return res(400, { error: 'piece' });
+      if (my.ll < MS.cost) return res(409, { error: 'laurels' });
+      const a = await up(me, 'SET ms = :m, ll = ll - :c', { ':m': N(my.ms + 1), ':c': N(MS.cost), ':o': N(my.ms) }, 'll >= :c AND (ms = :o OR attribute_not_exists(ms))');
       return res(200, { me: mine(row(a.Attributes)) });
     }
     if (rk === 'POST /arena/kit') {
@@ -441,9 +501,10 @@ exports.handler = async (e) => {
       const dr = Math.round(32 * (w - ex) * q * pq), fr = Math.round(16 * (w - ex) * q * pq), day = new Date(now).toISOString().slice(0, 10), fw = w && q > 0 && my.tfd !== day;
       // Team battles pay a little more than duels (John OK'd 27 Nov 2026): a win 10, up to 14 against a stronger team, a loss 4, the day's first team win +10.
       const ll = Math.round((w ? 10 + Math.min(4, Math.max(0, Math.round((fo.tr - my.tr) / 50))) : 4) * q) + (fw ? 10 : 0), dl = Math.round(2 * q);
-      const a = await up(me, 'SET tr = :r, tp = :pk, et = :et, tfd = :fd, trp = :rp ADD ' + (w ? 'tw' : 'tx') + ' :one, ll :ll',
-        { ':r': N(Math.max(0, my.tr + dr)), ':pk': N(Math.max(my.tp, my.tr + dr)), ':et': N(Math.max(my.et, now) + EINT), ':fd': S(fw ? day : my.tfd || '-'), ':rp': S(JSON.stringify(rp2)), ':one': N(1), ':ll': N(ll), ':o': N(my.et) }, 'et = :o OR attribute_not_exists(et)');
-      await up(id, 'SET tr = :r ADD ' + (w ? 'tdl :one' : 'tdw :one, ll :d'), Object.assign({ ':r': N(Math.max(0, fo.tr - fr)), ':one': N(1) }, w ? {} : { ':d': N(dl) }));
+      const [sx, sv1] = sv(my, 'tr'), [fx2, sv2] = sv(fo, 'tr');
+      const a = await up(me, 'SET tr = :r, tp = :pk, et = :et, tfd = :fd, trp = :rp' + sx + ' ADD ' + (w ? 'tw' : 'tx') + ' :one, ll :ll',
+        { ...sv1, ':r': N(Math.max(0, my.tr + dr)), ':pk': N(Math.max(my.tp, my.tr + dr)), ':et': N(Math.max(my.et, now) + EINT), ':fd': S(fw ? day : my.tfd || '-'), ':rp': S(JSON.stringify(rp2)), ':one': N(1), ':ll': N(ll), ':o': N(my.et) }, 'et = :o OR attribute_not_exists(et)');
+      await up(id, 'SET tr = :r' + fx2 + ' ADD ' + (w ? 'tdl :one' : 'tdw :one, ll :d'), Object.assign({ ...sv2, ':r': N(Math.max(0, fo.tr - fr)), ':one': N(1) }, w ? {} : { ':d': N(dl) }));
       return res(200, { team: 1, win: !!w, log: d.log, first: d.first, dr, ll, fw: !!fw, q, a: tpub(my), b: tpub(fo), me: mine(row(a.Attributes)) });
     }
     if (rk === 'POST /arena/fight') {
@@ -460,12 +521,13 @@ exports.handler = async (e) => {
       const dr = Math.round(32 * (w - ex) * q * pq), fr = Math.round(16 * (w - ex) * q * pq), day = new Date(now).toISOString().slice(0, 10), fw = w && q > 0 && my.fd !== day;
       // Laurels are a grind on purpose (John): a win is 8, up to 12 against a stronger hero, a loss 3, the day's first win +10.
       const ll = Math.round((w ? 8 + Math.min(4, Math.max(0, Math.round((fo.r - my.r) / 50))) : 3) * q) + (fw ? 10 : 0), dl = Math.round(2 * q);
-      const a = await up(me, 'SET r = :r, pk = :pk, et = :et, fd = :fd, rp = :rp ADD ' + (w ? 'w' : 'l') + ' :one, ll :ll',
-        { ':r': N(Math.max(0, my.r + dr)), ':pk': N(Math.max(my.pk, my.r + dr)), ':et': N(Math.max(my.et, now) + EINT), ':fd': S(fw ? day : my.fd || '-'), ':rp': S(JSON.stringify(rp2)), ':one': N(1), ':ll': N(ll), ':o': N(my.et) }, 'et = :o OR attribute_not_exists(et)');
-      await up(id, 'SET r = :r ADD ' + (w ? 'dl :one' : 'dw :one, ll :d'), Object.assign({ ':r': N(Math.max(0, fo.r - fr)), ':one': N(1) }, w ? {} : { ':d': N(dl) }));
+      const [sx, sv1] = sv(my, 'r'), [fx2, sv2] = sv(fo, 'r');
+      const a = await up(me, 'SET r = :r, pk = :pk, et = :et, fd = :fd, rp = :rp' + sx + ' ADD ' + (w ? 'w' : 'l') + ' :one, ll :ll',
+        { ...sv1, ':r': N(Math.max(0, my.r + dr)), ':pk': N(Math.max(my.pk, my.r + dr)), ':et': N(Math.max(my.et, now) + EINT), ':fd': S(fw ? day : my.fd || '-'), ':rp': S(JSON.stringify(rp2)), ':one': N(1), ':ll': N(ll), ':o': N(my.et) }, 'et = :o OR attribute_not_exists(et)');
+      await up(id, 'SET r = :r' + fx2 + ' ADD ' + (w ? 'dl :one' : 'dw :one, ll :d'), Object.assign({ ...sv2, ':r': N(Math.max(0, fo.r - fr)), ':one': N(1) }, w ? {} : { ':d': N(dl) }));
       return res(200, { win: !!w, log: d.log, first: d.first, dr, ll, fw: !!fw, q, a: pub(my), b: pub(fo), me: mine(row(a.Attributes)) });
     }
   } catch (x) { if (x.name === 'ConditionalCheckFailedException') return res(409, { error: 'state' }); throw x; }
   return res(404, { error: 1 });
 };
-exports._test = { duel, stats, owned, loadout, SK, BEATS, teamFight, team, cstats, CKIT, ccost, cgate, tpub };
+exports._test = { RBASE, MS, seasonOf, prevSeason, seasonNo, seasonEnd, season, row0, duel, stats, owned, loadout, SK, BEATS, teamFight, team, cstats, CKIT, ccost, cgate, tpub };

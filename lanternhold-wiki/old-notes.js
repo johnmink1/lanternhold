@@ -1,7 +1,21 @@
-// Lanternhold patch notes v119 and older. The game keeps only the newest notes;
+// Lanternhold patch notes v120 and older. The game keeps only the newest notes;
 // the wiki joins these on the end so the full history stays on the Patch notes page.
 // Evaluated by build.js with the core API in scope as L.
 [
+    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate and a crafting log', items: [
+      'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
+      'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
+      'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
+      'New Legendary loot: when a world boss ends, everyone who fought rolls their own chance at a Legendary (2% to 20%, higher with more damage, full odds once 3 phases break). Several delvers can win.',
+      'You also get boss shards and Rift tokens for your damage. Take 40 Rift tokens to Warden Sable at the new Rift Gate, a portal just outside the Hold (Map > The Hold, or the shop buttons), and trade them for a Legendary piece of any boss set.',
+      'This week\'s preview boss keeps its scores until it ends on Friday, and pays out under the new loot rules.',
+      'The bell has a new Crafting tab. Every merge, upgrade, mass merge, scrap, smelt and enchant at the Armorer or the Enchanter (or in the field) writes an entry showing what happened, what you gained and what you lost.',
+      'Gained lists the finished item with its stats and enchants, plus gold, Dust and hero XP. Lost lists every piece that went in, as it was before, and the gold, Dust or shards spent.',
+      'Fixed: beating a region guardian (like floor 50) before its region trial is done sent your party back a floor with no reason on screen after the first time. Now every time it happens you see why: a toast and a "Region trial 3/10 elites" note in the arena.',
+      'While you wait at a guardian, the goal line under the floor shows the trial: how many alliance elites you have (out of 10) and the floor they open. Hover it for the full rule.',
+      'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
+      'Mages, necromancers and healers now cost Dust when they sign on, on top of gold. Wages are still gold only.',
+    ] },
     { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
       'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
       'Fixed: very big saves (thousands of items) could not sync to your account, so the account save fell behind. Big saves are now packed down to about a tenth of the size.',

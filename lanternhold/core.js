@@ -1,4 +1,4 @@
-/* lh-build 202611270632 */
+/* lh-build 202611271617 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -1402,9 +1402,15 @@
     } else if (!o.c || o.ca !== (s.hall && s.hall.at) || o.cv !== 2) { o.c = npcCost(s, o.rar, 'sign', (memberById(o.id) || o).cls); o.ca = s.hall && s.hall.at; o.cv = 2; }
     return o.c;
   }
+  // v141 (John, 27 Nov 2026: "only makes sense to have factions work together"): a hire from your hero's own faction
+  // costs NPC_SIDE_FEE less to sign on (gold, Dust and the 2 h contract) and NPC_SIDE_WAGE less an hour.
+  const NPC_SIDE_FEE = 0.2, NPC_SIDE_WAGE = 0.1;
+  const npcSideOf = (s, o) => o && (o.side || ((s.hires && s.hires[o.id] && s.hires[o.id].m) || memberById(o.id) || {}).side) || null;
+  const npcKin = (s, o) => { const me = sideOf(s), sd = npcSideOf(s, o); return !!me && me === sd; };
   function npcPrice(s, o, kind, bench) {
-    const c = npcLock(s, o, bench);
-    if (!bench && !o.until && kind === 'short') return { gold: Math.round(c.gold * NPC_SHORT_PART), dust: 0, dustAlt: 0 };
+    let c = npcLock(s, o, bench);
+    if (!bench && !o.until && kind === 'short') c = { gold: Math.round(c.gold * NPC_SHORT_PART), dust: 0, dustAlt: 0 };
+    if (!c.free && npcKin(s, o)) { const k = 1 - NPC_SIDE_FEE; c = Object.assign({}, c, { gold: Math.round(c.gold * k), dust: Math.round((c.dust || 0) * k), dustAlt: Math.round((c.dustAlt || 0) * k), kin: 1 }); }
     return c;
   }
   // v120 (John, 25 Nov 2026): a wage is worked out from the hire's own stats, the same rule for every NPC:
@@ -1422,12 +1428,13 @@
     const w = wageOf(s, h.rar, lv, d, hp), out = [['Base fee', base], ['Power level ' + lv, atLv - base], ['Gear damage', withD - atLv], ['Gear health', w.stat - withD]];
     if (w.capped) out.push(['Capped at ' + Math.round(WAGE_CAP[h.rar] * 100) + '% of income', w.cap - w.stat]);
     if (w.relief > 0) out.push(['Your wage relief ' + Math.round(w.relief * 100) + '%', -Math.min(w.stat, w.cap) * w.relief]);
+    if (npcKin(s, { id })) out.push(['Your own faction ' + Math.round(NPC_SIDE_WAGE * 100) + '%', -w.wage * NPC_SIDE_WAGE]);
     return out;
   }
   // An offer's wage once hired: the power level they would join at, with no gear yet.
   function npcOfferWage(s, o) {
     const lv = o.lv || s.levels[o.id] || (LEGENDS.includes(o.id) ? 1 : 0) || Math.max(1, Math.round(Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))) * npcRar(o.rar).lvF));
-    return wageOf(s, o.rar, lv, 0, 0).wage;
+    return wageOf(s, o.rar, lv, 0, 0).wage * (npcKin(s, o) ? 1 - NPC_SIDE_WAGE : 1);
   }
   // v125 (John, 25 Nov 2026): a hire's wage never passes WAGE_CAP of your steady income an hour (the NPC Guild's
   // yardstick, npcIncomeMin), so a party whose power level ran ahead of its floor can still keep one. Below that,
@@ -1448,10 +1455,11 @@
     const stat = npcWageAt(rar, lv, dpsPct, hpPct), cap = wageCapAt(s, rar), relief = wageRelief(s).total, base = Math.min(stat, cap);
     return { stat, cap, capped: stat > cap, relief, wage: base * (1 - relief) };
   }
-  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return wageOf(s, h.rar, lvl(s, id), gearMult(s, id, 'dps') - 1, gearMult(s, id, 'hp') - 1).wage; };
+  const wagePerHour = (s, id) => { const h = s.hires && s.hires[id]; if (!h || h.kind === 'short') return 0; return wageOf(s, h.rar, lvl(s, id), gearMult(s, id, 'dps') - 1, gearMult(s, id, 'hp') - 1).wage * (npcKin(s, { id }) ? 1 - NPC_SIDE_WAGE : 1); };
   const wagesPerHour = s => Object.keys(s.hires || {}).reduce((a, id) => a + wagePerHour(s, id), 0);
   const legendBeat = id => STORY.find(b => b.join === id);
   function npcReq(s, o) {
+    if (o.story) return null; // a story companion you sent back can always be hired again
     if (o.rar === 'legendary') { const b = legendBeat(o.id); return b && !s.story.seen[b.id] ? 'Their part of the story has not reached you yet' : null; }
     if (o.rar === 'uncommon' && heroLv(s) < 10) return 'Hero level 10';
     if (o.rar === 'rare' && (s.maxFloorEver || 1) < 30) return 'Reach floor 30';
@@ -1520,13 +1528,13 @@
     if (pay === 'dust') { if (!c.dustAlt || (s.dust || 0) < c.dustAlt) return { ok: false, why: 'Not enough Dust' }; s.dust -= c.dustAlt; s.npcDust = (s.npcDust || 0) + c.dustAlt; }
     else { if (s.gold < c.gold || (s.dust || 0) < c.dust) return { ok: false, why: s.gold < c.gold ? 'Not enough gold' : 'Not enough Dust' }; s.gold -= c.gold; s.dust = (s.dust || 0) - c.dust; s.npcDust = (s.npcDust || 0) + c.dust; s.npcGold = (s.npcGold || 0) + c.gold; qSpend(s, 'guild', c.gold); }
     s.hires = s.hires || {};
-    const legend = LEGENDS.includes(o.id);
+    const legend = LEGENDS.includes(o.id) || !!o.story;
     s.hires[o.id] = { rar: o.rar, kind: bench ? (bench.kind || 'sign') : kind, at: now, until: (bench ? bench.kind : kind) === 'short' ? now + NPC_SHORT_MS : 0, m: legend ? null : { id: o.id, name: o.name, cls: o.cls, side: o.side, rar: o.rar, hue: o.hue } };
     if (bench && bench.kind === 'short') s.hires[o.id].until = now + NPC_SHORT_MS;
     if (!legend) dyn[o.id] = npcMember(s.hires[o.id].m);
     let lv = bench ? bench.lv : 1;
     if (!bench && !legend) { const best = Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))); lv = Math.max(1, Math.round(best * npcRar(o.rar).lvF)); }
-    if (!bench && legend && s.levels[o.id]) lv = s.levels[o.id];
+    if (!bench && legend && (o.lv || s.levels[o.id])) lv = o.lv || s.levels[o.id];
     s.levels[o.id] = lv;
     if (bench && bench.traits) { s.traits = s.traits || {}; s.traits[o.id] = bench.traits; }
     if (s.gone) delete s.gone[o.id];
@@ -1548,6 +1556,25 @@
     delete s.gear[id]; delete s.hp[id]; delete s.down[id]; if (s.traits) delete s.traits[id];
     if (!LEGENDS.includes(id)) delete s.levels[id];
     delete s.hires[id];
+    return true;
+  }
+  // v141 (John, 27 Nov 2026): story companions (the five who find you on the stair, never hired) can be sent back to the
+  // Guild Hall to free their spot. They wait there as an ordinary Rare offer (STORY_RAR) at their power level, priced and
+  // paid like any hire, and leave with the rest of the offers at the next rotation (or a re-roll). They don't come back
+  // through the story after that.
+  const STORY_RAR = 'rare';
+  const isStoryComp = (s, id) => !!id && id !== 'you' && s.unlocked.includes(id) && !(s.hires && s.hires[id]) && !isGuest(s, id) && !LEGENDS.includes(id) && !!MEMBERS.find(m => m.id === id && !m.uniq);
+  function storyRelease(s, id, now) {
+    if (!isStoryComp(s, id)) return false;
+    const lv = lvl(s, id), h = hallState(s, now || Date.now());
+    s.unlocked = s.unlocked.filter(x => x !== id);
+    s.party = s.party.map(x => x === id ? null : x);
+    if (s.jobs) for (const k in s.jobs) if (s.jobs[k] === id) delete s.jobs[k];
+    if (s.autoTrain) delete s.autoTrain[id];
+    delete s.gear[id]; delete s.hp[id]; delete s.down[id];
+    delete s.levels[id];
+    s.gone = s.gone || {}; s.gone[id] = Date.now();
+    h.offers = h.offers.filter(o => o.id !== id).concat([{ id, rar: STORY_RAR, legend: 1, story: 1, lv }]);
     return true;
   }
   // Wages every second, offline too (dt in seconds). Short contracts end on time.
@@ -4337,7 +4364,7 @@
   Q({ id: 'duel5', c: 'ring', ev: 'duel', n: 5, w: 5, g: qOn('ring'), t: q => 'Fight ' + q.n + ' duels in the Ember Ring', go: 'ring' });
   Q({ id: 'win2', c: 'ring', ev: 'duel', n: 2, w: 6, g: qOn('ring'), m: d => d.win, t: q => 'Win ' + q.n + ' duels in the Ember Ring', go: 'ring' });
   Q({ id: 'winup', c: 'ring', ev: 'duel', n: 1, w: 6, g: qOn('ring'), m: d => d.win && d.up, t: () => 'Beat a hero rated higher than you in the Ring', go: 'ring' });
-  Q({ id: 'winedge', c: 'ring', ev: 'duel', n: 1, w: 6, g: qOn('ring'), m: d => d.win && d.edge > 0, t: () => 'Win a duel where your class has the edge', go: 'ring' });
+  Q({ id: 'winedge', c: 'ring', ev: 'duel', n: 1, w: 6, g: qOn('ring'), m: d => d.win && d.edge > 0, t: () => 'Win a duel where your class has the advantage', go: 'ring' });
   Q({ id: 'wincounter', c: 'ring', ev: 'duel', n: 1, w: 7, g: qOn('ring'), m: d => d.win && d.edge < 0, t: () => 'Win a duel against a class that counters yours', go: 'ring' });
   Q({ id: 'duelcls', c: 'ring', ev: 'duel', n: 3, w: 5, g: qOn('ring'), u: d => d.cls, t: q => 'Duel heroes of ' + q.n + ' different classes', go: 'ring' });
   Q({ id: 'wineven', c: 'ring', ev: 'duel', n: 1, w: 5, g: qOn('ring'), m: d => d.win && d.even, t: () => 'Win an Even match in the Ring', go: 'ring' });
@@ -4510,8 +4537,8 @@
   const api = {
     npPlus, incomeHour, priceH, steadyPartyDps, pipRate, samplePipIncome, acctGoldPerSec, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
     steadyDps, damageMeter, meterReset, METER_TAU, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npGold, npIlvl, npOld, npReady, startNP,
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, LORE_LEGENDS, LORE_COUNT, UNIQ, UNIQ_IDS, UNIQ_QUESTS, UNIQ_GUILD, UNIQ_OFFER_MS, UNIQ_DRILL_SEC, CAGE_FLOOR, CAGE_BASE, CAGE_GROW, CAGE_MAX, CAGE_TIME, postOn, uniqArrive, uniqQuest, uniqDrill, uniqTick, cageChance, cageMult, thistleFoe, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
-    UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, LORE_LEGENDS, LORE_COUNT, UNIQ, UNIQ_IDS, UNIQ_QUESTS, UNIQ_GUILD, UNIQ_OFFER_MS, UNIQ_DRILL_SEC, CAGE_FLOOR, CAGE_BASE, CAGE_GROW, CAGE_MAX, CAGE_TIME, postOn, uniqArrive, uniqQuest, uniqDrill, uniqTick, cageChance, cageMult, thistleFoe, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, NPC_SIDE_FEE, NPC_SIDE_WAGE, npcKin, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, STORY_RAR, isStoryComp, storyRelease, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
     STATS, STAT_CLASS, STAT_BASE, STAT_AFFINITY, STAT_MAX, RESPEC_COST, statSpent, xpNeed, heroLevel, pointsFor, heroPoints, statScore, addStat, resetStats, statVal, PACK_CHANCE, PACK_GOLD,

@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- lh-build 202611270632 -->
+<!-- lh-build 202611271617 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -60,11 +60,11 @@ for(var i=0;i<M.length&&!r;i++)if(M[i][0].test(h))r=M[i][1];
 if(!r)r=("web-"+h.replace(/[^a-z0-9]+/g,"-")).slice(0,24).replace(/-+$/,"")}
 ls.setItem("lh_ref",r.toLowerCase())})()}catch(e){}</script>
 <script>/* Inside Discord (Activity frame), or localhost with ?discord=mock: load the Discord SDK and the Activity glue (discord/boot.js). */
-if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)&&/[?&]discord=mock\b/.test(location.search)))document.write('<script src="discord/sdk.js?v=202611270632"><\/script><script src="discord/boot.js?v=202611270632"><\/script>');</script>
+if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)&&/[?&]discord=mock\b/.test(location.search)))document.write('<script src="discord/sdk.js?v=202611271617"><\/script><script src="discord/boot.js?v=202611271617"><\/script>');</script>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611270632">
+<link rel="stylesheet" href="style.css?v=202611271617">
 </head>
 <body>
 <div id="app">
@@ -147,6 +147,7 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
     <aside class="panel">
       <nav class="tabs" role="tablist">
         <button class="onlyphone" data-go="arena"><svg><use href="#i-sword"/></svg><span>Fight</span></button>
+        <button class="townitem" data-tab="dash" aria-label="Dashboard" data-tip="Dashboard: your own page of tiles"><svg><use href="#i-star"/></svg><span>Dashboard</span></button>
         <button class="on" data-tab="party"><svg><use href="#i-users"/></svg><span>Party</span></button>
         <button data-tab="camp"><svg><use href="#i-flame"/></svg><span>Camp</span></button>
         <button data-tab="gear"><svg><use href="#i-bag"/></svg><span>Gear</span><em id="gearcount"></em></button>
@@ -169,6 +170,7 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
         <details class="flogbox" id="flogbox"><summary>Fight log <i class="tipi" data-tip="What happened in recent fights: kills, critical strikes, abilities, falls, ambushes and loot. Hits are summed up on each kill to keep it short.">i</i></summary><div id="flog"><div class="fseg"><button data-ff="all" class="on">All</button><button data-ff="fight">Fights</button><button data-ff="party">Party</button><button data-ff="loot">Loot</button></div><ul class="flist"></ul></div></details>
         <details class="flogbox" id="meterbox"><summary>Damage meter <i class="tipi" data-tip="Who is really dealing your damage, averaged over the last 30 seconds. It counts abilities like Backstab and Ember Storm, skeletons and your taps, so it can differ from the steady numbers on each hero.">i</i></summary><div id="meter"></div></details>
       </div>
+      <div class="tabbody" id="tab-dash" hidden><div id="dashbox"></div></div>
       <div class="tabbody" id="tab-camp" hidden>
         <div id="campbar2"></div>
         <div id="benchwrap" class="camp"><h3 class="sub">Campfire <i class="tipi" data-tip="Companions resting by the fire work camp jobs that help the whole party, even while you are deep below. Train them to make their jobs count for more.">i</i></h3><div id="bench"></div><div id="campnext"></div></div>
@@ -313,13 +315,13 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
   window.LH_CLOUD = { region: "us-east-1", clientId: "191dppk0cud8d3bdgh3lbmgjr2", api: "https://nyu3u8gc73.execute-api.us-east-1.amazonaws.com" };
 </script>
 <div class="tip" id="tip" role="tooltip" hidden></div>
-<script>window.LH_BUILD = "202611270632";</script>
+<script>window.LH_BUILD = "202611271617";</script>
 <script>window.LH_SUPPORT_URL = "https://buymeacoffee.com/born2gamellc"; /* Buy Me a Coffee page; the button stays hidden while this is empty */</script>
-<script src="music.js?v=202611270632"></script>
-<script src="core.js?v=202611270632"></script>
-<script src="sprites.js?v=202611270632"></script>
-<script src="vector.js?v=202611270632"></script>
-<script src="ui.js?v=202611270632"></script>
-<script src="intro.js?v=202611270632"></script>
+<script src="music.js?v=202611271617"></script>
+<script src="core.js?v=202611271617"></script>
+<script src="sprites.js?v=202611271617"></script>
+<script src="vector.js?v=202611271617"></script>
+<script src="ui.js?v=202611271617"></script>
+<script src="intro.js?v=202611271617"></script>
 </body>
 </html>

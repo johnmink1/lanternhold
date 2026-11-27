@@ -1,4 +1,4 @@
-/* lh-build 202611270632 */
+/* lh-build 202611271617 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -1391,9 +1391,9 @@ button.stat.quests.done{color:var(--good);background:rgba(143,207,106,.08);borde
 .chattitle .iconbtn{width:32px;height:32px}
 .chattitle .iconbtn svg{width:18px;height:18px}
 .chat{height:440px}
-@media (max-width:720px){.chatfab{bottom:calc(76px + env(safe-area-inset-bottom));right:12px;padding:9px 13px 9px 10px}.chatfab span{display:none}.chat{bottom:calc(66px + env(safe-area-inset-bottom));height:60vh}}
+@media (max-width:720px){.chatfab span{display:none}.chat{bottom:calc(66px + env(safe-area-inset-bottom));height:60vh}}
 .cbseg button{font-size:11.5px;padding:8px 2px;gap:3px}.cbseg img{width:13px;height:17px}
-#toasts{bottom:76px}@media (min-width:721px) and (max-width:560px){#toasts{bottom:136px}}
+#toasts{bottom:76px}
 /* players online */
 .onlinect{display:flex;align-items:center;gap:6px;margin-left:4px;padding:5px 11px 5px 9px;border-radius:999px;border:1px solid #1f3a2a;background:#0b1712;color:#bff0cf;font:700 14px var(--body);cursor:pointer;font-variant-numeric:tabular-nums}
 .onlinect[hidden]{display:none}
@@ -1501,6 +1501,8 @@ h3.sub .tipi{vertical-align:2px}
 .rt-ironclad{color:#9fb6c8}.rt-emberborn{color:var(--ember)}.rt-gilded{color:var(--gold)}.rt-lanternsworn{color:#ffe08a;box-shadow:0 0 8px #f5c24255}.rt-riftbreaker{color:#c78bff;box-shadow:0 0 10px #9b4dff66}
 .ringseg{margin:0 0 10px;width:max-content;max-width:100%}
 .ringbuild{margin:0 2px 10px}
+.rnum{border-bottom:1px dotted currentColor;cursor:help}
+.rdsplit{margin:6px 0 0;opacity:.9}
 .ringfoes,.ringkit{display:grid;gap:8px}
 .ringfoe,.ringpiece{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
 .ringfoe:hover{border-color:var(--line2)}
@@ -1741,10 +1743,13 @@ body.resting .taptip{display:none}
   .chatfab{bottom:calc(74px + env(safe-area-inset-bottom));right:10px;width:46px;height:46px;padding:0;justify-content:center;border-radius:50%}
   .chatfab small{display:none}
   .chatfab svg{width:21px;height:21px}
+  .chatfab{transition:transform .25s ease,opacity .25s ease}
+  .chatfab.away{transform:translateY(140%);opacity:0;pointer-events:none}
   #toasts{top:calc(8px + env(safe-area-inset-top));bottom:auto;left:10px;right:10px;width:auto}
   .toast{pointer-events:auto;padding:8px 12px;font-size:13.5px;gap:10px;background:#151a24f7}
   .toast svg{width:22px;height:22px}
   .toast small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .toast.open small{display:block;-webkit-line-clamp:unset;overflow:visible}
 }
 .cgrid{grid-template-columns:minmax(0,1fr)}.codexseg button{min-width:0;padding-left:6px;padding-right:6px}
 @media (max-width:720px){.ctx small{white-space:normal;overflow:visible;text-overflow:clip}.codexseg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}.codexseg button{padding:7px 4px}}
@@ -2861,3 +2866,85 @@ details.howto p{margin:6px 0 0}
   .stagehead .pips{gap:3px;max-width:100%;overflow:hidden}.stagehead .pips i{width:10px}
   .stagehead .flsub .biome{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 }
+.npcacts .npcneed{flex-basis:100%;color:var(--muted);font-size:12.5px;margin-top:2px}
+.kintag{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid #3f6f4f;color:#9fe0b4;background:#0e1d14;vertical-align:middle}
+/* v141 screen layout: players move or hide sections (ui.js LAY_MODS, saved in S.settings.lay) */
+.layoff{display:none!important}
+.stage>.flogbox.laypin{margin-top:0;flex:none}
+.stage>.laypin #meter,.stage>.laypin .flist{max-height:24vh;overflow:auto}
+body.atench .stage>.laypin{display:none}
+@media (min-width:901px){
+  body.layleft .layout{grid-template-columns:minmax(360px,1fr) minmax(0,1.15fr)}
+  body.layleft .panel{order:-1}
+}
+body.layedit .stage,body.layedit .stagehead,body.layedit .arena,body.layedit .foe{overflow:visible}
+body.layedit .stage{padding-top:6px}
+body.layedit .stage>*,body.layedit .panel,body.layedit #warstrip,body.layedit .foe .toggles,body.layedit #tab-party .buybar,body.layedit #tab-party .ftips,body.layedit #tab-party .flogbox{position:relative;outline:2px dashed color-mix(in srgb,var(--accent) 70%,transparent);outline-offset:2px}
+body.layedit .stage>*{margin-top:12px}
+body.layedit #arena,body.layedit .stage>.foe,body.layedit #abilities,body.layedit #tonicbar{outline-color:color-mix(in srgb,var(--muted) 40%,transparent)}
+body.layedit #tab-party .buybar,body.layedit #tab-party .ftips,body.layedit #tab-party .flogbox{margin-top:22px}
+.laybar{position:absolute;top:-16px;right:12px;z-index:30;display:flex;gap:4px;align-items:center;background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line2);border-radius:999px;padding:3px 4px 3px 10px;font:600 12px/1 var(--body,Inter),sans-serif;letter-spacing:0;text-transform:none;color:var(--text);box-shadow:0 4px 14px rgba(0,0,0,.45);white-space:nowrap;cursor:default}
+.laybar.in{top:50%;transform:translateY(-50%)}
+.laybar b{font-weight:700;margin-right:4px}
+.laybar small{color:var(--muted);font-weight:600;padding-right:6px}
+.laybar button{font:inherit;cursor:pointer;min-width:26px;height:24px;padding:0 8px;border-radius:999px;background:var(--bg2);border:1px solid var(--line);color:var(--text)}
+.laybar button:hover{border-color:var(--accent)}
+.laybar button.hide{color:var(--ember)}
+.laytop{position:sticky;top:0;z-index:60;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:10px 16px;background:linear-gradient(90deg,#1c2a44,#2a1f3d);border-bottom:1px solid var(--line2);font-size:14px;color:var(--text)}
+.laytop>span{color:var(--muted)}
+.laytop .layhid{display:flex;gap:6px;flex-wrap:wrap}
+.laytop .layhid button,.laytop .layhid i{font:inherit;font-size:12.5px;font-style:normal;padding:4px 10px;border-radius:999px;border:1px dashed var(--line2);background:none;color:var(--muted);cursor:pointer}
+.laytop .layhid button:hover{color:var(--text);border-color:var(--accent)}
+.laysheet .lrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);margin-bottom:6px;font-size:14px}
+.laysheet .lrow small{display:block;color:var(--muted);font-size:11.5px}
+.laysheet .lrow.off>span:first-child{opacity:.55}
+.laysheet .ar{display:flex;gap:4px}
+.laysheet .ar button{font:inherit;font-size:12.5px;min-width:30px;height:30px;padding:0 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.laysheet .lsw{appearance:none;-webkit-appearance:none;width:40px;height:22px;border-radius:999px;background:var(--line2);position:relative;cursor:pointer;margin:0}
+.laysheet .lsw::after{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+.laysheet .lsw:checked{background:var(--accent)}.laysheet .lsw:checked::after{left:21px}
+.laysheet .llock{color:var(--muted);font-size:11.5px;width:40px;text-align:center}
+.laysheet .lbar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+.laysheet .lbar button{font:inherit;font-size:12.5px;padding:8px 2px;border-radius:9px;border:1px solid var(--line2);background:var(--bg2);color:var(--muted)}
+.laysheet .lbar button.on{border-color:var(--accent);color:var(--accent)}
+/* v141 Ember Ring: seasons and Ring Mastery */
+.raward{margin-left:4px;color:#ffd27a;border-color:#c8952a}
+.rseasonbox{margin:0 0 10px;padding:8px 10px;border:1px solid var(--line,#2a3346);border-radius:10px;font-size:13px}
+.rseasonbox summary{cursor:pointer}
+.rseasonbox summary svg{display:inline-block;width:14px;height:14px;vertical-align:-2px}
+.rseasonbox summary *{display:inline}
+.rseasonbox p{margin:6px 0 0}
+.rslast{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0 0 10px;font-size:13px}
+.rslast i{font-style:normal;font-weight:700;color:#ffd27a;margin-right:4px}
+.rmastery .tile{display:grid;place-items:center}
+.rmastery .tile svg{width:22px;height:22px}
+.fr-emberchamp{border-color:transparent;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,conic-gradient(from var(--fa,0deg),#ff8a3d,#ffd27a,#c8452a,#ff8a3d) border-box;animation:frnexus 3s linear infinite}
+@media (prefers-reduced-motion:reduce){.fr-emberchamp{animation:none}}
+/* v141 Dashboard tab: tiles the player picks (ui.js DASH, saved in S.settings.dash) */
+.dashhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 10px}
+.dashhead b{display:block;font:700 15px var(--title);letter-spacing:.04em}.dashhead small{color:var(--muted);font-size:12.5px}
+.dashhead>span{display:flex;gap:6px;flex-wrap:wrap}
+.dash{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.dtile{border:1px solid var(--line);border-radius:12px;background:var(--bg2);padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.dtile.wide{grid-column:1/-1}
+.dtile h4{margin:0;display:flex;align-items:center;gap:6px;font:700 11.5px var(--title);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dtile h4 svg{width:14px;height:14px;color:var(--accent)}
+.dtile .dtools{margin-left:auto;display:flex;gap:4px}
+.dtile .dtools button{font:inherit;font-size:13px;width:26px;height:24px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--text);cursor:pointer}
+.dash.editing .dtile{outline:2px dashed color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:1px}
+.dval p{margin:0;font-size:13px}.dval .dsub{color:var(--muted);font-size:12.5px}
+.dbig{display:block;font-size:20px;font-weight:800;line-height:1.2}.dbig small{font-size:12px;color:var(--muted);font-weight:600}
+.dgood{color:var(--gold)}.dwarn{color:#ff9c88}
+.dlist{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:13px}
+.dlist li{display:flex;justify-content:space-between;gap:8px;align-items:center}.dlist li b{font-weight:600;color:var(--muted);white-space:nowrap}
+.dlog li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dacts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.dlock{margin:0;font-size:12.5px;color:var(--muted)}.dlock svg{width:12px;height:12px;vertical-align:-1px;margin-right:4px}
+.dpick{display:grid;gap:6px;max-height:60vh;overflow:auto;margin:8px 0 12px}
+.dpick button{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--text);font:inherit;cursor:pointer}
+.dpick button svg{width:18px;height:18px;color:var(--accent)}.dpick small{display:block;color:var(--muted);font-size:12px}
+.dpick em{font-style:normal;font-weight:700;color:var(--accent);font-size:13px}
+@media (min-width:721px) and (max-width:1240px){.tabs [data-tab="dash"] span{display:none}.tabs button{padding-left:5px;padding-right:5px}}
+@media (max-width:720px){.dash{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.dtile{padding:9px 10px}.dbig{font-size:17px}.dacts .btn{padding:5px 9px;font-size:12.5px}}
+@media (min-width:721px) and (max-width:1040px){.tabs button{font-size:13px;padding-left:4px;padding-right:4px;gap:4px}}
+@media (max-width:720px){.dtile h4{flex-wrap:wrap}.dash.editing .dtile .dtools{width:100%;margin-left:0;order:-1;justify-content:flex-end}}

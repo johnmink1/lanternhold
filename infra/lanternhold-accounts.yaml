@@ -1441,6 +1441,10 @@ Resources:
               - Effect: Allow
                 Action: [dynamodb:GetItem]
                 Resource: !GetAtt HeroesTable.Arn
+              # v141 Ring seasons: add the season's award cosmetics (ADD own) to the winners' wallets
+              - Effect: Allow
+                Action: [dynamodb:UpdateItem]
+                Resource: !GetAtt WalletsTable.Arn
 
   ArenaFunction:
     Type: AWS::Lambda::Function
@@ -1455,6 +1459,7 @@ Resources:
         Variables:
           ARENA: !Ref ArenaTable
           HEROES: !Ref HeroesTable
+          WALLETS: !Ref WalletsTable
       # Packaged from infra/ring by `aws cloudformation package` (too big to inline).
       Code: ring
 

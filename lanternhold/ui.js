@@ -1,4 +1,4 @@
-/* lh-build 202611270632 */
+/* lh-build 202611271617 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -97,6 +97,7 @@
   // ---------- tooltips ----------
   // One styled tooltip for the whole game. Anything with data-tip (or an old-style title, which gets converted)
   // shows it on hover with a mouse, or on a tap of a small (i) badge on touch screens. It stays inside the window.
+  // v141 (John, 27 Nov 2026): on phones a tap on gold, damage, Embers or Dust in the top bar shows its numbers too.
   const tipEl = document.getElementById('tip');
   let tipFor = null, tipHide = 0;
   function tipText(el) {
@@ -123,7 +124,7 @@
   });
   document.addEventListener('pointerout', e => { if (tipFor && !tipFor.contains(e.relatedTarget)) { clearTimeout(tipHide); tipHide = setTimeout(hideTip, 60); } });
   document.addEventListener('click', e => {
-    const i = e.target.closest('.tipi,.klant') || (!fine.matches && e.target.closest('.trait[data-tip],.cxp[data-tip],#foetag[data-tip]'));
+    const i = e.target.closest('.tipi,.klant') || (!fine.matches && e.target.closest('.trait[data-tip],.cxp[data-tip],#foetag[data-tip],.purse div.stat[data-tip],.kintag[data-tip],.rnum[data-tip]'));
     if (i) { e.preventDefault(); e.stopPropagation(); if (tipFor === i) hideTip(); else { showTip(i); clearTimeout(tipHide); tipHide = setTimeout(hideTip, 5000); } return; }
     if (!fine.matches) hideTip();
   }, true);
@@ -1478,7 +1479,8 @@
     // Phones: at most 2 at once, and only 1 in the first 10 s after loading (the welcome-back burst); the rest wait in the bell.
     const small = innerWidth <= 720, cap = small ? (performance.now() < 10000 ? 1 : 2) : 3;
     while (box.children.length > cap) box.firstChild.remove();
-    t.onclick = () => t.remove();
+    // v141: on phones a long line is cut at 2 lines; the first tap opens it in full (and holds it), the next closes it.
+    t.onclick = () => { const sm = t.querySelector('small'); if (!t.classList.contains('open') && sm && sm.scrollHeight > sm.clientHeight + 2) { t.classList.add('open'); clearTimeout(timer); left = 12000; go(); return; } t.remove(); };
     // Stays up longer, and waits while the pointer rests on it. Every pop-up is kept in the bell too.
     let left = small ? 5000 : 7000, at = Date.now(), timer = 0;
     const go = () => { timer = setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, left); at = Date.now(); };
@@ -1917,7 +1919,7 @@
       return '<div class="seat bench">' + portrait(id) + '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + '</div><div class="lv">Power level ' + L.lvl(S, id) + ' &middot; ' + esc(m.title) + '</div>' +
         '<div class="jobline' + (job ? ' on' : '') + '">' + (job ? icon(job.icon) + '<b>' + job.name + '</b> ' + L.jobText(job, L.jobValue(S, job, id)) : 'No camp job yet') + (L.UNIQ[id] ? (L.postOn(S, id) ? ' ' + uqPerk(id) : ' <small class="uqhint" data-tip="' + esc(L.UNIQ[id].perk + ': ' + L.UNIQ[id].text) + '" tabindex="0">&#9733; ' + esc(L.UNIQ[id].perk) + ' as ' + esc(uqPostName(id)) + '</small>') : '') + '</div>' + traitChips(id, true) + '</div>' +
         '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button><div class="minis">' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
-        '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button><button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] ? '<button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button>' : '') + '</div></div></div>';
+        '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button><button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] || L.isStoryComp(S, id) ? '<button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button>' : '') + '</div></div></div>';
     }).join('');
     if (!bench.length) benchHtml = jobsHtml + '<p class="note">No one is at the fire. Companions who rest here can take a job that helps the whole party.</p>';
     if ($('bench').dataset.h !== benchHtml) { $('bench').innerHTML = benchHtml; $('bench').dataset.h = benchHtml; }
@@ -2024,7 +2026,19 @@
     else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour: a ' + R.name + ' base fee of ' + fmt(L.NPC_FEE[o.rar]) + ', more for each power level and their gear, never more than ' + Math.round(L.WAGE_CAP[o.rar] * 100) + '% of your income, less your wage relief.">Sign on · ' + price(c) + '</button>' +
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
-    return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
+    // v141: say why sign-on is greyed out (a disabled button shows no tip on phones).
+    if (!why && !(c.free && !full)) {
+      let need = '';
+      if (full && !(bench && o.kind === 'short')) need = 'No free spot at the Campfire';
+      else if (!c.free) {
+        const lack = [];
+        if (S.gold < c.gold) lack.push(fmt(c.gold - S.gold) + ' more gold');
+        if ((S.dust || 0) < (c.dust || 0)) lack.push(fmt(c.dust - (S.dust || 0)) + ' more Dust');
+        if (lack.length) need = 'Need ' + lack.join(' and ') + (!bench && c.dustAlt && (S.dust || 0) < c.dustAlt && S.gold < c.gold ? ', or ' + fmt(c.dustAlt - (S.dust || 0)) + ' more Dust' : '');
+      }
+      if (need) acts += '<small class="npcneed">' + need + '</small>';
+    }
+    return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span>' + (L.npcKin(S, o) ? ' <span class="kintag" data-tip="Your own faction: ' + Math.round(L.NPC_SIDE_FEE * 100) + '% off signing on and ' + Math.round(L.NPC_SIDE_WAGE * 100) + '% off their wage." tabindex="0">Your faction</span>' : '') + '</div>' +
       '<div class="lv">' + (m.title ? esc(m.title) : (side ? side.name + (o.need === 'banner' ? ' only' : '') : '')) + ' &middot; wage ' + fmt(wage) + ' gold/h' + (bench ? ' &middot; power level ' + o.lv + ' &middot; leaves in ' + fmtTime(Math.max(0, (o.until - Date.now()) / 1000)) : '') + (!bench && o.exp ? ' &middot; leaves in ' + fmtTime(Math.max(0, (o.exp - Date.now()) / 1000)) : '') + '</div>' +
       (L.UNIQ[o.id] ? '<div class="jobline on uqline">' + uqPerk(o.id) + ' <small>as ' + esc(uqPostName(o.id)) + '</small></div>' : '') +
       '<div class="npcacts">' + acts + '</div></div></div>';
@@ -2058,6 +2072,14 @@
     if (t.dataset.release) {
       if (!campGate(true)) return true;
       const id = t.dataset.release, m = L.memberById(id), sh = L.shortHire(S, id);
+      // v141 (John, 27 Nov 2026): story companions can go back to the Guild Hall too, as an ordinary offer.
+      if (L.isStoryComp(S, id)) {
+        modal('<h2>Send ' + esc(m.name) + ' to the Guild Hall?</h2><p>This frees their spot at the Campfire. ' + esc(m.name) + ' waits at the Guild Hall as a ' + L.npcRar(L.STORY_RAR).name + ' hire at power level ' + L.lvl(S, id) + ', until the Hall’s offers change. Hire them back before then and they draw a wage like any hire. After that they are gone for good. Their gear goes back to your bag.</p><div class="row"><button class="btn ghost" id="m-no">Keep them</button><button class="btn" id="m-yes">Send them</button></div>', md => {
+          md.querySelector('#m-no').onclick = closeModal;
+          md.querySelector('#m-yes').onclick = () => { if (L.storyRelease(S, id)) toast('crown', m.name + ' went to the Guild Hall', 'Their gear is back in your bag. They wait there until the offers change.', ''); closeModal(); save(); updateSeats(true); updateAbilities(true); paintBoard(); };
+        });
+        return true;
+      }
       modal('<h2>Let ' + esc(m.name) + ' go?</h2><p>' + (sh ? 'Their contract ends now, with no refund.' : 'They go back to the Guild Hall and wait on the bench for 3 days. You can hire them back at the same level for half the price.') + ' Their gear goes back to your bag.</p><div class="row"><button class="btn ghost" id="m-no">Keep them</button><button class="btn" id="m-yes">Let them go</button></div>', md => {
         md.querySelector('#m-no').onclick = closeModal;
         md.querySelector('#m-yes').onclick = () => { const i = S.party.indexOf(id); L.npcRelease(S, id, sh ? 'short' : 'sent'); closeModal(); if (i >= 0) sendOff(i, id, m.name + ' went back to the Guild Hall', 'Their gear is back in your bag.'); save(); updateSeats(true); updateAbilities(true); paintBoard(); };
@@ -3566,8 +3588,10 @@
   }
   function paintTown() {
     const tb = document.querySelector('.tabs [data-town]'); if (!tb) return;
-    tb.classList.toggle('on', ['market', 'guild', 'ring', 'codex'].includes(tab));
-    const td = $('tradedot'), d = $('towndot'); if (td && d) { d.hidden = td.hidden; d.textContent = td.textContent; }
+    const inTown = [...document.querySelectorAll('.tabs .townitem')].map(b => b.dataset.tab);
+    tb.classList.toggle('on', inTown.includes(tab));
+    const td = $('tradedot'), d = $('towndot'), mk = document.querySelector('.tabs [data-tab="market"]');
+    if (td && d) { d.hidden = td.hidden || !(mk && mk.classList.contains('townitem')); d.textContent = td.textContent; }
   }
   setInterval(paintTown, 1500);
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
@@ -3585,7 +3609,7 @@
     const hires = Object.keys(S.hires || {}), signed = hires.filter(id => !L.shortHire(S, id)).length, wph = L.wagesPerHour(S);
     const inc = S.hero ? L.offlineEarnPerSec(S) * 3600 : 0, owed = S.owed || 0, awayW = wph * L.NPC_AWAY_WAGE, net = inc - awayW;
     const row = (k, v, c) => '<tr><td>' + k + '</td><td class="' + (c || '') + '">' + v + '</td></tr>';
-    const sg = (v, cls) => '<b class="' + cls + '">' + (v >= 0 ? '+' : '−') + fmt(Math.abs(v)) + '</b>';
+    const sg = (v, cls) => '<b class="' + cls + '">' + (v >= 1 ? '+' : v <= -1 ? '−' : '') + fmt(Math.abs(v)) + '</b>';
     if (g) {
       let h = '<div class="mtip"><b>Gold</b><table>';
       if (S.hero) h += row('Away income', sg(inc, 'pos') + ' /h');
@@ -3600,6 +3624,17 @@
       if ((S.npcDust || 0) > 0) h += row('Spent on hires', sg(-S.npcDust, 'neg'));
       h += '</table><small>From scrapping gear. Pays for enchants, Rare and better hires, and new faces at the Guild Hall.</small></div>';
       if (d.dataset.tiph !== h) { d.dataset.tiph = h; d.dataset.tip = 'Dust'; if (tipFor === d) showTip(d); }
+    }
+    // v141 (John, 27 Nov 2026): the damage figure shows who makes it, steady hits per party member.
+    const dp = document.querySelector('.stat.dps');
+    if (dp && S.hero) {
+      const now = Date.now(), tot = L.totalDps(S, now);
+      let h = '<div class="mtip"><b>Party damage</b><table>', sum = 0;
+      for (const id of S.party) { const m = L.memberById(id), v = L.memberDps(S, id, now) || 0; sum += v; if (m) h += row(esc(m.name), '<b>' + fmt(v) + '</b> /s'); }
+      const sk = tot - sum; // skeletons: totalDps adds them on top of the party's steady hits
+      if (sk >= 1) h += row('Skeletons', '<b>' + fmt(sk) + '</b> /s');
+      h += row('Total', '<b>' + fmt(tot) + '</b> /s', 'tot') + '</table><small>Steady hits with every bonus counted. Abilities and taps come on top: see the Damage meter under the fight log.</small></div>';
+      if (dp.dataset.tiph !== h) { dp.dataset.tiph = h; dp.dataset.tip = 'Party damage'; if (tipFor === dp) showTip(dp); }
     }
   }
 
@@ -3640,6 +3675,7 @@
       if (cx === 'stats') { if (force || lastFeatCount !== L.featCount(S)) updateFeats(); updateLedger(); }
     }
     if (tab === 'rekindle') updateRekindle();
+    if (tab === 'dash' && force) paintDash(true);
     lastRelicCount = Object.keys(S.relics).length; lastFeatCount = L.featCount(S);
     $('relcount').textContent = lastRelicCount + '/' + L.RELICS.length;
     $('featcount').textContent = lastFeatCount + '/' + featsShown().length;
@@ -3976,6 +4012,214 @@
   // every 30 s, and the Keeper's own game checks right after it publishes its hero.
   setTimeout(loadOnline, 2000); setInterval(loadOnline, 30000);
   { const tt = $('taptip'); if (tt) ['click', 'pointerdown', 'mousedown', 'touchstart'].forEach(ev => tt.addEventListener(ev, e => e.stopPropagation())); }
+  // ---------- v141 screen layout (John 27 Nov: "make each section a module that can be re-arranged and added/removed") ----------
+  // Saved in S.settings.lay so it follows the hero (NP+ keeps settings). Battle, foe and abilities can move but never hide;
+  // the floor bar stays on top of the battle. New heroes get the default layout until the tutorial is done,
+  // because the tutorial points at these sections.
+  const LAY_MODS = {
+    war: ['#warstrip', 'Grand War strip', 'The war room link'], head: ['.stage>.stagehead', 'Floor and chapter', 'Floor arrows, map and chapter goal'],
+    arena: ['#arena', 'Battle'], foe: ['.stage>.foe', 'Foe and health'], tog: ['.stage .foe .toggles', 'Auto toggles', 'Descend and abilities'],
+    skills: ['#abilities', 'Abilities'], meter: ['#meterbox', 'Damage meter'], log: ['#flogbox', 'Fight log'],
+    train: ['#tab-party .buybar', 'Train amount', 'x1, x10, x25, Max'], tips: ['#tab-party .ftips', 'Formation tips'],
+  };
+  const LAY_HIDE = ['war', 'head', 'tog', 'meter', 'log', 'train', 'tips'], LAY_PIN = ['meter', 'log'];
+  const LAY_BAR = ['dash', 'camp', 'gear', 'rekindle', 'market', 'guild', 'ring', 'codex'], LAY_BAR_N = 3;
+  const LAY_DEF = () => ({ ord: ['foe', 'skills', 'meter', 'log'], hide: {}, pin: {}, side: 'r', bar: ['camp', 'gear', 'rekindle'] });
+  const layReady = () => !!(S.hero && (!S.tut || S.tut.done));
+  function layOf() {
+    const d = LAY_DEF(), o = (S.settings && S.settings.lay) || {};
+    if (!layReady()) return d;
+    const ord = (Array.isArray(o.ord) ? o.ord : []).filter(k => d.ord.includes(k));
+    d.ord.forEach(k => { if (!ord.includes(k)) ord.push(k); });
+    const bar = Array.isArray(o.bar) ? o.bar.filter(k => LAY_BAR.includes(k)).slice(0, LAY_BAR_N) : d.bar;
+    return { ord, hide: Object.assign({}, o.hide), pin: Object.assign({}, o.pin), side: o.side === 'l' ? 'l' : 'r', bar };
+  }
+  function laySet(f) { const l = layOf(); f(l); S.settings.lay = l; save(); applyLayout(); if (layEditing) layBars(); }
+  const layEl = k => document.querySelector(LAY_MODS[k][0]);
+  let layKey = '', layEditing = false;
+  function applyLayout() {
+    const l = layOf(); layKey = JSON.stringify([layReady(), S.settings && S.settings.lay]);
+    LAY_HIDE.forEach(k => { const e = layEl(k); if (e) e.classList.toggle('layoff', !!l.hide[k]); });
+    const st = document.querySelector('.stage'), tp = $('tab-party');
+    // Pinned meter / log move under the fight; otherwise they go back to the end of the Party tab, in their usual order.
+    ['log', 'meter'].forEach(k => { const e = layEl(k); if (!e || !st || !tp) return; const want = l.pin[k] ? st : tp; if (e.parentNode !== want) want.appendChild(e); e.classList.toggle('laypin', !!l.pin[k]); });
+    { const fl = $('flogbox'), me = $('meterbox'); if (fl && me && fl.parentNode === tp && me.parentNode === tp && (me.compareDocumentPosition(fl) & 4)) tp.insertBefore(fl, me); }
+    l.ord.forEach((k, i) => { const e = layEl(k); if (e) e.style.order = i + 1; if (k === 'skills' && $('tonicbar')) $('tonicbar').style.order = i + 1; });
+    document.body.classList.toggle('layleft', l.side === 'l');
+    document.querySelectorAll('.tabs button[data-tab]').forEach(b => { const t = b.dataset.tab; if (t === 'party' || t === 'admin' || !LAY_BAR.includes(t)) return; b.classList.toggle('townitem', !l.bar.includes(t)); });
+    if (typeof paintTown === 'function') paintTown();
+  }
+  try { applyLayout(); } catch (e) {}
+  setInterval(() => { if (JSON.stringify([layReady(), S.settings && S.settings.lay]) !== layKey) applyLayout(); }, 1500);
+  // Desktop: edit in place, a small bar on each section. Phones: a list sheet.
+  function openLayout() {
+    if (!layReady()) { toast('lock', 'Finish the tutorial first', 'You can change your screen layout once the tutorial is done.', ''); return; }
+    closeModal();
+    if (phone()) { layoutSheet(); return; }
+    switchTab('party'); layEditing = true; document.body.classList.add('layedit'); layBars();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function layDone() { layEditing = false; document.body.classList.remove('layedit'); document.querySelectorAll('.laybar,.laytop').forEach(x => x.remove()); save(); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && layEditing) layDone(); });
+  function layMove(l, k, d) { const i = l.ord.indexOf(k), j = i + d; if (i < 0 || j < 0 || j >= l.ord.length) return; l.ord.splice(i, 1); l.ord.splice(j, 0, k); }
+  // Up / down skip sections that are not on the fight side right now (an unpinned meter or log).
+  function layStep(l, k, d) { const live = l.ord.filter(x => !LAY_PIN.includes(x) || l.pin[x]); const i = live.indexOf(k), o = live[i + d]; if (i < 0 || !o) return; const a = l.ord.indexOf(k), b = l.ord.indexOf(o); l.ord[a] = o; l.ord[b] = k; }
+  function layBars() {
+    document.querySelectorAll('.laybar,.laytop').forEach(x => x.remove());
+    const l = layOf();
+    Object.keys(LAY_MODS).forEach(k => {
+      const e = layEl(k); if (!e || l.hide[k]) return;
+      const mov = l.ord.includes(k) && (!LAY_PIN.includes(k) || l.pin[k]);
+      const b = document.createElement('div'); b.className = 'laybar' + (k === 'tog' ? ' in' : ''); b.dataset.k = k;
+      b.innerHTML = '<b>' + LAY_MODS[k][1] + '</b>' +
+        (mov ? '<button data-la="up" aria-label="Move up">&uarr;</button><button data-la="dn" aria-label="Move down">&darr;</button>' : '') +
+        (LAY_PIN.includes(k) ? '<button data-la="pin">' + (l.pin[k] ? 'Back to Party tab' : 'Pin under the fight') + '</button>' : '') +
+        (LAY_HIDE.includes(k) ? '<button data-la="hide" class="hide">Hide</button>' : (k === 'arena' || k === 'foe' || k === 'skills' ? '<small>always shown</small>' : ''));
+      (e.tagName === 'DETAILS' && e.querySelector('summary') || e).appendChild(b); // a folded <details> only shows its summary
+    });
+    const hid = LAY_HIDE.filter(k => l.hide[k]);
+    const t = document.createElement('div'); t.className = 'laytop';
+    t.innerHTML = '<b>Editing your screen</b><span>Move sections with the arrows. Hide what you don\'t use.</span>' +
+      '<span class="layhid">' + (hid.length ? hid.map(k => '<button data-show="' + k + '">+ ' + LAY_MODS[k][1] + '</button>').join('') : '<i>Nothing hidden</i>') + '</span>' +
+      '<button class="btn ghost small" data-la="side">Tabs on the ' + (l.side === 'l' ? 'right' : 'left') + '</button>' +
+      '<button class="btn ghost small" data-la="reset">Reset to default</button><button class="btn small" data-la="done">Done</button>';
+    $('app').prepend(t);
+  }
+  document.addEventListener('click', e => {
+    if (!layEditing) return;
+    const sh = e.target.closest('.laytop [data-show]'); if (sh) { laySet(l => { delete l.hide[sh.dataset.show]; }); return; }
+    const a = e.target.closest('.laybar [data-la], .laytop [data-la]'); if (!a) return;
+    e.preventDefault(); e.stopPropagation();
+    const k = a.closest('.laybar') && a.closest('.laybar').dataset.k, act = a.dataset.la;
+    if (act === 'done') { layDone(); return; }
+    if (act === 'reset') { S.settings.lay = LAY_DEF(); save(); applyLayout(); layBars(); return; }
+    laySet(l => {
+      if (act === 'side') l.side = l.side === 'l' ? 'r' : 'l';
+      else if (act === 'hide') l.hide[k] = 1;
+      else if (act === 'pin') { if (l.pin[k]) delete l.pin[k]; else l.pin[k] = 1; }
+      else layStep(l, k, act === 'up' ? -1 : 1);
+    });
+  }, true);
+  function layoutSheet() {
+    const row = (k, l) => {
+      const m = LAY_MODS[k], mov = l.ord.includes(k) && (!LAY_PIN.includes(k) || l.pin[k]), canHide = LAY_HIDE.includes(k), on = !l.hide[k];
+      const sub = LAY_PIN.includes(k) ? (l.pin[k] ? 'Under the fight' : 'In the Party tab') : canHide ? (m[2] || '') : 'always shown';
+      return '<div class="lrow' + (on ? '' : ' off') + '"><span>' + m[1] + (sub ? '<small>' + sub + '</small>' : '') + '</span>' +
+        '<span class="ar">' + (LAY_PIN.includes(k) && on ? '<button data-lp="' + k + '">' + (l.pin[k] ? 'To tab' : 'Pin') + '</button>' : '') +
+        (mov && on ? '<button data-lu="' + k + '" aria-label="Move up">&uarr;</button><button data-ld="' + k + '" aria-label="Move down">&darr;</button>' : '') + '</span>' +
+        (canHide ? '<input type="checkbox" class="lsw" data-lh="' + k + '"' + (on ? ' checked' : '') + ' aria-label="Show ' + m[1] + '">' : '<small class="llock">Locked</small>') + '</div>';
+    };
+    const paint = () => {
+      const l = layOf(), mb = $('laysheet'); if (!mb) return;
+      const fight = ['war', 'head', 'arena'].concat(l.ord.filter(k => !LAY_PIN.includes(k) || l.pin[k])).concat(['tog']);
+      const tabbed = ['train', 'tips'].concat(LAY_PIN.filter(k => !l.pin[k]));
+      mb.innerHTML = '<h2>Screen layout</h2><p class="setnote">Move sections or switch off the ones you don\'t use. The battle, foe and abilities always stay.</p>' +
+        '<h3 class="sethead">Fight screen</h3>' + fight.map(k => row(k, l)).join('') +
+        '<h3 class="sethead">Party tab</h3>' + tabbed.map(k => row(k, l)).join('') +
+        '<h3 class="sethead">Bottom bar</h3><p class="setnote">Pick ' + LAY_BAR_N + ' tabs to sit next to Fight and Party. The rest live under Town.</p>' +
+        '<div class="lbar">' + LAY_BAR.map(t => { const b = document.querySelector('.tabs [data-tab="' + t + '"]'); return '<button data-lb="' + t + '" class="' + (l.bar.includes(t) ? 'on' : '') + '">' + esc(b && b.querySelector('span') ? b.querySelector('span').textContent.trim() : t) + '</button>'; }).join('') + '</div>' +
+        '<div class="row"><button class="btn ghost" id="lay-reset">Reset to default</button><button class="btn" id="lay-done">Done</button></div>';
+    };
+    modal('<div id="laysheet" class="laysheet"></div>', () => {
+      const m = $('laysheet'); paint();
+      m.addEventListener('click', e => {
+        const t = e.target.closest('button'); if (!t) return;
+        if (t.id === 'lay-done') { save(); closeModal(); return; }
+        if (t.id === 'lay-reset') { S.settings.lay = LAY_DEF(); save(); applyLayout(); paint(); return; }
+        if (t.dataset.lu || t.dataset.ld) laySet(l => layStep(l, t.dataset.lu || t.dataset.ld, t.dataset.lu ? -1 : 1));
+        else if (t.dataset.lp) laySet(l => { const k = t.dataset.lp; if (l.pin[k]) delete l.pin[k]; else l.pin[k] = 1; });
+        else if (t.dataset.lb) {
+          const k = t.dataset.lb, l0 = layOf();
+          if (!l0.bar.includes(k) && l0.bar.length >= LAY_BAR_N) { toast('lock', 'The bar is full', 'Tap a tab that is on to take it off first.', ''); return; }
+          laySet(l => { l.bar = l.bar.includes(k) ? l.bar.filter(x => x !== k) : l.bar.concat(k); });
+        } else return;
+        paint();
+      });
+      m.addEventListener('change', e => { const c = e.target.closest('[data-lh]'); if (!c) return; laySet(l => { if (c.checked) delete l.hide[c.dataset.lh]; else l.hide[c.dataset.lh] = 1; }); paint(); });
+    });
+  }
+  // ---------- v141 Dashboard (John 27 Nov: "a custom dashboard page... a player can build their dashboard by adding ANY tile") ----------
+  // Every tile reads what the game already shows elsewhere and offers one-tap jumps. Buttons use data-dt (switch tab),
+  // data-dq (click an existing control by selector), data-df (a function in DASH_FN) or data-camp (the camp handler).
+  // The tile list is saved in S.settings.dash.
+  const DASH_DEF = ['purse', 'depth', 'quests', 'party', 'pack', 'places'];
+  const dT = (t, l) => '<button class="btn ghost small" data-dt="' + t + '">' + (l || 'Open') + '</button>';
+  const dQ = (q, l) => '<button class="btn ghost small" data-dq="' + q + '">' + l + '</button>';
+  const dF = (f, l) => '<button class="btn ghost small" data-df="' + f + '">' + l + '</button>';
+  const dC = (c, l) => '<button class="btn ghost small" data-camp="' + c + '">' + l + '</button>';
+  const dLock = f => f && S.hero && !L.canUse(S, f) ? '<p class="dlock">' + icon('lock') + lockMsg(f) + '</p>' : '';
+  const dTxt = id => { const e = $(id); return e ? e.textContent.trim() : ''; };
+  const DASH_FN = {
+    mail: () => { switchTab('market'); const b = document.querySelector('#mktseg [data-mv="mail"]'); if (b) b.click(); },
+    rekindle: () => { switchTab('rekindle'); const b = document.querySelector('#tab-rekindle [data-v="rekindle"]'); if (b) b.click(); },
+    tree: () => { switchTab('rekindle'); const b = document.querySelector('#tab-rekindle [data-v="tree"]'); if (b) b.click(); },
+    boss: () => openBoss(), chat: () => openChat(true), layout: () => openLayout(), hero: () => profileModal('you'),
+    journal: () => { switchTab('codex'); const b = document.querySelector('#codexseg [data-cx="journal"]'); if (b) b.click(); },
+    board: () => { switchTab('codex'); const b = document.querySelector('#codexseg [data-cx="board"]'); if (b) b.click(); },
+  };
+  const DASH = {
+    purse: { n: 'Gold and power', i: 'coin', d: 'Gold, party damage, Dust and Embers.', v: now => '<b class="dbig">' + fmt(S.gold) + ' <small>gold</small></b><p>' + fmt(L.totalDps(S, now)) + ' damage/s · ' + fmt(S.dust || 0) + ' Dust · ' + fmt(S.embers) + ' Embers</p>', a: () => dC('store', 'Store') },
+    depth: { n: 'Depth and chapter', i: 'map', d: 'Your floor, deepest floor and chapter goal.', v: () => '<b class="dbig">Floor ' + S.floor + '</b><p>Deepest ' + (S.maxFloorEver || 1) + ' · Chapter ' + L.chapterOf(S) + '</p><p class="dsub">' + esc(dTxt('goaltext')) + '</p>', a: () => dQ('#btn-map', 'Map of the Deep') },
+    quests: { n: 'Quests and bounties', i: 'flare', d: 'Daily quests and bounties done.', v: () => '<b class="dbig">' + esc(dTxt('questct')) + '</b><p>Daily quests and bounties</p>', a: () => dQ('#quests', 'Open quests') },
+    party: { n: 'Party', i: 'users', d: 'Who is in your marching order, front to back.', w: 1, v: () => '<ul class="dlist">' + S.party.map((id, k) => { const m = L.memberById(id); return m ? '<li><span>' + (k + 1) + '. ' + esc(m.name) + ' ' + classTag(m.cls) + '</span><b>Power level ' + fmt(S.levels[id] || 0) + '</b></li>' : ''; }).join('') + '</ul>', a: () => dT('party', 'Train party') + dQ('#f-auto', 'Auto-arrange') + dQ('#f-train', 'Training Grounds') },
+    meter: { n: 'Damage meter', i: 'sword', d: 'Who deals your damage, last 30 seconds.', v: now => { const r = L.damageMeter(S, now), t = r.reduce((a, x) => a + x.dps, 0) || 1; return r.length ? '<ul class="dlist">' + r.slice(0, 5).map(x => { const m = METER_NAME[x.key] ? null : L.memberById(x.key); return '<li><span>' + esc(m ? m.name : METER_NAME[x.key] ? METER_NAME[x.key][0] : x.key) + '</span><b>' + fmt(x.dps) + '/s · ' + Math.round(x.dps / t * 100) + '%</b></li>'; }).join('') + '</ul>' : '<p class="dsub">No damage yet. Fight for a few seconds.</p>'; } },
+    flog: { n: 'Fight log', i: 'skull', d: 'The last few things that happened in fights.', w: 1, v: () => FLOG.length ? '<ul class="dlist dlog">' + FLOG.slice(0, 5).map(x => '<li><span>' + x.text + '</span></li>').join('') + '</ul>' : '<p class="dsub">Nothing yet.</p>' },
+    pack: { n: 'Pack', i: 'bag', d: 'Pack space and auto-scrap.', v: () => { const n = L.packCount(S), c = L.bagCap(S); return '<b class="dbig">' + fmt(n) + (S.boh ? ' <small>Bag of Holding</small>' : ' <small>/ ' + fmt(c) + '</small>') + '</b><p>Auto-scrap ' + esc(dTxt('g-autos') || 'Off') + (!S.boh && n >= c ? ' · <span class="dwarn">full, new finds are sold</span>' : '') + '</p>'; }, a: () => dLock('gear') || dT('gear', 'Gear') + dQ('#g-auto', 'Auto-scrap') + dQ('#g-scrap', 'Mass scrap') },
+    skills: { n: 'Hero and skills', i: 'star', d: 'Hero level, stat points and Kindling to spend.', v: () => { const hp = L.heroPoints(S); return '<b class="dbig">Hero level ' + L.heroLv(S) + '</b><p>' + (hp > 0 ? '<span class="dgood">' + hp + ' stat point' + (hp === 1 ? '' : 's') + ' to spend</span>' : 'No stat points waiting') + (S.kindling ? ' · ' + S.kindling + ' Kindling' : '') + '</p>'; }, a: () => dT('rekindle', 'Stats') + dF('tree', 'Skill tree') + dF('hero', 'My hero') },
+    rekindle: { n: 'Rekindle', i: 'lantern', d: 'Embers you would gain by rekindling now.', v: () => { const ok = L.canUse(S, 'rekindle'), e = L.embersFor(S); return '<b class="dbig">+' + fmt(e) + ' <small>Embers</small></b><p>' + (ok ? (e > 0 ? 'Ready when you are' : 'Go deeper to earn Embers') : 'Opens at hero level ' + L.unlockOf('rekindle').lv) + '</p>' + (S.np ? '<p class="dsub">New Playthrough NP+' + S.np + '</p>' : ''); }, a: () => dF('rekindle', 'Rekindle') },
+    places: { n: 'Around the Hold', i: 'lamp', d: 'Quick trips to the shops, the Hold and camp.', w: 1, v: () => '', a: () => dC('ench', 'Enchanter') + dC('arm', 'Armorer') + dC('store', 'Store') + dC('hold', 'The Hold') + dC('go', 'Return to camp') },
+    camp: { n: 'Camp', i: 'flame', d: 'Companions resting by the fire and their jobs.', v: () => { const n = (S.unlocked || []).filter(id => id !== 'you' && !S.party.includes(id)).length; return '<b class="dbig">' + n + ' <small>at camp</small></b><p>Companions out of the party work camp jobs</p>'; }, a: () => dLock('camp') || dT('camp', 'Camp') },
+    boss: { n: 'World boss', i: 'skull', d: 'The weekend world boss and the Golden Loot Goblin.', v: () => { const b = $('wbbar'), g = $('gobbar'); const t = [b, g].filter(x => x && !x.hidden).map(x => esc(x.textContent.trim())).join(' · '); return t ? '<p>' + t + '</p>' : '<p class="dsub">No world boss right now. It comes on weekends.</p>'; }, a: () => dLock('boss') || dF('boss', 'World boss') },
+    ring: { n: 'Ember Ring', i: 'duel', d: 'Duels and team battles against other players.', v: () => '<p>Duels and team battles</p>', a: () => dLock('ring') || dT('ring', 'Go to the Ring') },
+    market: { n: 'Market and mail', i: 'coin', d: 'Player market and your mailbox.', v: () => { const m = dTxt('mailn'); return '<p>' + (m ? '<span class="dgood">' + esc(m) + ' in your mailbox</span>' : 'Mailbox is empty') + '</p>'; }, a: () => dLock('buy') || dT('market', 'Market') + dF('mail', 'Mailbox') },
+    guild: { n: 'Players Guild', i: 'crown', d: 'Players online and the hero board.', v: () => '<b class="dbig">' + esc(dTxt('onlinect') || '0') + ' <small>online</small></b>', a: () => dLock('guild') || dT('guild', 'Guild') },
+    codex: { n: 'Codex', i: 'book', d: 'Feats, relics, journal and leaderboard.', v: () => '<p>' + L.featCount(S) + ' feats · ' + Object.keys(S.relics || {}).length + '/' + L.RELICS.length + ' relics</p>', a: () => dT('codex', 'Codex') + dF('journal', 'Journal') + dF('board', 'Leaderboard') },
+    tonics: { n: 'Tonics', i: 'oil', d: 'Tonics working right now.', v: () => { const t = $('tonicbar'); const x = t && !t.hidden ? t.textContent.replace(/\s+/g, ' ').trim() : ''; return '<p' + (x ? '' : ' class="dsub"') + '>' + esc(x || 'No tonics active') + '</p>'; }, a: () => dC('store', 'Store') },
+    buffs: { n: 'Blessings', i: 'flare', d: 'Lantern Keeper, Lantern Surge and Mercy\'s Blessing.', v: () => { const on = [['keeperbar', 'Lantern Keeper is here'], ['surge', 'Lantern Surge'], ['mercy', 'Mercy\'s Blessing']].filter(([id]) => $(id) && !$(id).hidden).map(([id, n]) => n + (dTxt(id) ? ' ' + esc(dTxt(id)) : '')); return '<p' + (on.length ? '' : ' class="dsub"') + '>' + (on.length ? on.join(' · ') : 'No blessings right now') + '</p>'; } },
+    chat: { n: 'Chat', i: 'chat', d: 'Open chat with other players.', v: () => '<p>Global, Banner, Trade, Help, Party and Whispers</p>', a: () => dF('chat', 'Open chat') },
+    help: { n: 'Help and settings', i: 'help', d: 'Guide, settings and screen layout.', v: () => '', a: () => dQ('#btn-guide', 'Guide') + dQ('#btn-settings', 'Settings') + dF('layout', 'Edit layout') },
+  };
+  let dashEdit = false;
+  const dashList = () => { const d = S.settings && Array.isArray(S.settings.dash) ? S.settings.dash : DASH_DEF; return d.filter((k, i) => DASH[k] && d.indexOf(k) === i); };
+  function dashSet(list) { S.settings.dash = list; save(); paintDash(true); }
+  function paintDash(force) {
+    const box = $('dashbox'); if (!box || tab !== 'dash') return;
+    const now = Date.now(), list = dashList();
+    const head = '<div class="dashhead"><div><b>Dashboard</b><small>' + (dashEdit ? 'Move or remove tiles, or add any tile you like.' : 'Your own page. Add any tile.') + '</small></div><span>' +
+      (dashEdit ? '<button class="btn ghost small" data-dd="add">+ Add tile</button><button class="btn ghost small" data-dd="reset">Reset</button><button class="btn small" data-dd="done">Done</button>' : '<button class="btn ghost small" data-dd="edit">Edit dashboard</button>') + '</span></div>';
+    if (force || box.dataset.k !== list.join() + dashEdit) {
+      box.dataset.k = list.join() + dashEdit;
+      box.innerHTML = head + (list.length ? '<div class="dash' + (dashEdit ? ' editing' : '') + '">' + list.map(k => '<section class="dtile' + (DASH[k].w ? ' wide' : '') + '" data-tile="' + k + '"><h4>' + icon(DASH[k].i) + DASH[k].n +
+        (dashEdit ? '<span class="dtools"><button data-dm="-1" aria-label="Move back">&larr;</button><button data-dm="1" aria-label="Move forward">&rarr;</button><button data-dm="x" aria-label="Remove tile">&times;</button></span>' : '') +
+        '</h4><div class="dval"></div><div class="dacts"></div></section>').join('') + '</div>' : '<p class="note">Your dashboard is empty. <button class="linkbtn" data-dd="add">Add a tile</button></p>');
+    }
+    box.querySelectorAll('.dtile').forEach(t => {
+      const d = DASH[t.dataset.tile]; let v = '', a = '';
+      try { v = d.v(now); a = d.a ? d.a() : ''; } catch (e) { v = '<p class="dsub">Not available right now.</p>'; }
+      const vv = t.querySelector('.dval'), aa = t.querySelector('.dacts');
+      if (vv.dataset.h !== v) { vv.dataset.h = v; vv.innerHTML = v; }
+      if (aa.dataset.h !== a) { aa.dataset.h = a; aa.innerHTML = a; aa.hidden = !a; }
+    });
+  }
+  setInterval(() => paintDash(false), 700);
+  function dashAdd() {
+    const have = dashList(), rest = Object.keys(DASH).filter(k => !have.includes(k));
+    modal('<h2>Add a tile</h2><p class="setnote">Pick anything you want on your dashboard. You can add every tile.</p>' +
+      (rest.length ? '<div class="dpick">' + rest.map(k => '<button data-addt="' + k + '">' + icon(DASH[k].i) + '<span><b>' + DASH[k].n + '</b><small>' + DASH[k].d + '</small></span><em>Add</em></button>').join('') + '</div>' : '<p class="note">Every tile is already on your dashboard.</p>') +
+      '<div class="row"><button class="btn" id="d-close">Done</button></div>', m => {
+        m.querySelector('#d-close').onclick = closeModal;
+        m.querySelectorAll('[data-addt]').forEach(b => b.onclick = () => { dashSet(dashList().concat(b.dataset.addt)); b.remove(); if (!m.querySelector('[data-addt]')) closeModal(); });
+      });
+  }
+  document.addEventListener('click', e => {
+    const box = e.target.closest('#dashbox'); if (!box) return;
+    const dd = e.target.closest('[data-dd]'), dm = e.target.closest('[data-dm]'), dt = e.target.closest('[data-dt]'), dq = e.target.closest('[data-dq]'), df = e.target.closest('[data-df]');
+    if (dd) { const a = dd.dataset.dd; if (a === 'add') dashAdd(); else if (a === 'reset') dashSet(DASH_DEF.slice()); else { dashEdit = a === 'edit'; if (!dashEdit) save(); paintDash(true); } return; }
+    if (dm) { const k = dm.closest('[data-tile]').dataset.tile, l = dashList(), i = l.indexOf(k); if (dm.dataset.dm === 'x') l.splice(i, 1); else { const j = i + +dm.dataset.dm; if (j < 0 || j >= l.length) return; l.splice(i, 1); l.splice(j, 0, k); } dashSet(l); return; }
+    if (dt) { const b = document.querySelector('.tabs [data-tab="' + dt.dataset.dt + '"]'); if (b) b.click(); else switchTab(dt.dataset.dt); return; }
+    if (dq) { const el = document.querySelector(dq.dataset.dq); if (el) el.click(); return; }
+    if (df && DASH_FN[df.dataset.df]) DASH_FN[df.dataset.df]();
+  });
   // ---------- settings ----------
   $('btn-settings').addEventListener('click', openSettings);
   function openSettings() {
@@ -3990,6 +4234,7 @@
       (CL ? '<label class="setrow setnotif"><span>Lanternholder tips<small>A short note when a limit Lanternholder lifts gets in your way, at most once a day</small></span><input type="checkbox" id="s-nudge"' + (S.nudgeOff ? '' : ' checked') + '></label>' : '') +
       '<p style="margin-top:16px">Your progress saves automatically in this browser. Copy a backup to move it to another device.</p>' +
       '<div class="row"><button class="btn ghost" id="s-export">Copy backup</button><button class="btn ghost" id="s-import">Load backup</button><button class="btn danger" id="s-reset">Erase progress</button></div>' +
+      '<h3 class="sethead">Screen layout</h3><p class="setnote">' + (layReady() ? 'Move or hide parts of the screen to suit how you play.' : 'Opens once the tutorial is done.') + '</p><div class="row"><button class="btn ghost" id="s-lay"' + (layReady() ? '' : ' disabled') + '>Edit layout</button></div>' +
       '<div class="row"><button class="btn ghost" id="s-tut">Replay the tutorial</button><a class="btn ghost" href="https://lanternhold.born2gamellc.com/wiki/" target="_blank" rel="noopener">Open the wiki</a><button class="btn ghost" id="s-intro">Watch the intro</button>' + (fsOk() ? '<button class="btn ghost" id="s-full">' + (fsEl() ? 'Leave full screen' : 'Play full screen') + '</button>' : '') + '</div>' +
       '<div id="s-extra"></div>' +
       (window.LH_SUPPORT_URL ? '<p style="margin-top:16px">Lanternhold is free with no ads. If you enjoy it, you can <a style="color:var(--gold)" target="_blank" rel="noopener" href="' + window.LH_SUPPORT_URL + '">buy the developer a coffee</a>. It supports the time that goes into the game. It is not a charity donation and gives nothing in game. Thank you.</p>' : '') +
@@ -4013,6 +4258,7 @@
         m.querySelector('#s-close').onclick = () => { save(); closeModal(); };
         m.querySelector('#s-full') && (m.querySelector('#s-full').onclick = () => { save(); closeModal(); toggleFull(); });
         m.querySelector('#s-tut').onclick = () => { S.tut = { i: 0, done: false }; coachCtx = null; closeModal(); switchTab('party'); save(); };
+        m.querySelector('#s-lay').onclick = openLayout;
         m.querySelector('#s-intro').onclick = () => { save(); closeModal(); if (window.LHIntro) LHIntro.play(); };
         m.querySelector('#s-export').onclick = () => {
           save(); const code = backupCode(localStorage.getItem(SAVE_KEY) || '');
@@ -4577,14 +4823,14 @@
     star: 'M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6L12 16.3l-5.4 3 1.3-6-4.6-4.1 6.1-.6z', key: 'M3 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M11 12h10M18 12v3M15 12v2',
     anvil: 'M4 7h13c0 3-2 4-4 4v3h3v3H7v-3h3v-3C7 11 4 9 4 7zM17 7h3', crown: 'M3 8l4 4 5-7 5 7 4-4-2 11H5z', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
     rose: 'M12 13c-3 0-5-2-5-5 2 0 3 1 3.5 2C11 7 12 5 12 5s1 2 1.5 5c.5-1 1.5-2 3.5-2 0 3-2 5-5 5zM12 13v8M12 17c-2 0-3-1-4-2M12 18c2 0 3-1 4-2',
-    raven: 'M3 13c3-1 5-4 9-4 3 0 5 2 6 1l3-1-2 3c0 4-4 7-9 7l-2 3v-3c-2-1-4-3-5-6z', rift: 'M12 2c-2 4 3 6 0 10s3 6 0 10M8 7c-2 2-2 8 0 10M16 7c2 2 2 8 0 10',
+    laurel: 'M12 21V9M12 9c-2-1-3-3-3-5 2 0 3 2 3 5zM12 9c2-1 3-3 3-5-2 0-3 2-3 5zM12 13c-3 0-5-2-5-4 2 0 4 1 5 4zM12 13c3 0 5-2 5-4-2 0-4 1-5 4zM12 17c-3 0-5-2-6-4 2 0 5 1 6 4zM12 17c3 0 5-2 6-4-2 0-5 1-6 4z', raven: 'M3 13c3-1 5-4 9-4 3 0 5 2 6 1l3-1-2 3c0 4-4 7-9 7l-2 3v-3c-2-1-4-3-5-6z', rift: 'M12 2c-2 4 3 6 0 10s3 6 0 10M8 7c-2 2-2 8 0 10M16 7c2 2 2 8 0 10',
   };
   const COSMETICS = {
-    f: { label: 'Frame', items: [['plain', 'Plain Iron', 0], ['iron', 'Covenant Iron', 150], ['radiant', 'Radiant Gilt', 150], ['tide', 'Tide Maw', 150], ['mercy', 'Mercy Laurel', 150], ['ember', 'Ember Ring', 250], ['rift', 'Riftglass', 400], ['nexus', 'Nexus Crown', 600]] },
-    t: { label: 'Title', items: [['delver', 'Delver', 0], ['lampbearer', 'Lampbearer', 80], ['ashborn', 'Ashborn', 120], ['nightwatch', 'of the Night Watch', 120], ['riftwalker', 'Rift-Walker', 200], ['warden', 'Warden of the Hold', 200], ['stormcaller', 'Stormcaller', 200], ['oathkeeper', 'Oathkeeper', 250], ['heir', 'Heir of the Lamp', 400], ['dawn', 'Dawnbringer', -1, 'hidden']] },
+    f: { label: 'Frame', items: [['plain', 'Plain Iron', 0], ['iron', 'Covenant Iron', 150], ['radiant', 'Radiant Gilt', 150], ['tide', 'Tide Maw', 150], ['mercy', 'Mercy Laurel', 150], ['ember', 'Ember Ring', 250], ['emberchamp', 'Ember Champion', -1, 'hidden'], ['rift', 'Riftglass', 400], ['nexus', 'Nexus Crown', 600]] },
+    t: { label: 'Title', items: [['delver', 'Delver', 0], ['lampbearer', 'Lampbearer', 80], ['ashborn', 'Ashborn', 120], ['nightwatch', 'of the Night Watch', 120], ['riftwalker', 'Rift-Walker', 200], ['warden', 'Warden of the Hold', 200], ['stormcaller', 'Stormcaller', 200], ['oathkeeper', 'Oathkeeper', 250], ['heir', 'Heir of the Lamp', 400], ['dawn', 'Dawnbringer', -1, 'hidden'], ['emberchamp', 'Ember Champion', -1, 'hidden']] },
     c: { label: 'Name color', items: [['none', 'Plain', 0], ['gold', 'War Gold', 100], ['violet', 'Nyx Violet', 100], ['ember', 'Ember', 100], ['frost', 'Frost', 100], ['verdant', 'Verdant', 100], ['rift', 'Riftlight', 300]] },
     g: { label: 'Banner', items: [['night', 'Night Watch', 0], ['forge', 'Cinder Forge', 150], ['crypt', 'Mosswater', 150], ['glass', 'Glass Wastes', 150], ['storm', 'Stormglass', 200], ['rift', 'The Rift', 350], ['nexus', 'The Nexus', 500]] },
-    e: { label: 'Emblems', items: [['lantern', 'Lantern', 0], ['shield', 'Shield', 0], ['sword', 'Sword', 0], ['skull', 'Skull', 40], ['flame', 'Flame', 40], ['wave', 'Wave', 40], ['sun', 'Sun', 40], ['moon', 'Moon', 40], ['star', 'Star', 40], ['key', 'Key', 40], ['anvil', 'Anvil', 40], ['crown', 'Crown', 60], ['eye', 'Eye', 60], ['rose', 'Rose', 60], ['raven', 'Raven', 80], ['rift', 'Rift', 100]] },
+    e: { label: 'Emblems', items: [['lantern', 'Lantern', 0], ['shield', 'Shield', 0], ['sword', 'Sword', 0], ['skull', 'Skull', 40], ['flame', 'Flame', 40], ['wave', 'Wave', 40], ['sun', 'Sun', 40], ['moon', 'Moon', 40], ['star', 'Star', 40], ['key', 'Key', 40], ['anvil', 'Anvil', 40], ['crown', 'Crown', 60], ['eye', 'Eye', 60], ['rose', 'Rose', 60], ['raven', 'Raven', 80], ['rift', 'Rift', 100], ['laurel', 'Season Laurel', -1, 'hidden']] },
   };
   const ttCls = id => id === 'dawn' ? ' tt-dawn' : ''; // the one-of-a-kind title glows
   const cosOf = (k, id) => (COSMETICS[k].items.find(x => x[0] === id) || COSMETICS[k].items[0]);
@@ -4987,7 +5233,7 @@
     'Plate armour, a solid hammer and a small steady heal for the whole party.',
     'Oath of Dawn: heals the party for 25% and the party takes 30% less damage for 6s.',
     'Its own skill tree (Dawn, Aegis, Crusade), class gear set and Grand War aura.',
-    'Ember Ring: no class edge and no counter, and for its first two weeks its duels and team battles move no rating.']] };
+    'Ember Ring: no class advantage and no counter, and for its first two weeks its duels and team battles move no rating.']] };
   // after(c): what to do once the class is yours (pick it at setup, or change class). back: where Back goes.
   function openClassUnlock(c, after, back) {
     const d = L.CLASSES[c], price = L.PAID_CLASS[c], own = clsOwned(c), bal = prof ? prof.bal : null, pitch = CLASS_PITCH[c] || ['', []];
@@ -6050,6 +6296,16 @@
   if (CL) {
     $('btn-chat').hidden = false;
     $('btn-chat').addEventListener('click', () => openChat(true));
+    // v141: on phones the round chat button sat over the right edge of rows (+5 buttons, health, camp jobs). It now slides
+    // away while you scroll down and comes back when you scroll up, get near the top, or reach the end of the page.
+    { const fab = $('btn-chat'); let lastY = 0;
+      addEventListener('scroll', e => {
+        if (innerWidth > 720) return;
+        const el = e.target === document ? document.scrollingElement : e.target; if (!el || el.scrollTop == null) return;
+        const y = el.scrollTop, end = y + el.clientHeight >= el.scrollHeight - 40;
+        fab.classList.toggle('away', y > lastY + 2 && y > 80 && !end); if (y < lastY - 2 || y <= 80 || end) fab.classList.remove('away');
+        lastY = y;
+      }, { passive: true, capture: true }); }
     $('chatmin').addEventListener('click', () => openChat(false));
     // The chat window stays as you left it: open or tucked away.
     try { if (localStorage.getItem('lh_chat') === '1' && !dockMode() && matchMedia('(min-width:721px)').matches) setTimeout(() => openChat(true), 1500); } catch (e) {}
@@ -7204,11 +7460,12 @@
         '<b>Mail</b>: send to someone you recruited or chatted with, as a gift or for a price.',
         'Gold and gear have no real-money value.']],
       ['The Ember Ring (PvP)', 'i:duel', 'Duel other players\u2019 heroes, or fight their teams, for Laurels and rating.', [
-        'Opens at hero level ' + L.unlockOf('ring').lv + '. Open the <b>PvP</b> tab (Town on phones) and press <b>Duel</b>. Only your own hero fights; companions, tonics and Sigils never count.',
-        'Each class has the edge on two classes and is countered by two (the Paladin has neither). Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
+        'Opens at hero level ' + L.unlockOf('ring').lv + '. Open the <b>PvP</b> tab (Town on phones) and press <b>Duel</b>. Only your own hero fights. Each class starts with its own Ring health and attack (tanks sturdier, rogues and mages sharper); dungeon gear and power, companions, tonics and Sigils never count.',
+        'Each class has the <b>advantage</b> over two classes (+4% damage) and is <b>countered</b> by two (4% less). The Paladin has neither. Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
         'Rematches against the same hero within a day pay less each time, so spread your duels around.',
+        '<b>Ring seasons</b> last a calendar month (Season 1 runs to the end of December). The top 3 duelists win the Ember Champion title and frame, the top 25 the Season Laurel emblem. Then every rating moves halfway back to 1,000.',
         '10 challenges, one back every 30 minutes. Wins give rating and Laurels, losses a few Laurels; your hero also defends while you are away. A full kit is a long climb.',
-        'Laurels buy the <b>Ringwarden kit</b>: PvP gear with <b>Edge</b> (more damage to heroes) and <b>Resolve</b> (less damage from heroes). It works only in the Ring.',
+        'Laurels buy the <b>Ringwarden kit</b>: PvP gear that works only in the Ring. With all five pieces at +15, <b>Ring Mastery</b> ranks add 1% Ring health and attack each, up to 10. <b>Edge</b> adds damage to other heroes: Edge 100 is +25%, 300 is +50%. <b>Resolve</b> softens their blows: Resolve 100 blocks 12.5%, 300 blocks 25%, and it never blocks more than half. Each point adds a little less than the one before. Tap a Ring number to see what yours does.',
         '<b>Team battles</b> (Team view): your hero and two of your own companions against another player\u2019s team. Borrowed player heroes can\u2019t join. The front fighter takes most of the blows. Companions wear their own <b>companion Ring kit</b>, bought with Laurels. A win pays 10 Laurels, a loss 4.']],
       ['Your profile', 'i:user', 'Your hero sheet, and the card other players see.', [
         'Tap your portrait. <b>My hero</b> shows power level, steady damage, health and deepest floor up top, with sections you can fold open.',
@@ -7312,6 +7569,18 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
+      'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
+      'Edit layout (Settings): move or hide parts of the screen, pin the damage meter or fight log under the fight, and pick your phone\'s bottom bar tabs.',
+      'Ember Ring seasons: monthly, Season 1 ends 31 Dec. The top 3 win the Ember Champion title and frame, the top 25 the Season Laurel emblem.',
+      'Ring Mastery: after a full Ringwarden kit, Laurels buy +1% Ring health and attack per rank, up to 10.',
+      'Each class starts the Ring with its own health and attack, and dungeon power no longer counts there.',
+      'Ember Ring: tap Edge, Resolve, health or attack to see what they do. After a duel, see what Edge added and Resolve blocked.',
+      'Guild hires from your own faction cost 20% less to sign on and 10% less in wages.',
+      'Story companions can go back to the Guild Hall from the Campfire to free their spot.',
+      'Phones: tap gold, damage, Embers or Dust for the numbers. Damage lists each party member.',
+      'Phones: the chat button slides away while you scroll, long pop-ups open in full on a tap, and Guild cards say what you still need.',
+    ] },
     { v: 140, date: 'November 2026', title: 'Safer saves and a fresh Guide', items: [
       'Your account keeps a daily copy of your save for 35 days, and the server checks every save, Market buy and Mail payment.',
       'Settings: turn off party invites to play solo, replay the tutorial, open the wiki.',
@@ -7325,7 +7594,7 @@
     { v: 139, date: 'November 2026', title: 'The Paladin', items: [
       'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
       'The Paladin is a Sigil class: unlock it once for 1,000 Sigils and every hero on your account can be one. The first change into it is free. It keeps pace with the other classes and never outclasses them.',
-      'Paladins have their own skill tree, class gear set (Oath of the First Dawn), Grand War aura and Ember Ring skills. In the Ring it has no class edge or counter, and its first two weeks move no rating.',
+      'Paladins have their own skill tree, class gear set (Oath of the First Dawn), Grand War aura and Ember Ring skills. In the Ring it has no class advantage or counter, and its first two weeks move no rating.',
       'Your first Sigil pack ever comes with 50% more Sigils, once.',
       'Lantern Surge shout-out: tick the box in the Sigil shop and your hero’s name shows with the Surge your pack lights.',
       'Gift Lanternholder: open another player’s profile in the Players Guild and give them 30 days for 500 Sigils.',
@@ -7448,20 +7717,6 @@
     { v: 121, date: 'November 25, 2026', title: 'Rarer set pieces and steadier filters', items: [
       'Set pieces are rarer: every chance to find a region, class or job set piece is halved. A guardian now drops a set piece about 1 time in 18 (was about 1 in 9). The map’s drop chances show the new odds.',
       'The Sort, Rarity and Who dropdowns in your inventory (and on the Armorer and Enchanter counters) no longer snap shut while gold ticks in.',
-    ] },
-    { v: 120, date: 'November 25, 2026', title: 'World boss rework, the Rift Gate and a crafting log', items: [
-      'From the first weekend boss on, every point of real damage you deal chips the shared health bar. The stronger your party, the more you deal, and going deeper never lowers your score again.',
-      'Each world boss resists two classes and is weak to one. The boss window shows which. It also hits harder and uses a special attack, so a weak party falls early.',
-      'Hired and story companions deal half damage to the world boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
-      'New Legendary loot: when a world boss ends, everyone who fought rolls their own chance at a Legendary (2% to 20%, higher with more damage, full odds once 3 phases break). Several delvers can win.',
-      'You also get boss shards and Rift tokens for your damage. Take 40 Rift tokens to Warden Sable at the new Rift Gate, a portal just outside the Hold (Map > The Hold, or the shop buttons), and trade them for a Legendary piece of any boss set.',
-      'This week\'s preview boss keeps its scores until it ends on Friday, and pays out under the new loot rules.',
-      'The bell has a new Crafting tab. Every merge, upgrade, mass merge, scrap, smelt and enchant at the Armorer or the Enchanter (or in the field) writes an entry showing what happened, what you gained and what you lost.',
-      'Gained lists the finished item with its stats and enchants, plus gold, Dust and hero XP. Lost lists every piece that went in, as it was before, and the gold, Dust or shards spent.',
-      'Fixed: beating a region guardian (like floor 50) before its region trial is done sent your party back a floor with no reason on screen after the first time. Now every time it happens you see why: a toast and a "Region trial 3/10 elites" note in the arena.',
-      'While you wait at a guardian, the goal line under the floor shows the trial: how many alliance elites you have (out of 10) and the floor they open. Hover it for the full rule.',
-      'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
-      'Mages, necromancers and healers now cost Dust when they sign on, on top of gold. Wages are still gold only.',
     ] },
   ];
   const NOTES_V = PATCH_NOTES[0].v;
@@ -8158,8 +8413,8 @@
       leech: 'Heal ' + ringPc(v) + ' of the damage you deal.', undying: 'Once per duel, survive a killing blow with ' + ringPc(v) + ' health.', execute: '+' + ringPc(v) + ' damage to foes under 30% health.',
     })[s.fx] + (s.cd ? ' Every ' + s.cd + ' turns.' : '');
   }
-  const NATURE_TEXT = { tank: 'Sturdy: takes 10% less damage.', healer: 'Blessed: heals 1% each turn and takes 6% less damage.', rogue: 'Deadly: +8% critical chance, and crits hit harder.', mage: 'Arcane: abilities hit 10% harder.', necro: 'Hungry: heals 12% of the damage it deals.', paladin: 'Devoted: heals 0.5% each turn and takes 5% less damage. No class edge or counter.' };
-  // 1 if a has the edge on b, -1 if b counters a, 0 otherwise.
+  const NATURE_TEXT = { tank: 'Sturdy: takes 10% less damage.', healer: 'Blessed: heals 1% each turn and takes 6% less damage.', rogue: 'Deadly: +8% critical chance, and crits hit harder.', mage: 'Arcane: abilities hit 10% harder.', necro: 'Hungry: heals 12% of the damage it deals.', paladin: 'Devoted: heals 0.5% each turn and takes 5% less damage. No class advantage or counter.' };
+  // 1 if a has the advantage over b, -1 if b counters a, 0 otherwise.
   const ringEdge = (a, b) => { const m = rg.st && rg.st.match; if (!m) return 0; return m.beats[a].includes(b) ? 1 : m.beats[b].includes(a) ? -1 : 0; };
   const ringWhy = (a, b) => (rg.st && rg.st.match.why[a + '>' + b]) || '';
   const laurel = n => '<span class="laurel">' + icon('crown') + Number(n).toLocaleString('en-US') + '</span>';
@@ -8203,7 +8458,43 @@
     if (w > 0 || l > 0) toast('shield', 'Your hero held the Ring', (w ? w + (w === 1 ? ' challenger beaten' : ' challengers beaten') : '') + (w && l ? ', ' : '') + (l ? l + ' lost' : '') + ' while you were away.' + (w ? ' +' + (w * 2) + ' Laurels.' : ''), w >= l ? 'feat' : '');
   }
   function ringFig(cls, hue, size) { return '<img class="ringspr" src="' + SP.spriteURL(cls, size || 3, hue || 0) + '" alt="">'; }
-  function ringStatLine(s) { return fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack' + (s.E ? ' &middot; Edge ' + s.E : '') + (s.R ? ' &middot; Resolve ' + s.R : ''); }
+  // v141 (John, 27 Nov 2026): every Ring number explains itself. Same formulas as strike() in infra/ring/index.js.
+  // Each class's Ring base [health, attack]; keep in step with RBASE in infra/ring/index.js.
+  const RING_BASE = { tank: [1420, 115], healer: [1250, 140], rogue: [970, 205], mage: [1000, 195], necro: [1140, 150], paladin: [1250, 155] };
+  const ringBase = c => RING_BASE[c] || RING_BASE.necro;
+  const ringEdgeOf = E => E / (E + 300), ringResOf = R => .5 * R / (R + 300);
+  const ringPct0 = x => Math.round(x * 1000) / 10 + '%';
+  const ringTipE = E => 'Edge ' + E + ': you deal ' + ringPct0(ringEdgeOf(E)) + ' more damage to other heroes. Each point adds a little less (Edge 100 is +25%, 300 is +50%). Ring kit pieces raise it.';
+  const ringTipR = R => 'Resolve ' + R + ': other heroes deal ' + ringPct0(ringResOf(R)) + ' less damage to you. Each point adds a little less, and it never blocks more than half (Resolve 100 is 12.5%, 300 is 25%). Radiant strikes ignore it.';
+  const ringTipA = c => 'Ring attack: ' + CLS_NAME(c) + 's start at ' + ringBase(c)[1] + '. Dungeon gear and power never count here; attack ranks on Ring kit pieces raise it.';
+  const ringTipH = c => 'Ring health: ' + CLS_NAME(c) + 's start at ' + fmt(ringBase(c)[0]) + '. Dungeon gear and power never count here; health ranks on Ring kit pieces raise it.';
+  const ringNum = (t, v) => '<span class="rnum" data-tip="' + esc(t) + '" tabindex="0">' + v + '</span>';
+  // v141 seasons: the season chip, the awards a hero has won, and the season box on the Standings tab.
+  const ringDays = t => Math.max(1, Math.ceil((t - Date.now()) / 864e5));
+  const ringSeasonNo = sn => { const [y, m] = sn.split('-').map(Number); return (y - 2026) * 12 + m - 11; };
+  const ringSeasonEnds = z => ringDays(z.ends) + (ringDays(z.ends) === 1 ? ' day' : ' days');
+  function ringSeasonChip(st) { const z = st.season; return z ? '<span class="rseason" data-tip="' + esc('Ring Season ' + z.no + ' ends in ' + ringSeasonEnds(z) + '. See Standings for the rewards.') + '" tabindex="0">' + icon('star') + 'Season ' + z.no + ' <small>' + ringDays(z.ends) + 'd</small></span>' : ''; }
+  const ringAwards = sa => (sa || []).map(a => a.split(':')).sort().map(([sn, p]) => '<span class="rtitle sm raward" title="' + esc('Finished Ring Season ' + ringSeasonNo(sn) + ' in place ' + p) + '">S' + ringSeasonNo(sn) + ' #' + p + '</span>').join('');
+  function ringSeasonBox(st) {
+    const z = st.season; if (!z) return '';
+    let h = '<details class="rseasonbox"><summary>' + icon('star') + ' <b>Ring Season ' + z.no + '</b> ends in ' + ringSeasonEnds(z) + '</summary><p>The top 3 duelists win the <b>Ember Champion</b> title and frame, the top 25 the <b>Season Laurel</b> emblem, all for your profile. Then every duel and team rating moves halfway back to 1,000. Your best rating (for kit tiers) stays.</p></details>';
+    if (z.last && z.last.top.length) h += '<div class="rslast"><small>Ring Season ' + z.last.no + ' champions</small>' + z.last.top.slice(0, 3).map(t => '<span><i>' + t.p + '</i>' + esc(t.n) + ' ' + classTag(t.c) + ' <small>' + t.r.toLocaleString('en-US') + '</small></span>').join('') + '</div>';
+    return h;
+  }
+  function ringStatLine(s, all) { return ringNum(ringTipH(s.c), fmt(s.hp) + ' health') + ' &middot; ' + ringNum(ringTipA(s.c), fmt(s.at) + ' attack') + (s.E || all ? ' &middot; ' + ringNum(ringTipE(s.E || 0), 'Edge ' + (s.E || 0)) : '') + (s.R || all ? ' &middot; ' + ringNum(ringTipR(s.R || 0), 'Resolve ' + (s.R || 0)) : ''); }
+  // After a duel: roughly how much each side's Edge added and Resolve blocked (radiant strikes and poison skip both).
+  function ringSplit(r) {
+    const X = [r.a, r.b], o = [{ e: 0, b: 0 }, { e: 0, b: 0 }];
+    for (const [a, d, c, , tag] of r.log) {
+      if (!(d > 0) || c > 1) continue;
+      const k = tag && ringSkill(tag); if (k && k.fx === 'pierce') continue;
+      const e = ringEdgeOf(X[a].s.E || 0), rv = ringResOf(X[1 - a].s.R || 0);
+      o[a].e += d * e / (1 + e); o[1 - a].b += d * rv / (1 - rv);
+    }
+    const ln = (i, who) => [o[i].e >= 1 ? who + ' Edge: +' + fmt(Math.round(o[i].e)) + ' damage' : '', o[i].b >= 1 ? who + ' Resolve: ' + fmt(Math.round(o[i].b)) + ' blocked' : ''].filter(Boolean).join(' &middot; ');
+    const t = [ln(0, 'Your'), ln(1, esc(r.b.n) + '’s')].filter(Boolean);
+    return t.length ? '<p class="note small rdsplit">' + t.join('<br>') + '</p>' : '';
+  }
   function paintRing() {
     const box = $('ringbox'); if (!box || typeof tab === 'undefined' || tab !== 'ring') return;
     const intro = '<p class="note">Duel other players’ heroes one on one, or bring two of your companions for a team battle. Tonics and Sigils never count. Win Laurels and climb the standings.</p>';
@@ -8212,17 +8503,17 @@
     const st = rg.st;
     if (!st || !st.me) { box.innerHTML = '<div class="ringempty"><h3>The Ember Ring</h3>' + intro + '<p class="note">' + (rg.err || 'Stepping into the Ring…') + '</p>' + (rg.err ? '<button class="btn small" id="ring-retry">Try again</button>' : '') + '</div>'; const b = $('ring-retry'); if (b) b.onclick = () => loadRing(true); return; }
     const me = st.me, you = L.memberById('you'), en = ringEnergy(me), nextIn = me.et - Date.now() - (RING_EMAX - en - 1) * RING_EINT;
-    let h = '<div class="ringhead' + (myBanner() ? ' hasban' : '') + '">' + (myBanner() ? '<div class="rhban">' + bannerSVG(myBanner()) + '</div>' : '') + '<div class="rhfig">' + ringFig(you.cls, lookHue(you), 3) + '</div><div class="rhinfo"><div class="rhtop"><h3>The Ember Ring</h3><span class="rtitle rt-' + ringTitle(me.r).toLowerCase() + '">' + ringTitle(me.r) + '</span></div>' +
+    let h = '<div class="ringhead' + (myBanner() ? ' hasban' : '') + '">' + (myBanner() ? '<div class="rhban">' + bannerSVG(myBanner()) + '</div>' : '') + '<div class="rhfig">' + ringFig(you.cls, lookHue(you), 3) + '</div><div class="rhinfo"><div class="rhtop"><h3>The Ember Ring</h3><span class="rtitle rt-' + ringTitle(me.r).toLowerCase() + '">' + ringTitle(me.r) + '</span>' + ringAwards(me.sa) + '</div>' +
       '<div class="rhrate"><b>' + me.r.toLocaleString('en-US') + '</b> rating' + (st.rank ? ' &middot; rank ' + st.rank + ' of ' + st.n : '') + (me.pk > me.r ? ' &middot; best ' + me.pk.toLocaleString('en-US') : '') + '</div>' +
       '<div class="rhchips"><span title="Wins and losses">' + icon('sword') + me.w + '&ndash;' + me.l + '</span>' + '<span title="Laurels, spent on Ring skills and the Ringwarden kit">' + laurel(me.ll) + '</span>' +
-      '<span title="Challenges refill one every 30 minutes, up to 10" class="' + (en ? '' : 'out') + '">' + icon('flame') + en + '/' + RING_EMAX + (en < RING_EMAX ? ' <small>+1 in ' + fmtTime(Math.max(1, Math.ceil(nextIn / 1000))) + '</small>' : '') + '</span></div></div></div>' +
+      ringSeasonChip(st) + '<span title="Challenges refill one every 30 minutes, up to 10" class="' + (en ? '' : 'out') + '">' + icon('flame') + en + '/' + RING_EMAX + (en < RING_EMAX ? ' <small>+1 in ' + fmtTime(Math.max(1, Math.ceil(nextIn / 1000))) + '</small>' : '') + '</span></div></div></div>' +
       '<div class="seg ringseg">' + [['foes', 'Duels'], ['team', 'Team'], ['skills', 'Skills'], ['kit', 'Kit'], ['top', 'Standings']].map(v => '<button data-rv="' + v[0] + '"' + (rg.view === v[0] || (v[0] === 'team' && rg.view === 'tgear') ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
     if (rg.view === 'foes') {
       const ms = me.s, mp = ringPower(ms);
-      h += '<p class="note small ringbuild"><b>Your hero in the Ring:</b> ' + ringStatLine(ms) + '. Deeper delving helps a little; the Ringwarden kit helps a lot.</p>';
+      h += '<p class="note small ringbuild"><b>Your hero in the Ring:</b> ' + ringStatLine(ms, true) + '. Dungeon power never counts in the Ring: your class, Ring kit and Ring skills do.</p>';
       h += st.foes.length ? '<div class="ringfoes">' + st.foes.map(f => {
         const q = ringPower(f.s) / mp, odd = q > 1.35 ? ['tough', 'Tough fight'] : q < 0.75 ? ['easy', 'You are favored'] : ['even', 'Even match'];
-        const ed = ringEdge(you.cls, f.c), mu = ed > 0 ? '<span class="mu good" title="' + esc(ringWhy(you.cls, f.c)) + '">' + icon('star') + 'Your ' + CLS_NAME(you.cls).toLowerCase() + ' has the edge</span>' : ed < 0 ? '<span class="mu bad" title="' + esc(ringWhy(f.c, you.cls)) + '">' + icon('shield') + 'Counters your ' + CLS_NAME(you.cls).toLowerCase() + '</span>' : '';
+        const ed = ringEdge(you.cls, f.c), mu = ed > 0 ? '<span class="mu good" title="' + esc(ringWhy(you.cls, f.c)) + '">' + icon('star') + 'Your ' + CLS_NAME(you.cls).toLowerCase() + ' has the advantage</span>' : ed < 0 ? '<span class="mu bad" title="' + esc(ringWhy(f.c, you.cls)) + '">' + icon('shield') + 'Counters your ' + CLS_NAME(you.cls).toLowerCase() + '</span>' : '';
         const rc = me.rc && me.rc[f.id], rq = rc ? (me.rep || [1, .5, .25, 0])[Math.min(rc[0], 3)] : 1;
         const rm = !rc ? '' : rq > 0 ? '<span class="mu rep">' + icon('refresh') + 'Rematch: ' + Math.round(rq * 100) + '% rating and Laurels</span>' : '<span class="mu bad">' + icon('refresh') + 'Rematch pays nothing for ' + ringIn(rc[1] - Date.now()) + '</span>';
         const brings = (f.lo ? f.lo.a.concat(f.lo.p) : []).map(id => { const k = ringSkill(id); return k ? k.n : ''; }).filter(Boolean);
@@ -8237,7 +8528,7 @@
     } else if (rg.view === 'skills') {
       h += ringSkillsView(me, you.cls);
     } else if (rg.view === 'kit') {
-      h += '<p class="note small">Ringwarden gear is separate from your dungeon gear and works only in the Ring. <b>Edge</b> adds damage against heroes; <b>Resolve</b> softens their blows. Each piece has ' + RING_MAX + ' ranks: Ironbound, then Emberforged (needs a best rating of 1,300), then Starwrought (1,600).</p><div class="ringkit">';
+      h += '<p class="note small">Ringwarden gear is separate from your dungeon gear and works only in the Ring. <b>Edge</b> adds damage against heroes (100 is +25%); <b>Resolve</b> softens their blows (100 blocks 12.5%, never more than half). Each point adds a little less than the one before. Each piece has ' + RING_MAX + ' ranks: Ironbound, then Emberforged (needs a best rating of 1,300), then Starwrought (1,600).</p><div class="ringkit">';
       h += RING_KIT.map((p, i) => {
         const r = me.k[i] || 0, t = RING_TIER(r), nt = RING_TIER(r + 1), g = ringGate(r), cost = ringCost(r);
         const nm = (r ? t[0] + ' ' : 'Ringwarden ') + (p.id === 'arms' ? RING_ARMS[you.cls] : p.name) + (r ? ' <em>+' + r + '</em>' : '');
@@ -8248,7 +8539,9 @@
         else act = '<button class="btn small" data-kit="' + i + '"' + (me.ll < cost ? ' disabled title="Not enough Laurels"' : '') + '>' + (r ? 'Upgrade' : 'Claim') + ' ' + laurel(cost) + '</button>';
         return '<div class="ringpiece r-' + t[1] + '"><div class="tile r-' + t[1] + (r ? '' : ' ghost') + '"><img class="iimg" src="' + SP.itemIcon(you.cls, p.slot, r ? t[1] : 'common') + '" alt=""></div><div class="rpinfo"><b>' + nm + '</b><small>' + (r ? fx(r) : 'Not claimed yet') + '</small>' + (r < RING_MAX ? '<small class="dim">Next rank: ' + fx(1) + '</small>' : '') + '</div><div class="rpact">' + act + '</div></div>';
       }).join('') + '</div>';
+      h += ringMasteryRow(me);
     } else {
+      h += ringSeasonBox(st);
       h += '<div class="seg ringseg tmtopseg">' + [['duel', 'Duels'], ['team', 'Teams']].map(v => '<button data-rtop="' + v[0] + '"' + (rg.topv === v[0] ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
       if (rg.topv === 'team') {
         const tt = st.ttop || [];
@@ -8268,7 +8561,7 @@
     let h = '<div class="rmatch"><div><b>' + CLS_NAME(cls) + '</b> <small>' + NATURE_TEXT[cls] + '</small></div>' +
       '<div class="rmrow"><span class="mu good">' + icon('star') + 'Strong against</span>' + beats.map(c => '<span class="rmc c-' + c + '" title="' + esc(ringWhy(cls, c)) + '">' + CLS_NAME(c) + '</span>').join('') + '</div>' +
       '<div class="rmrow"><span class="mu bad">' + icon('shield') + 'Weak against</span>' + weak.map(c => '<span class="rmc c-' + c + '" title="' + esc(ringWhy(c, cls)) + '">' + CLS_NAME(c) + '</span>').join('') + '</div>' +
-      '<small class="dim">With the edge you deal 4% more damage; against a counter, 4% less.</small></div>';
+      '<small class="dim">With the advantage you deal 4% more damage; when countered, 4% less.</small></div>';
     h += '<p class="note small">Learn skills with Laurels and choose what your hero brings: ' + sl[0] + ' abilities, used in the order you set whenever they make sense, and ' + sl[1] + ' passives. Your loadout also defends while you are away.</p>';
     const list = st.skills.filter(s => s.c === cls);
     const card = s => {
@@ -8314,12 +8607,20 @@
     if (fst) { list.splice(list.indexOf(k), 1); list.unshift(k); }
     ringSetLoadout(a, p); return true;
   }
+  // v141 Ring Mastery: after the full kit, Laurels keep buying small ranks.
+  function ringMasteryRow(me) {
+    const M = rg.st.mastery; if (!M) return '';
+    const ms = me.ms || 0, full = (me.k || []).length === RING_KIT.length && me.k.every(r => r >= RING_MAX), per = Math.round(M.per * 100);
+    const act = ms >= M.max ? '<span class="rkmax">Mastered</span>' : !full ? '<span class="rklock" title="Raise all five pieces to +' + RING_MAX + ' first">' + icon('lock') + 'Full kit</span>' : '<button class="btn small" data-kit="m"' + (me.ll < M.cost ? ' disabled title="Not enough Laurels"' : '') + '>Rank up ' + laurel(M.cost) + '</button>';
+    return '<div class="ringpiece rmastery"><div class="tile r-legend' + (ms ? '' : ' ghost') + '">' + icon('star') + '</div><div class="rpinfo"><b>Ring Mastery' + (ms ? ' <em>' + ms + '/' + M.max + '</em>' : '') + '</b><small>' + (ms ? '+' + ms * per + '% Ring health and attack' : 'Opens once every piece is +' + RING_MAX) + '</small>' + (ms < M.max ? '<small class="dim">+' + per + '% more each rank, up to ' + M.max + '</small>' : '') + '</div><div class="rpact">' + act + '</div></div>';
+  }
   async function ringKit(i, btn) {
     if (rg.busy) return; rg.busy = true; if (btn) btn.disabled = true;
     try {
       const r = await api('POST', { p: i }, '/arena/kit');
       if (!r || !r.me) throw 0;
       rg.st.me = r.me; sfx.buy(); L.qEv(S, 'ringkit'); save();
+      if (i === 'm') { toast('star', 'Ring Mastery ' + r.me.ms, '+' + Math.round(r.me.ms * rg.st.mastery.per * 100) + '% Ring health and attack. It only counts in the Ring.', 'feat'); rg.busy = false; paintRing(); return; }
       const p = RING_KIT[i], k = r.me.k[i];
       toast('shield', RING_TIER(k)[0] + ' ' + (p.id === 'arms' ? RING_ARMS[L.memberById('you').cls] : p.name) + ' +' + k, 'Your Ringwarden kit grows stronger. It only counts in the Ring.', 'feat');
     } catch (e) { toast('lock', 'Could not upgrade', 'Check your Laurels and try again in a moment.', 'warn'); }
@@ -8345,10 +8646,11 @@
   }
   const teamKitOf = id => { const me = rg.st && rg.st.me; return (((me && me.ck) || {})[id] || '0.0.0').split('.').map(Number); };
   function teamStats(id) {
-    const b = ringBuild(id), k = teamKitOf(id);
+    const k = teamKitOf(id);
     let R = 0, E = 0, hp = 1, at = 1;
     k.forEach((r, i) => { const p = TEAM_KIT[i]; R += p.R * r; E += p.E * r; hp += p.hp * r; at += p.at * r; });
-    return { hp: Math.round((800 + 28 * b.v) * hp), at: Math.round((100 + 4 * b.m) * at), E, R };
+    const bs = ringBase((L.memberById(id) || {}).cls);
+    return { hp: Math.round(bs[0] * hp), at: Math.round(bs[1] * at), E, R }; // v141: same class base as the server, dungeon power never counts
   }
   // The lineup: the saved one, with companions you no longer have dropped; with none saved, you plus your two strongest.
   function teamLine() {
@@ -8413,7 +8715,7 @@
     rg.gid = id;
     const m = L.memberById(id), k = teamKitOf(id), s = teamStats(id), ab = ringSkill(ringFree(m.cls));
     let h = '<div class="tmgear-who">' + line.map(x => '<button data-tmgear="' + esc(x) + '" class="' + (x === id ? 'on' : '') + '">' + ringFig(L.memberById(x).cls, L.memberById(x).hue, 2) + esc(L.memberById(x).name) + '</button>').join('') + '<button class="tmback" data-rv="team">Back to lineup</button></div>';
-    h += '<div class="tmgearhead">' + ringFig(m.cls, m.hue, 3) + '<div><h3>' + esc(m.name) + '’s Ring kit</h3><small>' + classTag(m.cls) + ' ' + rarTag(id) + ' Power level ' + L.lvl(S, id) + '</small><small>In the Ring: ' + fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack' + (s.E ? ' &middot; Edge ' + s.E : '') + (s.R ? ' &middot; Resolve ' + s.R : '') + '</small>' + (ab ? '<small>Fights with: ' + esc(ab.n) + ' (class ability)</small>' : '') + '</div></div>';
+    h += '<div class="tmgearhead">' + ringFig(m.cls, m.hue, 3) + '<div><h3>' + esc(m.name) + '’s Ring kit</h3><small>' + classTag(m.cls) + ' ' + rarTag(id) + ' Power level ' + L.lvl(S, id) + '</small><small>In the Ring: ' + ringStatLine(s) + '</small>' + (ab ? '<small>Fights with: ' + esc(ab.n) + ' (class ability)</small>' : '') + '</div></div>';
     h += '<p class="note small">Companion Ring gear is separate from dungeon gear and counts only in team battles. It stays with this companion. Each piece has ' + TEAM_MAX + ' ranks: Ironbound, then Emberforged (needs a best team rating of 1,300).</p><div class="ringkit">';
     h += TEAM_KIT.map((p, i) => {
       const r = k[i] || 0, t = TEAM_TIER(r), g = teamGate(r), cost = teamCost(r);
@@ -8535,7 +8837,7 @@
     const you = L.memberById('you'), A = r.a, B = r.b, hp = [A.s.hp, B.s.hp];
     const sname = id => { const k = ringSkill(id); return k ? k.n : ''; };
     const kit = x => (x.lo ? x.lo.a.concat(x.lo.p) : []).map(sname).filter(Boolean);
-    const ed = ringEdge(A.c, B.c), edl = ed ? '<div class="rdedge ' + (ed > 0 ? 'good' : 'bad') + '">' + esc(ed > 0 ? ringWhy(A.c, B.c) : ringWhy(B.c, A.c)) + ': ' + esc(ed > 0 ? A.n : B.n) + ' has the edge</div>' : '';
+    const ed = ringEdge(A.c, B.c), edl = ed ? '<div class="rdedge ' + (ed > 0 ? 'good' : 'bad') + '">' + esc(ed > 0 ? ringWhy(A.c, B.c) : ringWhy(B.c, A.c)) + ': ' + esc(ed > 0 ? A.n : B.n) + ' has the advantage</div>' : '';
     const side = (x, i, hue) => '<div class="rdside s' + i + '"><div class="rdname"><b>' + esc(x.n) + '</b>' + classTag(x.c) + '</div><small class="rdkit">' + kit(x).map(esc).join(' &middot; ') + '</small><div class="rdfig"><img src="' + SP.spriteURL(x.c, 5, hue || 0) + '" alt=""><div class="rdpop" id="rd-pop' + i + '"></div></div>' +
       '<div class="bar rdhp"><i id="rd-hp' + i + '" style="width:100%"></i><span id="rd-ht' + i + '">' + fmt(hp[i]) + '</span></div><small>' + ringTitle(x.r) + ' &middot; ' + x.r.toLocaleString('en-US') + '</small></div>';
     modal('<div class="maphead"><div><h2>The Ember Ring</h2><small>' + esc(A.n) + ' challenges ' + esc(B.n) + '</small></div><button class="iconbtn" id="rd-x" aria-label="Close">&times;</button></div>' +
@@ -8575,7 +8877,7 @@
         while (step(true)); paint();
         md.querySelector('.rdside.s' + (r.win ? 1 : 0)).classList.add('fallen');
         const res = md.querySelector('#rd-res'); res.hidden = false; res.className = 'rdres ' + (r.win ? 'won' : 'lost');
-        res.innerHTML = '<h3>' + (r.win ? 'Victory' : 'Defeat') + '</h3><p>' + (r.dr >= 0 ? '+' : '') + r.dr + ' rating &middot; +' + r.ll + ' Laurels' + (r.fw ? ' (first win of the day bonus)' : '') + '</p>' + (r.q < 1 ? '<p class="note small">' + (r.q > 0 ? 'Rematch: ' + Math.round(r.q * 100) + '% of the usual rating and Laurels.' : 'You have fought this hero too often today, so this duel paid nothing. Try another challenger.') + '</p>' : '');
+        res.innerHTML = '<h3>' + (r.win ? 'Victory' : 'Defeat') + '</h3><p>' + (r.dr >= 0 ? '+' : '') + r.dr + ' rating &middot; +' + r.ll + ' Laurels' + (r.fw ? ' (first win of the day bonus)' : '') + '</p>' + (r.q < 1 ? '<p class="note small">' + (r.q > 0 ? 'Rematch: ' + Math.round(r.q * 100) + '% of the usual rating and Laurels.' : 'You have fought this hero too often today, so this duel paid nothing. Try another challenger.') + '</p>' : '') + ringSplit(r);
         r.win ? sfx.relic() : sfx.fail();
         const sk = md.querySelector('#rd-skip'); sk.textContent = 'Back to the Ring'; sk.className = 'btn'; sk.onclick = close;
         rg.at = 0; loadRing(true);
@@ -8592,7 +8894,7 @@
     const tv = e.target.closest('[data-rtop]'); if (tv) { rg.topv = tv.dataset.rtop; paintRing(); return; }
     if (teamClick(e)) return;
     const d = e.target.closest('[data-duel]'); if (d) { ringDuel(d.dataset.duel, d); return; }
-    const k = e.target.closest('[data-kit]'); if (k) { ringKit(+k.dataset.kit, k); return; }
+    const k = e.target.closest('[data-kit]'); if (k) { ringKit(k.dataset.kit === 'm' ? 'm' : +k.dataset.kit, k); return; }
     const sk = e.target.closest('[data-skl]'); if (sk) { ringLearn(sk.dataset.skl, sk); return; }
     if (ringLoadoutClick(e)) return;
     if (e.target.closest('#ring-ref')) { rg.sent = 0; loadRing(true); }
