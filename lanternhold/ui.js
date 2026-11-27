@@ -1918,7 +1918,7 @@
       return '<div class="seat bench">' + portrait(id) + '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + '</div><div class="lv">Power level ' + L.lvl(S, id) + ' &middot; ' + esc(m.title) + '</div>' +
         '<div class="jobline' + (job ? ' on' : '') + '">' + (job ? icon(job.icon) + '<b>' + job.name + '</b> ' + L.jobText(job, L.jobValue(S, job, id)) : 'No camp job yet') + (L.UNIQ[id] ? (L.postOn(S, id) ? ' ' + uqPerk(id) : ' <small class="uqhint" data-tip="' + esc(L.UNIQ[id].perk + ': ' + L.UNIQ[id].text) + '" tabindex="0">&#9733; ' + esc(L.UNIQ[id].perk) + ' as ' + esc(uqPostName(id)) + '</small>') : '') + '</div>' + traitChips(id, true) + '</div>' +
         '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button><div class="minis">' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
-        '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button><button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] ? '<button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button>' : '') + '</div></div></div>';
+        '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button><button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] || L.isStoryComp(S, id) ? '<button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button>' : '') + '</div></div></div>';
     }).join('');
     if (!bench.length) benchHtml = jobsHtml + '<p class="note">No one is at the fire. Companions who rest here can take a job that helps the whole party.</p>';
     if ($('bench').dataset.h !== benchHtml) { $('bench').innerHTML = benchHtml; $('bench').dataset.h = benchHtml; }
@@ -2059,6 +2059,14 @@
     if (t.dataset.release) {
       if (!campGate(true)) return true;
       const id = t.dataset.release, m = L.memberById(id), sh = L.shortHire(S, id);
+      // v141 (John, 27 Nov 2026): story companions can go back to the Guild Hall too, as an ordinary offer.
+      if (L.isStoryComp(S, id)) {
+        modal('<h2>Send ' + esc(m.name) + ' to the Guild Hall?</h2><p>This frees their spot at the Campfire. ' + esc(m.name) + ' waits at the Guild Hall as a ' + L.npcRar(L.STORY_RAR).name + ' hire at power level ' + L.lvl(S, id) + ', until the Hall’s offers change. Hire them back before then and they draw a wage like any hire. After that they are gone for good. Their gear goes back to your bag.</p><div class="row"><button class="btn ghost" id="m-no">Keep them</button><button class="btn" id="m-yes">Send them</button></div>', md => {
+          md.querySelector('#m-no').onclick = closeModal;
+          md.querySelector('#m-yes').onclick = () => { if (L.storyRelease(S, id)) toast('crown', m.name + ' went to the Guild Hall', 'Their gear is back in your bag. They wait there until the offers change.', ''); closeModal(); save(); updateSeats(true); updateAbilities(true); paintBoard(); };
+        });
+        return true;
+      }
       modal('<h2>Let ' + esc(m.name) + ' go?</h2><p>' + (sh ? 'Their contract ends now, with no refund.' : 'They go back to the Guild Hall and wait on the bench for 3 days. You can hire them back at the same level for half the price.') + ' Their gear goes back to your bag.</p><div class="row"><button class="btn ghost" id="m-no">Keep them</button><button class="btn" id="m-yes">Let them go</button></div>', md => {
         md.querySelector('#m-no').onclick = closeModal;
         md.querySelector('#m-yes').onclick = () => { const i = S.party.indexOf(id); L.npcRelease(S, id, sh ? 'short' : 'sent'); closeModal(); if (i >= 0) sendOff(i, id, m.name + ' went back to the Guild Hall', 'Their gear is back in your bag.'); save(); updateSeats(true); updateAbilities(true); paintBoard(); };

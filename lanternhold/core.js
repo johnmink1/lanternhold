@@ -1452,6 +1452,7 @@
   const wagesPerHour = s => Object.keys(s.hires || {}).reduce((a, id) => a + wagePerHour(s, id), 0);
   const legendBeat = id => STORY.find(b => b.join === id);
   function npcReq(s, o) {
+    if (o.story) return null; // a story companion you sent back can always be hired again
     if (o.rar === 'legendary') { const b = legendBeat(o.id); return b && !s.story.seen[b.id] ? 'Their part of the story has not reached you yet' : null; }
     if (o.rar === 'uncommon' && heroLv(s) < 10) return 'Hero level 10';
     if (o.rar === 'rare' && (s.maxFloorEver || 1) < 30) return 'Reach floor 30';
@@ -1520,13 +1521,13 @@
     if (pay === 'dust') { if (!c.dustAlt || (s.dust || 0) < c.dustAlt) return { ok: false, why: 'Not enough Dust' }; s.dust -= c.dustAlt; s.npcDust = (s.npcDust || 0) + c.dustAlt; }
     else { if (s.gold < c.gold || (s.dust || 0) < c.dust) return { ok: false, why: s.gold < c.gold ? 'Not enough gold' : 'Not enough Dust' }; s.gold -= c.gold; s.dust = (s.dust || 0) - c.dust; s.npcDust = (s.npcDust || 0) + c.dust; s.npcGold = (s.npcGold || 0) + c.gold; qSpend(s, 'guild', c.gold); }
     s.hires = s.hires || {};
-    const legend = LEGENDS.includes(o.id);
+    const legend = LEGENDS.includes(o.id) || !!o.story;
     s.hires[o.id] = { rar: o.rar, kind: bench ? (bench.kind || 'sign') : kind, at: now, until: (bench ? bench.kind : kind) === 'short' ? now + NPC_SHORT_MS : 0, m: legend ? null : { id: o.id, name: o.name, cls: o.cls, side: o.side, rar: o.rar, hue: o.hue } };
     if (bench && bench.kind === 'short') s.hires[o.id].until = now + NPC_SHORT_MS;
     if (!legend) dyn[o.id] = npcMember(s.hires[o.id].m);
     let lv = bench ? bench.lv : 1;
     if (!bench && !legend) { const best = Math.max(1, ...s.unlocked.filter(x => x !== 'you' && !LEGENDS.includes(x)).map(x => lvl(s, x))); lv = Math.max(1, Math.round(best * npcRar(o.rar).lvF)); }
-    if (!bench && legend && s.levels[o.id]) lv = s.levels[o.id];
+    if (!bench && legend && (o.lv || s.levels[o.id])) lv = o.lv || s.levels[o.id];
     s.levels[o.id] = lv;
     if (bench && bench.traits) { s.traits = s.traits || {}; s.traits[o.id] = bench.traits; }
     if (s.gone) delete s.gone[o.id];
@@ -1548,6 +1549,25 @@
     delete s.gear[id]; delete s.hp[id]; delete s.down[id]; if (s.traits) delete s.traits[id];
     if (!LEGENDS.includes(id)) delete s.levels[id];
     delete s.hires[id];
+    return true;
+  }
+  // v141 (John, 27 Nov 2026): story companions (the five who find you on the stair, never hired) can be sent back to the
+  // Guild Hall to free their spot. They wait there as an ordinary Rare offer (STORY_RAR) at their power level, priced and
+  // paid like any hire, and leave with the rest of the offers at the next rotation (or a re-roll). They don't come back
+  // through the story after that.
+  const STORY_RAR = 'rare';
+  const isStoryComp = (s, id) => !!id && id !== 'you' && s.unlocked.includes(id) && !(s.hires && s.hires[id]) && !isGuest(s, id) && !LEGENDS.includes(id) && !!MEMBERS.find(m => m.id === id && !m.uniq);
+  function storyRelease(s, id, now) {
+    if (!isStoryComp(s, id)) return false;
+    const lv = lvl(s, id), h = hallState(s, now || Date.now());
+    s.unlocked = s.unlocked.filter(x => x !== id);
+    s.party = s.party.map(x => x === id ? null : x);
+    if (s.jobs) for (const k in s.jobs) if (s.jobs[k] === id) delete s.jobs[k];
+    if (s.autoTrain) delete s.autoTrain[id];
+    delete s.gear[id]; delete s.hp[id]; delete s.down[id];
+    delete s.levels[id];
+    s.gone = s.gone || {}; s.gone[id] = Date.now();
+    h.offers = h.offers.filter(o => o.id !== id).concat([{ id, rar: STORY_RAR, legend: 1, story: 1, lv }]);
     return true;
   }
   // Wages every second, offline too (dt in seconds). Short contracts end on time.
@@ -4511,7 +4531,7 @@
     npPlus, incomeHour, priceH, steadyPartyDps, pipRate, samplePipIncome, acctGoldPerSec, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
     steadyDps, damageMeter, meterReset, METER_TAU, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npGold, npIlvl, npOld, npReady, startNP,
     NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, LORE_LEGENDS, LORE_COUNT, UNIQ, UNIQ_IDS, UNIQ_QUESTS, UNIQ_GUILD, UNIQ_OFFER_MS, UNIQ_DRILL_SEC, CAGE_FLOOR, CAGE_BASE, CAGE_GROW, CAGE_MAX, CAGE_TIME, postOn, uniqArrive, uniqQuest, uniqDrill, uniqTick, cageChance, cageMult, thistleFoe, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
-    UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
+    UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, STORY_RAR, isStoryComp, storyRelease, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
     STATS, STAT_CLASS, STAT_BASE, STAT_AFFINITY, STAT_MAX, RESPEC_COST, statSpent, xpNeed, heroLevel, pointsFor, heroPoints, statScore, addStat, resetStats, statVal, PACK_CHANCE, PACK_GOLD,

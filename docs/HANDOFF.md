@@ -221,6 +221,11 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
 
+## v141 bundle (open, 27 Nov 2026)
+Branch `claude/project-thread-coxcsf`, draft PR #89.
+- Phones: a tap on gold, damage, Embers or Dust in the top bar opens its tip (`.purse div.stat[data-tip]` in the touch tip selector). The damage tip lists steady damage per party member plus skeletons (`paintMoneyTips`).
+- Story companions sent back to the Guild (John): `storyRelease` in core.js. A story companion who was never hired (`isStoryComp`: Oduya, Moss, Kestrel, Wren, Vael) gets Let go at the Campfire. They leave like a released hire, `s.gone` is set so the story never re-adds them, and they wait at the Guild Hall as a `STORY_RAR` ('rare') offer `{story:1, legend:1, lv}` at their power level. No `keep`, so the next rotation or re-roll clears them. `npcHire` treats `o.story` like a Legend (static member, `m: null`); `npcReq` never blocks them.
+
 ## v140 Guide, wiki, tutorial and clean-up (27 Nov 2026)
 John: "make sure all of the wiki stuff is updated, new player tutorial... look through the game and see what we can clean up". Text and layout only, no mechanics.
 - Guide (`GUIDE` in ui.js, which also builds the wiki's Guide pages) now reads its numbers from core where it can: the unlock list is built from `L.UNLOCKS`, rekindle from `unlockOf('rekindle')`, wipe stop from `WIPE_HOLD`, loadouts from `LOADOUT_FREE/PASS`, NP+ marks from `NP_MODS`. Keep it that way so it cannot go stale. Remember the wiki evaluates `GUIDE` with only `L` in scope: no UI helpers inside it.
