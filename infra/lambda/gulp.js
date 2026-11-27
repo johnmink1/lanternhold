@@ -7,7 +7,8 @@
 // one goblin per GAP); the goblin bursts out when an NP+ hero is online (seen in the last 3 minutes), within STIR.
 // It lasts LIFE with health HPX maxed assaults per NP+ hero online. The fight and loot are in goblin.js.
 const D = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
-const db = new D.DynamoDBClient({}), { BOSS: T, HEROES: H } = process.env;
+const db = new D.DynamoDBClient({}), { BOSS: T, HEROES: H, SAVES } = process.env;
+const trust = require('./trust'); // v140: morsels are paid with gold the server trusts (trust.js)
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) }), S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
 const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
 const DAY = 12, B = 2.5e-6, K = 2.5e-6, CAPP = .02, GAP = 72 * 36e5, STIR = 48 * 36e5, LIFE = 30 * 6e4, HPX = 2.5, CEIL = 150;
@@ -44,6 +45,7 @@ exports.handler = async (e) => {
   const day = 'gulpd#' + new Date(now).toISOString().slice(0, 10);
   if (e.routeKey === 'POST /gulp/feed') {
     const k = Math.floor(+b.n), gold = M(0, mn(1e300, +b.g || 0));
+    if (!(await trust.canPay(db, SAVES, cl.sub, gold, 'gulp'))) return res(402, { error: 'gold' });
     if (!(k >= 1 && k <= 50)) return res(400, { error: 1 });
     // Hotfix 26 Nov 2026 (Kyvia): the feeder row wrote its weight to 'w', the table's key, so every feed failed after
     // the counters had moved (gold was never taken). Weight is now 'wt', the feeder row is written first, and a hero

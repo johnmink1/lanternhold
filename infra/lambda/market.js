@@ -3,7 +3,8 @@
 // seller's mailbox (inbox#<seller>) as a 'sale' letter they claim. v125 (John, 25 Nov 2026, NP+ gold sinks): NP+ market
 // sales pay the seller 95%; the 5% leaves the game.
 const { DynamoDBClient, GetItemCommand, QueryCommand, TransactWriteItemsCommand } = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
-const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES;
+const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES, SAVES = process.env.SAVES;
+const trust = require('./trust'); // v140: a buyer pays with gold the server trusts (trust.js)
 const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'], SLOT = 'main off head neck chest robe legs feet ring'.split(' '), RAR = ['common', 'fine', 'rare', 'epic', 'set'], JOB = 'forage smith herb armor prospect lamp'.split(' ');
 const SET = { vigil: 'tank', grace: 'healer', night: 'rogue', regalia: 'mage', crown: 'necro', dawn: 'paladin' };
 const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard)/i;
@@ -63,6 +64,7 @@ exports.handler = async (e) => {
     const L = row(g.Item), buy = op === 'buy';
     if (buy ? L.seller === me || L.at < now - WEEK : L.seller !== me) return res(403, E);
     if (buy && !okName(String(b.name || ''))) return res(400, NM);
+    if (buy && !(await trust.canPay(db, SAVES, cl.sub, L.price, 'market'))) return res(402, { error: 'gold' });
     const ops = [
       { Delete: { TableName: T, Key: { pk: S(mk(cls)), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } },
       { Delete: { TableName: T, Key: { pk: S('sell#' + L.seller), sk: S(id) } } }];
