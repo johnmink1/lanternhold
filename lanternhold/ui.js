@@ -1435,6 +1435,8 @@
       } else if (e.type === 'relic') {
         sfx.relic();
         toast('relic', e.level > 1 ? e.relic.name + ' grows stronger' : 'Relic found: ' + e.relic.name, e.relic.desc + (e.level > 1 ? ' (level ' + e.level + ')' : ''), 'relic');
+      } else if (e.type === 'daycap') {
+        toast('relic', 'Daily relic limit reached', 'Repeat guardian kills give no more relics today. First clears still can. Quest book > Today\u2019s limits shows every daily limit.', 'relic');
       } else if (e.type === 'retry') {
         toast('sword', 'Back to the stair', 'Your party has rested and heads back down.', 'feat');
       } else if (e.type === 'wipe') {
@@ -4190,6 +4192,7 @@
     tonics: { n: 'Tonics', i: 'oil', d: 'Tonics working right now.', v: () => { const t = $('tonicbar'); const x = t && !t.hidden ? t.textContent.replace(/\s+/g, ' ').trim() : ''; return '<p' + (x ? '' : ' class="dsub"') + '>' + esc(x || 'No tonics active') + '</p>'; }, a: () => dC('store', 'Store') },
     buffs: { n: 'Blessings', i: 'flare', d: 'Lantern Keeper, Lantern Surge and Mercy\'s Blessing.', v: () => { const on = [['keeperbar', 'Lantern Keeper is here'], ['surge', 'Lantern Surge'], ['mercy', 'Mercy\'s Blessing']].filter(([id]) => $(id) && !$(id).hidden).map(([id, n]) => n + (dTxt(id) ? ' ' + esc(dTxt(id)) : '')); return '<p' + (on.length ? '' : ' class="dsub"') + '>' + (on.length ? on.join(' · ') : 'No blessings right now') + '</p>'; } },
     chat: { n: 'Chat', i: 'chat', d: 'Open chat with other players.', v: () => '<p>Global, Banner, Trade, Help, Party and Whispers</p>', a: () => dF('chat', 'Open chat') },
+    limits: { n: 'Today\u2019s limits', i: 'relic', d: 'Daily limits on relics, chests, events and found Sigils, and when they reset.', w: 1, v: () => { const x = limitsData(); return '<ul class="dlist">' + x.list.map(r => '<li><span>' + esc(r.name) + '</span><b' + (r.used >= r.max ? ' class="dwarn"' : '') + '>' + fmt(r.used) + ' / ' + fmt(r.max) + '</b></li>').join('') + '</ul><p class="dsub">' + x.when + '</p>'; }, a: () => dQ('#quests', 'Quest book') },
     help: { n: 'Help and settings', i: 'help', d: 'Guide, settings and screen layout.', v: () => '', a: () => dQ('#btn-guide', 'Guide') + dQ('#btn-settings', 'Settings') + dF('layout', 'Edit layout') },
   };
   let dashEdit = false;
@@ -5401,6 +5404,7 @@
     claiming = true;
     try {
       const n = S.sigPend, r = await papi('POST', '/sigils/earn', { kind: 'drop', n });
+      if (r.add > 0) { const d = sigUtcDay(); if (!S.sigDay || S.sigDay.d !== d) S.sigDay = { d, n: 0 }; S.sigDay.n += r.add; }
       S.sigPend = Math.max(0, (S.sigPend || 0) - n) + (n - r.add); if (prof) prof.bal = r.bal; save();
       // v140: the server banks found Sigils only while you are really playing (a cloud save in the last 10 minutes),
       // at most one per 5 minutes. `wait` means try again later, not the daily cap.
@@ -5411,6 +5415,19 @@
       }
     } catch (e) {}
     claiming = false;
+  }
+  // Today's limits (John, 27 Nov 2026): how much of each daily cap is used, and when they all reset.
+  function sigToday() { const d = sigUtcDay(); return sigCapped() ? L.SIGIL_DROP_DAY : Math.min(L.SIGIL_DROP_DAY, S.sigDay && S.sigDay.d === d ? S.sigDay.n : 0); }
+  function limitsData() {
+    const t = L.dayLimits(S, Date.now()), list = t.list.slice();
+    list.splice(1, 0, { k: 'sigil', name: 'Found Sigils banked', note: signedIn() ? (S.sigPend > 0 ? S.sigPend + ' found and waiting to bank.' : 'From chests, locked chests and guardians.') : 'Sign in to bank found Sigils.', used: sigToday(), max: L.SIGIL_DROP_DAY });
+    const left = Math.max(0, t.reset - Date.now()), at = new Date(t.reset).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return { list, when: 'Resets in ' + Math.floor(left / 36e5) + 'h ' + Math.floor(left % 36e5 / 6e4) + 'm (' + at + ' your time)' };
+  }
+  function limitsHtml() {
+    const x = limitsData();
+    return '<h3 class="sub">Today\u2019s limits</h3><p class="note small">Each of these stops for the day once it is used up. ' + x.when + '. Gold, XP, gear and Dust from fights have no daily limit.</p><ul class="quests dlimits">' +
+      x.list.map(r => '<li class="quest' + (r.used >= r.max ? ' got' : '') + '"><div><b>' + esc(r.name) + '</b><div class="qbar"><i style="width:' + Math.round(r.used / r.max * 100) + '%"></i></div><small>' + fmt(r.used) + ' / ' + fmt(r.max) + (r.used >= r.max ? ' · done for today' : ' · ' + fmt(r.max - r.used) + ' left') + (r.note ? ' · ' + esc(r.note) : '') + '</small></div></li>').join('') + '</ul>';
   }
   // Quest book (26 Nov 2026): each quest can point at the place that does it.
   const QGO = { ring: ['To the Ring', () => document.querySelector('.tabs [data-tab="ring"]').click()], guild: ['To the Guild', () => document.querySelector('.tabs [data-tab="guild"]').click()],
@@ -5449,7 +5466,7 @@
       '<ul class="quests">' + q.map(row).join('') +
       '<li class="quest bonus' + (got & 8 ? ' got' : allGot ? ' done' : '') + '"><div><b>Finish all three</b><small>A bonus for clearing the day.</small></div>' + (got & 8 ? '<span class="qok">' + sigil + '+' + L.QUEST_BONUS + '</span>' : '<button class="btn small" data-q="3"' + (allGot ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_BONUS + '</button>') + '</li></ul>' +
       (signedIn() ? '' : '<p class="note">Sign in to claim quest rewards. Your progress still counts.</p>') +
-      '<h3 class="sub">Finding Sigils</h3><p class="note">Now and then a treasure chest or a guardian holds 1 to 3 Sigils. Your odds: <b>' + pct(L.sigilChance(S, 'chest')) + '</b> per chest and <b>' + pct(L.sigilChance(S, 'boss')) + '</b> per guardian. Every 30 floors of your deepest descent adds 0.01%, up to 0.05%, and the Kindling upgrade Sigil Sense adds 0.01% per rank. You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day.</p>' +
+      '<h3 class="sub">Finding Sigils</h3><p class="note">Now and then a treasure chest or a guardian holds 1 to 3 Sigils. Your odds: <b>' + pct(L.sigilChance(S, 'chest')) + '</b> per chest and <b>' + pct(L.sigilChance(S, 'boss')) + '</b> per guardian. Every 30 floors of your deepest descent adds 0.01%, up to 0.05%, and the Kindling upgrade Sigil Sense adds 0.01% per rank. You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day.</p>' + limitsHtml() +
       '<div class="row"><button class="btn ghost" id="dq-ok">Close</button></div>', md => {
         md.querySelector('#dq-x').onclick = closeModal; md.querySelector('#dq-ok').onclick = closeModal;
         md.querySelectorAll('[data-bty]').forEach(btn => btn.onclick = () => {
