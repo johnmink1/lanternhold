@@ -1,6 +1,6 @@
-# Lanternhold handoff (24 Nov 2026)
+# Lanternhold handoff (started 24 Nov 2026, kept current)
 
-This handoff stands on its own for the new Lanternhold project. It is current as of **v124**, live at https://lanternhold.born2gamellc.com.
+This handoff stands on its own for the new Lanternhold project. v140 is live (27 Nov 2026) and v141 is the open bundle (see "v141 bundle" below). Live at https://lanternhold.born2gamellc.com.
 
 ## Where Lanternhold work happens
 
@@ -17,7 +17,7 @@ Do not ship changes one at a time. Collect everything John asks for into one num
 | Path | What it is |
 |---|---|
 | `lanternhold/core.js` | All game rules: classes, foes, loot, crafting, events, the `api` export list. Any new function must be added to that big export list at the bottom. |
-| `lanternhold/ui.js` | All UI, the in-game Delver's Guide (`GUIDE`) and `PATCH_NOTES` (newest first). The open bundle is **v128** (branch `claude/lanternhold-v128`, PR #42); v127 is live. |
+| `lanternhold/ui.js` | All UI, the in-game Delver's Guide (`GUIDE`) and `PATCH_NOTES` (newest first). The newest release sections below say which bundle is open. |
 | `lanternhold/style.css`, `index.html` | Styles and markup. `window.LH_SUPPORT_URL` in `index.html` is John's Buy Me a Coffee page (buymeacoffee.com/born2gamellc, set v132). It shows the "Support the dev" button and a Settings line. It supports John's time, not charity; keep it apart from the Mercy Corps / Extra Life buttons and give no in-game reward. |
 | `lanternhold/vector.js` | Illustrated SVG sprites (`ART.enchanter`, `ART.armorer`, classes, foes). |
 | `lanternhold/sprites.js` | Pixel fallback sprites and `itemIcon`. |
@@ -224,6 +224,8 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
 ## v141 bundle (open, 27 Nov 2026)
 Branch `claude/project-thread-coxcsf`, draft PR #89.
 - Phones: a tap on gold, damage, Embers or Dust in the top bar opens its tip (`.purse div.stat[data-tip]` in the touch tip selector). The damage tip lists steady damage per party member plus skeletons (`paintMoneyTips`).
+- Phones: the round chat button slides away while you scroll down (`.chatfab.away`) and returns on scroll up, near the top or at the end. Long toast lines open in full on the first tap (`.toast.open`). Guild sign-on cards say what is missing (`.npcneed`: gold, Dust or a Campfire spot). Dead CSS removed.
+- Faction discount (John 27 Nov: "only makes sense to have factions work together"; he picked 20%/10%): `npcPrice` takes `NPC_SIDE_FEE` 0.2 off sign-on gold, Dust and the 2 h contract when `npcKin` (offer side = `sideOf` hero), `wagePerHour`/`npcOfferWage` take `NPC_SIDE_WAGE` 0.1 off the wage, and `npcWageParts` lists it. Guild card tag `.kintag` "Your faction". Baseline (Covenant tank, uncommon offers): sign-on 281 -> 225 gold, wage 34 -> 30 gold/h.
 - Story companions sent back to the Guild (John): `storyRelease` in core.js. A story companion who was never hired (`isStoryComp`: Oduya, Moss, Kestrel, Wren, Vael) gets Let go at the Campfire. They leave like a released hire, `s.gone` is set so the story never re-adds them, and they wait at the Guild Hall as a `STORY_RAR` ('rare') offer `{story:1, legend:1, lv}` at their power level. No `keep`, so the next rotation or re-roll clears them. `npcHire` treats `o.story` like a Legend (static member, `m: null`); `npcReq` never blocks them.
 
 ## v140 Guide, wiki, tutorial and clean-up (27 Nov 2026)

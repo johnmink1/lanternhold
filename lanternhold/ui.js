@@ -124,7 +124,7 @@
   });
   document.addEventListener('pointerout', e => { if (tipFor && !tipFor.contains(e.relatedTarget)) { clearTimeout(tipHide); tipHide = setTimeout(hideTip, 60); } });
   document.addEventListener('click', e => {
-    const i = e.target.closest('.tipi,.klant') || (!fine.matches && e.target.closest('.trait[data-tip],.cxp[data-tip],#foetag[data-tip],.purse div.stat[data-tip]'));
+    const i = e.target.closest('.tipi,.klant') || (!fine.matches && e.target.closest('.trait[data-tip],.cxp[data-tip],#foetag[data-tip],.purse div.stat[data-tip],.kintag[data-tip]'));
     if (i) { e.preventDefault(); e.stopPropagation(); if (tipFor === i) hideTip(); else { showTip(i); clearTimeout(tipHide); tipHide = setTimeout(hideTip, 5000); } return; }
     if (!fine.matches) hideTip();
   }, true);
@@ -1479,7 +1479,8 @@
     // Phones: at most 2 at once, and only 1 in the first 10 s after loading (the welcome-back burst); the rest wait in the bell.
     const small = innerWidth <= 720, cap = small ? (performance.now() < 10000 ? 1 : 2) : 3;
     while (box.children.length > cap) box.firstChild.remove();
-    t.onclick = () => t.remove();
+    // v141: on phones a long line is cut at 2 lines; the first tap opens it in full (and holds it), the next closes it.
+    t.onclick = () => { const sm = t.querySelector('small'); if (!t.classList.contains('open') && sm && sm.scrollHeight > sm.clientHeight + 2) { t.classList.add('open'); clearTimeout(timer); left = 12000; go(); return; } t.remove(); };
     // Stays up longer, and waits while the pointer rests on it. Every pop-up is kept in the bell too.
     let left = small ? 5000 : 7000, at = Date.now(), timer = 0;
     const go = () => { timer = setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, left); at = Date.now(); };
@@ -2025,7 +2026,19 @@
     else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour: a ' + R.name + ' base fee of ' + fmt(L.NPC_FEE[o.rar]) + ', more for each power level and their gear, never more than ' + Math.round(L.WAGE_CAP[o.rar] * 100) + '% of your income, less your wage relief.">Sign on · ' + price(c) + '</button>' +
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
-    return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
+    // v141: say why sign-on is greyed out (a disabled button shows no tip on phones).
+    if (!why && !(c.free && !full)) {
+      let need = '';
+      if (full && !(bench && o.kind === 'short')) need = 'No free spot at the Campfire';
+      else if (!c.free) {
+        const lack = [];
+        if (S.gold < c.gold) lack.push(fmt(c.gold - S.gold) + ' more gold');
+        if ((S.dust || 0) < (c.dust || 0)) lack.push(fmt(c.dust - (S.dust || 0)) + ' more Dust');
+        if (lack.length) need = 'Need ' + lack.join(' and ') + (!bench && c.dustAlt && (S.dust || 0) < c.dustAlt && S.gold < c.gold ? ', or ' + fmt(c.dustAlt - (S.dust || 0)) + ' more Dust' : '');
+      }
+      if (need) acts += '<small class="npcneed">' + need + '</small>';
+    }
+    return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span>' + (L.npcKin(S, o) ? ' <span class="kintag" data-tip="Your own faction: ' + Math.round(L.NPC_SIDE_FEE * 100) + '% off signing on and ' + Math.round(L.NPC_SIDE_WAGE * 100) + '% off their wage." tabindex="0">Your faction</span>' : '') + '</div>' +
       '<div class="lv">' + (m.title ? esc(m.title) : (side ? side.name + (o.need === 'banner' ? ' only' : '') : '')) + ' &middot; wage ' + fmt(wage) + ' gold/h' + (bench ? ' &middot; power level ' + o.lv + ' &middot; leaves in ' + fmtTime(Math.max(0, (o.until - Date.now()) / 1000)) : '') + (!bench && o.exp ? ' &middot; leaves in ' + fmtTime(Math.max(0, (o.exp - Date.now()) / 1000)) : '') + '</div>' +
       (L.UNIQ[o.id] ? '<div class="jobline on uqline">' + uqPerk(o.id) + ' <small>as ' + esc(uqPostName(o.id)) + '</small></div>' : '') +
       '<div class="npcacts">' + acts + '</div></div></div>';
@@ -6070,6 +6083,16 @@
   if (CL) {
     $('btn-chat').hidden = false;
     $('btn-chat').addEventListener('click', () => openChat(true));
+    // v141: on phones the round chat button sat over the right edge of rows (+5 buttons, health, camp jobs). It now slides
+    // away while you scroll down and comes back when you scroll up, get near the top, or reach the end of the page.
+    { const fab = $('btn-chat'); let lastY = 0;
+      addEventListener('scroll', e => {
+        if (innerWidth > 720) return;
+        const el = e.target === document ? document.scrollingElement : e.target; if (!el || el.scrollTop == null) return;
+        const y = el.scrollTop, end = y + el.clientHeight >= el.scrollHeight - 40;
+        fab.classList.toggle('away', y > lastY + 2 && y > 80 && !end); if (y < lastY - 2 || y <= 80 || end) fab.classList.remove('away');
+        lastY = y;
+      }, { passive: true, capture: true }); }
     $('chatmin').addEventListener('click', () => openChat(false));
     // The chat window stays as you left it: open or tucked away.
     try { if (localStorage.getItem('lh_chat') === '1' && !dockMode() && matchMedia('(min-width:721px)').matches) setTimeout(() => openChat(true), 1500); } catch (e) {}

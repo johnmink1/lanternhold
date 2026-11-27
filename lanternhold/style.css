@@ -1391,9 +1391,9 @@ button.stat.quests.done{color:var(--good);background:rgba(143,207,106,.08);borde
 .chattitle .iconbtn{width:32px;height:32px}
 .chattitle .iconbtn svg{width:18px;height:18px}
 .chat{height:440px}
-@media (max-width:720px){.chatfab{bottom:calc(76px + env(safe-area-inset-bottom));right:12px;padding:9px 13px 9px 10px}.chatfab span{display:none}.chat{bottom:calc(66px + env(safe-area-inset-bottom));height:60vh}}
+@media (max-width:720px){.chatfab span{display:none}.chat{bottom:calc(66px + env(safe-area-inset-bottom));height:60vh}}
 .cbseg button{font-size:11.5px;padding:8px 2px;gap:3px}.cbseg img{width:13px;height:17px}
-#toasts{bottom:76px}@media (min-width:721px) and (max-width:560px){#toasts{bottom:136px}}
+#toasts{bottom:76px}
 /* players online */
 .onlinect{display:flex;align-items:center;gap:6px;margin-left:4px;padding:5px 11px 5px 9px;border-radius:999px;border:1px solid #1f3a2a;background:#0b1712;color:#bff0cf;font:700 14px var(--body);cursor:pointer;font-variant-numeric:tabular-nums}
 .onlinect[hidden]{display:none}
@@ -1741,10 +1741,13 @@ body.resting .taptip{display:none}
   .chatfab{bottom:calc(74px + env(safe-area-inset-bottom));right:10px;width:46px;height:46px;padding:0;justify-content:center;border-radius:50%}
   .chatfab small{display:none}
   .chatfab svg{width:21px;height:21px}
+  .chatfab{transition:transform .25s ease,opacity .25s ease}
+  .chatfab.away{transform:translateY(140%);opacity:0;pointer-events:none}
   #toasts{top:calc(8px + env(safe-area-inset-top));bottom:auto;left:10px;right:10px;width:auto}
   .toast{pointer-events:auto;padding:8px 12px;font-size:13.5px;gap:10px;background:#151a24f7}
   .toast svg{width:22px;height:22px}
   .toast small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .toast.open small{display:block;-webkit-line-clamp:unset;overflow:visible}
 }
 .cgrid{grid-template-columns:minmax(0,1fr)}.codexseg button{min-width:0;padding-left:6px;padding-right:6px}
 @media (max-width:720px){.ctx small{white-space:normal;overflow:visible;text-overflow:clip}.codexseg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}.codexseg button{padding:7px 4px}}
@@ -2861,3 +2864,5 @@ details.howto p{margin:6px 0 0}
   .stagehead .pips{gap:3px;max-width:100%;overflow:hidden}.stagehead .pips i{width:10px}
   .stagehead .flsub .biome{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 }
+.npcacts .npcneed{flex-basis:100%;color:var(--muted);font-size:12.5px;margin-top:2px}
+.kintag{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:999px;border:1px solid #3f6f4f;color:#9fe0b4;background:#0e1d14;vertical-align:middle}
