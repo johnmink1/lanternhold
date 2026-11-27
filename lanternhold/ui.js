@@ -6606,12 +6606,13 @@
         '<b>Sell</b>: tap an item in Gear, choose <b>Sell on market</b>. Listings last a week.',
         '<b>Mail</b>: send to someone you recruited or chatted with, as a gift or for a price.',
         'Gold and gear have no real-money value.']],
-      ['The Ember Ring (PvP)', 'i:duel', 'Duel other players\u2019 heroes for Laurels and rating.', [
+      ['The Ember Ring (PvP)', 'i:duel', 'Duel other players\u2019 heroes, or fight their teams, for Laurels and rating.', [
         'Open the <b>PvP</b> tab and press <b>Duel</b>. Only your own hero fights; companions, tonics and Sigils never count.',
         'Each class has the edge on two classes and is countered by two. Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
         'Rematches against the same hero within a day pay less each time, so spread your duels around.',
         '10 challenges, one back every 30 minutes. Wins give rating and Laurels, losses a few Laurels; your hero also defends while you are away. A full kit is a long climb.',
-        'Laurels buy the <b>Ringwarden kit</b>: PvP gear with <b>Edge</b> (more damage to heroes) and <b>Resolve</b> (less damage from heroes). It works only in the Ring.']],
+        'Laurels buy the <b>Ringwarden kit</b>: PvP gear with <b>Edge</b> (more damage to heroes) and <b>Resolve</b> (less damage from heroes). It works only in the Ring.',
+        '<b>Team battles</b> (Team view): your hero and two of your own companions against another player\u2019s team. Borrowed player heroes can\u2019t join. The front fighter takes most of the blows. Companions wear their own <b>companion Ring kit</b>, bought with Laurels. A win pays 10 Laurels, a loss 4.']],
       ['Your profile', 'i:user', 'The card other players see.', [
         'Tap your portrait, then <b>Customize profile</b>: frame, title, color, banner, emblems and a bio.']],
       ['The Wardrobe', 'i:star', 'Outfits, lanterns and war banners, looks only.', [
@@ -6710,6 +6711,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 133, date: 'November 2026', title: 'Team battles in the Ember Ring', items: [
+      'Team battles: take your hero and two of your own companions into the Ember Ring against another player\u2019s team. Pick who stands Front, Middle and Back.',
+      'Companions can wear a companion Ring kit, bought with Laurels. A team win pays 10 Laurels, a loss 4, and your team defends while you are away.'] },
     { v: 132, date: 'November 2026', title: 'Quests, profiles and one name each', items: [
       'Hero names are now one per player. If yours is taken, the game asks you to pick a new one.',
       'Quests: the Bounty Board and daily quests now draw from 200 kinds across the game, picked for your hero. Many have a button that takes you there.',
@@ -8031,7 +8035,7 @@
   const ringTitle = r => RING_TITLES.find(t => r >= t[0])[1];
   // A rough strength score for "even match" hints: damage per hit times health, Edge and Resolve included.
   const ringPower = s => s.at * (1 + s.E / (s.E + 300)) * s.hp / (1 - .5 * s.R / (s.R + 300));
-  const rg = { st: null, at: 0, view: 'foes', busy: false, err: '', sent: 0 };
+  const rg = { st: null, at: 0, view: 'foes', busy: false, err: '', sent: 0, tl: null, gid: '', topv: 'duel' };
   // ---- Ring skills and class matchups (the data comes with GET /arena) ----
   const CLS_NAME = c => L.CLASSES[c].name;
   const ringPc = x => Math.round(x * 1000) / 10 + '%';
@@ -8054,11 +8058,12 @@
   const ringEdge = (a, b) => { const m = rg.st && rg.st.match; if (!m) return 0; return m.beats[a].includes(b) ? 1 : m.beats[b].includes(a) ? -1 : 0; };
   const ringWhy = (a, b) => (rg.st && rg.st.match.why[a + '>' + b]) || '';
   const laurel = n => '<span class="laurel">' + icon('crown') + Number(n).toLocaleString('en-US') + '</span>';
-  // Our build: the log of the hero's own damage and health, with no tonics, abilities or knocked-out state.
-  function ringBuild() {
+  // A Ring build: the log of a member's own damage and health (the hero by default), with no tonics, abilities or knocked-out state.
+  function ringBuild(id) {
+    id = id || 'you';
     const keep = { t: S.tonic, d: S.down, a: S.abil, f: S.fx };
     let dps = 0, hp = 0;
-    try { S.tonic = {}; S.down = {}; S.abil = {}; S.fx = {}; dps = L.memberDps(S, 'you', Date.now()); hp = L.maxHpOf(S, 'you'); }
+    try { S.tonic = {}; S.down = {}; S.abil = {}; S.fx = {}; dps = L.memberDps(S, id, Date.now()); hp = L.maxHpOf(S, id); }
     catch (e) {} finally { S.tonic = keep.t; S.down = keep.d; S.abil = keep.a; S.fx = keep.f; }
     const lg = x => Math.round(Math.log(1 + Math.max(0, x || 0)) * 10) / 10;
     return { m: lg(dps), v: lg(hp) };
@@ -8071,10 +8076,12 @@
     rg.busy = true; rg.err = '';
     try {
       // The hero board row must exist first (it holds the name); publishing is quick and harmless.
-      if (Date.now() - rg.sent > 5 * 6e4) { try { await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref: '', bp: L.buildCard(S) }, '/hero'); } catch (e) {} await api('PUT', ringBuild(), '/arena'); rg.sent = Date.now(); }
+      if (Date.now() - rg.sent > 5 * 6e4) { try { await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref: '', bp: L.buildCard(S) }, '/hero'); } catch (e) {} const t = rg.st ? teamLine() : null; await api('PUT', Object.assign(ringBuild(), t && t.length === 3 ? { tl: teamBody(t) } : {}), '/arena'); rg.sent = Date.now(); }
       const st = await api('GET', null, '/arena'); if (!st) throw 0; rg.st = st; rg.at = Date.now();
       fetchLooks((st.foes || []).map(f => f.id).concat((st.top || []).map(t => t.id))).then(n => { if (n) paintRing(); });
       ringDefenseNews();
+      // a first visit: enter your strongest two companions as your team, so it can defend and be challenged
+      if (st.me && !st.me.tl) { const t = teamLine(); if (t.length === 3) { const u = await api('PUT', Object.assign(ringBuild(), { tl: teamBody(t) }), '/arena'); if (u && u.me) rg.st.me = u.me; } }
     } catch (e) { rg.err = 'The Ring could not be reached right now. Try again in a minute.'; }
     rg.busy = false; paintRing();
   }
@@ -8082,8 +8089,10 @@
   function ringDefenseNews() {
     const me = rg.st && rg.st.me; if (!me) return;
     let old = null; try { old = JSON.parse(localStorage.getItem('lh_ringdef') || 'null'); } catch (e) {}
-    try { localStorage.setItem('lh_ringdef', JSON.stringify({ dw: me.dw, dl: me.dl })); } catch (e) {}
+    try { localStorage.setItem('lh_ringdef', JSON.stringify({ dw: me.dw, dl: me.dl, tw: me.tdw || 0, tl: me.tdl || 0 })); } catch (e) {}
     if (!old) return;
+    const tw = (me.tdw || 0) - (old.tw || 0), tl = (me.tdl || 0) - (old.tl || 0);
+    if (old.tw != null && (tw > 0 || tl > 0)) toast('users', 'Your team held the Ring', (tw ? tw + (tw === 1 ? ' team beaten' : ' teams beaten') : '') + (tw && tl ? ', ' : '') + (tl ? tl + ' lost' : '') + ' while you were away.' + (tw ? ' +' + (tw * 2) + ' Laurels.' : ''), tw >= tl ? 'feat' : '');
     const w = me.dw - old.dw, l = me.dl - old.dl;
     if (w > 0) { L.qEv(S, 'ringdef', { n: w }); save(); }
     if (w > 0 || l > 0) toast('shield', 'Your hero held the Ring', (w ? w + (w === 1 ? ' challenger beaten' : ' challengers beaten') : '') + (w && l ? ', ' : '') + (l ? l + ' lost' : '') + ' while you were away.' + (w ? ' +' + (w * 2) + ' Laurels.' : ''), w >= l ? 'feat' : '');
@@ -8102,7 +8111,7 @@
       '<div class="rhrate"><b>' + me.r.toLocaleString('en-US') + '</b> rating' + (st.rank ? ' &middot; rank ' + st.rank + ' of ' + st.n : '') + (me.pk > me.r ? ' &middot; best ' + me.pk.toLocaleString('en-US') : '') + '</div>' +
       '<div class="rhchips"><span title="Wins and losses">' + icon('sword') + me.w + '&ndash;' + me.l + '</span>' + '<span title="Laurels, spent on Ring skills and the Ringwarden kit">' + laurel(me.ll) + '</span>' +
       '<span title="Challenges refill one every 30 minutes, up to 10" class="' + (en ? '' : 'out') + '">' + icon('flame') + en + '/' + RING_EMAX + (en < RING_EMAX ? ' <small>+1 in ' + fmtTime(Math.max(1, Math.ceil(nextIn / 1000))) + '</small>' : '') + '</span></div></div></div>' +
-      '<div class="seg ringseg">' + [['foes', 'Challengers'], ['skills', 'Skills'], ['kit', 'Kit'], ['top', 'Standings']].map(v => '<button data-rv="' + v[0] + '"' + (rg.view === v[0] ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
+      '<div class="seg ringseg">' + [['foes', 'Duels'], ['team', 'Team'], ['skills', 'Skills'], ['kit', 'Kit'], ['top', 'Standings']].map(v => '<button data-rv="' + v[0] + '"' + (rg.view === v[0] || (v[0] === 'team' && rg.view === 'tgear') ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
     if (rg.view === 'foes') {
       const ms = me.s, mp = ringPower(ms);
       h += '<p class="note small ringbuild"><b>Your hero in the Ring:</b> ' + ringStatLine(ms) + '. Deeper delving helps a little; the Ringwarden kit helps a lot.</p>';
@@ -8116,6 +8125,10 @@
           '<button class="btn small" data-duel="' + f.id + '"' + (en ? '' : ' disabled title="No challenges left. One returns every 30 minutes."') + '>Duel</button></div>';
       }).join('') + '</div>' : '<p class="note">No other heroes have entered the Ring yet. Check back soon, or tell a friend to bring their hero.</p>';
       h += '<div class="row"><button class="btn ghost small" id="ring-ref">' + icon('refresh') + ' New challengers</button></div>';
+    } else if (rg.view === 'team') {
+      h += teamView(me, you);
+    } else if (rg.view === 'tgear') {
+      h += teamGearView(me);
     } else if (rg.view === 'skills') {
       h += ringSkillsView(me, you.cls);
     } else if (rg.view === 'kit') {
@@ -8131,6 +8144,13 @@
         return '<div class="ringpiece r-' + t[1] + '"><div class="tile r-' + t[1] + (r ? '' : ' ghost') + '"><img class="iimg" src="' + SP.itemIcon(you.cls, p.slot, r ? t[1] : 'common') + '" alt=""></div><div class="rpinfo"><b>' + nm + '</b><small>' + (r ? fx(r) : 'Not claimed yet') + '</small>' + (r < RING_MAX ? '<small class="dim">Next rank: ' + fx(1) + '</small>' : '') + '</div><div class="rpact">' + act + '</div></div>';
       }).join('') + '</div>';
     } else {
+      h += '<div class="seg ringseg tmtopseg">' + [['duel', 'Duels'], ['team', 'Teams']].map(v => '<button data-rtop="' + v[0] + '"' + (rg.topv === v[0] ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
+      if (rg.topv === 'team') {
+        const tt = st.ttop || [];
+        h += tt.length ? '<ol class="ringtop tmtop">' + tt.map((t, i) => '<li class="' + (t.id === me.id ? 'me' : '') + '"><span class="rk">' + (i + 1) + '</span><span class="tmtrio">' + t.t.map(x => ringFig(x.c, teamHue(x, t.id), 1)).join('') + '</span><span class="nm c-' + esc(t.c) + '">' + esc(t.n) + '</span><span class="rtitle sm rt-' + ringTitle(t.tr).toLowerCase() + '">' + ringTitle(t.tr) + '</span><b>' + t.tr.toLocaleString('en-US') + '</b><small>' + t.tw + '&ndash;' + t.tx + '</small></li>').join('') + '</ol>' : '<p class="note">No team battles yet. The first win puts your team on top.</p>';
+        h += '<p class="note small">Every team starts at 1,000 team rating. Beating a higher-rated team is worth more.</p>';
+        box.innerHTML = h; return;
+      }
       h += st.top.length ? '<ol class="ringtop">' + st.top.map((t, i) => '<li class="' + (t.id === me.id ? 'me' : '') + '"><span class="rk">' + (i + 1) + '</span>' + ((t.id === me.id ? myBanner() : theirBanner(t.id)) ? bannerSVG(t.id === me.id ? myBanner() : theirBanner(t.id), 'tban') : '') + ringFig(t.c, outfitHue((looksCache[t.id] || {}).k), 1) + '<span class="nm c-' + esc(t.c) + '">' + esc(t.n) + '</span><span class="rtitle sm rt-' + ringTitle(t.r).toLowerCase() + '">' + ringTitle(t.r) + '</span><b>' + t.r.toLocaleString('en-US') + '</b><small>' + t.w + '&ndash;' + t.l + '</small></li>').join('') + '</ol>' : '<p class="note">Nobody has fought yet. The first win puts you on top.</p>';
       h += '<p class="note small">Everyone starts at 1,000. Beating a higher-rated hero is worth more. Heroes that defend well while their owner is away climb too.</p>';
     }
@@ -8199,6 +8219,198 @@
       toast('shield', RING_TIER(k)[0] + ' ' + (p.id === 'arms' ? RING_ARMS[L.memberById('you').cls] : p.name) + ' +' + k, 'Your Ringwarden kit grows stronger. It only counts in the Ring.', 'feat');
     } catch (e) { toast('lock', 'Could not upgrade', 'Check your Laurels and try again in a moment.', 'warn'); }
     rg.busy = false; paintRing();
+  }
+  // ---- team battles (John, 27 Nov 2026): the hero plus two of your own companions, 3 vs 3 ----
+  // Borrowed player heroes never join. The lineup (Front, Middle, Back) is saved on the server with each companion's
+  // Ring build (the log of its own damage and health, like the hero's) and fights for you while you are away.
+  // Companions wear a companion Ring kit bought with Laurels; it stays with that companion.
+  // Keep TEAM_KIT, teamGate, teamCost and the stat formula in step with CKIT/cgate/ccost/cstats in infra/ring/index.js.
+  const TEAM_KIT = [
+    { id: 'arms', name: 'Arms', slot: 'main', R: 0, E: 6, hp: 0, at: .02 },
+    { id: 'mail', name: 'Mail', slot: 'chest', R: 6, E: 0, hp: .02, at: 0 },
+    { id: 'charm', name: 'Charm', slot: 'neck', R: 3, E: 3, hp: .01, at: .01 },
+  ];
+  const TEAM_MAX = 10, teamGate = r => r >= 5 ? 1300 : 0, teamCost = r => 40 + 20 * r;
+  const TEAM_TIER = r => r <= 0 ? ['Plain', 'common'] : r <= 5 ? ['Ironbound', 'rare'] : ['Emberforged', 'epic'];
+  const TEAM_POS = ['Front', 'Middle', 'Back'];
+  const ringFree = c => ({ tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain' })[c];
+  // Companions that can fight: your own, not borrowed players and not two-hour contracts.
+  function teamPool() {
+    return (S.unlocked || []).filter(id => id !== 'you' && L.memberById(id) && !L.isGuest(S, id) && L.lvl(S, id) > 0 && !(S.hires && S.hires[id] && S.hires[id].kind === 'short'));
+  }
+  const teamKitOf = id => { const me = rg.st && rg.st.me; return (((me && me.ck) || {})[id] || '0.0.0').split('.').map(Number); };
+  function teamStats(id) {
+    const b = ringBuild(id), k = teamKitOf(id);
+    let R = 0, E = 0, hp = 1, at = 1;
+    k.forEach((r, i) => { const p = TEAM_KIT[i]; R += p.R * r; E += p.E * r; hp += p.hp * r; at += p.at * r; });
+    return { hp: Math.round((800 + 28 * b.v) * hp), at: Math.round((100 + 4 * b.m) * at), E, R };
+  }
+  // The lineup: the saved one, with companions you no longer have dropped; with none saved, you plus your two strongest.
+  function teamLine() {
+    const me = rg.st && rg.st.me, pool = teamPool();
+    if (rg.tl) return rg.tl.filter(id => id === 'you' || pool.includes(id));
+    const saved = me && Array.isArray(me.tl) ? me.tl.map(e => e.id).filter(id => id === 'you' || pool.includes(id)) : null;
+    if (saved && saved.length) return saved.includes('you') ? saved : ['you'].concat(saved).slice(0, 3);
+    const best = pool.map(id => { const s = teamStats(id); return [id, s.hp * s.at]; }).sort((a, b) => b[1] - a[1]).slice(0, 2).map(x => x[0]);
+    return ['you'].concat(best);
+  }
+  const teamBody = ids => ids.map(id => { if (id === 'you') return { id: 'you' }; const m = L.memberById(id), b = ringBuild(id); return { id, n: m.name, c: m.cls, m: b.m, v: b.v }; });
+  async function teamSave(ids) {
+    rg.tl = ids.slice();
+    if (ids.length !== 3) { paintRing(); return; }
+    if (rg.busy) return; rg.busy = true;
+    try { const r = await api('PUT', Object.assign(ringBuild(), { tl: teamBody(ids) }), '/arena'); if (!r || !r.me) throw 0; rg.st.me = r.me; rg.tl = null; rg.sent = Date.now(); sfx.buy(); }
+    catch (e) { toast('lock', 'Lineup not saved', 'Try again in a moment.', 'warn'); }
+    rg.busy = false; paintRing();
+  }
+  const teamName = (t, i) => esc(t.hero ? t.n : t.n || '');
+  const teamHue = (t, owner) => t.hero ? (owner === rg.st.me.id ? lookHue(L.memberById('you')) : outfitHue((looksCache[owner] || {}).k)) : ((L.memberById(t.id) || {}).hue || 0);
+  function teamView(me, you) {
+    const line = teamLine(), pool = teamPool(), en = ringEnergy(me), full = line.length === 3, saved = !!(me.tl && me.tl.length === 3) && !rg.tl;
+    let h = '<p class="note small tmnote">Fight another player’s team with your hero and two companions. Borrowed player heroes can’t join, only companions you hired or found. The front fighter takes most of the blows; rogues go for the weakest foe and healers mend the weakest teammate.</p>';
+    h += '<div class="tmhead"><span><b>' + (me.tr || 1000).toLocaleString('en-US') + '</b> team rating</span><span class="rtitle sm rt-' + ringTitle(me.tr || 1000).toLowerCase() + '">' + ringTitle(me.tr || 1000) + '</span>' + (rg.st.trank ? '<span>rank ' + rg.st.trank + ' of ' + rg.st.tn + '</span>' : '') + '<span title="Team wins and losses">' + icon('sword') + (me.tw || 0) + '&ndash;' + (me.tx || 0) + '</span><span>' + laurel(me.ll) + '</span></div>';
+    h += '<h3 class="sub">Your lineup</h3><div class="tmline">' + [0, 1, 2].map(i => {
+      const id = line[i];
+      if (!id) return '<div class="tmslot empty"><span class="tmposl">' + TEAM_POS[i] + '</span><div class="tmempty">' + icon('users') + '</div><small>' + (pool.length > line.length - 1 ? 'Add a companion below' : 'Hire or find more companions to fill this spot') + '</small></div>';
+      const m = L.memberById(id), isYou = id === 'you', s = isYou ? me.s : teamStats(id), k = isYou ? null : teamKitOf(id);
+      return '<div class="tmslot' + (i === 0 ? ' tmfront' : '') + '"><span class="tmposl' + (isYou ? ' tmyou' : '') + '">' + TEAM_POS[i] + '</span>' + ringFig(m.cls, isYou ? lookHue(m) : m.hue, 3) +
+        '<div class="nm">' + esc(isYou ? S.hero.name : m.name) + '</div><div class="tmtags">' + classTag(m.cls) + (isYou ? '<span class="rartag" style="--rc:#6cc4e8">Your hero</span>' : rarTag(id)) + '</div>' +
+        '<small>Power level ' + L.lvl(S, id) + '</small><small class="st">' + fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack</small>' +
+        (isYou ? '<small class="st">Ringwarden kit + Ring skills</small>' : '<div class="tmkit" title="Companion Ring kit">' + k.map(r => '<i class="' + (r > 5 ? 'ep' : r ? 'on' : '') + '"></i>').join('') + '</div>') +
+        '<div class="tmbtn"><button class="btn ghost small" data-tmmove="' + i + '" title="Move one spot toward the front">Move</button>' + (isYou ? '' : '<button class="btn ghost small" data-tmgear="' + esc(id) + '">Gear</button>') + '</div>' + (isYou ? '' : '<button class="tmx" data-tmout="' + esc(id) + '" title="Remove from the lineup" aria-label="Remove ' + esc(m.name) + ' from the lineup">&times;</button>') + '</div>';
+    }).join('') + '</div>';
+    if (!full) h += '<p class="note small">' + (pool.length < 2 ? 'You need two companions of your own for a team. Hire some at the Guild Hall.' : 'Pick two companions to save your team.') + '</p>';
+    else if (!saved) h += '<p class="note small">Saving your lineup…</p>';
+    const fr = line.filter(id => id !== 'you').length;
+    h += '<details class="tmfold"' + (full ? '' : ' open') + '><summary>Pick companions <small>' + fr + ' of 2 chosen</small></summary><div class="tmroster">' + (pool.length ? pool.map(id => {
+      const m = L.memberById(id), on = line.includes(id), s = teamStats(id);
+      return '<div class="tmrow' + (on ? ' in' : '') + '">' + ringFig(m.cls, m.hue, 2) + '<div><span class="nm">' + esc(m.name) + '</span> ' + classTag(m.cls) + ' ' + rarTag(id) + '<small>Power level ' + L.lvl(S, id) + ' &middot; ' + fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack</small></div>' +
+        (on ? '<span class="inl">In lineup</span>' : '<button class="btn ghost small" data-tmin="' + esc(id) + '"' + (full ? ' disabled title="Remove a companion from your lineup first"' : '') + '>Add</button>') + '</div>';
+    }).join('') : '<p class="note small">No companions yet.</p>') + '</div></details>';
+    const tf = rg.st.tfoes || [];
+    h += '<h3 class="sub">Team challengers</h3>' + (tf.length ? '<div class="tmfoes">' + tf.map(f => {
+      const my = (me.team || []).reduce((t, x) => t + ringPower(x.s), 0) || 1, q = f.t.reduce((t, x) => t + ringPower(x.s), 0) / my;
+      const odd = q > 1.35 ? ['tough', 'Tough fight'] : q < 0.75 ? ['easy', 'You are favored'] : ['even', 'Even match'];
+      const rc = me.trc && me.trc[f.id], rq = rc ? (me.rep || [1, .5, .25, 0])[Math.min(rc[0], 3)] : 1;
+      const rm = !rc ? '' : rq > 0 ? '<small><span class="mu rep">' + icon('refresh') + 'Rematch: ' + Math.round(rq * 100) + '% rating and Laurels</span></small>' : '<small><span class="mu bad">' + icon('refresh') + 'Rematch pays nothing for ' + ringIn(rc[1] - Date.now()) + '</span></small>';
+      return '<div class="tmfoe"><div class="tmtrio">' + f.t.map(t => ringFig(t.c, teamHue(t, f.id), 2)).join('') + '</div><div><span class="nm">' + esc(f.n) + '’s team</span><small><span class="rtitle sm rt-' + ringTitle(f.tr).toLowerCase() + '">' + ringTitle(f.tr) + '</span> ' + f.tr.toLocaleString('en-US') + ' &middot; ' + f.tw + '&ndash;' + f.tx + ' &middot; <i class="odds ' + odd[0] + '">' + odd[1] + '</i></small>' + rm + '<small class="dim">' + f.t.map(t => esc(t.n)).join(' &middot; ') + '</small></div>' +
+        '<button class="btn small" data-tfight="' + f.id + '"' + (!saved ? ' disabled title="Save a full lineup first"' : !en ? ' disabled title="No challenges left. One returns every 30 minutes."' : '') + '>Fight</button></div>';
+    }).join('') + '</div>' : '<p class="note">No other teams have entered yet. Check back soon.</p>');
+    h += '<details class="tmfold"><summary>How team battles work <small>tap to open</small></summary><ul class="tmrule"><li>Win: 10 Laurels, up to 14 against a stronger team. Loss: 4. First team win of the day: +10.</li><li>Uses the same challenges as duels.</li><li>Your team defends while you are away: +2 Laurels for each challenger it beats.</li><li>Companions use their class ability and their companion Ring kit. Your hero brings its Ringwarden kit and Ring skills.</li><li>Team battles have their own rating and standings, and never hurt your dungeon party.</li></ul></details>';
+    return h;
+  }
+  function teamGearView(me) {
+    const line = teamLine().filter(id => id !== 'you');
+    let id = rg.gid && line.includes(rg.gid) ? rg.gid : line[0];
+    if (!id) return '<p class="note">Add companions to your lineup first.</p><div class="row"><button class="btn ghost small" data-rv="team">Back to lineup</button></div>';
+    rg.gid = id;
+    const m = L.memberById(id), k = teamKitOf(id), s = teamStats(id), ab = ringSkill(ringFree(m.cls));
+    let h = '<div class="tmgear-who">' + line.map(x => '<button data-tmgear="' + esc(x) + '" class="' + (x === id ? 'on' : '') + '">' + ringFig(L.memberById(x).cls, L.memberById(x).hue, 2) + esc(L.memberById(x).name) + '</button>').join('') + '<button class="tmback" data-rv="team">Back to lineup</button></div>';
+    h += '<div class="tmgearhead">' + ringFig(m.cls, m.hue, 3) + '<div><h3>' + esc(m.name) + '’s Ring kit</h3><small>' + classTag(m.cls) + ' ' + rarTag(id) + ' Power level ' + L.lvl(S, id) + '</small><small>In the Ring: ' + fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack' + (s.E ? ' &middot; Edge ' + s.E : '') + (s.R ? ' &middot; Resolve ' + s.R : '') + '</small>' + (ab ? '<small>Fights with: ' + esc(ab.n) + ' (class ability)</small>' : '') + '</div></div>';
+    h += '<p class="note small">Companion Ring gear is separate from dungeon gear and counts only in team battles. It stays with this companion. Each piece has ' + TEAM_MAX + ' ranks: Ironbound, then Emberforged (needs a best team rating of 1,300).</p><div class="ringkit">';
+    h += TEAM_KIT.map((p, i) => {
+      const r = k[i] || 0, t = TEAM_TIER(r), g = teamGate(r), cost = teamCost(r);
+      const nm = (r ? t[0] + ' ' : 'Ringwarden ') + p.name + (r ? ' <em>+' + r + '</em>' : '');
+      const fx = x => [p.R ? 'Resolve +' + p.R * x : '', p.E ? 'Edge +' + p.E * x : '', p.hp ? 'health +' + Math.round(p.hp * x * 1000) / 10 + '%' : '', p.at ? 'attack +' + Math.round(p.at * x * 1000) / 10 + '%' : ''].filter(Boolean).join(' &middot; ');
+      let act;
+      if (r >= TEAM_MAX) act = '<span class="rkmax">Mastered</span>';
+      else if ((me.tp || 1000) < g) act = '<span class="rklock" title="Reach a team rating of ' + g.toLocaleString('en-US') + ' once to unlock Emberforged ranks">' + icon('lock') + g.toLocaleString('en-US') + ' team rating</span>';
+      else act = '<button class="btn small" data-ckit="' + i + '"' + (me.ll < cost ? ' disabled title="Not enough Laurels"' : '') + '>' + (r ? 'Upgrade' : 'Claim') + ' ' + laurel(cost) + '</button>';
+      return '<div class="ringpiece r-' + t[1] + '"><div class="tile r-' + t[1] + (r ? '' : ' ghost') + '"><img class="iimg" src="' + SP.itemIcon(m.cls, p.slot, r ? t[1] : 'common') + '" alt=""></div><div class="rpinfo"><b>' + nm + '</b><small>' + (r ? fx(r) : 'Not claimed yet') + '</small>' + (r < TEAM_MAX ? '<small class="dim">Next rank: ' + fx(1) + '</small>' : '') + '</div><div class="rpact">' + act + '</div></div>';
+    }).join('') + '</div>';
+    return h;
+  }
+  async function teamKit(i, btn) {
+    const id = rg.gid; if (rg.busy || !id) return; rg.busy = true; if (btn) btn.disabled = true;
+    try {
+      const r = await api('POST', { cid: id, p: i }, '/arena/kit'); if (!r || !r.me) throw 0;
+      rg.st.me = r.me; sfx.buy(); save();
+      const k = teamKitOf(id)[i];
+      toast('shield', TEAM_TIER(k)[0] + ' ' + TEAM_KIT[i].name + ' +' + k, L.memberById(id).name + '’s Ring kit grows stronger. It counts only in team battles.', 'feat');
+    } catch (e) { toast('lock', 'Could not upgrade', 'Check your Laurels and try again in a moment.', 'warn'); }
+    rg.busy = false; paintRing();
+  }
+  function teamClick(e) {
+    const mv = e.target.closest('[data-tmmove]'), out = e.target.closest('[data-tmout]'), add = e.target.closest('[data-tmin]'), gear = e.target.closest('[data-tmgear]'), ck = e.target.closest('[data-ckit]'), tf = e.target.closest('[data-tfight]');
+    if (gear) { rg.gid = gear.dataset.tmgear; rg.view = 'tgear'; paintRing(); return true; }
+    if (ck) { teamKit(+ck.dataset.ckit, ck); return true; }
+    if (tf) { teamFight(tf.dataset.tfight, tf); return true; }
+    if (!mv && !out && !add) return false;
+    const line = teamLine().slice();
+    if (mv) { const i = +mv.dataset.tmmove, j = (i + line.length - 1) % line.length; if (line.length > 1) [line[i], line[j]] = [line[j], line[i]]; }
+    if (out) line.splice(line.indexOf(out.dataset.tmout), 1);
+    if (add && line.length < 3 && !line.includes(add.dataset.tmin)) line.push(add.dataset.tmin);
+    teamSave(line); return true;
+  }
+  async function teamFight(id, btn) {
+    if (rg.busy) return;
+    const me = rg.st && rg.st.me; if (!me || !ringEnergy(me)) return;
+    rg.busy = true; if (btn) btn.disabled = true;
+    let r;
+    try {
+      // refresh the lineup's builds first, so the companions fight as strong as they are now
+      if (Date.now() - rg.sent > 5 * 6e4) { const t = teamLine(); const u = await api('PUT', Object.assign(ringBuild(), t.length === 3 ? { tl: teamBody(t) } : {}), '/arena'); if (u && u.me) rg.st.me = u.me; rg.sent = Date.now(); }
+      r = await api('POST', { id, team: 1 }, '/arena/fight'); if (!r || !r.log) throw 0;
+    } catch (e) { rg.busy = false; if (btn) btn.disabled = false; toast('lock', 'The battle did not start', 'The Ring could not be reached. Your challenge was not spent.', 'warn'); return; }
+    rg.st.me = r.me; rg.busy = false;
+    playTeam(r);
+  }
+  // Play a team battle back from the server's log: [side, slot, target side, target slot, damage, flag, heal, tag, ...six healths].
+  function playTeam(r) {
+    const T = [r.a.t, r.b.t], own = [r.a.id, r.b.id], max = T[0].concat(T[1]).map(t => t.s.hp), cur = max.slice();
+    const sname = id => { const k = ringSkill(id); return k ? k.n : ''; };
+    const nm = (sd, i) => esc(T[sd][i] ? T[sd][i].n : '');
+    const fig = (t, sd, i) => '<div class="tmf" id="tm-f' + (sd * 3 + i) + '"><span class="tmpos">' + TEAM_POS[i] + '</span><div class="fig"><img src="' + SP.spriteURL(t.c, 5, teamHue(t, own[sd])) + '" alt=""><div class="rdpop" id="tm-pop' + (sd * 3 + i) + '"></div></div><b>' + esc(t.n) + '</b><div class="bar"><i id="tm-hp' + (sd * 3 + i) + '" style="width:100%"></i><span id="tm-ht' + (sd * 3 + i) + '">' + fmt(t.s.hp) + '</span></div></div>';
+    modal('<div class="maphead"><div><h2>Team battle</h2><small>Your team challenges ' + esc(r.b.n) + '’s team</small></div><button class="iconbtn" id="tm-x" aria-label="Close">&times;</button></div>' +
+      '<div class="tmarena"><div class="tmside them">' + T[1].map((t, i) => fig(t, 1, i)).join('') + '</div><div class="tmmid"><small>' + esc(r.b.n) + '’s team</small><span class="rdvs">VS</span><small>Your team</small></div><div class="tmside us">' + T[0].map((t, i) => fig(t, 0, i)).join('') + '</div></div>' +
+      '<div class="rdlog" id="tm-log"></div><div class="rdres" id="tm-res" hidden></div><div class="row"><button class="btn ghost" id="tm-skip">Skip to the end</button></div>', md => {
+      $('modal').dataset.lock = '1';
+      const lines = []; let i = 0, timer = 0, done = false;
+      const q = s => md.querySelector(s);
+      const pop = (k, txt, cls) => { const p = q('#tm-pop' + k); if (!p) return; const s = document.createElement('span'); s.className = cls; s.textContent = txt; p.appendChild(s); setTimeout(() => s.remove(), 900); };
+      const paint = () => { for (let k = 0; k < 6; k++) { if (!q('#tm-hp' + k)) continue; q('#tm-hp' + k).style.width = Math.max(0, cur[k] / max[k] * 100) + '%'; q('#tm-ht' + k).textContent = fmt(Math.max(0, cur[k])); q('#tm-f' + k).classList.toggle('fallen', cur[k] <= 0); } q('#tm-log').innerHTML = lines.slice(-3).map(l => '<p>' + l + '</p>').join(''); };
+      const step = quiet => {
+        const e = r.log[i++]; if (!e) return false;
+        const [sd, a, ts, ti, d, c, hl, tag] = e, before = cur.slice();
+        for (let k = 0; k < 6; k++) cur[k] = e[8 + k] != null ? e[8 + k] : cur[k];
+        if (quiet) return true;
+        const A = sd * 3 + a, D = ts * 3 + ti, an = tag && tag !== 'dot' && tag !== 'stun' && tag !== 'und' ? sname(tag) : '';
+        if (c === 3) { pop(A, 'Stunned', 'miss'); sfx.thud(); lines.push('<b>' + nm(sd, a) + '</b> is stunned and loses the turn.'); return true; }
+        if (c === 5) { pop(A, 'Survives!', 'crit'); sfx.relic(); lines.push('<b>' + nm(sd, a) + '</b> refuses to fall!'); return true; }
+        if (c === 4) { pop(D, '-' + fmt(d), 'dot'); lines.push('<b>' + nm(ts, ti) + '</b> suffers ' + fmt(d) + ' from the lingering wound.' + (before[D] > 0 && cur[D] <= 0 ? ' <b>' + nm(ts, ti) + '</b> falls.' : '')); return true; }
+        const f = q('#tm-f' + A + ' .fig'); if (f) { f.classList.remove('lunge'); void f.offsetWidth; f.classList.add('lunge'); }
+        if (an) pop(A, an, 'abil');
+        if (ts === sd) { // a heal on a teammate
+          if (hl) pop(D, '+' + fmt(hl), 'heal'); sfx.buy();
+          lines.push('<b>' + nm(sd, a) + '</b> uses <em class="ab">' + esc(an) + '</em>' + (D !== A ? ' on <b>' + nm(ts, ti) + '</b>' : '') + (hl ? ' and restores ' + fmt(hl) : '') + '.');
+          return true;
+        }
+        const tf = q('#tm-f' + D + ' .fig'); if (tf && (d > 0 || c === 1)) { tf.classList.remove('struck'); void tf.offsetWidth; tf.classList.add('struck'); }
+        if (c === 2) pop(D, 'Miss', 'miss'); else if (d > 0) pop(D, '-' + fmt(d), c ? 'crit' : 'dmg');
+        if (hl) pop(A, '+' + fmt(hl), 'heal');
+        c === 2 ? sfx.thud() : d > 0 ? sfx.hit(c === 1) : sfx.buy();
+        const what = an ? 'uses <em class="ab">' + esc(an) + '</em> on <b>' + nm(ts, ti) + '</b>' + (c === 2 ? ' but misses' : d > 0 ? ' for ' + fmt(d) + (c ? ' (critical)' : '') : '') : c === 2 ? 'misses <b>' + nm(ts, ti) + '</b>' : (c ? 'lands a <em>critical</em> blow on <b>' + nm(ts, ti) + '</b> for ' : 'hits <b>' + nm(ts, ti) + '</b> for ') + fmt(d);
+        lines.push('<b>' + nm(sd, a) + '</b> ' + what + (hl ? ' and recovers ' + fmt(hl) : '') + '.' + (before[D] > 0 && cur[D] <= 0 ? ' <b>' + nm(ts, ti) + '</b> falls.' : ''));
+        return true;
+      };
+      const finish = () => {
+        if (done) return; done = true; clearInterval(timer);
+        while (step(true)); paint();
+        const res = q('#tm-res'); res.hidden = false; res.className = 'rdres ' + (r.win ? 'won' : 'lost');
+        const down = T[0].filter((t, k) => cur[k] <= 0 && !t.hero).map(t => esc(t.n));
+        res.innerHTML = '<h3>' + (r.win ? 'Victory' : 'Defeat') + '</h3><p>' + (r.dr >= 0 ? '+' : '') + r.dr + ' team rating &middot; +' + r.ll + ' Laurels' + (r.fw ? ' (first team win of the day bonus)' : '') + '</p>' +
+          (r.q < 1 ? '<p class="note small">' + (r.q > 0 ? 'Rematch: ' + Math.round(r.q * 100) + '% of the usual rating and Laurels.' : 'You have fought this team too often today, so this battle paid nothing. Try another team.') + '</p>' : '') +
+          (down.length ? '<p class="note small">' + down.join(' and ') + (down.length > 1 ? ' are' : ' is') + ' fine after the match. Team battles never hurt your dungeon party.</p>' : '');
+        r.win ? sfx.relic() : sfx.fail();
+        const sk = q('#tm-skip'); sk.textContent = 'Back to the Ring'; sk.className = 'btn'; sk.onclick = close;
+        rg.at = 0; loadRing(true);
+      };
+      const close = () => { clearInterval(timer); delete $('modal').dataset.lock; closeModal(); paintRing(); };
+      q('#tm-x').onclick = () => { finish(); close(); };
+      q('#tm-skip').onclick = finish;
+      paint(); sfx.boss();
+      timer = setInterval(() => { if (!step(false)) return finish(); paint(); }, 360);
+    });
   }
   // ---- the duel itself, played back from the server's log ----
   async function ringDuel(id, btn) {
@@ -8269,7 +8481,9 @@
     });
   }
   if ($('ringbox')) $('ringbox').addEventListener('click', e => {
-    const v = e.target.closest('[data-rv]'); if (v) { rg.view = v.dataset.rv; paintRing(); if (v.dataset.rv === 'foes' || v.dataset.rv === 'top') loadRing(); return; }
+    const v = e.target.closest('[data-rv]'); if (v) { rg.view = v.dataset.rv; paintRing(); if (v.dataset.rv === 'foes' || v.dataset.rv === 'top' || v.dataset.rv === 'team') loadRing(); return; }
+    const tv = e.target.closest('[data-rtop]'); if (tv) { rg.topv = tv.dataset.rtop; paintRing(); return; }
+    if (teamClick(e)) return;
     const d = e.target.closest('[data-duel]'); if (d) { ringDuel(d.dataset.duel, d); return; }
     const k = e.target.closest('[data-kit]'); if (k) { ringKit(+k.dataset.kit, k); return; }
     const sk = e.target.closest('[data-skl]'); if (sk) { ringLearn(sk.dataset.skl, sk); return; }
