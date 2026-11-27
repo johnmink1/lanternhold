@@ -182,6 +182,7 @@ There is no working AWS CLI. The cloud container's keys are invalid, and VENGEAN
 
 John: "watch the game logs... look out on odd things". Every 4 hours a read-only sweep reads the admin activity log (all players, `audit.js` flags plus gold-rate, spend and NP+ checks) and CloudWatch Lambda Errors/Throttles, and reports only new anomalies. Runbook and known false alarms: project files `log-watch/sweep.md`. Broken things can be hotfixed; mechanics or save changes need John's OK; AWS changes need his go.
 - First sweep found `lanternhold-invite` failing ~100% of calls since at least 23 Nov ('dec' is a DynamoDB reserved word), so party invites never showed. Fixed in PR #49; deployed 26 Nov 2026 03:25 UTC with John's go via `infra/deploy/hotfix-invite-dec.sh` (backup `~/lhbak/lanternhold-invite-202611260325.zip`); errors went from 8-11/min to 0.
+- 27 Nov 2026 00:40 UTC sweep: Kyvia loaded a hand-edited backup code at 22:52 UTC 26 Nov (play time went back 40 s, gold 227.7B -> 999.2T, gold earned -> 10 Qa) and spent it on ~50 Gilded Caskets and camp renovations. Backup codes were plain base64 JSON. Hotfix: codes are now `LH2.<base64>.<check>` (`backupCode`/`readBackup` in ui.js); old or edited codes are refused; each import writes an 'import' entry to the activity log. audit.js: 'edit' (bad) when play time goes back while gold jumps, and earning-rate flags over 10,000x go red. What to do about Kyvia's save is John's call.
 
 ## Discord feedback (bugs and feature requests)
 
