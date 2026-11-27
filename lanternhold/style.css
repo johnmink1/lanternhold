@@ -1,4 +1,4 @@
-/* lh-build 202611271955 */
+/* lh-build 202611272009 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2950,6 +2950,7 @@ body.layedit #tab-party .buybar,body.layedit #tab-party .ftips,body.layedit #tab
 /* Hardcore (v142) */
 .hcbadge{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 8px;border-radius:10px;border:1px solid #ff6b5a88;background:#ff6b5a1f;color:#ff8a7a;font:700 11px/1.4 var(--title,inherit);letter-spacing:.06em;text-transform:uppercase;vertical-align:middle;cursor:pointer}
 .hcbadge svg{width:12px;height:12px}
+.nmbadge{border-color:#e8b75a88;background:#e8b75a1f;color:#f0c879}
 body.hcmode .brand b{color:#ff8a7a}
 .hcred{color:#ff8a7a}
 .hcw h2{color:#ff6b5a;display:flex;align-items:center;gap:8px;font-size:21px}.hcw h2 svg{width:22px;height:22px}
