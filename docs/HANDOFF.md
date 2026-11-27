@@ -1,6 +1,6 @@
 # Lanternhold handoff (started 24 Nov 2026, kept current)
 
-This handoff stands on its own for the new Lanternhold project. v142 is live (27 Nov 2026); the next release is v143, and it can only hold QoL and bug fixes (see Feature freeze). Live at https://lanternhold.born2gamellc.com.
+This handoff stands on its own for the new Lanternhold project. v143 is live (27 Nov 2026, build 202611272300); the next release is v144, and it can only hold QoL and bug fixes (see Feature freeze). Live at https://lanternhold.born2gamellc.com.
 
 ## Where Lanternhold work happens
 
@@ -227,7 +227,9 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
 
-## v143 bundle: Hardcore NP+ and Act 1 QoL (27 Nov 2026, in progress)
+## v143: Hardcore NP+ and Act 1 QoL (SHIPPED 27 Nov 2026 23:09 UTC, PR #108, build 202611272300)
+
+- Server script run in CloudShell 23:06 UTC on John's go: all 12 functions updated, exchange env set (TRUSTCHECK=log), saves table point-in-time recovery ENABLED. Backups `~/lhbak/*-202611272306.zip` + `lanternhold-exchange-env-202611272306.json`, run log `~/lhbak/v143-run.log` (undo commands at its end).
 From the Act 1 review (John 27 Nov 22:44 UTC: Sigils are account-bound and fine in Hardcore; Hardcore gets the same NP+ as Normal; yes to the QoL list). Branch claude/project-thread-yn2s1l. Not shipped yet.
 - Hardcore NP+ per slot: `np.js` reads `?hc=1` and keeps the Hardcore tier as `hnp`/`hnpAt` on the account wallet (the +25 Sigils go to the account), stamps the Hardcore hero row, clears Hardcore trades, no First Dawn. Every answer carries `hc`; `syncNp` in the Hardcore slot only applies a tier when `hc === 1`, so an old server can never reset a Hardcore hero again (#107). `startNP` keeps a Hardcore run's death/lost counters (hccheck needs them) and drops its carried gear and Lost Pack. `save.js` reads `hnp` for the Hardcore NP check. Hardcore NP+ markets are `mkt#<cls>#hc#<tier>`.
 - Sigils in Hardcore: daily quest claims and found Sigils work in both slots; the daily mask and find cap stay per account (wallet), so the two saves share one daily set. `perks.js` checks "real play" against the slot's own save row.
