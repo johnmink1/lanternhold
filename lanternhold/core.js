@@ -1,4 +1,4 @@
-/* lh-build 202611272037 */
+/* lh-build 202611272049 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -3962,6 +3962,7 @@
   // force: the server says this account is already on `tier` (another device started it), so reset to it anyway.
   function startNP(s, tier, at, force) {
     tier = Math.min(NP_MAX, tier | 0);
+    if (s && s.hc) return false; // v142 hotfix: New Playthrough never touches a Hardcore hero
     if (force ? !(s && s.hero) || tier <= npTier(s) : !npReady(s) || tier !== npTier(s) + 1) return false;
     const keep = {}; for (const k of NP_KEEP) if (s[k] !== undefined) keep[k] = s[k];
     for (const k of Object.keys(s)) delete s[k];

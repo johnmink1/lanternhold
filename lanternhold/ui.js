@@ -1,4 +1,4 @@
-/* lh-build 202611272037 */
+/* lh-build 202611272049 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -29,6 +29,25 @@
       return L.migrate(o);
     } catch (e) {}
     return null;
+  }
+  // v142 hotfix (John, 27 Nov 2026): if the game ever reloads itself again and again, stop after a few tries and say
+  // so, instead of flashing between screens. A tap on the button always reloads.
+  let reloadStop = false;
+  try {
+    const now = Date.now(), ts = JSON.parse(sessionStorage.getItem('lh_loads') || '[]').filter(t => now - t < 20000).concat([now]);
+    sessionStorage.setItem('lh_loads', JSON.stringify(ts)); reloadStop = ts.length > 5;
+  } catch (e) {}
+  function reloadPage(force) {
+    if (reloadStop && !force) {
+      dormant = true;
+      if (document.getElementById('reloadstop')) return;
+      const d = document.createElement('div'); d.id = 'reloadstop';
+      d.innerHTML = '<div><h2>Lanternhold stopped restarting</h2><p>The game tried to reload itself several times in a row, so it paused to keep your save safe. Tell us on Discord if this keeps happening.</p><button class="btn" id="rs-go">Reload</button></div>';
+      document.body.appendChild(d);
+      d.querySelector('#rs-go').onclick = () => { try { sessionStorage.removeItem('lh_loads'); } catch (e) {} location.reload(); };
+      return;
+    }
+    location.reload();
   }
   // ---------- one tab at a time ----------
   // Two open copies of the game each kept saving their own state over the other, so a claim, a setting or a tonic
@@ -3487,10 +3506,12 @@
   }
   // Server tier wins: a save behind the server's tier (another device, an old backup) starts over at that tier.
   async function syncNp() {
-    if (!CL || !signedIn() || !S.hero) return;
+    // v142 hotfix (John, 27 Nov 2026): the account's NP+ tier belongs to the Normal hero. Applied to a Hardcore hero it
+    // reset the game, the reset was refused, and the page reloaded over and over (the screen flipped on his phone).
+    if (!CL || !signedIn() || !S.hero || HCS) return;
     try { npSrv = await papi('GET', '/np'); } catch (e) { return; }
     const t = npSrv.np | 0;
-    if (t > L.npTier(S)) { L.startNP(S, t, npSrv.npAt, true); save(); try { await pushCloud(true); } catch (e) {} location.reload(); return; }
+    if (t > L.npTier(S)) { L.startNP(S, t, npSrv.npAt, true); save(); try { await pushCloud(true); } catch (e) {} reloadPage(); return; }
     if (t < L.npTier(S)) { S.np = t; save(); }
     paintNp();
   }
@@ -4046,7 +4067,8 @@
   }
   function switchSlot(k) {
     if (k === SLOT) { closeModal(); return; }
-    const go = () => { try { localStorage.setItem('lh_slot', k); } catch (e) {} location.reload(); };
+    let gone = false; // v142 hotfix: switch once, with a clean load of the page (the save push and the timeout both called this)
+    const go = () => { if (gone) return; gone = true; dormant = true; try { localStorage.setItem('lh_slot', k); } catch (e) {} reloadPage(); };
     save();
     if (CL && signedIn() && S.hero && cloudReady) { Promise.resolve(pushCloud(true)).then(go, go); setTimeout(go, 4000); } else go();
   }
@@ -4589,7 +4611,7 @@
   // An admin reset this account: drop this device's save and start a brand-new game.
   function playerReset() {
     try { localStorage.removeItem(SAVE_KEY); localStorage.setItem('lanternhold.wiped', 'me'); } catch (e) {}
-    S = L.newState(); location.reload();
+    S = L.newState(); reloadPage();
   }
   // Big saves (thousands of items) can pass the server's 300 KB limit, so a save over 150 KB is gzipped and sent
   // as 'gz1:' + base64, about a tenth of the size. Smaller saves stay plain JSON (Tim, 25 Nov 2026: 1,880 items).
@@ -4619,6 +4641,7 @@
   async function pushCloud1(quiet, claim) {
     if (!CL || !signedIn() || !S.hero || dormant) return;
     if (!ownsTab()) { goDormant(); return; }
+    if (HCS && !S.hc) return; // v142 hotfix: never send a non-Hardcore save from the Hardcore slot
     if (!claim && !cloudReady) return; // not before this device has checked the account save and claimed it
     try {
       const o = saveObj(), sent = acts.slice();
@@ -4761,7 +4784,7 @@
     S = L.migrate(o); S.lastSeen = Date.now();
     if (HCS && S.hero && !S.hc) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(saveObj())); } catch (e) {}
-    location.reload();
+    reloadPage();
   }
   function paintAccount() {
     try { if (chat.open) { paintChat(); pollChat(); } } catch (e) {}
@@ -5802,7 +5825,7 @@
       let seen = 0; try { seen = Number(localStorage.getItem(EPOCH_KEY)) || 0; } catch (e) {}
       if (!ep || ep <= seen || (S.created || 0) >= ep) return;
       try { localStorage.removeItem(SAVE_KEY); localStorage.setItem(EPOCH_KEY, String(ep)); localStorage.setItem('lanternhold.wiped', '1'); } catch (e) {}
-      S = L.newState(); location.reload();
+      S = L.newState(); reloadPage();
     } catch (e) {}
   }
   function wipedNotice() {
@@ -7826,6 +7849,7 @@
       'Your Hardcore hero loads on every device you sign in on, and Switch save shows it. Normal saves get a Normal badge at the top to switch saves.',
       'Hardcore healers save their Hymn for a raise when a companion is dying, instead of spending it on a heal.',
       'On phones, a game tab woken from the background no longer plays an old copy of your save. It pauses so only one tab plays.',
+      'Switching to Hardcore no longer makes the screen flip and reload over and over when your Normal hero is on a New Playthrough. New Playthrough tiers stay with your Normal hero.',
     ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
