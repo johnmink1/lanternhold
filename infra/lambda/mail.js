@@ -2,7 +2,8 @@
 // the price, which goes to the sender as a 'payment' letter) or declines (the item goes back as a
 // 'return' letter). Senders can recall an unanswered offer. Letters (sale, payment, return) are claimed.
 const { DynamoDBClient, GetItemCommand, QueryCommand, TransactWriteItemsCommand } = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
-const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES;
+const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES, SAVES = process.env.SAVES;
+const trust = require('./trust'); // v140: payments are checked against the gold the server trusts (trust.js)
 const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'], SLOT = 'main off head neck chest robe legs feet ring'.split(' '), RAR = ['common', 'fine', 'rare', 'epic', 'set'], JOB = 'forage smith herb armor prospect lamp'.split(' ');
 const SET = { vigil: 'tank', grace: 'healer', night: 'rogue', regalia: 'mage', crown: 'necro', dawn: 'paladin' };
 const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard)/gi;
@@ -66,9 +67,11 @@ exports.handler = async (e) => {
     ops.push({ Delete: { TableName: T, Key: K('out#' + L.from, id) } });
     const acc = rk === 'accept';
     if (!acc && rk !== 'decline') return res(404, E);
+    if (acc && L.price > 0 && !(await trust.canPay(db, SAVES, cl.sub, L.price, 'mail'))) return res(402, { error: 'gold' });
     if (!acc || L.price > 0) ops.push({ Put: { TableName: T, Item: { ...K('inbox#' + L.from, newId()), type: S(acc ? 'payment' : 'return'), from: S(me), fromName: S(L.toName), item: S(JSON.stringify(L.item)), gold: S(acc ? L.price : 0), at: N(now), ttl: N(Math.floor(now / 1000) + 5184000) } } });
   }
   try { await db.send(new TransactWriteItemsCommand({ TransactItems: ops })); }
   catch (x) { if (x.name === 'TransactionCanceledException') return res(404, E); throw x; }
+  if (rk === 'claim' && L.gold > 0) await trust.credit(db, SAVES, cl.sub, L.gold);
   return res(200, { ok: true, letter: L });
 };

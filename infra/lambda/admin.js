@@ -1,6 +1,7 @@
 // Lanternhold admin: player list and bans (the server wipe and player reset live in reset.js). Only members of the Cognito "admins" group get in.
 // GET /epoch is public: clients compare it with their save and start over after a wipe.
 const D = require('@aws-sdk/client-dynamodb');
+const zlib = require('zlib'), crypto = require('crypto'), SC = require('./savecheck');
 const C = require('@aws-sdk/client-cognito-identity-provider');
 const db = new D.DynamoDBClient({}), idp = new C.CognitoIdentityProviderClient({});
 const { SAVES, HEROES, TRADE, POOL } = process.env;
@@ -88,6 +89,48 @@ exports.handler = async (e) => {
       k = q.LastEvaluatedKey;
     } while (k);
     return res(200, { ok: true, listings: n });
+  }
+  // v140 held saves and snapshots (save.js). GET /admin/held: every player whose last save the check held.
+  if (rk === 'GET /admin/held') {
+    const r = await db.send(new D.QueryCommand({ TableName: TRADE, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': S('heldidx') } }));
+    return res(200, { held: (r.Items || []).map(i => ({ id: i.sk.S, at: +i.at.N, mode: i.mode ? i.mode.S : '', flags: JSON.parse(i.flags.S) })) });
+  }
+  // GET /admin/saves?id=<pid>: the held save (if any) and the snapshots kept for one player, newest first.
+  if (rk === 'GET /admin/saves') {
+    const id = String((e.queryStringParameters || {}).id || '');
+    if (!/^[0-9a-f]{16}$/.test(id)) return res(400, { error: 'id' });
+    const [h, sn] = await Promise.all([
+      db.send(new D.GetItemCommand({ TableName: TRADE, Key: { pk: S('held#' + id), sk: S('0') }, ProjectionExpression: 'pk, #a, flags, #r, #m', ExpressionAttributeNames: { '#a': 'at', '#r': 'ref', '#m': 'mode' } })),
+      db.send(new D.QueryCommand({ TableName: TRADE, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': S('snap#' + id) }, ProjectionExpression: 'sk, #a, #s', ExpressionAttributeNames: { '#a': 'at', '#s': 'sum' }, ScanIndexForward: false }))]);
+    const hi = h.Item;
+    return res(200, { held: hi ? { at: +hi.at.N, mode: hi.mode ? hi.mode.S : '', flags: JSON.parse(hi.flags.S), ref: JSON.parse(hi.ref ? hi.ref.S : 'null') } : null,
+      snaps: (sn.Items || []).map(i => ({ sk: i.sk.S, at: +i.at.N, sum: JSON.parse(i.sum.S) })) });
+  }
+  // POST /admin/restore { id, from: 'held' | <snapshot sk> }: puts that copy back as the player's account save and makes
+  // it the trusted reference. dv is set to 'admin', so the player's open game pauses with "Play here" and loads it.
+  // POST /admin/held/drop { id }: forgets a held save (the trusted save stays).
+  if (rk === 'POST /admin/restore' || rk === 'POST /admin/held/drop') {
+    const id = String(b.id || ''), from = String(b.from || 'held');
+    if (!/^[0-9a-f]{16}$/.test(id) || !/^(held|\d{4}-\d\d-\d\d|b[\dT:-]{19})$/.test(from)) return res(400, { error: 'id' });
+    const hr = (await db.send(new D.GetItemCommand({ TableName: HEROES, Key: { pid: S(id) } }))).Item;
+    if (!hr || !hr.u) return res(404, { error: 'player' });
+    const sub = hr.u.S, now = Date.now(), dropHeld = () => Promise.all([
+      db.send(new D.DeleteItemCommand({ TableName: TRADE, Key: { pk: S('held#' + id), sk: S('0') } })),
+      db.send(new D.DeleteItemCommand({ TableName: TRADE, Key: { pk: S('heldidx'), sk: S(id) } }))]);
+    const audit = act => db.send(new D.PutItemCommand({ TableName: TRADE, Item: { pk: S('audit#'), sk: S(now.toString(36) + crypto.randomBytes(3).toString('hex')), at: { N: String(now) }, by: S(cl.email || cl.sub), act: S(act), pid: S(id), name: S(hr.name ? hr.name.S : ''), ttl: { N: String(Math.floor(now / 1000) + 365 * 86400) } } }));
+    if (rk === 'POST /admin/held/drop') { await dropHeld(); await audit('held-drop'); return res(200, { ok: true }); }
+    const src = (await db.send(new D.GetItemCommand({ TableName: TRADE, Key: from === 'held' ? { pk: S('held#' + id), sk: S('0') } : { pk: S('snap#' + id), sk: S(from) } }))).Item;
+    if (!src || !src.data) return res(404, { error: 'copy' });
+    const data = src.data.S;
+    let sv = null; try { sv = JSON.parse(data.slice(0, 4) === 'gz1:' ? zlib.gunzipSync(Buffer.from(data.slice(4), 'base64')).toString() : data); } catch (x) { return res(400, { error: 'copy' }); }
+    const cur = (await db.send(new D.GetItemCommand({ TableName: SAVES, Key: { userId: S(sub) }, ProjectionExpression: 'ck' }))).Item;
+    let ck0 = null; try { ck0 = cur && cur.ck ? JSON.parse(cur.ck.S) : null; } catch (x) {}
+    const p = SC.point(sv, now, 'admin'), ck = { pts: ((ck0 && ck0.pts) || []).concat([p]).slice(-72), hw: p, h: (ck0 && ck0.h) || {}, sd: (ck0 && ck0.sd) || '' };
+    await db.send(new D.UpdateItemCommand({ TableName: SAVES, Key: { userId: S(sub) }, UpdateExpression: 'SET #d = :d, updated = :u, floor = :f, dv = :v, ck = :k REMOVE crd',
+      ExpressionAttributeNames: { '#d': 'data' }, ExpressionAttributeValues: { ':d': S(data), ':u': { N: String(now) }, ':f': { N: String(p.f) }, ':v': S('admin'), ':k': S(JSON.stringify(ck)) } }));
+    if (from === 'held') await dropHeld();
+    await audit('restore ' + from);
+    return res(200, { ok: true, from, gold: p.g, floor: p.f, playTime: p.pt });
   }
   return res(404, { error: 'not found' });
 };

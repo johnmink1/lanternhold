@@ -1,4 +1,4 @@
-/* lh-build 202611270629 */
+/* lh-build 202611270632 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4168,7 +4168,7 @@
     const tok = await idToken(); if (!tok) throw new Error('signed out');
     const r = await fetch(CL.api.replace(/\/$/, '') + (path || '/save'), { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     if (r.status === 404) return null;
-    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); if (j.error === 'moved') elsewhere(); }
+    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); if (j.error === 'moved') elsewhere(); if (j.error === 'held') heldSave(); }
     if (!r.ok) throw new Error('cloud ' + r.status);
     return r.json();
   }
@@ -4283,6 +4283,19 @@
       '<button class="pick" id="c-local"><b>This device</b><small>' + summary(local) + '</small></button></div>', m => {
         m.querySelector('#c-cloud').onclick = () => { delete $('modal').dataset.lock; closeModal(); useSave(cloud); };
         m.querySelector('#c-local').onclick = () => { delete $('modal').dataset.lock; closeModal(); pushCloud(false, true); };
+      });
+  }
+  // v140 save check (John, 27 Nov 2026): the server compares each save with the last one it trusted and holds a save
+  // that gained more than real time allows (an edited save or backup, or a cheat tool). The account keeps the last
+  // good save; this game stops syncing and offers to load it. An admin can review the held copy and approve it.
+  let heldShown = false;
+  function heldSave() {
+    if (heldShown || dormant) return; heldShown = true;
+    modal('<div class="center"><h2>Your save was not accepted</h2><p>The server checks every save against the last one it accepted. This one gained more gold or progress than the time played allows, so it was held for the team to review. Your account still has your last good save.</p>' +
+      '<p class="note">If you think this is a mistake, tell us on Discord. The held save is kept, and the team can approve it.</p>' +
+      '<div class="row" style="justify-content:center"><button class="btn ghost" id="hs-stay">Keep playing here</button><button class="btn" id="hs-load">Load my last good save</button></div>', md => {
+        md.querySelector('#hs-stay').onclick = () => { closeModal(); toast('lock', 'Not syncing', 'Progress on this device stays here until a save passes the check.', 'warn'); };
+        md.querySelector('#hs-load').onclick = () => { try { sessionStorage.setItem('lh_take', '1'); } catch (e) {} location.reload(); };
       });
   }
   // Another device claimed the account: stop saving here, like a second tab does.
@@ -5403,13 +5416,14 @@
     if (!r.ok) throw new Error(r.status === 403 ? 'This account is not an admin.' : j.error === 'self' ? 'You cannot ban yourself.' : j.error === 'player' ? 'That player has not played since bans were added, so their account cannot be found yet.' : j.error === 'name' ? 'The name you typed does not match the hero.' : 'The server said no (' + r.status + ').');
     return j;
   }
-  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [];
+  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [], adminHeld = [];
   function paintAdminTab() { const t = $('tabadmin'); if (t) t.hidden = !isAdmin(); }
   async function loadAdmin() {
     $('adminbox').innerHTML = '<p class="note">Loading players…</p>';
     try { adminList = await adminApi('GET', '/admin/players'); } catch (e) { $('adminbox').innerHTML = '<p class="note">' + esc(e.message) + '</p>'; return; }
     try { adminLinks = (await adminApi('GET', '/admin/links')).links || []; await loadWar(); } catch (e) { adminLinks = []; }
     try { adminLog = (await adminApi('GET', '/admin/audit')).log || []; } catch (e) { adminLog = []; }
+    try { adminHeld = (await adminApi('GET', '/admin/held')).held || []; } catch (e) { adminHeld = []; }
     paintAdmin();
   }
   // Where players came from: the first ?ref= tag (or referring site) each signed-in hero arrived with (server field rf).
@@ -5423,6 +5437,32 @@
     return '<h3 class="sub">Where players came from</h3><p class="note">Each signed-in hero, by the link or site they first arrived from. Active = seen in the last 7 days.</p>' +
       '<div class="adm-list adm-refs">' + rows.map(k => '<div class="adm-row"><span class="adm-n"><b>' + esc(REF_NAME[k] || k) + '</b><small>' + esc(k) + '</small></span><span class="adm-rc"><b>' + t[k].n + '</b> hero' + (t[k].n === 1 ? '' : 'es') + ' &middot; ' + t[k].wk + ' active</span></div>').join('') + '</div>';
   }
+  // v140 held saves (the server's save check) and snapshots: one row per held player; "Saves" opens a player's copies.
+  const flagText = f => esc(f.t || f.k);
+  function heldList() {
+    if (!adminHeld.length) return '';
+    const nm = id => { const p = adminList.players.find(x => x.id === id); return p ? p.name : id; };
+    return '<h3 class="sub">Held saves</h3><p class="note">Saves the server check did not accept. In watch mode they were saved anyway and only noted here.</p><div class="adm-list">' +
+      adminHeld.sort((a, c) => c.at - a.at).map(h => '<div class="adm-row"><span class="adm-n"><b>' + esc(nm(h.id)) + '</b><small>' + new Date(h.at).toLocaleString() + (h.mode === 'log' ? ' &middot; watch mode, saved anyway' : ' &middot; refused') + '<br>' + h.flags.map(flagText).join('<br>') + '</small></span>' +
+        '<span class="adm-act"><button class="btn small ghost" data-saves="' + h.id + '">Saves</button></span></div>').join('') + '</div>';
+  }
+  async function openSaves(p) {
+    let r; try { r = await adminApi('GET', '/admin/saves?id=' + p.id); } catch (x) { toast('lock', 'Could not load saves', x.message, 'warn'); return; }
+    const sum = m => m ? 'gold ' + fmt(m.g || 0) + ', deepest floor ' + (m.f || 0) + (m.np ? ', NP+' + m.np : '') + ', ' + Math.round((m.pt || 0) / 360) / 10 + ' h played' : '';
+    modal('<h2>' + esc(p.name) + ': saves</h2>' +
+      (r.held ? '<h3 class="sub">Held save</h3><p class="note">' + new Date(r.held.at).toLocaleString() + '<br>' + r.held.flags.map(flagText).join('<br>') + '</p><div class="row"><button class="btn small ghost" data-hdrop="1">Drop it</button><button class="btn small" data-rest="held">Approve: make it their save</button></div>' : '<p class="note">No held save.</p>') +
+      '<h3 class="sub">Snapshots</h3><p class="note">The first save of each day (UTC), and a copy taken before an older save replaced a newer one. Kept 35 days.</p>' +
+      (r.snaps.length ? '<div class="adm-list">' + r.snaps.map(x => '<div class="adm-row"><span class="adm-n"><b>' + (x.sk[0] === 'b' ? 'Before an older copy, ' + new Date(x.at).toLocaleString() : x.sk) + '</b><small>' + sum(x.sum) + '</small></span><span class="adm-act"><button class="btn small ghost" data-rest="' + esc(x.sk) + '">Restore</button></span></div>').join('') + '</div>' : '<p class="note">None yet.</p>') +
+      '<div class="row"><button class="btn ghost" id="sv-x">Close</button></div>', md => {
+        md.querySelector('#sv-x').onclick = closeModal;
+        const go = async (path, body, done) => { if (adminBusy) return; adminBusy = true; try { const x = await adminApi('POST', path, body); closeModal(); toast('star', done, x.floor != null ? 'Now ' + fmt(x.gold) + ' gold, deepest floor ' + x.floor + '. Their open game asks them to press Play here.' : '', 'feat'); } catch (x) { toast('lock', 'That did not work', x.message, 'warn'); } adminBusy = false; loadAdmin(); };
+        md.querySelectorAll('[data-rest]').forEach(b => b.onclick = () => {
+          if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Press again to replace their save'; return; }
+          go('/admin/restore', { id: p.id, from: b.dataset.rest }, 'Save restored for ' + p.name);
+        });
+        const d = md.querySelector('[data-hdrop]'); if (d) d.onclick = () => go('/admin/held/drop', { id: p.id }, 'Held save dropped');
+      });
+  }
   function paintAdmin() {
     if (!adminList) return;
     const ago = t => { if (!t) return 'never'; const m = Math.floor((Date.now() - t) / 6e4); return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.floor(m / 60) + ' h ago' : Math.floor(m / 1440) + ' d ago'; };
@@ -5430,13 +5470,13 @@
     const on = adminList.players.filter(p => p.on).length, banned = adminList.players.filter(p => p.banned).length;
     $('adminbox').innerHTML =
       '<div class="adm-stats"><div><small>Players</small><b>' + adminList.players.length + '</b></div><div><small>Online now</small><b>' + on + '</b></div><div><small>Banned</small><b>' + banned + '</b></div><div><small>Last wipe</small><b>' + (adminList.epoch ? new Date(adminList.epoch).toLocaleDateString() : 'never') + '</b></div></div>' +
-      refTally(adminList.players) +
+      heldList() + refTally(adminList.players) +
       '<div class="adm-bar"><input id="adm-q" type="search" placeholder="Find a player by name" value="' + esc(adminQ) + '"><button class="btn small ghost" id="adm-re">Refresh</button></div>' +
       '<div class="adm-list">' + (list.length ? list.map(p => '<div class="adm-row' + (p.banned ? ' banned' : '') + '"><span class="adm-n"><b>' + esc(p.name || 'Unnamed') + '</b>' + (p.cls ? ' ' + classTag(p.cls) : '') + '<small>' + (p.banned ? 'Banned' : (p.on ? '<span class="online">Online now</span> &middot; ' : 'Seen ' + ago(p.seen) + ' &middot; ') + 'power level ' + p.level + ', floor ' + p.floor) + '</small></span>' +
-        '<button class="btn small ghost" data-log="' + p.id + '">View Log</button>' +
+        '<button class="btn small ghost" data-log="' + p.id + '">View Log</button><button class="btn small ghost" data-saves="' + p.id + '">Saves</button>' +
         (p.canBan ? '<button class="btn small ghost" data-grant="' + p.id + '">Sigils</button><button class="btn small ghost" data-reset="' + p.id + '">Reset</button>' : '') + (p.banned ? '<button class="btn small ghost" data-unban="' + p.id + '">Unban</button>' : '<button class="btn small danger" data-ban="' + p.id + '"' + (p.canBan ? '' : ' disabled title="They need to play once more before they can be banned"') + '>Ban</button>') + '</div>').join('') : '<p class="note">No players match.</p>') + '</div>' +
       '<h3 class="sub">Grand War links</h3>' + (adminLinks.length ? '<p class="note">Players asking to show their Grand War commander badges. Approve only when you know the player is that commander, for example from Discord.</p><div class="adm-list">' + adminLinks.sort((a, c) => a.wv - c.wv).map(l => '<div class="adm-row"><span class="adm-n"><b>' + esc(l.name || 'Unnamed') + '</b> wants to be <b>' + esc(l.wl) + '</b><small>' + (commander(l.wl) ? warBadge(l.wl) : 'Not on the war ladder right now') + (l.wv ? ' &middot; <span class="online">Verified</span>' : ' &middot; Waiting') + '</small></span>' + (l.wv ? '' : '<button class="btn small" data-lok="' + l.id + '">Approve</button>') + '<button class="btn small ghost" data-lno="' + l.id + '">' + (l.wv ? 'Remove' : 'Reject') + '</button></div>').join('') + '</div>' : '<p class="note">No players have asked to link a Grand War commander yet.</p>') +
-      '<h3 class="sub">Admin log</h3>' + (adminLog.length ? '<div class="adm-list">' + adminLog.map(l => '<div class="adm-row"><span class="adm-n"><b>' + (l.act === 'wipe' ? 'Server wiped' : 'Reset ' + esc(l.name || 'a player') + (l.self ? ' (their own account)' : '')) + '</b><small>' + esc(l.by) + ' &middot; ' + new Date(l.at).toLocaleString() + (l.act === 'reset' ? ' &middot; ' + (l.sigils ? 'Sigils and purchases wiped too' : 'Sigils and purchases kept') : '') + '</small></span></div>').join('') + '</div>' : '<p class="note">No player resets or server wipes yet.</p>') +
+      '<h3 class="sub">Admin log</h3>' + (adminLog.length ? '<div class="adm-list">' + adminLog.map(l => '<div class="adm-row"><span class="adm-n"><b>' + (l.act === 'wipe' ? 'Server wiped' : /^restore/.test(l.act) ? 'Restored a save for ' + esc(l.name || 'a player') : l.act === 'held-drop' ? 'Dropped a held save of ' + esc(l.name || 'a player') : 'Reset ' + esc(l.name || 'a player') + (l.self ? ' (their own account)' : '')) + '</b><small>' + esc(l.by) + ' &middot; ' + new Date(l.at).toLocaleString() + (l.act === 'reset' ? ' &middot; ' + (l.sigils ? 'Sigils and purchases wiped too' : 'Sigils and purchases kept') : '') + '</small></span></div>').join('') + '</div>' : '<p class="note">No player resets or server wipes yet.</p>') +
       '<div class="adm-danger"><h3 class="sub">Wipe the server</h3><p class="note">Deletes every cloud save, every hero on the guild board and every market listing and letter. Everyone, signed in or not, starts over from a new game the next time they open Lanternhold. Bans, Sigils, bought looks, Sigil market listings, store links and Grand War links stay in place. This cannot be undone.</p><button class="btn danger" id="adm-wipe">Wipe the server…</button></div>';
   }
   $('tab-admin').addEventListener('input', e => { if (e.target.id === 'adm-q') { adminQ = e.target.value; const pos = e.target.selectionStart; paintAdmin(); const q = $('adm-q'); q.focus(); q.setSelectionRange(pos, pos); } });
@@ -5450,6 +5490,8 @@
       catch (x) { toast('lock', 'That did not work', x.message, 'warn'); }
       adminBusy = false; loadAdmin(); return;
     }
+    const sv = e.target.closest('[data-saves]');
+    if (sv) { const p = adminList.players.find(x => x.id === sv.dataset.saves); if (p) openSaves(p); return; }
     const lg = e.target.closest('[data-log]');
     if (lg) { const p = adminList.players.find(x => x.id === lg.dataset.log); if (p) openPlayerLog(p); return; }
     const gr = e.target.closest('[data-grant]');
@@ -7270,26 +7312,15 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 140, date: 'November 2026', title: 'A fresh Guide and tidy-ups', items: [
-      'The Guide and the wiki are up to date: unlock hero levels, the Paladin, loadouts, the Bestiary, NP+ marks, profiles, the Hall of Fame and more.',
-      'New wiki pages and sections: New Playthrough (NP+), NPC Guild hires and Mythic sets. The Paladin is on the Classes page.',
-      'Tutorial: clearer wording, two new steps (quests and the Town menu) and better placement on phones.',
-      'Phones: loadouts sit in two neat columns, the Codex buttons fit on two rows, and the Market class filter is one row again.',
-      'The NPC Guild explanation folds away under How hiring works.',
-      'Smaller fixes to wording: hero level and power level are named everywhere, and quest names read better.',
-      'Fights: Poisoned, Burning and Stunned show once per burst instead of over every hero at once.',
-      'The Lantern Keeper boost now starts within moments of the Keeper signing in.',
-      'Phones: the top buttons fit on one row. Music and full screen are in Settings.',
-      'Settings has Replay the tutorial and Open the wiki buttons, and shows your version.',
-      'The chapter goal wraps to two lines instead of being cut off. Hover it to read it all.',
-      'A lighter download: the game keeps the newest patch notes, and the full history is on the wiki.',
-      'Phones: at most two pop-ups at once, and only one while the game loads. The rest wait in the bell.',
-      'Small phones: the floor header no longer overlaps the region name.',
-      'Signed in, time away is measured by the server clock, so changing your device clock no longer pays extra.',
-      'Paladin heroes must be unlocked to show in the Guild and the Ember Ring.',
-      'Gift Lanternholder is paid with bought Sigils only.',
-      'Found Sigils bank while you play, at most one every 5 minutes.',
-      'Settings: turn off party invites from players to play solo with your companions and NPC hires.',
+    { v: 140, date: 'November 2026', title: 'Safer saves and a fresh Guide', items: [
+      'Your account keeps a daily copy of your save for 35 days, and the server checks every save, Market buy and Mail payment.',
+      'Settings: turn off party invites to play solo, replay the tutorial, open the wiki.',
+      'The Guide, wiki and tutorial are up to date, with new wiki pages for NP+, NPC hires and Mythic sets.',
+      'Phones: the top buttons fit one row, fewer pop-ups at once, and tidier loadouts, Codex and Market.',
+      'Poisoned, Burning and Stunned show once per burst. The chapter goal no longer gets cut off.',
+      'The Lantern Keeper boost starts within moments of the Keeper signing in.',
+      'Fair play: time away uses the server clock, gifts use bought Sigils, found Sigils bank while you play, and Paladins must be unlocked.',
+      'A lighter download. Older patch notes are on the wiki.',
     ] },
     { v: 139, date: 'November 2026', title: 'The Paladin', items: [
       'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
@@ -7464,6 +7495,8 @@
   const tradeSub = it => (L.normItem(it), 0) || L.RARITY.find(r => r.id === it.rar).name + ' ' + L.CLASSES[it.cls].name.toLowerCase() + ' ' + L.SLOT_NAME[it.slot].toLowerCase() + ' &middot; ' + itemEffect(it);
   const tradeErr = (e, what) => {
     const c = e && e.code;
+    // v140: the server checks payments against the gold it trusts this hero to have (the last save it accepted)
+    if (c === 'gold' || (e && e.status === 402)) return 'The server could not confirm that much gold yet. Let your game sync for a minute, then try again.';
     // NP+ (v122): the 24 h trade lock after a new playthrough, and mail only between heroes of the same tier
     if (c === 'lock') return 'Trading opens 24 hours after you start a New Playthrough' + (S.npAt ? ' (at ' + new Date(S.npAt + L.NP_LOCK).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + ')' : '') + '.';
     if (what === 'send' && e && e.status === 409) return 'Mail only goes between heroes on the same New Playthrough tier, and not in the first 24 hours after either of you starts one.';
@@ -8022,7 +8055,7 @@
       DW.done = 'Gulp gobbled ' + n + (n === 1 ? ' morsel' : ' morsels') + ' (' + fmt(f.cost) + ' gold). ' + (f.burps.length ? 'Burp! Out came ' + f.burps.map(esc).join(', ') + '.' : 'Om nom nom.');
       if (f.burps.length) toast('star', 'Gulp coughed something up', f.burps.join(', ') + '.', 'feat');
       if (r.gob) loadGulp();
-    } catch (x) { toast('lock', 'Gulp didn’t eat that', (x && /409/.test(x.message || '') ? 'Gulp is full for today. ' : 'The server could not take the morsels. ') + 'Your gold is untouched.', 'warn'); loadGulp(); }
+    } catch (x) { toast('lock', 'Gulp didn’t eat that', (x && /409/.test(x.message || '') ? 'Gulp is full for today. ' : x && /402/.test(x.message || '') ? 'The server could not confirm that much gold yet; let your game sync first. ' : 'The server could not take the morsels. ') + 'Your gold is untouched.', 'warn'); loadGulp(); }
     gp.busy = false; paintEnchPanel(true); paintCamp();
   });
   // The goblin bar above the fight, the assault and the claim.

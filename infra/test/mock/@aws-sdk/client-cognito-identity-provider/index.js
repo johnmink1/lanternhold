@@ -1,0 +1,1 @@
+class C{constructor(i){this.input=i}};module.exports={CognitoIdentityProviderClient:class{async send(){return {Users:[]}}},ListUsersInGroupCommand:C,AdminDisableUserCommand:C,AdminEnableUserCommand:C,AdminUserGlobalSignOutCommand:C};
