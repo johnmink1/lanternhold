@@ -1,4 +1,4 @@
-/* lh-build 202611270013 */
+/* lh-build 202611270017 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
