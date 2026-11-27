@@ -1,4 +1,4 @@
-/* lh-build 202611270146 */
+/* lh-build 202611270233 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6892,9 +6892,10 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 137, date: 'November 2026', title: 'Fast floors', items: [
+    { v: 137, date: 'November 2026', title: 'Fast floors and world boss', items: [
       'Foes no longer vanish before you see them on easy floors: each one stays up a moment before it falls.',
       'Far above a floor, foes come in swarms of 3 to 5 that fall together. Gold, loot and kills are the same as before.',
+      'World boss: every assault still chips the shared health bar, but only your best 12 assaults of the weekend count toward your rank, Sigils and Mythic roll.',
     ] },
     { v: 136, date: 'November 2026', title: 'One Bestiary', items: [
       'The Bestiary is now one list by region. Each creature\u2019s Details shows its family story and mastery; chests and guardians sit at the end.',
