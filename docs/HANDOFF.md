@@ -1,6 +1,6 @@
 # Lanternhold handoff (started 24 Nov 2026, kept current)
 
-This handoff stands on its own for the new Lanternhold project. v140 is live (27 Nov 2026) and v141 is the open bundle (see "v141 bundle" below). Live at https://lanternhold.born2gamellc.com.
+This handoff stands on its own for the new Lanternhold project. v141 is live (27 Nov 2026); next release is v142. Live at https://lanternhold.born2gamellc.com.
 
 ## Where Lanternhold work happens
 
@@ -221,8 +221,8 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
 
-## v141 bundle (open, 27 Nov 2026)
-Branch `claude/project-thread-coxcsf`, draft PR #89.
+## v141 bundle (27 Nov 2026)
+Shipped as PR #89 (includes #90 PvP Ring Mastery + seasons and #91 layout modules + Dashboard). Ring server `infra/deploy/v141-ring.sh` ran 27 Nov 16:19 UTC on John's go (backup ~/lhbak/lanternhold-arena-202611271619.zip), 0 errors.
 - Phones: a tap on gold, damage, Embers or Dust in the top bar opens its tip (`.purse div.stat[data-tip]` in the touch tip selector). The damage tip lists steady damage per party member plus skeletons (`paintMoneyTips`).
 - Phones: the round chat button slides away while you scroll down (`.chatfab.away`) and returns on scroll up, near the top or at the end. Long toast lines open in full on the first tap (`.toast.open`). Guild sign-on cards say what is missing (`.npcneed`: gold, Dust or a Campfire spot). Dead CSS removed.
 - Faction discount (John 27 Nov: "only makes sense to have factions work together"; he picked 20%/10%): `npcPrice` takes `NPC_SIDE_FEE` 0.2 off sign-on gold, Dust and the 2 h contract when `npcKin` (offer side = `sideOf` hero), `wagePerHour`/`npcOfferWage` take `NPC_SIDE_WAGE` 0.1 off the wage, and `npcWageParts` lists it. Guild card tag `.kintag` "Your faction". Baseline (Covenant tank, uncommon offers): sign-on 281 -> 225 gold, wage 34 -> 30 gold/h.
