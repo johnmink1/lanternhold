@@ -1,4 +1,4 @@
-/* lh-build 202611270449 */
+/* lh-build 202611270545 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1208,7 +1208,7 @@
       case 'lockpass': flog('fight', 'The party walks past the ' + (e.k === 'door' ? 'locked door' : 'locked chest')); break;
       case 'lockopen': flog('loot', (e.id ? nm(e.id) : 'Your Rogue') + ' opens the ' + (e.k === 'door' ? 'door' : 'chest') + ': <b class="good">' + (e.gold ? fmt(e.gold) + ' gold' : fmt(e.dust) + ' Dust') + '</b>' + (e.sigil ? ' and a <b>Sigil</b>' : '')); break;
       case 'goblinkill': flog('loot', '<b class="good">Loot Goblin slain</b>' + (e.item ? ', ' + esc(L.gearName(e.item)) + ' recovered' : '')); break;
-      case 'herolevel': flog('party', nm('you') + ' reaches <b>level ' + e.lv + '</b>'); break;
+      case 'herolevel': flog('party', nm('you') + ' reaches <b>hero level ' + e.lv + '</b>'); break;
     }
   }
   let flogFilter = 'all';
@@ -1617,12 +1617,12 @@
     const curR = L.regionNo(S.maxFloorEver), tr = curR < L.REGIONS - 1 && L.regionNeed(S, (curR + 1) * 10 + 1) ? L.trialOf(S, curR) : null;
     const fu = focus && L.unlockOf(focus);
     let h = '<div class="road">' + (fu ? '<div class="roadlock">' + icon('lock') + '<div><b>' + esc(fu.name) + ' opens at hero level ' + fu.lv + '</b><small>' + esc(fu.desc) + ' Your hero earns XP from every fight, and more from deeper floors and guardians.</small></div></div>' : '') +
-      '<div class="roadhead"><div><h3>The road ahead</h3><small>' + esc(heroName()) + ' is hero level <b>' + lv + '</b> &middot; ' + pct + '% to level ' + (lv + 1) + '</small></div></div>' +
+      '<div class="roadhead"><div><h3>The road ahead</h3><small>' + esc(heroName()) + ' is hero level <b>' + lv + '</b> &middot; ' + pct + '% to hero level ' + (lv + 1) + '</small></div></div>' +
       '<div class="bar roadxp"><i style="width:' + pct + '%"></i></div><ul class="roadlist">' +
       L.UNLOCKS.map(u => { const on = L.canUse(S, u.id); return '<li class="' + (on ? 'open' : '') + (u.id === focus ? ' focus' : '') + '"><span class="ric">' + icon(on ? u.icon : 'lock') + '</span><div><b>' + esc(u.name) + '</b><small>' + esc(u.desc) + '</small></div><em>' + (on ? 'Open' : 'Hero level ' + u.lv) + '</em></li>'; }).join('') +
       '</ul>' + (tr ? '<div class="roadlock">' + icon('map') + '<div><b>Region trial: ' + esc(trialName(curR)) + '</b><small>To reach floors ' + ((curR + 1) * 10 + 1) + ' and deeper: defeat ' + L.TRIAL_ELITES + ' alliance elites here (' + tr.elites + '/' + L.TRIAL_ELITES + ') and beat the guardian on floor ' + ((curR + 1) * 10) + (tr.guardian ? ' (done)' : '') + '.</small></div></div>' : '') +
       '<p class="note small">' +
-      'Your campfire holds ' + L.fireCap(S) + ' companions now, not counting your party; it grows at hero levels ' + L.ROSTER_LV.join(', ') + '. Camp job slots open at levels ' + L.JOB_SLOT_LV.join(', ') + '.</p></div>';
+      'Your campfire holds ' + L.fireCap(S) + ' companions now, not counting your party; it grows at hero levels ' + L.ROSTER_LV.join(', ') + '. Camp job slots open at hero levels ' + L.JOB_SLOT_LV.join(', ') + '.</p></div>';
     return h;
   }
   const trialName = r => (L.BIOMES[r] || { name: 'Region ' + (r + 1) }).name;
@@ -2027,7 +2027,7 @@
     const h = L.hallState(S), now = Date.now(), wph = L.wagesPerHour(S), away = L.offlineEarnPerSec(S) * 3600;
     const next = Math.max(0, (h.at + L.NPC_ROTATE - now) / 1000), rr = L.npcRerollCost(S), full = L.companions(S).length >= L.rosterCap(S);
     let x = '<h3 class="sub" id="npcg">NPC Guild</h3><div class="growcard npcg">' +
-      '<p>Hire companions for gold or Dust. Rarer ones fight harder and work camp jobs better, but cost more and draw a bigger wage every hour, even while you are away. Legendaries are the lore companions of the story and a few unique wanderers. A wage never passes a share of your income, and full region masteries, Charisma and a Quartermaster at camp bring it down. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p>' +
+      '<p>Hire companions for gold or Dust. They draw a wage every hour, even while you are away.</p><details class="howto"><summary>How hiring works</summary><p>Rarer hires fight harder and work camp jobs better, but cost more and draw a bigger wage. Legendaries are the lore companions of the story and a few unique wanderers. A wage never passes a share of your income, and full region masteries, Charisma and a Quartermaster at camp bring it down. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p></details>' +
       '<div class="npcstat"><span data-tip="Half that while you are away.">Wages <b>' + fmt(wph) + ' gold/h</b></span>' + (() => { const rl = L.wageRelief(S); return '<span data-tip="' + esc('Takes a share off every hire\u2019s wage, up to ' + Math.round(L.WAGE_RELIEF_MAX * 100) + '%. ' + (rl.parts.length ? rl.parts.map(p => p[0] + ' ' + Math.round(p[1] * 100) + '%').join(', ') + '. ' : '') + 'Earn more with all three mastery stars in a region (' + Math.round(L.WAGE_RELIEF_MAST * 100) + '% each), Charisma and a Quartermaster at camp.') + '">Wage relief <b>' + Math.round(rl.total * 100) + '%</b></span>'; })() + '<span data-tip="What your party brings home each hour while you are away. You earn more while you play.">Away income <b>' + fmt(away) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
       '<button class="btn small ghost" data-npcreroll' + ((S.dust || 0) >= rr ? '' : ' disabled') + '>New faces now · ' + fmt(rr) + ' Dust</button></div>' +
       (full ? '<p class="note">Every companion spot is taken. Let someone go from the Campfire, or take a 2 hour contract.</p>' : '') +
@@ -2150,7 +2150,7 @@
     const join = () => {
       L.addGuest(S, { id: 'p_' + g.id, name: g.name, cls: g.cls, side: g.side, level: g.level, bp: g.bp }); L.qEv(S, 'guest', { id: g.id });
       const gg = (S.guests || []).find(x => x.id === 'p_' + g.id); if (gg) { gg.pf = g.pf || null; gg.w = g.w || ''; gg.wd = g.wd || null; }
-      sfx.buy(); toast('users', g.name + ' joins your party', 'They accepted your invite. A ' + L.CLASSES[g.cls].name + ' at level ' + g.level + '.', 'feat');
+      sfx.buy(); toast('users', g.name + ' joins your party', 'They accepted your invite. A ' + L.CLASSES[g.cls].name + ' at power level ' + g.level + '.', 'feat');
       updateSeats(true); updateAbilities(true); paintBoard();
     };
     if (S.party.includes(null)) return join();
@@ -2266,7 +2266,7 @@
   });
   // ---------- inventory filters (v117) ----------
   const INV_KINDS = [['all', 'All'], ['weapon', 'Weapons'], ['off', 'Off-hands'], ['armor', 'Armour'], ['jewel', 'Jewellery']];
-  const INV_SORTS = [['best', 'Best first'], ['level', 'Level'], ['rarity', 'Rarity'], ['type', 'Type'], ['new', 'Newest']];
+  const INV_SORTS = [['best', 'Best first'], ['level', 'Power level'], ['rarity', 'Rarity'], ['type', 'Type'], ['new', 'Newest']];
   const INV = { kind: 'all', rar: 'all', who: 'all', sort: 'best' };
   try { Object.assign(INV, JSON.parse(localStorage.getItem('lh_inv') || '{}')); } catch (e) {}
   const invSave = () => { try { localStorage.setItem('lh_inv', JSON.stringify(INV)); } catch (e) {} };
@@ -2353,7 +2353,7 @@
     el.innerHTML = '<span class="lo-h">Loadouts</span>' + Array.from({ length: L.LOADOUT_PASS }, (_, i) => {
       const lo = los[i], open = i < have;
       if (!open) return '<button class="lo lo-lock" data-lolock="' + i + '" data-tip="More loadouts come with Lanternholder.">' + icon('lock') + '<b>Set ' + (i + 1) + '</b></button>';
-      return '<span class="lo' + (lo ? ' has' : '') + '"><b>' + esc(lo ? lo.n : 'Set ' + (i + 1)) + '</b>' + (lo ? '<button class="btn small" data-lowear="' + i + '">Wear</button>' : '') + '<button class="btn small ghost" data-losave="' + i + '">' + (lo ? 'Save' : 'Save current') + '</button></span>';
+      return '<span class="lo' + (lo ? ' has' : '') + '"><b>' + esc(lo ? lo.n : 'Set ' + (i + 1)) + '</b>' + (lo ? '<button class="btn small" data-lowear="' + i + '">Wear</button>' : '') + '<button class="btn small ghost" data-losave="' + i + '" data-tip="Remember what everyone wears now">Save</button></span>';
     }).join('');
   }
   document.addEventListener('click', e => {
@@ -3360,7 +3360,7 @@
     const box = $('relics');
     box.innerHTML = L.RELICS.map(r => {
       const lv = S.relics[r.id] || 0;
-      return lv ? '<div class="relic">' + icon('relic') + '<span class="lvl">Level ' + lv + '</span><b>' + r.name + '</b><small>' + r.desc + '</small></div>'
+      return lv ? '<div class="relic">' + icon('relic') + '<span class="lvl">Relic level ' + lv + '</span><b>' + r.name + '</b><small>' + r.desc + '</small></div>'
                 : '<div class="relic unknown">' + icon('relic') + '<span class="lvl">Undiscovered</span><b>???</b><small>Found somewhere in the deep.</small></div>';
     }).join('');
     $('relcount').textContent = Object.keys(S.relics).length + '/' + L.RELICS.length;
@@ -5259,7 +5259,7 @@
     };
     box.innerHTML = '<div class="chead"><div><h3>' + esc(L.memberById('you').name) + ', hero level ' + h.lv + ' ' + c.name + '</h3><small>Earns XP from every fight ' + tipI('Your hero earns XP even when they sit out. Bigger foes give more. Each level gives a stat point.') + '</small></div>' +
       '<div class="kbal cpts' + (pts ? ' on' : '') + '">' + icon('star') + '<b>' + pts + '</b><small>' + (pts === 1 ? 'Point' : 'Points') + '</small></div></div>' +
-      '<div class="cxp" data-tip="' + esc(xpTip()) + '"><i style="width:' + Math.min(100, h.xp / h.need * 100).toFixed(1) + '%"></i><span>' + fmt(Math.floor(h.xp)) + ' / ' + fmt(h.need) + ' XP to level ' + (h.lv + 1) + '<em class="cxr">XP &times;' + xpRate() + '</em></span></div>' +
+      '<div class="cxp" data-tip="' + esc(xpTip()) + '"><i style="width:' + Math.min(100, h.xp / h.need * 100).toFixed(1) + '%"></i><span>' + fmt(Math.floor(h.xp)) + ' / ' + fmt(h.need) + ' XP to hero level ' + (h.lv + 1) + '<em class="cxr">XP &times;' + xpRate() + '</em></span></div>' +
       '<div class="cgrid">' + L.STATS.map(row).join('') + '</div>' +
       '<div class="kfoot"><span>About stats ' + tipI('Favoured stats count half again. Stats work while your hero is in the party. A reset costs ' + L.RESPEC_COST + ' ' + TOKEN + '.') + '</span>' + ((S.attr && Object.keys(S.attr).length) ? '<button class="btn ghost small" id="c-reset">Reset stats</button>' : '') + '</div>';
   }
@@ -6632,34 +6632,37 @@
   const TUT = [
     { id: 'strike', title: 'Strike!', text: 'Tap the monster to hit it yourself. Your party fights on its own too, but every tap helps. Try a few.', target: '#arena', tab: null, ready: () => true, done: c => S.stats.clicks >= c.clicks + 5, noNext: true },
     { id: 'gold', title: 'Gold', text: 'Every monster drops gold, even while you are away. Gold is how your party grows stronger.', target: '.stat.gold', ready: () => true },
-    { id: 'train', title: 'Train your party', text: 'Spend gold to train. Higher levels mean more damage, health and healing. You can train anyone in your party anywhere, even deep in the dungeon.', target: '#seats .buy:not([disabled])', tab: 'party', ready: () => S.gold >= 10, done: c => sumLevels() > c.levels, noNext: true },
+    { id: 'train', title: 'Train your party', text: 'Spend gold to train. Each Train raises a fighter\'s power level: more damage, health and healing. You can train anyone in your party anywhere, even deep in the dungeon.', target: '#seats .buy:not([disabled])', tab: 'party', ready: () => S.gold >= 10, done: c => sumLevels() > c.levels, noNext: true },
     { id: 'abil', title: 'Abilities', text: 'Each class has a special move. They fire by themselves, or press keys 1 to 5 (or tap them) to use one right when you need it.', target: '#abilities', ready: () => true },
     { id: 'order', title: 'Marching order', text: 'The top of this list stands at the front. Keep your tank up front, healers in the middle so they reach everyone, and watch the back for ambushes.', target: '.formhead', tab: 'party', ready: () => S.party.filter(Boolean).length >= 2 },
-    { id: 'boss', title: 'Guardians', text: 'Every fifth floor has a guardian. Beat it before the lantern oil runs out, or your party falls back to train and try again.', target: '#lanternwrap', ready: () => S.foe && S.foe.boss },
-    { id: 'gear', title: 'You found gear', text: 'Monsters drop weapons, armor, trinkets and rings. Open Gear to see them. You change gear at the main camp on floor 1, or anywhere with a Campfire Draught. A green arrow marks an upgrade.', target: '.tabs [data-tab="gear"]', ready: () => S.bag.length > 0, done: () => tab === 'gear', noNext: true },
+    { id: 'boss', title: 'Guardians', text: 'Every fifth floor has a guardian. Beat it before the lantern oil runs out, or your party falls back to train and try again. After ' + L.WIPE_HOLD + ' defeats in a row it waits one floor up: train, then switch Descend back on.', target: '#lanternwrap', ready: () => S.foe && S.foe.boss },
+    { id: 'gear', title: 'You found gear', text: 'Monsters drop weapons, armor, trinkets and rings. Open Gear to see them. You change gear at the main camp on floor 1, or anywhere with a Campfire Draught. A green arrow marks an upgrade.', target: '.tabs [data-tab="gear"]', ready: () => S.bag.length > 0 && L.canUse(S, 'gear'), done: () => tab === 'gear', noNext: true },
     { id: 'camp', title: 'Camp', text: 'The main camp on floor 1 is where you swap companions and train them; going back restarts you at the top of the region. A Campfire Draught from the Store lets you change gear right where you are.', target: '#campbar', tab: 'party', ready: () => S.floor > 1 && S.maxFloorEver >= 4 },
     { id: 'traits', title: 'Companion traits', text: 'Each companion has three traits: one for a party seat, one for a class they like fighting beside, and one for resting at camp. Working traits glow gold, so try moving people around.', target: '#seats .traits', tab: 'party', ready: () => S.unlocked.length >= 3 && !!document.querySelector('#seats .traits') },
-    { id: 'map', title: 'Map of the Deep', text: 'See how far you have come, which guardians you have beaten, and travel back to any floor you have reached.', target: '#btn-map', ready: () => S.maxFloorEver >= 8 },
-    { id: 'stats', title: 'Your character', text: 'Your hero earns XP from every fight. Each level brings a stat point. Open Skills and spend it on Strength, Wisdom, Luck and the rest. Your class favours two of them.', target: '.tabs [data-tab="rekindle"]', ready: () => !!S.hero && L.heroPoints(S) > 0 },
-    { id: 'end', title: 'You are ready', text: 'That is the basics. The story will introduce new companions as you descend. Open the Guide (the ? at the top) any time for the details.', target: '#btn-guide', ready: () => true },
+    { id: 'map', title: 'Map of the Deep', text: 'See how far you have come and which guardians you have beaten. From hero level ' + L.unlockOf('map').lv + ' you can travel back to any floor you have reached.', target: '#btn-map', ready: () => S.maxFloorEver >= 8 },
+    { id: 'stats', title: 'Your character', text: 'Your hero earns XP from every fight. Each hero level brings a stat point. Open Skills and spend it on Strength, Wisdom, Luck and the rest. Your class favours two of them.', target: '.tabs [data-tab="rekindle"]', ready: () => !!S.hero && L.heroPoints(S) > 0 },
+    { id: 'quests', title: 'Quests and bounties', text: 'Three daily quests and three bounties, picked for what your hero can do right now. They pay gold, Dust and Sigils. Many have a button that takes you straight there.', target: '#quests', ready: () => true },
+    { id: 'town', title: 'More of the Hold', text: 'More of the Hold opens as your hero levels up: the Ember Ring at hero level ' + L.unlockOf('ring').lv + ', the Players Guild at ' + L.unlockOf('guild').lv + ', the world boss at ' + L.unlockOf('boss').lv + '. Codex, Progress shows the whole road. On phones, Market, Guild, PvP and Codex sit under Town.', target: () => phone() ? '.tabs [data-town]' : '.tabs [data-tab="codex"]', ready: () => true },
+    { id: 'end', title: 'You are ready', text: 'That is the basics. The story will introduce new companions as you descend, and the Next step hint under the chapter goal shows what to do next. Open the Guide (the ? at the top) any time for the details.', target: '#btn-guide', ready: () => true },
   ];
   let coachCtx = null, coachEl = null;
   function tutState() { if (!S.tut) { S.tut = { i: 0, done: false }; S.seenNotes = S.notesShown = NOTES_V; } return S.tut; }
   function coachHide() { $('coach').hidden = true; if (coachEl) coachEl.classList.remove('tut-hi'); coachEl = null; }
   function coachShow(step, i) {
     if (step.tab && tab !== step.tab) switchTab(step.tab);
-    const el = document.querySelector(step.target);
+    const el = document.querySelector(typeof step.target === 'function' ? step.target() : step.target);
     if (!el || !el.offsetParent) { coachHide(); return; }
     if (coachEl !== el) {
       if (coachEl) coachEl.classList.remove('tut-hi'); coachEl = el; el.classList.add('tut-hi');
       const r0 = el.getBoundingClientRect(), roomBottom = innerWidth <= 720 ? innerHeight - 190 : innerHeight - 20;
-      if (r0.top < 60 || r0.bottom > roomBottom) el.scrollIntoView({ block: innerWidth <= 720 ? 'start' : 'center', behavior: 'smooth' });
+      if (r0.top < (innerWidth <= 720 ? 140 : 60) || r0.bottom > roomBottom) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
     $('coachstep').textContent = 'Tutorial ' + (i + 1) + ' of ' + TUT.length;
     $('coachtitle').textContent = step.title; $('coachtext').textContent = step.text;
     $('coachnext').hidden = !!step.noNext; $('coachnext').textContent = i === TUT.length - 1 ? 'Got it' : 'Next';
     const c = $('coach'); c.hidden = false;
-    if (innerWidth <= 720) { c.style.left = '12px'; c.style.right = '12px'; c.style.top = 'auto'; c.style.bottom = '12px'; c.classList.remove('up'); return; }
+    // Phones: the card sits at the bottom, or at the top when it points at the bottom tab bar (Town) so it never covers it.
+    if (innerWidth <= 720) { const low = el.getBoundingClientRect().top > innerHeight - 200; c.style.left = '12px'; c.style.right = '12px'; c.style.top = low ? '12px' : 'auto'; c.style.bottom = low ? 'auto' : '12px'; c.classList.remove('up'); return; }
     const r = el.getBoundingClientRect(), cw = c.offsetWidth, ch = c.offsetHeight;
     let top = r.bottom + 14, up = false;
     if (top + ch > innerHeight - 10) { top = r.top - ch - 14; up = true; }
@@ -6708,13 +6711,14 @@
   // st: 'done' | 'now' | 'next'. ends: the finale's possible endings (side key from L.SIDES, or null).
   const ROADMAP = [
     { id: 'start', tag: 'Where we started', name: 'The road so far', when: 'Nov 22 to 24, 2026', st: 'done', pic: 's:tank,healer,rogue,mage,necro',
-      story: 'Lanternhold opened with five heroes, one lantern and a cellar full of Gloops. 119 updates later, the Deep is a front of the Grand War.',
+      story: 'Lanternhold opened with five heroes, one lantern and a cellar full of Gloops. 139 updates later, the Deep is a front of the Grand War.',
       items: [
         ['flame', 'The first night', 'Updates 1 to 12', ['Tap to strike and train your party.', 'The Campfire and camp jobs.', 'Skill trees, Kindling and a full set of gear slots.']],
         ['shield', 'The war comes down', 'Updates 13 to 28', ['Act One below the Starless Vault.', 'Alliances, banners and the world map.', 'Sigils, Mercy’s Blessing, the Lantern Pass and daily quests.']],
         ['users', 'A living Hold', 'Updates 29 to 73', ['The Trading Post and the Players Guild.', 'Ember Ring duels and world boss weekends.', 'The Loot Goblin, merging, enchanting, the Wardrobe and music.']],
         ['duel', 'Deeper fights', 'Updates 74 to 100', ['Region trials and special attacks.', 'Mana, stamina, burns and stuns.', 'The Ghost Lantern, the merchant, bounties and the Mercy Corps on the road.']],
-        ['lantern', 'The Hold today', 'Updates 102 to 119', ['The Hold’s tents: Enchanter, Armorer and Store.', 'Legendary world boss loot and Victor’s Banner.', 'Bestiary mastery, real weapon types, chat windows and the NPC Guild.']],
+        ['lantern', 'The Hold grows', 'Updates 102 to 119', ['The Hold’s tents: Enchanter, Armorer and Store.', 'Legendary world boss loot and Victor’s Banner.', 'Bestiary mastery, real weapon types, chat windows and the NPC Guild.']],
+        ['crown', 'The Hold today', 'Updates 120 to 139', ['New Playthrough tiers, Mythic gear and the Rift Gate.', 'A hundred and twenty creatures with home regions, team battles and unique Legendaries.', 'Quests, hero profiles, the Hall of Fame and the Paladin.']],
       ] },
     { id: 'act1', tag: 'Act I · Season 1', name: 'The First Incursion', when: 'Now to Jan 24, 2027', st: 'now', pic: 'i:lantern',
       story: 'Fifteen regions, from the Lamplit Cellars down to the Rift Threshold. Play it to find out what waits at the bottom.',
@@ -6782,14 +6786,15 @@
         'Each tap hits for <b>1 + 5% of your party damage per second</b>. The Grim Whetstone relic adds 25% per level, and a critical hit does 5x. Hover the <b>i</b> in the arena corner to see your tap damage.',
         'Each floor has <b>8 monsters</b>. Clear them to go deeper.',
         'Monsters drop <b>gold</b>. Spend it to <b>train</b> your party in the Party tab. Training raises a character\'s <b>power level</b>.',
-        'Every <b>25 power levels</b> a character gets a big power jump.']],
+        'Every <b>25 power levels</b> a character gets a big power jump.',
+        'New here? The <b>Next step</b> hint under the chapter goal points at the most useful thing to do now, until hero level 12. Tap it to go there.']],
       ['Power level and hero level', 'i:star', 'Two different levels. Power level is how strong each fighter is; hero level is how far your own hero has come.', [
         '<b>Power level</b>: every character in your party has one, your hero included. Raise it with gold (<b>Train</b> on the Party tab). It sets damage and health, and gear needs a power level to wear. Rekindling resets it.',
         '<b>Hero level</b>: your own hero\'s experience level, from fighting. It gives stat points and opens new parts of the game. It is never reset.',
         'So a hero can be hero level 11 and power level 142 at the same time. Your Party card shows power level; the Skills tab and Codex show hero level.']],
       ['Hero level and unlocks', 'i:star', 'New parts of the game open as your hero levels up. Codex, Progress shows the whole road.', [
-        'Level <b>3</b>: Gear. <b>5</b>: the Campfire. <b>8</b>: map travel and buying on the Market. <b>10</b>: camp jobs.',
-        '<b>12</b>: the Players Guild. <b>15</b>: the Ember Ring. <b>18</b>: selling and the Sigil exchange. <b>20</b>: rekindling. <b>25</b>: world boss and job sets.',
+        [...new Set(L.UNLOCKS.map(u => u.lv))].sort((x, y) => x - y).map(lv => 'Hero level <b>' + lv + '</b>: ' + L.UNLOCKS.filter(u => u.lv === lv).map(u => u.name.replace(/^The /, 'the ')).join(', ')).join('. ') + '.',
+        'More camp job slots open at hero levels ' + L.JOB_SLOT_LV.slice(1).join(', ') + '.',
         'Hero XP grows with depth, and guardians give the most.']],
       ['Region trials', 'i:map', 'Each region has a trial that opens the way to the next one.', [
         'Defeat <b>' + L.TRIAL_ELITES + ' alliance elites</b> in the region (the bannered warband foes) and beat its <b>guardian</b>.',
@@ -6804,6 +6809,7 @@
         '<b>Night Watch</b> (Skills tab) stretches that up to 3 days.',
         '<b>Lanternholder</b> adds 4 more hours.']],
       ['The side panel', 'i:map', 'Eight tabs, each with one job. Locked tabs show the hero level that opens them.', [
+        'On phones, <b>Market</b>, <b>Guild</b>, <b>PvP</b> and <b>Codex</b> sit under the <b>Town</b> button at the bottom, and <b>Fight</b> jumps back up to the battle.',
         '<b>Party</b>: who fights, and in what order.',
         '<b>Camp</b>: resting companions, camp jobs and training.',
         '<b>Gear</b>: dress your characters.',
@@ -6816,7 +6822,7 @@
         'The <b>Why we fight</b> opening plays on your first visit. Replay it any time from <b>Settings</b>.',
         'Lanternhold is free. Once the game’s costs are covered, the proceeds go to the Mercy Corps giving: children’s hospitals, food pantries and local schools.',
         'The <b>music button</b> in the top bar opens the player: eight original tracks, skip, shuffle, volume and mute.',
-        '<b>Settings</b> (the gear button) holds sound, the tutorial and your save.']],
+        '<b>Settings</b> (the gear button) holds sound, which pop-ups show in the corner, and your backup. The Guide has <b>Replay the tutorial</b>.']],
       ['Controls', 'i:help', 'Everything works with taps; keys are shortcuts.', [
         '<b>Tap, Space or Enter</b>: strike',
         '<b>1 to 5</b>: party abilities. <b>6 to 8</b>: your hero’s specializations.',
@@ -6830,7 +6836,8 @@
         '<b>Rogue</b>: most damage, dodges a quarter of attacks. Backstab hits hard.',
         '<b>Mage</b>: Ember Storm quadruples damage for a few seconds.',
         '<b>Necromancer</b>: raises skeletons that fight and soak blows.',
-        '<b>Paladin</b> (a Sigil class, your hero only): plate and a small steady party heal. Oath of Dawn heals the party and shields it for a few seconds. A sidegrade, never stronger.']],
+        '<b>Paladin</b> (a Sigil class, your hero only): plate and a small steady party heal. Oath of Dawn heals the party and shields it for a few seconds. A sidegrade, never stronger.',
+        'Unlock the Paladin once for <b>' + L.PAID_CLASS.paladin.toLocaleString('en-US') + ' Sigils</b> and every hero on your account can be one. Your first change into it is free. Companions and hired NPCs are never Paladins.']],
       ['Marching order', 's:tank,rogue,healer,mage,necro', 'The top of the Party list stands in front, nearest the monster.', [
         'A <b>tank</b> in the front two draws attacks.',
         'Heals get <b>15% weaker per step</b> of distance, so healers go in the middle.',
@@ -6858,6 +6865,7 @@
         'Invites to <i>you</i> show at the top with <b>Accept</b> and <b>Decline</b>. Accepting lends a copy of your hero and earns you gold.',
         'Borrowed heroes bring their own gear, stats and skills, up to <b>2×</b> your own hero’s damage and health. They update each time you play.',
         'Each player hero in your party adds <b>+5%</b> party damage and gold (up to two). They never ask for wages.',
+        'Tap a name on the board to see that hero\'s public profile.',
         '<b>Dismiss</b> on a seat lets a hero go.']],
       ['Your banner', 'i:flare', 'Your hero flies one of five banners, each with a perk.', [
         'Iron Covenant <b>+15% health</b>. Radiant Ascendancy <b>+12% damage</b>. Devouring Tide <b>+15% gold</b>. Mercy Corps <b>+15% healing</b>. Unsworn <b>+5%</b> to all three.',
@@ -6866,6 +6874,8 @@
     { id: 'fight', name: 'Combat', icon: 'sword', topics: [
       ['Monsters', 's:slime,rat,skeleton', 'Monsters hit back. If the whole party falls, it retreats a floor and tries again.', [
         'Retreats last about a minute. Use it to train and check gear.',
+        'After <b>' + L.WIPE_HOLD + ' defeats in a row</b> on the same floor, the party holds one floor up and <b>Descend automatically</b> switches off. Train, then switch it back on.',
+        'Far above your deepest floor, foes come in <b>swarms</b> of 3 to 5 that fall together. Gold and loot are the same as fighting them one by one.',
         '<b>Grand War soldiers</b> (with a banner) are tougher and drop more.']],
       ['Mana and stamina', 'i:flare', 'Healers, mages and necromancers use mana. Rogues, tanks and paladins use stamina.', [
         'The blue bar under a hero is <b>mana</b>, the gold bar is <b>stamina</b>. Both hold ' + L.RES_MAX + ' and refill on their own: mana at ' + L.RES_REGEN.mana + ' a second, stamina at ' + L.RES_REGEN.stamina + ' a second.',
@@ -6936,7 +6946,7 @@
         'If the wall breaks, the Guardian takes the stage. <b>Nothing lands on it</b>, and the foe behind it waits.',
         'Slow down for about three seconds and it withdraws. You lose nothing but the time.']],
       ['World boss weekends', 's:colossus', 'One giant Rift boss every weekend that all signed-in players fight together.', [
-        'Runs Friday to Sunday (UTC). A purple bar on the stage shows it; tap it to join a <b>two-minute assault</b>, once every 15 minutes.',
+        'Opens at hero level ' + L.unlockOf('boss').lv + ' for signed-in players. Runs Friday to Sunday (UTC). A purple bar on the stage shows it; tap it to join a <b>two-minute assault</b>, once every 15 minutes.',
         'Every assault chips the shared health bar, but only your <b>best ' + L.WB_BEST + ' assaults</b> count toward your rank, Sigils and Mythic roll.',
         'Every point of <b>real damage</b> counts, so the stronger your party, the more you chip off. Going deeper never lowers it.',
         'Each boss resists two classes (−30%) and is weak to one (+30%); the boss window shows which. It hits hard and uses a special attack.',
@@ -6991,12 +7001,16 @@
         'Change gear at <b>camp</b>. <b>Equip best</b> does it in one tap.',
         'A <b>green arrow</b> marks an upgrade. The corner number (Lv) is the power level needed.',
         'Upgrade with gold, or salvage what you do not need.']],
+      ['Gear loadouts', 'i:gear-armor', 'Save what your whole party wears and put it back on in one tap.', [
+        'The <b>Loadouts</b> row is in the Gear tab, Equipped view. <b>Save</b> remembers what everyone wears now; <b>Wear</b> puts it all back on, at camp like any gear change.',
+        'Everyone gets ' + L.LOADOUT_FREE + ' loadout. Lanternholder gets ' + L.LOADOUT_PASS + '.']],
       ['Rarity and sets', 'i:crown', 'Rare and epic gear is a real find, and gets likelier deeper down.', [
+        'Rarities: <b>Common</b>, <b>Fine</b>, <b>Rare</b>, <b>Epic</b>, set pieces, <b>Legendary</b> and, above them all, <b>Mythic</b> from world boss weekends.',
         'From floor 15, guardians can drop <b>set pieces</b>. Two or three of a set add bonuses.',
         'A <b>Forager</b> at camp improves all drops.']],
       ['Job gear', 'i:hammer', 'Some pieces boost a camp job (orange dot).', [
         'Fine 2%, rare 6%, epic 15% chance to roll one.',
-        'Each job has a 3-piece job set from floor 20 once your hero reaches level ' + L.unlockOf('jset').lv + ': <b>2 pieces +40%</b>, <b>3 pieces +100%</b>.']],
+        'Each job has a 3-piece job set from floor 20 once your hero reaches hero level ' + L.unlockOf('jset').lv + ': <b>2 pieces +40%</b>, <b>3 pieces +100%</b>.']],
       ['Your pack', 'i:bag', 'The pack holds 40 items to start.', [
         'Kindling adds <b>+10 slots</b> up to six times. Lanternholder adds 10.',
         'When full, the weakest common item is sold automatically.',
@@ -7012,9 +7026,9 @@
       ['The campfire roster', 'i:users', 'Your party’s 4 companion seats never count. On top of them, the campfire holds 4 resting companions, plus one more at hero levels 10, 20 and 30.', [
         'When a new companion arrives and the fire is full, dismiss someone for good to keep them, or turn them away.',
         'Up to 3 more spots can be added for ' + L.ROSTER_COST + ' Sigils each. They are yours for good.']],
-      ['Camp jobs', 'i:hammer', 'Opens at hero level ' + L.JOB_SLOT_LV[0] + ' with one job slot; one more slot at levels ' + L.JOB_SLOT_LV.slice(1).join(', ') + '.', [
+      ['Camp jobs', 'i:hammer', 'Opens at hero level ' + L.JOB_SLOT_LV[0] + ' with one job slot; one more slot at hero levels ' + L.JOB_SLOT_LV.slice(1).join(', ') + '.', [
         '<b>Forager</b>: gear drops. <b>Runesmith</b>: damage. <b>Herbalist</b>: healing.',
-        '<b>Armorer</b>: health. <b>Prospector</b>: gold. <b>Lamplighter</b>: lantern oil.',
+        '<b>Armorer</b>: health. <b>Prospector</b>: gold. <b>Lamplighter</b>: lantern oil. <b>Quartermaster</b>: lower NPC wages.',
         'Grows with level; <b>+50%</b> when the job suits their class. A <i>Hard worker</i> trait adds more.']],
       ['The Store and tonics', 'i:cup', 'Tonics are small boosts for 10 or 15 minutes. Open <b>Store</b> on the camp bar.', [
         'Combat: <b>+15% damage</b>, <b>+15% health</b>, <b>+20% healing</b>, <b>+5% crit</b> (gold only).',
@@ -7023,7 +7037,7 @@
         '<b>Campfire Draught</b>: change gear anywhere for 60 seconds and keep your floor. <b>Lantern Oil</b>: +15 seconds against a guardian.']],
     ] },
     { id: 'grow', name: 'Getting stronger', icon: 'star', topics: [
-      ['Your character', 'i:user', 'Your hero earns XP from every fight and gets a stat point each level.', [
+      ['Your character', 'i:user', 'Your hero earns XP from every fight and gets a stat point each hero level.', [
         '<b>STR</b> damage. <b>DEX</b> crits and dodge. <b>CON</b> health. <b>INT</b> ability power.',
         '<b>WIS</b> healing and faster abilities. <b>CHA</b> gold. <b>LCK</b> a little of everything.',
         'Your class <b>favours two stats</b>; points there count 50% more.',
@@ -7031,10 +7045,10 @@
       ['Skill tree and Kindling', 'i:flare', 'Rekindling earns Kindling, spent on your hero’s class tree.', [
         'Three branches of four skills. The fourth teaches a new ability (keys 6 to 8).',
         'Kindling also buys pack space, extra rings and a second trinket slot.',
-        'Reset the tree free at camp. Change class at camp for 15 Kindling.']],
-      ['Rekindling', 'i:lantern', 'At hero level 20, from floor 75 or deeper, start again from floor 1 for permanent Embers.', [
+        'Reset the tree free at camp. Change class at camp for ' + L.CLASS_CHANGE_COST + ' Kindling.']],
+      ['Rekindling', 'i:lantern', 'At hero level ' + L.unlockOf('rekindle').lv + ', from floor ' + L.REKINDLE_FLOOR + ' or deeper, start again from floor 1 for permanent Embers.', [
         'Each <b>Ember</b> adds 4% damage and gold forever.',
-        'Companions, gear, relics and your character stay; levels reset.',
+        'Companions, gear, relics and your character stay; power levels reset.',
         'Embers count from floor 60, so a deeper descent pays far more. Your hero keeps their level.',
         'Rekindle when progress slows down.']],
       ['Training Grounds', 'i:sword', 'A practice dummy on the Party tab for comparing setups.', [
@@ -7045,12 +7059,18 @@
         'Each start pays <b>+25 Sigils</b> and shows your tier as a badge on your profile, the Players Guild board and in chat.',
         'Per tier: monsters <b>+25%</b> health and damage, gear drops at <b>+10%</b> item level, and you keep <b>+2%</b> damage, health and gold for good.',
         '<b>Resets</b>: gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story. <b>Kept</b>: everything bought with Sigils, your profile, journal lore, feats, Ember Ring rating and Rift tokens.',
-        'Trading is per tier: you see and buy only your tier’s market, mail only goes to heroes on your tier, trading opens 24 hours after you start, and gear from an earlier tier can not be worn. Your old listings, offers and unclaimed mail are cleared when you start.']],
+        'Trading is per tier: you see and buy only your tier’s market, mail only goes to heroes on your tier, trading opens 24 hours after you start, and gear from an earlier tier can not be worn. Your old listings, offers and unclaimed mail are cleared when you start.',
+        'Each tier is a real climb: monsters get tougher the deeper you go, foes drop more gold, and training costs more. From NP+' + L.NP_TDUST_TIER + ', Healers, Mages and Necromancers past power level ' + L.NP_TDUST_LV + ' also need Dust to train.',
+        'From NP+' + L.NP_MARK_TIER + ', monsters can carry <b>marks</b>: ' + Object.values(L.NP_MODS).map(m => '<b>' + m.name + '</b> (' + m.desc.replace(/ \(NP\+\)$/, '').replace(/^[^:]*: /, '').replace(/^./, x => x.toLowerCase()) + ')').join(', ') + '.']],
       ['NP+ gold sinks', 'i:coin', 'From NP+1: Pip, Gulp and the Golden Loot Goblin, plus Reforge, the Dust Press and Hold works.', [
         '<b>Pip the Dicer</b> sells Lucky Crates for gold (30 minutes, 3 hours or 12 hours of your income). Coffers and Caskets can hold one of <b>8 Curios</b>; every 10th Casket without one is sure to have one.',
         '<b>Gulp the Hoard Mimic</b> eats morsels of gold (10 minutes of income, 12 a day). The fed counter is shared by all NP+ heroes.',
         'Each morsel makes the <b>Golden Loot Goblin</b> slightly more likely. When it appears you have <b>30 minutes</b> to beat it in 2-minute assaults, or it escapes. Bring a Rogue for its dashes. The reward is the <b>Gilded</b> ring set and Gilded shards.',
         '<b>Reforge</b> (Armorer), the <b>Dust Press</b> (Enchanter) and <b>Hold works</b> (Hold view) also take gold. The NP+ market keeps a 5% fee on sales.']],
+      ['The Bestiary', 's:beetle,moth,crab', L.CREATURES.length + ' creatures, ' + L.ROSTERS[0].length + ' to a region. Each one spawns most in its home region.', [
+        'Open it in the <b>Codex</b>, Journal. Creatures are listed by home region; ones you have not met show as silhouettes. Rare and very rare ones glow.',
+        'Tap <b>Details</b> on a creature you have met: picture, home, spawn odds and size. Its strength and special attack are revealed after a few defeats, and its field notes after more.',
+        'Defeating a family’s creatures also builds that family’s <b>mastery</b>, shown on every row.']],
       ['Story, journal and map', 'i:book', 'The story unfolds as you descend.', [
         'Replay scenes in the <b>Journal</b>.',
         'The <b>Map of the Deep</b> shows every region and lets you travel to floors you have reached. Each region’s dossier lists its <b>possible loot</b> with your real odds per kill, after your drop bonuses.']],
@@ -7059,17 +7079,20 @@
       ['Earning Sigils', 'i:star', 'You can earn Sigils without spending money.', [
         '<b>Daily quests</b> (top bar): 1 Sigil each, 2 more for all three.',
         'Chests and guardians sometimes hold 1 to 3.',
-        'Trade gold for Sigils with other players on the exchange.']],
+        'Trade gold for Sigils with other players on the exchange.',
+        '<b>Support the game</b> in the Sigil shop gives free one-time Sigils for linking your Discord or itch.io account.']],
       ['What Sigils buy', 'i:crown', 'Looks, convenience and speed-ups. Never combat power.', [
         '<b>Lanternholder</b> (premium): Auto-train, +10 bag slots, +4 h away, auto-claim for bounties and daily quests, 4 gear loadouts. Get it for 500 Sigils (30 days, nothing renews) or as a $4.99 monthly membership. New heroes get a free 3-day trial.',
-        '<b>Bag of Holding</b> (6,500, once): an endless pack.',
+        '<b>Bag of Holding</b> (6,500, once): an endless pack. The <b>Paladin</b> class (' + L.PAID_CLASS.paladin.toLocaleString('en-US') + ', once per account).',
         '<b>Speed-up tonics</b> and Campfire Draughts. <b>Wardrobe</b> outfits and lanterns. Profile frames, titles and colors.',
-        'Buy packs with <b>Get Sigils</b> after signing in with your Born 2 Game store account. Packs are one-time purchases and never renew.',
+        'Buy packs with <b>Get Sigils</b> (tap the Sigil counter at the top) after signing in with your Born 2 Game store account. Packs are one-time purchases and never renew. Your first pack ever comes with 50% more Sigils.',
+        '<b>Gift Lanternholder</b>: open another player’s profile from the Players Guild and give them 30 days for 500 Sigils.',
         'Sigils can also be sold to other players for gold on the Sigil exchange in the Market, or bought there with gold.',
-        'Every pack bought lights a <b>Lantern Surge</b> for all players: +25% gold and XP.']],
+        'Every pack bought lights a <b>Lantern Surge</b> for all players: +25% gold and XP. Tick the shout-out box and your hero’s name shows with it.']],
       ['Mercy’s Blessing', 'i:cross', 'Real donations to the Grand War’s Mercy Corps bless every player.', [
         '<b>+10% gold</b>, <b>+10% health</b>, <b>+20% healing</b> while it burns.',
-        'Each $10, 5 food items or toy adds 2 hours, up to 7 days.']],
+        'Each $10, 5 food items or toy adds 2 hours, up to 7 days.',
+        'Give from the game: the Sigil shop has <b>$1</b> and <b>any amount</b> buttons for our Extra Life team, for children’s hospitals. Add your #WarName to credit your alliance.']],
       ['Victor’s Banner', 'i:crown', 'The alliance that wins a Grand War season holds the Nexus, and its heroes here get stronger.', [
         '<b>+8% damage, health, healing and gold</b>, and fallen allies get back up in <b>10 seconds</b> instead of 15.',
         'Fly that alliance’s banner to get it. It lasts until the next season is crowned.']],
@@ -7086,10 +7109,12 @@
       ['Accounts', 'i:user', 'A free account saves your progress online, on any device.', [
         'Accounts are optional. <b>Play without an account</b> keeps your hero on this device only.',
         '<b>Continue with Born 2 Game</b> signs you in with your store account, or sign up with any email and the code we send you.',
-        'Sign in to use the Players Guild, the Market, the Ember Ring, world boss weekends and Sigils.']],
+        'Sign in to use the Players Guild, the Market, the Ember Ring, world boss weekends and Sigils.',
+        'Each hero name belongs to one player. If yours is already taken, the game asks you to pick another.',
+        'One device plays at a time. Open the game somewhere else and the first one pauses with <b>Play here</b>, so your save never splits.']],
       ['Discord', 'i:discord', 'Join us on the Grand War Discord.', [
         'Tap the Discord button at the top, or <a href="https://discord.gg/6G7E7rhGFu" target="_blank" rel="noopener">join here</a>.',
-        '<b>#lanternhold-chat</b> for players, <b>#lanternhold-bugs</b> for bug reports and <b>#lanternhold-ideas</b> for suggestions.']],
+        'The Lanternhold section has channels to chat with other delvers, report bugs and suggest features.']],
       ['Chat', 'i:chat', 'Global, Trade, Party and Banner channels.', [
         'Press <b>Chat</b> at the bottom right to open the window, and the dash to tuck it away again. A bubble on the button counts unread messages.',
         '<b>Whispers</b> are private chats, one per player. Each conversation is a tab along the top of the Whispers channel: their messages on the left, yours on the right. Tap <b>+</b> to start a new one, or tap a name in any channel and choose Whisper.',
@@ -7101,14 +7126,18 @@
         '<b>Mail</b>: send to someone you recruited or chatted with, as a gift or for a price.',
         'Gold and gear have no real-money value.']],
       ['The Ember Ring (PvP)', 'i:duel', 'Duel other players\u2019 heroes, or fight their teams, for Laurels and rating.', [
-        'Open the <b>PvP</b> tab and press <b>Duel</b>. Only your own hero fights; companions, tonics and Sigils never count.',
-        'Each class has the edge on two classes and is countered by two. Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
+        'Opens at hero level ' + L.unlockOf('ring').lv + '. Open the <b>PvP</b> tab (Town on phones) and press <b>Duel</b>. Only your own hero fights; companions, tonics and Sigils never count.',
+        'Each class has the edge on two classes and is countered by two (the Paladin has neither). Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
         'Rematches against the same hero within a day pay less each time, so spread your duels around.',
         '10 challenges, one back every 30 minutes. Wins give rating and Laurels, losses a few Laurels; your hero also defends while you are away. A full kit is a long climb.',
         'Laurels buy the <b>Ringwarden kit</b>: PvP gear with <b>Edge</b> (more damage to heroes) and <b>Resolve</b> (less damage from heroes). It works only in the Ring.',
         '<b>Team battles</b> (Team view): your hero and two of your own companions against another player\u2019s team. Borrowed player heroes can\u2019t join. The front fighter takes most of the blows. Companions wear their own <b>companion Ring kit</b>, bought with Laurels. A win pays 10 Laurels, a loss 4.']],
-      ['Your profile', 'i:user', 'The card other players see.', [
-        'Tap your portrait, then <b>Customize profile</b>: frame, title, color, banner, emblems and a bio.']],
+      ['Your profile', 'i:user', 'Your hero sheet, and the card other players see.', [
+        'Tap your portrait. <b>My hero</b> shows power level, steady damage, health and deepest floor up top, with sections you can fold open.',
+        '<b>Public profile</b> lets you choose what other players see, with a live preview. Name, class, power level and looks always show.',
+        '<b>Customize profile</b>: frame, title, color, banner, emblems and a bio.']],
+      ['Hall of Fame', 'i:crown', 'Records from across the Reach.', [
+        'Open <b>Codex</b>, Leaderboard, Hall of Fame: fastest to NP+1, net worth, the best of each class by power level and gear rating, guardian slayers and more.']],
       ['The Wardrobe', 'i:star', 'Outfits, lanterns and war banners, looks only.', [
         'Open it from the <b>Wardrobe</b> button in the Gear tab, from your portrait, or from the Quartermaster.',
         'Outfits recolor a hero from helm to boots; the rarest add an aura. Buy one once and dress any hero in your company in it.',
@@ -7205,6 +7234,14 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 140, date: 'November 2026', title: 'A fresh Guide and tidy-ups', items: [
+      'The Guide and the wiki are up to date: unlock hero levels, the Paladin, loadouts, the Bestiary, NP+ marks, profiles, the Hall of Fame and more.',
+      'New wiki pages and sections: New Playthrough (NP+), NPC Guild hires and Mythic sets. The Paladin is on the Classes page.',
+      'Tutorial: clearer wording, two new steps (quests and the Town menu) and better placement on phones.',
+      'Phones: loadouts sit in two neat columns, the Codex buttons fit on two rows, and the Market class filter is one row again.',
+      'The NPC Guild explanation folds away under How hiring works.',
+      'Smaller fixes to wording: hero level and power level are named everywhere, and quest names read better.',
+    ] },
     { v: 139, date: 'November 2026', title: 'The Paladin', items: [
       'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
       'The Paladin is a Sigil class: unlock it once for 1,000 Sigils and every hero on your account can be one. The first change into it is free. It keeps pace with the other classes and never outclasses them.',
@@ -8050,7 +8087,7 @@
       h += '<div class="whoseg tradecls">' + L.HERO_CLASSES.map(c => '<button class="whochip c-' + c + (!trade.mine && trade.cls === c ? ' on' : '') + '" data-tc="' + c + '"><img src="' + SP.spriteURL(c, 2) + '" alt=""><span>' + L.CLASSES[c].name + '</span></button>').join('') +
         '<button class="whochip' + (trade.mine ? ' on' : '') + '" data-tc="mine"><span>My listings</span></button></div>';
       const sel = (id, opts, v) => '<select id="' + id + '">' + opts.map(([k, t]) => '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
-      h += '<div class="mkfilters">' + sel('tf-slot', SLOT_FILTER, trade.slot) + sel('tf-rar', RAR_FILTER, trade.rar) + sel('tf-sort', [['cheap', 'Cheapest first'], ['new', 'Newest first'], ['power', 'Strongest first'], ['level', 'Lowest level first']], trade.sort) + '</div>';
+      h += '<div class="mkfilters">' + sel('tf-slot', SLOT_FILTER, trade.slot) + sel('tf-rar', RAR_FILTER, trade.rar) + sel('tf-sort', [['cheap', 'Cheapest first'], ['new', 'Newest first'], ['power', 'Strongest first'], ['level', 'Lowest power level first']], trade.sort) + '</div>';
       if (trade.msg) h += '<p class="note">' + esc(trade.msg) + '</p>';
       if (trade.list) {
         const list = shownListings();
@@ -8636,7 +8673,7 @@
   function ringStatLine(s) { return fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack' + (s.E ? ' &middot; Edge ' + s.E : '') + (s.R ? ' &middot; Resolve ' + s.R : ''); }
   function paintRing() {
     const box = $('ringbox'); if (!box || typeof tab === 'undefined' || tab !== 'ring') return;
-    const intro = '<p class="note">Duel other players’ heroes one on one. Only your own hero steps into the Ring: no companions, tonics or Sigils. Win Laurels and climb the standings.</p>';
+    const intro = '<p class="note">Duel other players’ heroes one on one, or bring two of your companions for a team battle. Tonics and Sigils never count. Win Laurels and climb the standings.</p>';
     if (!CL) { box.innerHTML = '<div class="ringempty"><h3>The Ember Ring</h3>' + intro + '<p class="note">The Ring needs the online server.</p></div>'; return; }
     if (!signedIn() || !S.hero) { box.innerHTML = '<div class="ringempty"><h3>The Ember Ring</h3>' + intro + '<button class="btn" id="ring-in">Sign in to enter the Ring</button></div>'; $('ring-in').onclick = () => authForm('in'); return; }
     const st = rg.st;

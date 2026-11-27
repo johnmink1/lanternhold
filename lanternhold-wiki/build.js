@@ -28,7 +28,7 @@ function coreConst(name) {
   try { return new Function('return (' + m[1] + ');')(); } catch (e) { return undefined; }
 }
 const L = Object.assign({}, CORE_API);
-for (const k of ['BASES', 'BOSS_SPRITES', 'PACK_FLOOR', 'AFFIX_CHANCE', 'POS_TRAIT_NAME', 'KIN_TRAIT_NAME', 'CAMP_TRAIT_NAME', 'WB_NAMES', 'DUST', 'SOCK_BASE', 'STAT_CLASS', 'MILESTONES', 'LORE', 'FOES', 'ELITE_CHANCE', 'GOBLIN_FLOOR', 'GOBLIN_TIME', 'GOBLIN_GOLD', 'WB_TIME', 'WB_COOL'])
+for (const k of ['BASES', 'BOSS_SPRITES', 'PACK_FLOOR', 'AFFIX_CHANCE', 'POS_TRAIT_NAME', 'KIN_TRAIT_NAME', 'CAMP_TRAIT_NAME', 'WB_NAMES', 'GG_RINGS', 'DUST', 'SOCK_BASE', 'STAT_CLASS', 'MILESTONES', 'LORE', 'FOES', 'ELITE_CHANCE', 'GOBLIN_FLOOR', 'GOBLIN_TIME', 'GOBLIN_GOLD', 'WB_TIME', 'WB_COOL'])
   if (L[k] === undefined) { const v = coreConst(k); if (v !== undefined) L[k] = v; }
 const UI = fs.readFileSync(path.join(GAME, 'ui.js'), 'utf8');
 const INDEX = fs.readFileSync(path.join(GAME, 'index.html'), 'utf8');
@@ -69,7 +69,8 @@ const slug = s => String(s).toLowerCase().replace(/[’'"]/g, '').replace(/[^a-z
 const pct = (v, plus) => (plus && v > 0 ? '+' : '') + (Math.round(v * 1000) / 10) + '%';
 const num = n => Number(n).toLocaleString('en-US');
 const icon = (id, cls) => '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="/wiki/icons.svg#i-' + id + '"/></svg>';
-const CLS = L.CLASSES, CO = L.CLASS_ORDER;
+// Every class a hero can be: the five companion classes plus the Sigil classes (the Paladin since v139).
+const CLS = L.CLASSES, CO = L.HERO_CLASSES || L.CLASS_ORDER;
 const clsName = c => (CLS[c] || {}).name || c;
 
 const written = new Set();
@@ -162,14 +163,14 @@ function ref(p) { p.group = 'Reference'; REF.push(p); pages.push(p); }
 // ---- Classes ----
 ref({
   slug: 'classes', title: 'Classes', icon: 'sword',
-  desc: 'The five Lanternhold classes: Tank, Healer, Rogue, Mage and Necromancer. Abilities, skill trees, hero specializations, auras and favoured stats.',
-  lede: 'Five seats, five roles. Every hero and companion belongs to one class, and each class has its own ability, skill tree and gear.',
+  desc: 'The Lanternhold classes: Tank, Healer, Rogue, Mage, Necromancer and the Paladin. Abilities, skill trees, hero specializations, auras and favoured stats.',
+  lede: 'Five seats, five roles, and the Paladin for your own hero. Every hero and companion belongs to one class, and each class has its own ability, skill tree and gear.',
   body: () => {
     const nav = '<div class="toc">' + CO.map(c => '<a href="#' + c + '">' + esc(clsName(c)) + '</a>').join('') + '</div>';
     return nav + CO.map(c => {
       const k = CLS[c], extras = [];
       if (k.armor) extras.push(['Armor', pct(k.armor) + ' less damage taken']);
-      if (k.heal) extras.push(['Healing', k.heal + ' per second at level 1']);
+      if (k.heal) extras.push(['Healing', k.heal + ' per second at power level 1']);
       if (k.dodge) extras.push(['Dodge', pct(k.dodge) + ' of attacks']);
       if (k.drain) extras.push(['Life drain', pct(k.drain) + ' of damage dealt']);
       const fav = (L.STAT_CLASS[c] || []).map(id => (L.STATS.find(x => x.id === id) || {}).name).filter(Boolean);
@@ -183,7 +184,8 @@ ref({
       return '<section class="block cls" id="' + c + '" style="--acc:' + k.color + '">' +
         '<div class="clshead">' + pic(c, 0, k.name, 'big') + '<div><h2><a class="anchor" href="#' + c + '">' + esc(k.name) + '</a></h2>' +
         '<p class="sub">Ability: <b>' + esc(k.ability.name) + '</b>. ' + esc(k.ability.desc) + ' Cooldown ' + k.ability.cd + 's.</p>' +
-        kv([['Health', k.hp + ' at level 1'], ['Damage', k.dps + ' per second at level 1']].concat(extras).concat([
+        (L.PAID_CLASS && L.PAID_CLASS[c] ? '<p class="note">A Sigil class for your own hero: unlock it once for ' + num(L.PAID_CLASS[c]) + ' Sigils and every hero on your account can be one. The first change into it is free. It keeps pace with the other classes and never outclasses them. Companions and hired NPCs never roll it.</p>' : '') +
+        kv([['Health', k.hp + ' at power level 1'], ['Damage', k.dps + ' per second at power level 1']].concat(extras).concat([
           ['Favoured stats', fav.join(' and ') + ' (×' + L.STAT_AFFINITY + ')'], L.RES_KIND && L.RES_KIND[c] ? ['Resource', (L.RES_KIND[c] === 'mana' ? 'Mana' : 'Stamina') + ' (' + L.RES_MAX + ', refills ' + L.RES_REGEN[L.RES_KIND[c]] + '/s). Ability costs ' + L.AB_COST + (L.RES_KIND[c] === 'mana' && c === 'healer' ? '; healing drains mana too, and Lantern Hymn uses whatever is left up to the cost' : '')] : null, ['Default seat', seat], RING_ARMS[c] ? ['Ember Ring arms', esc(RING_ARMS[c])] : null])) + '</div></div>' +
         (specs.length ? '<h3>Hero specializations</h3><p class="note">Your own hero learns these from the last tier of each skill branch. Keys 6 to 8.</p><div class="grid3">' + specs.map(a =>
           '<div class="mini"><b>' + esc(a.name) + '</b><small>' + esc(a.desc) + '</small><span class="tier">Cooldown ' + a.cd + 's' + (a.dur ? ' · lasts ' + a.dur + 's' : '') + '</span></div>').join('') + '</div>' : '') +
@@ -217,6 +219,8 @@ ref({
         sub: esc(m.title) + ' · ' + chip(esc(clsName(m.cls)), 'c') + (side ? ' ' + chip(esc(side.name), 's') : ''),
         body: '<p>' + esc(m.bio) + '</p>' + (m.line ? '<p class="quote">' + esc(m.line) + '</p>' : '') });
     }).join('') + '</div>').join('') +
+      (L.NPC_RAR ? '<h2 id="npc-guild">NPC Guild hires</h2><p>The Guild Hall offers six hires at a time, with new faces every ' + Math.round(L.NPC_ROTATE / 36e5) + ' hours.</p><ul><li><b>Sign on</b> takes a companion spot and pays a gold wage every hour (half rate while you are away).</li><li>A <b>2 h</b> contract is paid up front, with no wage and no free spot needed, up to ' + L.NPC_SHORT_MAX + ' at once.</li><li>Mages, Necromancers and Healers of the higher rarities also cost Dust once when they sign on.</li><li>If your gold runs dry for an hour of wages, the priciest hire walks off to the bench. Their gear returns to your bag, and they can be hired back for half price for ' + Math.round(L.NPC_BENCH_MS / 864e5) + ' days.</li><li>Wage relief, up to 50%, comes from mastered regions, Charisma and the Quartermaster camp job.</li></ul>' +
+        table(['Rarity', 'How often on offer', 'Camp job bonus', 'Wage cap per hour'], L.NPC_RAR.map(r => { const tw = L.NPC_RAR.reduce((x, y) => x + (y.w || 0), 0); return ['<b style="color:' + r.color + '">' + r.name + '</b>', r.w ? pct(r.w / tw) : '–', r.job ? pct(r.job, 1) : '–', pct(r.wage) + ' of your income']; })) : '') +
       '<h2 id="unique">Unique Legendaries</h2><p>Eight one-of-a-kind Legendary companions. Each gives a small extra bonus while working their own camp job, on top of the job itself. They draw a Legendary wage like any Legendary hire.</p><div class="grid2">' + L.MEMBERS.filter(m => m.uniq).map(m => {
         const side = L.SIDES[m.side], u = L.UNIQ[m.id], post = u.job === 'any' ? 'any camp job' : L.JOBS.find(j => j.id === u.job).name;
         const how = u.how === 'guild' ? 'Now and then on offer at the Guild Hall once you reach floor ' + u.floor + '.' : u.how === 'quest' ? 'Finish the side quest that opens on floor ' + u.floor + '. Joins for free.' : u.how === 'adv' ? 'Joins for free the first time you beat the floor ' + u.floor + ' guardian.' : 'Caged by a monster somewhere past floor ' + u.floor + '. Very rare: a Rogue in the party, the Mercy Corps banner and floors past 100 each make it likelier. Free him to have him join; if the monster gets away, he waits at the Guild Hall.';
@@ -340,7 +344,7 @@ ref({
 // ---- Sets ----
 ref({
   slug: 'sets', title: 'Item sets', nav: 'Sets', icon: 'crown',
-  desc: 'Every Lanternhold item set: the fifteen region sets, the Loot Goblin’s Sack, class sets with their bonuses and lore, and the six camp job sets.',
+  desc: 'Every Lanternhold item set: the fifteen region sets, the Mythic world boss sets, the Loot Goblin’s Sack, class sets with their bonuses and lore, and the camp job sets.',
   lede: 'Every region of the Deep has its own four-piece set, each class has a three-piece set from guardians, and each camp job has a set too.',
   body: () => {
     const sets = L.SETS.map(s => {
@@ -366,7 +370,12 @@ ref({
       }).join('') + '</div><p class="note">Piece names follow the wearer: plate for Tanks (Helm, Hauberk, Greaves, Sabatons), leather for Rogues (Hood, Jerkin, Breeches, Boots) and cloth for everyone else (Cowl, Vestment, Leggings, Slippers).</p>' : '';
     const sack = L.GOBLIN_SACK_GOLD ? '<h2 id="goblin-sack">The Loot Goblin’s Sack</h2><div class="grid2">' + card('goblin-sack-card', 'Loot Goblin’s Sack', { pic: pic('goblin', 0, 'Loot Goblin'), sub: 'Trinket · one of the rarest finds in the Deep',
       body: kv([['While worn', pct(L.GOBLIN_SACK_GOLD, 1) + ' gold for the whole party'], ['Drop chance', 'About one <a href="/wiki/bestiary/#loot-goblin">Loot Goblin</a> kill in ' + num(Math.round(1 / L.GOBLIN_SACK_CHANCE))], ['Sockets', '3 enchant sockets']]) }) + '</div>' : '';
-    return regionSets + sack + '<h2>Class sets</h2><div class="grid2">' + sets + '</div><h2 id="job-sets">Job sets</h2><p>From floor 20, guardians (0.375%) and chests (0.1%) can drop job set pieces. Any class can wear them, and they boost the camp job of whoever wears them.</p><div class="grid3">' + jobs + '</div>' +
+    const WKN = { hp: 'health', dps: 'damage', heal: 'healing', gold: 'gold' };
+    const mythic = (L.WB_SETS || []).length ? '<h2 id="mythic">Mythic sets</h2><p>Mythic is the top rarity, above Legendary. Each world boss guards a four-piece set (main hand, chest, ring and trinket) for any class. A drop is rare, so most delvers build theirs with Rift tokens (' + L.WB_TOKEN_COST + ' for a piece from Warden Sable at the Rift Gate) and upgrade it with that boss’s shards. See <a href="/wiki/world-boss/">World boss weekends</a>.</p><div class="grid2">' +
+      L.WB_SETS.slice(0, L.WB_BOSSES || 4).map((w, i) => card('mythic-' + i, esc(w.name), { pic: pic('colossus', 0, ''), sub: esc((L.WB_NAMES || [])[i] || w.word) + ' · Mythic',
+        body: '<div class="chips">' + Object.entries(w.piece).map(([sl, n]) => chip('<small>' + esc(L.SLOT_NAME[sl] || sl) + '</small> ' + esc(w.word + ' ' + n), 'set')).join('') + '</div>' + kv([['2 pieces', pct(L.WB_TWO[w.k], 1) + ' ' + WKN[w.k]], ['4 pieces', pct(L.WB_FOUR, 1) + ' damage and health']]) + (w.lore ? '<p class="quote">' + esc(w.lore) + '</p>' : '') })).join('') + '</div>' +
+      (L.GG_RINGS ? '<h3 id="gilded">The Golden Goblin’s Hoard</h3><p>Five Gilded rings, one for each ring slot, from the Golden Loot Goblin in a New Playthrough. Never from a world boss or the Rift Gate.</p>' + table(['Ring', 'Gives'], L.GG_RINGS.map(r => ['<b>' + esc(r.name) + '</b>', esc(r.fx)])) : '') : '';
+    return regionSets + mythic + sack + '<h2>Class sets</h2><div class="grid2">' + sets + '</div><h2 id="job-sets">Job sets</h2><p>From floor 20, guardians (0.375%) and chests (0.1%) can drop job set pieces. Any class can wear them, and they boost the camp job of whoever wears them.</p><div class="grid3">' + jobs + '</div>' +
       '<h2 id="job-affixes">Job affixes</h2><p>Some ordinary pieces roll a job affix instead (an orange dot in game): ' + Object.entries(L.AFFIX_CHANCE || {}).map(([r, v]) => r + ' ' + pct(v)).join(', ') + '.</p>' + related(['gear', 'camp-and-jobs']);
   },
   index: () => { for (const s of L.SETS) addSearch('sets', s.name, 'set-' + s.id, clsName(s.cls) + ' set. ' + Object.values(s.pieces).join(', ') + '. 2 pieces: ' + s.two + '. 3 pieces: ' + s.three, 'Set');
@@ -420,12 +429,32 @@ ref({
     '<h2 id="kindling">Kindling upgrades</h2>' + table(['Upgrade', 'Effect', 'Ranks', 'First rank'], L.KINDLE_UPS.map(u => ['<b>' + esc(u.name) + '</b>', esc(u.desc), String(u.max), u.base + ' Kindling'])) +
     '<p class="note">Kindling also buys skill tree ranks, +' + L.BAG_STEP + ' pack slots and extra ring and trinket slots. Changing class costs ' + L.CLASS_CHANGE_COST + ' Kindling.</p>' +
     '<h2 id="relics">Relics</h2><p>Guardians from floor 10 sometimes drop a relic. Duplicates level it up, and relics stay through rekindling.</p>' + table(['Relic', 'Bonus'], L.RELICS.map(r => ['<b>' + esc(r.name) + '</b>', esc(r.desc)])) +
-    '<h2 id="records">Records</h2><p>Each record you earn adds ' + 1 + '% to party damage, permanently.</p><div class="grid3 tight">' + L.FEATS.filter(f => !f.hidden).map(f => '<div class="mini" id="feat-' + f.id + '">' + icon('cup') + '<b>' + esc(f.name) + '</b><small>' + esc(f.desc) + '</small></div>').join('') + '</div>' +
-    '<h2 id="quests">Daily quests</h2><p>Three a day, picked for your hero from the same kinds as the bounty board, and never the same kind two days running. Each pays ' + L.QUEST_REWARD + ' Sigil, and finishing all three pays ' + L.QUEST_BONUS + ' more.</p>' +
+    '<h2 id="records">Records</h2><p>Each record (feat) you earn adds ' + Math.round(L.FEAT_PER * 100) + '% to party damage and healing, permanently.</p><div class="grid3 tight">' + L.FEATS.filter(f => !f.hidden).map(f => '<div class="mini" id="feat-' + f.id + '">' + icon('cup') + '<b>' + esc(f.name) + '</b><small>' + esc(f.desc) + '</small></div>').join('') + '</div>' +
+    '<h2 id="quests">Daily quests</h2><p>Three a day, picked for your hero from the same ' + Math.floor(L.QDEFS.length / 10) * 10 + ' or so kinds as the bounty board, and never the same kind two days running. Each pays ' + L.QUEST_REWARD + ' Sigil, and finishing all three pays ' + L.QUEST_BONUS + ' more. Lanternholder can claim finished ones for you.</p>' +
+    '<h2 id="hall-of-fame">Hall of Fame</h2><p>Codex, Leaderboard, Hall of Fame keeps records from across the Reach: fastest to NP+1, net worth, the best of each class by power level and gear rating, guardian slayers and more.</p>' +
     '<h2 id="milestones">Training milestones</h2><p>Companions get a big power jump at power levels ' + L.MILESTONES.slice(0, 8).join(', ') + ' and on up to ' + num(L.MILESTONES[L.MILESTONES.length - 1]) + '.</p>' +
-    '<h2 id="offline">While you are away</h2><p>Your party earns 25% of its gold for ' + (L.OFFLINE_BASE / 3600) + ' hours while the game is closed. Night Watch adds 16 hours a rank, up to ' + (L.OFFLINE_MAX / 3600) + ' hours.</p>' + related(['classes', 'getting-stronger']),
+    '<h2 id="offline">While you are away</h2><p>Your party earns 25% of its gold for ' + (L.OFFLINE_BASE / 3600) + ' hours while the game is closed. Night Watch adds 16 hours a rank, up to ' + (L.OFFLINE_MAX / 3600) + ' hours, and Lanternholder adds 4 more.</p>' + related(['classes', 'getting-stronger']),
   index: () => { for (const s of L.STATS) addSearch('progression', s.name, 'stats', 'Hero stat: ' + s.desc, 'Stat'); for (const u of L.KINDLE_UPS) addSearch('progression', u.name, 'kindling', 'Kindling upgrade: ' + u.desc, 'Kindling'); for (const r of L.RELICS) addSearch('progression', r.name, 'relics', 'Relic: ' + r.desc, 'Relic');
     for (const f of L.FEATS.filter(f => !f.hidden)) addSearch('progression', f.name, 'feat-' + f.id, 'Record: ' + f.desc, 'Record'); addSearch('progression', 'Rekindling', 'rekindle', 'Restart for Embers and Kindling from floor ' + L.REKINDLE_FLOOR, 'Progression'); addSearch('progression', 'Daily quests', 'quests', 'Three quests a day picked for your hero, 1 Sigil each', 'Quests'); },
+});
+
+// ---- New Playthrough (NP+) ----
+if (L.NP_MAX) ref({
+  slug: 'new-playthrough', title: 'New Playthrough (NP+)', nav: 'New Playthrough', icon: 'star',
+  desc: 'Lanternhold New Playthrough: NP+1 to NP+' + L.NP_MAX + ' tiers, what resets and what is kept, monster marks, NP+ training, Pip the Dicer, Curios, Gulp and the Golden Loot Goblin.',
+  lede: 'Beat the Lampmother on floor ' + L.ACT_ONE_END + ' and you can start the whole story again at a harder tier, up to NP+' + L.NP_MAX + '.',
+  body: () => '<h2 id="start">Starting a tier</h2><p>Open it from Skills, Rekindle view. Tiers go from NP+1 to NP+' + L.NP_MAX + ', at most one every ' + Math.round(L.NP_GAP / 864e5) + ' days. Each start pays ' + L.NP_SIGILS + ' Sigils and shows your tier as a badge on your profile, the Players Guild board and in chat, plus a gold ring around your picture.</p>' +
+    kv([['Each tier', 'Gear drops at ' + pct(L.NP_ILVL, 1) + ' item level, and you keep ' + pct(L.NP_PER, 1) + ' damage, health and gold for good'], ['Monsters', 'Tougher the deeper you go: at NP+1, double health on floor 1 and about five times by floor ' + L.ACT_ONE_END], ['Gold', 'Foes drop more gold: ×2 at NP+1, ×3 at NP+2 and so on'], ['Training', 'Costs more gold each tier. From NP+' + L.NP_TDUST_TIER + ', Healers, Mages and Necromancers past power level ' + L.NP_TDUST_LV + ' also need Dust']]) +
+    '<h2 id="resets">What resets and what is kept</h2><p><b>Resets:</b> gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story.</p><p><b>Kept:</b> everything bought with Sigils (Wardrobe, Bag of Holding, campfire spots, Lanternholder, tonics, the Paladin), your profile, journal lore, feats, Ember Ring rating, Rift tokens, Curios and Hold works.</p>' +
+    '<h2 id="trading">Trading on a tier</h2><p>Each tier has its own market, mail only goes between heroes on the same tier, trading opens ' + Math.round(L.NP_LOCK / 36e5) + ' hours after you start, and gear from an earlier tier can not be worn. Your old listings, offers and unclaimed mail are cleared when you start. The NP+ market keeps a 5% fee on each sale.</p>' +
+    '<h2 id="marks">Monster marks</h2><p>From NP+' + L.NP_MARK_TIER + ', monsters can carry marks.</p>' + table(['Mark', 'What it does'], Object.values(L.NP_MODS).map(m => ['<b>' + esc(m.name) + '</b>', esc(m.desc.replace(/ \(NP\+\)$/, '').replace(/^[^:]*: /, '').replace(/^./, x => x.toUpperCase()))])) +
+    '<h2 id="gold-sinks">Pip, Gulp and the Golden Loot Goblin</h2><p>NP+ heroes get new places to spend gold, priced in hours of your own steady income, set once a day.</p><ul>' +
+    '<li><b>Pip the Dicer</b> sells Lucky Crates (30 minutes, 3 hours or 12 hours of income). Coffers and Caskets can hold one of ' + L.CURIOS.length + ' Curios; every ' + L.CURIO_PITY + 'th Casket without one is sure to have one.</li>' +
+    '<li><b>Gulp the Hoard Mimic</b> eats morsels of gold (10 minutes of income, 12 a day). Every morsel makes the Golden Loot Goblin a little more likely.</li>' +
+    '<li>When the <b>Golden Loot Goblin</b> appears, everyone has 30 minutes to beat it in 2-minute assaults. The reward is a share of the <a href="/wiki/sets/#gilded">Gilded rings</a>.</li>' +
+    '<li><b>Reforge</b> at the Armorer, the <b>Dust Press</b> at the Enchanter, and <b>Hold works</b> (renovations and decorations) also take gold.</li></ul>' +
+    '<h3 id="curios">Curios</h3>' + table(['Curio', 'Gives'], L.CURIOS.map(c => ['<b>' + esc(c.name) + '</b>', esc(c.fx || '')])) + related(['progression', 'sets', 'getting-stronger']),
+  index: () => { addSearch('new-playthrough', 'New Playthrough (NP+)', '', 'Start the story again at a harder tier after floor ' + L.ACT_ONE_END, 'Progression'); for (const m of Object.values(L.NP_MODS)) addSearch('new-playthrough', m.name, 'marks', 'NP+ monster mark: ' + m.desc, 'Trick'); for (const c of L.CURIOS) addSearch('new-playthrough', c.name, 'curios', 'Curio: ' + (c.fx || ''), 'Curio'); addSearch('new-playthrough', 'Pip the Dicer', 'gold-sinks', 'Lucky Crates for gold', 'NP+'); addSearch('new-playthrough', 'Gulp the Hoard Mimic', 'gold-sinks', 'Feed gold morsels', 'NP+'); addSearch('new-playthrough', 'Golden Loot Goblin', 'gold-sinks', 'Beat it in 30 minutes for Gilded rings', 'NP+'); },
 });
 
 // ---- Store items ----
@@ -434,8 +463,9 @@ ref({
   desc: 'Lanternhold camp store: Campfire Draught, Lantern Oil and every tonic, what it does and how long it lasts. Plus Sigils, Lanternholder and Lantern Surge.',
   lede: 'The camp store sells consumables for gold, priced from what your party earns. Tonics stack time up to an hour.',
   body: () => '<div class="grid3">' + L.SHOP.map(s => card('item-' + s.id, esc(s.name), { pic: '<div class="gicon">' + icon(s.icon) + '</div>', body: '<p>' + esc(s.desc) + '</p>' })).join('') + '</div>' +
-    '<h2 id="sigils">Sigils</h2><p>Sigils are the premium token. They drop very rarely in game (chests, guardians and daily quests) and can be bought in packs. They buy convenience and perks such as Lanternholder premium (' + L.PASS_COST + ' Sigils for ' + L.PASS_DAYS + ' days, or a $4.99 monthly membership: Auto-train, +' + L.PASS_BAG + ' pack slots and 4 more offline hours), a stat respec (' + L.RESPEC_COST + ') and the Bag of Holding (' + num(L.BOH_COST) + '). Enchants, Ember Ring gear and auras can never be bought.</p>' +
-    '<h2 id="surge">Lantern Surge</h2><p>Whenever any player buys a Sigil pack, every hero in the game gets ' + pct(L.SURGE_FX.gold, 1) + ' gold and ' + pct(L.SURGE_FX.xp, 1) + ' XP for a while.</p>' + related(['sigils-and-perks', 'camp-and-jobs']),
+    '<h2 id="sigils">Sigils</h2><p>Sigils are the premium token. They drop very rarely in game (chests, guardians and daily quests) and can be bought in packs. They buy looks, convenience and perks such as Lanternholder premium (' + L.PASS_COST + ' Sigils for ' + L.PASS_DAYS + ' days, or a $4.99 monthly membership: Auto-train, +' + L.PASS_BAG + ' pack slots, 4 more offline hours, auto-claim for bounties and daily quests, and ' + L.LOADOUT_PASS + ' gear loadouts instead of ' + L.LOADOUT_FREE + '), a stat respec (' + L.RESPEC_COST + '), the Bag of Holding (' + num(L.BOH_COST) + ') and the Paladin class (' + num(L.PAID_CLASS.paladin) + ', once per account). Enchants, Ember Ring gear and auras can never be bought.</p>' +
+    '<ul><li>Tap the Sigil counter at the top to open the Sigil shop. Packs are one-time purchases through your Born 2 Game store account and never renew. Your first pack ever comes with 50% more Sigils.</li><li><b>Gift Lanternholder</b>: give another player 30 days for 500 Sigils from their profile in the Players Guild.</li><li><b>Support the game</b>: free one-time Sigils for linking your Discord or itch.io account.</li><li><b>Give to Extra Life</b>: $1 or any amount to our Extra Life team for children’s hospitals, right from the Sigil shop. It gives nothing in game.</li></ul>' +
+    '<h2 id="surge">Lantern Surge</h2><p>Whenever any player buys a Sigil pack, every hero in the game gets ' + pct(L.SURGE_FX.gold, 1) + ' gold and ' + pct(L.SURGE_FX.xp, 1) + ' XP for a while. Tick the shout-out box when you buy and your hero’s name shows with the Surge.</p>' + related(['sigils-and-perks', 'camp-and-jobs']),
   index: () => { for (const s of L.SHOP) addSearch('store-items', s.name, 'item-' + s.id, s.desc, 'Item'); addSearch('store-items', 'Sigils', 'sigils', 'Premium token, Lanternholder, Bag of Holding', 'Sigils'); addSearch('store-items', 'Lantern Surge', 'surge', 'Server-wide gold and XP boost', 'Sigils'); },
 });
 
@@ -461,7 +491,7 @@ ref({
 ref({
   slug: 'world-boss', title: 'World boss weekends', nav: 'World boss', icon: 'crown',
   desc: 'Lanternhold world boss weekends: the shared Rift boss every Friday to Sunday, two-minute assaults, phases and Sigil rewards.',
-  lede: 'One giant Rift boss every weekend that all signed-in players fight together, Friday to Sunday (UTC).',
+  lede: 'One giant Rift boss every weekend that all signed-in players fight together, Friday to Sunday (UTC). It opens at hero level ' + L.unlockOf('boss').lv + '.',
   body: () => '<div class="grid2">' + card('boss', 'The Rift bosses', { pic: pic('colossus', 0, 'World boss'), body: '<p>The boss changes each weekend. Each one resists two classes (−' + Math.round(L.WB_RESIST * 100) + '% damage) and is weak to one (+' + Math.round(L.WB_WEAK * 100) + '%):</p><ul>' + L.WB_NAMES.map((n, i) => { const t = L.WB_TRAITS[i], cn = c => L.CLASSES[c].name.toLowerCase() + 's'; return '<li><b>' + esc(n) + '</b>: ' + esc(t.trait) + '. Weak to ' + cn(t.weak) + ', resists ' + t.resist.map(cn).join(' and ') + '. Special: ' + esc(L.SPECIALS[t.sp].name) + '.</li>'; }).join('') + '</ul>' }) +
     card('assault', 'Assaults', { body: kv([['Length', (L.WB_TIME / 60) + ' minutes'], ['Cooldown', (L.WB_COOL / 60) + ' minutes'], ['Your damage', 'Real damage: the stronger your party, the more you deal'], ['Your score', 'Your best ' + L.WB_BEST + ' assaults of the weekend (rank, Sigils, Mythic roll)'], ['Companions', 'Hired and story companions deal half damage; players\' heroes deal full']]) + '<p>Everyone fills one shared health bar, and every assault counts toward it. Each phase broken makes the next one twice as tough.</p>' }) + '</div>' +
     '<h2 id="rewards">Rewards</h2><p>After the weekend, tap <b>Claim</b>: 3 Sigils for taking part, 1 more per phase broken (up to 5), 5 more for the top three, and a purse of gold.</p><h2 id="loot">Mythic loot</h2><p>Each boss guards a four-piece Mythic set, the strongest gear in the game, a tier above Legendary. Everyone who fought rolls their own chance at a piece, but a drop is rare: under 3% a weekend even for the strongest delvers, higher the more damage you dealt, and full odds only once the server breaks 3 phases. You also get boss shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' Rift tokens buy a piece of any boss set from Warden Sable at the Rift Gate, a portal just outside the Hold.</p>' + related(['bestiary', 'combat']),
@@ -528,10 +558,10 @@ function homeBody() {
     '<p class="lede">Everything you need to carry the lantern down to the Nyx Rift: classes and skill trees, companions, gear and sets, every region and monster, and how each system works.</p>' +
     '<div class="hbtns"><a class="btn gold" href="/wiki/getting-started/">New here? Start with the basics</a><a class="btn" href="/?ref=wiki">Play Lanternhold free</a></div>' +
     '<ul class="counts">' + counts.map(([n, t]) => '<li><b>' + n + '</b><span>' + t + '</span></li>').join('') + '</ul></div><div class="hparty" aria-hidden="true">' + heroes + '</div></section>' +
-    '<h2 class="sect">Guide</h2><div class="tiles">' + guide.map(p => '<a class="tile" href="/wiki/' + p.slug + '/">' + icon(p.icon) + '<b>' + esc(p.title) + '</b><small>' + (p.slug === 'roadmap' ? 'Where we started, four acts, the Breaking' : esc(strip(GUIDE.find(g => (GUIDE_SLUG[g.id] || slug(g.name)) === p.slug).topics.map(t => t[0]).slice(0, 4).join(', ')))) + '</small></a>').join('') + '</div>' +
+    '<h2 class="sect">Guide</h2><div class="tiles">' + guide.map(p => '<a class="tile" href="/wiki/' + p.slug + '/">' + icon(p.icon) + '<b>' + esc(p.title) + '</b><small>' + (p.slug === 'roadmap' ? 'Where we started, four acts and the finale' : esc(strip(GUIDE.find(g => (GUIDE_SLUG[g.id] || slug(g.name)) === p.slug).topics.map(t => t[0]).slice(0, 4).join(', ')))) + '</small></a>').join('') + '</div>' +
     '<h2 class="sect">Reference</h2><div class="tiles">' + REF.map(p => '<a class="tile" href="/wiki/' + p.slug + '/">' + icon(p.icon) + '<b>' + esc(p.title) + '</b><small>' + esc(p.desc.split(': ').pop().split('. ')[0].slice(0, 110)) + '</small></a>').join('') + '</div>' +
     (NOTES[0] ? '<h2 class="sect">Latest update</h2><a class="latest" href="/wiki/patch-notes/#v' + NOTES[0].v + '"><b>' + esc(NOTES[0].title) + '</b><small>Update ' + NOTES[0].v + (NOTES[0].date ? ' · ' + esc(NOTES[0].date) : '') + '</small><span>' + esc(strip(NOTES[0].items[0])).slice(0, 180) + '</span></a>' : '') +
-    '<section class="cta"><div><h2>Questions the wiki does not answer?</h2><p>Ask other delvers in #lanternhold-chat on the Grand War Discord, or report a bug in #lanternhold-bugs.</p></div><a class="btn" href="' + DISCORD + '" rel="noopener">' + icon('discord') + ' Join the Discord</a></section>';
+    '<section class="cta"><div><h2>Questions the wiki does not answer?</h2><p>Ask other delvers in the Lanternhold channels on the Grand War Discord, or report a bug or an idea there.</p></div><a class="btn" href="' + DISCORD + '" rel="noopener">' + icon('discord') + ' Join the Discord</a></section>';
 }
 
 // ---------- write ----------

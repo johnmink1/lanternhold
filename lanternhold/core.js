@@ -1,4 +1,4 @@
-/* lh-build 202611270449 */
+/* lh-build 202611270545 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -4207,7 +4207,7 @@
     m: (d, s, q) => qFoe(d) && (q.cid ? d.foe.cid === q.cid : d.foe.sprite === q.sp) && qInR(d, q), t: q => 'Hunt ' + q.n + ' ' + qPl(q.name) + ' on floors ' + q.a + '–' + q.b });
   BIOMES.forEach((bi, rn) => { if (bi.foe) Q({ id: 'hunt_' + bi.foe.id, c: 'hunt', ev: 'kill', n: 30, w: 6, g: qAt(rn * 10 + 2), add: packN,
     mk: s => { const [a, b] = regSpan(s, rn); return { a, b, sp: bi.foe.id, name: bi.foe.name }; },
-    m: (d, s, q) => qFoe(d) && d.foe.sprite === q.sp && qInR(d, q), t: q => 'Hunt ' + q.n + ' ' + qPl(q.name) + ' in ' + bi.name }); });
+    m: (d, s, q) => qFoe(d) && d.foe.sprite === q.sp && qInR(d, q), t: q => 'Hunt ' + q.n + ' ' + qPl(q.name) + ' in ' + bi.name.replace(/^The /, 'the ') }); });
   Q({ id: 'sweep', c: 'hunt', ev: 'kill', n: 60, w: 5, g: qAt(2), add: packN, mk: (s, r) => { const rn = pickReg(s, r), [a, b] = regSpan(s, rn); return { a, b, rname: BIOMES[rn % BIOMES.length].name }; },
     m: (d, s, q) => qMob(d) && qInR(d, q), t: q => 'Clear ' + q.n + ' monsters from ' + q.rname + ' (floors ' + q.a + '–' + q.b + ')' });
   Q({ id: 'old_sweep', c: 'hunt', ev: 'kill', n: 80, w: 5, g: qAt(31), add: packN, mk: (s, r) => { const t = regionNo(qTop(s)), rn = Math.max(0, t - 2 - Math.floor(r() * 3)), [a, b] = regSpan(s, rn); return { a, b, rname: BIOMES[rn % BIOMES.length].name }; },
@@ -4256,8 +4256,8 @@
   // -- The regions of Act One: each has its own guardian and its own alliance warband --
   BIOMES.forEach((bi, rn) => {
     const gf = (rn + 1) * 10;
-    Q({ id: 'rg_' + rn, c: 'region', ev: 'kill', n: 2, w: 5, g: qAt(gf + 1), m: (d, s) => qFoe(d) && d.foe.boss && d.f === gf, a: gf, t: q => 'Defeat ' + bi.boss + ', guardian of ' + bi.name + ', ' + q.n + ' times', mk: () => ({ a: gf, b: gf }) });
-    Q({ id: 're_' + rn, c: 'region', ev: 'kill', n: 5, w: 5, g: qAt(rn * 10 + 5), m: (d, s) => qFoe(d) && d.foe.elite && regionNo(d.f) === rn, t: q => 'Rout ' + q.n + ' ' + qPl(bi.war.units[0]) + ' and ' + qPl(bi.war.units[1]) + ' in ' + bi.name, mk: s => { const [a, b] = regSpan(s, rn); return { a, b }; } });
+    Q({ id: 'rg_' + rn, c: 'region', ev: 'kill', n: 2, w: 5, g: qAt(gf + 1), m: (d, s) => qFoe(d) && d.foe.boss && d.f === gf, a: gf, t: q => 'Defeat ' + bi.boss.replace(/^The /, 'the ') + ', guardian of ' + bi.name.replace(/^The /, 'the ') + ', ' + q.n + ' times', mk: () => ({ a: gf, b: gf }) });
+    Q({ id: 're_' + rn, c: 'region', ev: 'kill', n: 5, w: 5, g: qAt(rn * 10 + 5), m: (d, s) => qFoe(d) && d.foe.elite && regionNo(d.f) === rn, t: q => 'Rout ' + q.n + ' ' + qPl(bi.war.units[0]) + ' and ' + qPl(bi.war.units[1]) + ' in ' + bi.name.replace(/^The /, 'the '), mk: s => { const [a, b] = regSpan(s, rn); return { a, b }; } });
   });
 
   // -- The Grand War: alliance elites --
