@@ -137,8 +137,9 @@ exports.handler = async (event) => {
       let np = null;
       const last = ck && ck.pts && ck.pts[ck.pts.length - 1];
       if (WALLETS && (Number(sv.np) || 0) > (last ? last.np : 0)) {
-        const w = (await db.send(new D.GetItemCommand({ TableName: WALLETS, Key, ProjectionExpression: 'np' }))).Item;
-        np = w && w.np ? Number(w.np.N) : 0;
+        // v143: the wallet is the account's (sub0); a Hardcore save's tier is hnp on it.
+        const F = hc ? 'hnp' : 'np', w = (await db.send(new D.GetItemCommand({ TableName: WALLETS, Key: { userId: { S: sub0 } }, ProjectionExpression: F }))).Item;
+        np = w && w[F] ? Number(w[F].N) : 0;
       }
       chk = SC.check(ck, sv, now, { crd, np, claim: !!b.claim, dv: String(b.dv || '') });
     } catch (e) { if (e.name !== 'moved') console.log('savecheck', e.name || e.message || e); chk = null; }

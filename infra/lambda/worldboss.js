@@ -6,6 +6,9 @@
 // assault counts at most CEIL monsters' worth of the hero's deepest floor + 10 (fh = the game's foeHp).
 // v137 (John, 27 Nov 2026): every assault hits the shared bar in full, but a player's score (rank, Sigils, loot)
 // is the sum of their best BEST assaults (b: JSON list, best first).
+// v143 Hardcore (John, 27 Nov 2026: "Hardcore should have all of the abilities as normal, so World Bosses"): ?hc=1 is the
+// account's Hardcore hero (pid of '<sub>#hc'), its own row (flag hc) on the same shared bar. Sigils are account-bound,
+// so an account is paid Sigils once per event: the second hero's claim gets its gold and loot but no Sigils (row 'a#<pid>').
 const D = require('@aws-sdk/client-dynamodb');
 const crypto = require('crypto');
 const db = new D.DynamoDBClient({}), { BOSS: T, HEROES: H, WALLETS: W } = process.env;
@@ -25,25 +28,25 @@ function win(t) {
 const phases = (t, id) => { let k = 0, need = old(id) ? HP1 : HR; while (t >= need && k < 30) { t -= need; need *= 2; k++; } return k; };
 const all = async id => (await db.send(new D.QueryCommand({ TableName: T, KeyConditionExpression: 'w=:w', ExpressionAttributeValues: { ':w': S(id) } }))).Items || [];
 // The event's total row (g) and its players, best score first (ps).
-const ranks = async id => { const rows = await all(id); return { g: rows.find(i => i.s.S === '#'), ps: rows.filter(i => i.s.S !== '#').sort((x, y) => y.score.N - x.score.N) }; };
+const ranks = async id => { const rows = await all(id); return { g: rows.find(i => i.s.S === '#'), ps: rows.filter(i => i.s.S !== '#' && i.score).sort((x, y) => y.score.N - x.score.N) }; };
 const row = async (id, s) => (await db.send(new D.GetItemCommand({ TableName: T, Key: { w: S(id), s: S(s) } }))).Item;
 const mine = i => i ? { score: +i.score.N, last: +i.last?.N || 0, cl: !!i.cl } : { score: 0, last: 0, cl: false };
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer?.jwt?.claims;
   if (!cl?.sub) return res(401, { error: 1 });
-  const me = pidOf(cl.sub), now = Date.now(), w = win(now), live = now < w.end, pw = win(w.start - 1);
+  const hc = (e.queryStringParameters || {}).hc === '1', me = pidOf(hc ? cl.sub + '#hc' : cl.sub), now = Date.now(), w = win(now), live = now < w.end, pw = win(w.start - 1);
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400, { error: 1 }); }
   if (e.routeKey === 'GET /boss') {
     const { g, ps } = await ranks(w.id);
     const pr = await row(pw.id, me);
     return res(200, { w: { ...w, live, next: live ? 0 : w.start + 7 * DAY }, total: g ? +g.total.N : 0, n: ps.length,
-      top: ps.slice(0, 10).map(i => ({ name: i.nm.S, cls: i.c.S, score: +i.score.N })),
+      top: ps.slice(0, 10).map(i => Object.assign({ name: i.nm.S, cls: i.c.S, score: +i.score.N }, i.hc ? { hc: 1 } : {})),
       me: mine(ps.find(i => i.s.S === me)), prev: { id: pw.id, ...mine(pr) } });
   }
   if (e.routeKey === 'POST /boss/hit') {
     if (!live) return res(409, { error: 1 });
     const h = (await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(me) } }))).Item;
-    if (!h?.name || h.ban) return res(403, { error: 'hero' });
+    if (!h?.name || h.ban || !!h.hc !== hc) return res(403, { error: 'hero' });
     // Only weekend bosses are live now (the preview's monsters'-worth CAP scoring ended 27 Nov 2026).
     let sc = M(0, mn(CEIL * fh(mn(1500, (+h.fl?.N || 1) + 10)), Math.floor(b.score) || 0));
     // The Nexus check, server side: strike gaps (ms) that are too fast or machine-even lose the strikes' share.
@@ -53,9 +56,9 @@ exports.handler = async (e) => {
     const r0 = (await row(w.id, me)) || {}, bs = [sc].concat(r0.b ? JSON.parse(r0.b.S) : r0.score ? [+r0.score.N] : []).sort((x, y) => y - x).slice(0, BEST);
     let tot = 0; bs.map(v => tot += v);
     try {
-      await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(w.id), s: S(me) }, UpdateExpression: 'SET #l=:t,nm=:n,c=:c,score=:v,b=:b',
+      await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(w.id), s: S(me) }, UpdateExpression: 'SET #l=:t,nm=:n,c=:c,score=:v,b=:b' + (hc ? ',hc=:h' : ''),
         ConditionExpression: 'attribute_not_exists(#l) OR #l<:cut', ExpressionAttributeNames: { '#l': 'last' },
-        ExpressionAttributeValues: { ':t': N(now), ':n': h.name, ':c': h.cls, ':v': N(tot), ':b': S(JSON.stringify(bs)), ':cut': N(now - COOL + 5000) } }));
+        ExpressionAttributeValues: { ':t': N(now), ':n': h.name, ':c': h.cls, ':v': N(tot), ':b': S(JSON.stringify(bs)), ':cut': N(now - COOL + 5000), ...(hc ? { ':h': N(1) } : {}) } }));
     } catch (x) { if (x.name === CF) return res(429, { error: 1 }); throw x; }
     const g = await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(w.id), s: S('#') }, UpdateExpression: 'ADD #t :s', ExpressionAttributeNames: { '#t': 'total' }, ExpressionAttributeValues: { ':s': N(sc) }, ReturnValues: 'ALL_NEW' }));
     return res(200, { ok: true, add: sc, score: tot, total: +g.Attributes.total.N });
@@ -66,10 +69,15 @@ exports.handler = async (e) => {
     const { g, ps } = await ranks(id);
     const rank = ps.findIndex(i => i.s.S === me) + 1, my = ps[rank - 1];
     if (!rank || !(+my.score.N > 0)) return res(404, { error: 'none' });
-    const ph = phases(g ? +g.total.N : 0, id), sig = 3 + mn(5, ph) + (rank <= 3 ? 5 : 0);
+    const ph = phases(g ? +g.total.N : 0, id);
+    let sig = 3 + mn(5, ph) + (rank <= 3 ? 5 : 0);
     try {
       await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(id), s: S(me) }, UpdateExpression: 'SET cl=:t', ConditionExpression: 'attribute_not_exists(cl)', ExpressionAttributeValues: { ':t': N(now) } }));
     } catch (x) { if (x.name === CF) return res(409, { error: 'claimed' }); throw x; }
+    // Sigils once per account per event (Normal and Hardcore heroes share one wallet).
+    try {
+      await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(id), s: S('a#' + pidOf(cl.sub)) }, UpdateExpression: 'SET #a=:t', ConditionExpression: 'attribute_not_exists(#a)', ExpressionAttributeNames: { '#a': 'at' }, ExpressionAttributeValues: { ':t': N(now) } }));
+    } catch (x) { if (x.name !== CF) throw x; sig = 0; }
     const r = await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal=if_not_exists(bal,:g)+:a', ExpressionAttributeValues: { ':g': N(100), ':a': N(sig) }, ReturnValues: 'UPDATED_NEW' }));
     return res(200, { ok: true, sig, bal: +r.Attributes.bal.N, rank, n: ps.length, phases: ph });
   }

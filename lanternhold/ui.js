@@ -1,4 +1,4 @@
-/* lh-build 202611272049 */
+/* lh-build 202611272300 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1816,7 +1816,7 @@
     const a = b.dataset.camp;
     // leaving for camp, heading down or drinking a draught ends a shop visit first (v104)
     if (L.visiting(S) && (a === 'go' || a === 'down' || a === 'drink')) { L.leaveEnchanter(S); particles.length = 0; ewReset('on'); awReset('up'); paintEnchOv(); updatePanel(true); }
-    if (a === 'go') goCamp(); else if (a === 'ench') enchanterModal(); else if (a === 'arm') armorerModal(); else if (a === 'hold') openHold(); else if (a === 'down') descend(); else if (a === 'drink') drinkDraught(); else if (a === 'store') openStore(); else campModal();
+    if (a === 'go') goCamp(); else if (a === 'ench') enchanterModal(); else if (a === 'arm') armorerModal(); else if (a === 'hold') openHold(); else if (a === 'down') descend(); else if (a === 'drink') drinkDraught(); else if (a === 'store') openStore(); else if (a === 'works') openWorks(); else if (a === 'train') openTraining(); else campModal();
   });
   setInterval(paintCamp, 500);
 
@@ -2131,7 +2131,7 @@
       updateSeats(true); updateAbilities(true); paintBoard(); return true;
     }
     if (t.dataset.release) {
-      if (!campGate(true)) return true;
+      if (!campGate()) return true; // v143 (John): any camp, not only the main camp
       const id = t.dataset.release, m = L.memberById(id), sh = L.shortHire(S, id);
       // v141 (John, 27 Nov 2026): story companions can go back to the Guild Hall too, as an ordinary offer.
       if (L.isStoryComp(S, id)) {
@@ -2554,7 +2554,7 @@
       const d = fits && !w ? Math.round((v - (curStats[k] || 0)) * 100) : 0;
       return '<div class="ist"><span>' + k + '</span><b>' + pc(v) + '</b>' + (fits && !w ? '<em class="' + (d > 0 ? 'up' : d < 0 ? 'down' : 'eq') + '">' + (d > 0 ? '&#9650; ' + d + '%' : d < 0 ? '&#9660; ' + (-d) + '%' : 'same') + '</em>' : '') + '</div>';
     }).join('');
-    const pips = '<div class="upips" title="Upgrade level ' + it.up + ' of ' + L.UP_MAX + '">' + Array.from({ length: L.UP_MAX }, (_, i) => '<i class="' + (i < it.up ? 'on' : '') + '"></i>').join('') + '</div>';
+    const pips = '<div class="upips" title="Upgrade level ' + it.up + ' of ' + L.UP_MAX + '">' + Array.from({ length: L.UP_MAX }, (_, i) => '<i class="' + (i < it.up ? 'on' : '') + '"></i>').join('') + '<small class="upmax">' + (maxed ? 'Max +' + L.UP_MAX : '+' + it.up + ' of max +' + L.UP_MAX) + '</small></div>';
     const wearer = w ? L.memberById(w) : null;
     const tool = (id, ic, label, extra) => '<button class="itool' + (extra ? ' ' + extra : '') + '" id="' + id + '">' + icon(ic) + '<span>' + label + '</span></button>';
     modal('<div class="icard r-' + it.rar + '">' +
@@ -2750,7 +2750,7 @@
     if (AW.mode === 'up') {
       steps = ['Item', 'Upgrade'];
       if (!A) {
-        body = '<h3 class="ewq">Which item do you want to upgrade?</h3><p class="ewhint">Each upgrade raises an item one level for gold. Worn gear works too.</p>' +
+        body = '<h3 class="ewq">Which item do you want to upgrade?</h3><p class="ewhint">Each upgrade raises an item one level for gold, up to max +' + L.UP_MAX + '. Worn gear works too.</p>' +
           (l => sfList(l, sfApply(l).slice(0, 60).map(x => ewItemRow(x, 'data-awa="' + x.uid + '"', 'Upgrade to +' + (x.up + 1) + ewWorn(x), upCostTag(x))), 'Nothing left to upgrade.'))(S.bag.filter(x => x.up < L.UP_MAX).sort(byWorn));
       } else {
         cur = 1; picked = ewPicked('Upgrading', A, ewName(A), 'a');
@@ -2763,7 +2763,7 @@
       if (A) picked += ewPicked('Merging', A, ewName(A), 'a');
       if (B) picked += ewPicked('With', B, ewName(B), 'b');
       if (!A) {
-        body = '<h3 class="ewq">Which item do you want to merge?</h3><p class="ewhint">Two copies of the same item become one, a level higher. If it fails, both are lost.</p>' +
+        body = '<h3 class="ewq">Which item do you want to merge?</h3><p class="ewhint">Two copies of the same item become one, a level higher, up to max +' + L.UP_MAX + '. If it fails, both are lost.</p>' +
           (l => sfList(l, sfApply(l).slice(0, 60).map(x => ewItemRow(x, 'data-awa="' + x.uid + '"', S.bag.filter(y => y !== x && !y.lk && L.mergeable(x, y)).length + ' matching ' + (S.bag.filter(y => y !== x && !y.lk && L.mergeable(x, y)).length === 1 ? 'copy' : 'copies') + ewWorn(x), '')), 'No item has a matching copy yet. Copies of the same item can be merged.'))(S.bag.filter(x => !x.lk && x.up < L.UP_MAX && S.bag.some(y => y !== x && !y.lk && L.mergeable(x, y))).sort(byWorn));
       } else if (!B) {
         cur = 1;
@@ -3500,16 +3500,20 @@
     const now = t ? 'Now on NP+' + t + ': monsters ' + npFoeText(t) + ', gear +' + Math.round(L.NP_ILVL * t * 100) + '% item level, you +' + Math.round(L.NP_PER * t * 100) + '% damage, health and gold. ' + npMarkText(t) : '';
     $('npnote').textContent = now + (t >= L.NP_MAX ? '' : !ready ? 'Beat the Lampmother, the floor ' + L.ACT_ONE_END + ' guardian, to open the next tier.'
       : !CL || !signedIn() ? 'Sign in to start a New Playthrough. The server keeps your tier and pays the Sigils.'
+      : HCS && npSrv && npSrv.old ? 'New Playthrough for Hardcore heroes opens with the next server update.'
       : next ? 'The next tier opens ' + new Date(next).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' (at most one tier a week).'
       : 'Ready. This resets your whole adventure, so read the list first.');
-    $('btn-np').disabled = t >= L.NP_MAX || !ready || !!next;
+    $('btn-np').disabled = t >= L.NP_MAX || !ready || !!next || !!(HCS && (!npSrv || npSrv.old));
   }
   // Server tier wins: a save behind the server's tier (another device, an old backup) starts over at that tier.
   async function syncNp() {
-    // v142 hotfix (John, 27 Nov 2026): the account's NP+ tier belongs to the Normal hero. Applied to a Hardcore hero it
-    // reset the game, the reset was refused, and the page reloaded over and over (the screen flipped on his phone).
-    if (!CL || !signedIn() || !S.hero || HCS) return;
-    try { npSrv = await papi('GET', '/np'); } catch (e) { return; }
+    // v142 hotfix (John, 27 Nov 2026): an account-wide NP+ tier applied to a Hardcore hero reset the game, the reset was
+    // refused, and the page reloaded over and over. v143 (John): each slot has its own tier (GET /np?hc=1), and the
+    // Hardcore slot only trusts an answer that says it came from the per-slot server (hc: 1).
+    if (!CL || !signedIn() || !S.hero) return;
+    let r; try { r = await papi('GET', '/np'); } catch (e) { return; }
+    if (HCS && !(r && r.hc === 1)) { npSrv = { np: L.npTier(S), npAt: 0, next: 0, old: 1 }; paintNp(); return; }
+    npSrv = r;
     const t = npSrv.np | 0;
     if (t > L.npTier(S)) { L.startNP(S, t, npSrv.npAt, true); save(); try { await pushCloud(true); } catch (e) {} reloadPage(); return; }
     if (t < L.npTier(S)) { S.np = t; save(); }
@@ -3534,6 +3538,7 @@
         try {
           await publishHero();
           const r = await papi('POST', '/np');
+          if (HCS && r.hc !== 1) throw Object.assign(new Error('state'), { code: 'state' }); // never a Normal tier on a Hardcore hero
           if (!L.startNP(S, r.np, r.npAt)) throw Object.assign(new Error('state'), { code: 'state' });
           if (prof) prof.bal = r.bal; try { localStorage.setItem('lh_bal', String(r.bal)); } catch (e) {}
           save(); await pushCloud(true); sfx.relic();
@@ -4110,7 +4115,7 @@
       '<li>' + icon('users') + '<span>Companions working or resting at the <b>Campfire</b> are safe. Only a monster can kill a companion.</span></li>' +
       '<li>' + icon('lock') + '<span>Hardcore gold, gear and items <b>never leave Hardcore</b>: no Market, Mail, gifts or borrowed heroes with Normal.</span></li>' +
       '<li>' + icon('crown') + '<span>You get your own <b>Hardcore leaderboard</b> and a <b>Hardcore chat</b> tab.</span></li></ul>' +
-      '<details><summary>Full rules</summary><p>Your bag is safe: only what the party wears is at risk. Gold is kept. While you are away, your party earns at its floor but never goes deeper, so nobody dies while you sleep. Cautious descent (on by default) stops going deeper the moment anyone falls. Your Normal hero is never touched. Sigils stay on your account: you can spend them in Hardcore, but daily Sigils and found Sigils are for your Normal hero. The Ember Ring, the world boss and New Playthrough are not open to Hardcore heroes yet. Backups can\'t be loaded into or out of Hardcore, and the server checks every Hardcore save.</p></details>' +
+      '<details><summary>Full rules</summary><p>Your bag is safe: only what the party wears is at risk. Gold is kept. While you are away, your party earns at its floor but never goes deeper, so nobody dies while you sleep. Cautious descent (on by default) stops going deeper the moment anyone falls. Your Normal hero is never touched. Sigils stay on your account: spend them, claim daily quest Sigils and bank found Sigils in either save (both saves share one daily set). New Playthrough works in Hardcore with its own tier. World bosses hit as hard as any monster down here: check the threat level first, and escape before your party falls. Backups can\'t be loaded into or out of Hardcore, and the server checks every Hardcore save.</p></details>' +
       '<div class="ty"><span>Type <b>HARDCORE</b> to begin</span><input id="hc-ty" spellcheck="false" autocomplete="off"></div>' +
       '<div class="row"><button class="btn ghost" id="hc-no">Back to Normal</button><button class="btn hcgo" id="hc-go" disabled>Begin Hardcore</button></div></div>', md => {
         md.className = 'sheet hcsheet';
@@ -4348,7 +4353,7 @@
     pack: { n: 'Pack', i: 'bag', d: 'Pack space and auto-scrap.', v: () => { const n = L.packCount(S), c = L.bagCap(S); return '<b class="dbig">' + fmt(n) + (S.boh ? ' <small>Bag of Holding</small>' : ' <small>/ ' + fmt(c) + '</small>') + '</b><p>Auto-scrap ' + esc(dTxt('g-autos') || 'Off') + (!S.boh && n >= c ? ' · <span class="dwarn">full, new finds are sold</span>' : '') + '</p>'; }, a: () => dLock('gear') || dT('gear', 'Gear') + dQ('#g-auto', 'Auto-scrap') + dQ('#g-scrap', 'Mass scrap') },
     skills: { n: 'Hero and skills', i: 'star', d: 'Hero level, stat points and Kindling to spend.', v: () => { const hp = L.heroPoints(S); return '<b class="dbig">Hero level ' + L.heroLv(S) + '</b><p>' + (hp > 0 ? '<span class="dgood">' + hp + ' stat point' + (hp === 1 ? '' : 's') + ' to spend</span>' : 'No stat points waiting') + (S.kindling ? ' · ' + S.kindling + ' Kindling' : '') + '</p>'; }, a: () => dT('rekindle', 'Stats') + dF('tree', 'Skill tree') + dF('hero', 'My hero') },
     rekindle: { n: 'Rekindle', i: 'lantern', d: 'Embers you would gain by rekindling now.', v: () => { const ok = L.canUse(S, 'rekindle'), e = L.embersFor(S); return '<b class="dbig">+' + fmt(e) + ' <small>Embers</small></b><p>' + (ok ? (e > 0 ? 'Ready when you are' : 'Go deeper to earn Embers') : 'Opens at hero level ' + L.unlockOf('rekindle').lv) + '</p>' + (S.np ? '<p class="dsub">New Playthrough NP+' + S.np + '</p>' : ''); }, a: () => dF('rekindle', 'Rekindle') },
-    places: { n: 'Around the Hold', i: 'lamp', d: 'Quick trips to the shops, the Hold and camp.', w: 1, v: () => '', a: () => dC('ench', 'Enchanter') + dC('arm', 'Armorer') + dC('store', 'Store') + dC('hold', 'The Hold') + dC('go', 'Return to camp') },
+    places: { n: 'Around the Hold', i: 'lamp', d: 'Quick trips to the shops, the Hold, Hold works, the Training Grounds and camp.', w: 1, v: () => '', a: () => dC('ench', 'Enchanter') + dC('arm', 'Armorer') + dC('store', 'Store') + dC('hold', 'The Hold') + dC('works', 'Hold works') + dC('train', 'Training Grounds') + dC('go', 'Return to camp') },
     camp: { n: 'Camp', i: 'flame', d: 'Companions resting by the fire and their jobs.', v: () => { const n = (S.unlocked || []).filter(id => id !== 'you' && !S.party.includes(id)).length; return '<b class="dbig">' + n + ' <small>at camp</small></b><p>Companions out of the party work camp jobs</p>'; }, a: () => dLock('camp') || dT('camp', 'Camp') },
     boss: { n: 'World boss', i: 'skull', d: 'The weekend world boss and the Golden Loot Goblin.', v: () => { const b = $('wbbar'), g = $('gobbar'); const t = [b, g].filter(x => x && !x.hidden).map(x => esc(x.textContent.trim())).join(' · '); return t ? '<p>' + t + '</p>' : '<p class="dsub">No world boss right now. It comes on weekends.</p>'; }, a: () => dLock('boss') || dF('boss', 'World boss') },
     ring: { n: 'Ember Ring', i: 'duel', d: 'Duels and team battles against other players.', v: () => '<p>Duels and team battles</p>', a: () => dLock('ring') || dT('ring', 'Go to the Ring') },
@@ -5372,7 +5377,7 @@
         use('gs-boh', 'bag', 'Bag of Holding', S.boh ? 'Owned' : fmt(L.BOH_COST) + ' ' + TOKEN + ', once', S.boh ? 'Details' : 'See') +
         (wardOn() ? use('gs-ward', 'user', 'Wardrobe', 'Outfits and lantern styles', 'Open') : '') +
         use('gs-look', 'crown', 'Profile looks', 'Frames, titles, banners, emblems', 'Open') +
-        (CL ? use('gs-mkt', 'coin', 'Sigil exchange', 'Sell ' + TOKEN + ' for gold, or buy them with gold', 'Open') : '') +
+        (CL && !HCS ? use('gs-mkt', 'coin', 'Sigil exchange', 'Sell ' + TOKEN + ' for gold, or buy them with gold', 'Open') : '') +
       '</div>' +
       (CL ? '<div class="shopuses">' + use('gs-sup', 'users', 'Support the game', 'Free one-time ' + TOKEN + ' for linking your Discord or itch.io account', 'Open') + '</div>' : '') +
       // 2. Lanternholder: one set of perks, two ways to get it
@@ -5607,7 +5612,7 @@
     return sigCap === sigUtcDay();
   }
   async function claimFound() {
-    if (claiming || HCS || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped() || Date.now() < sigWait) return;
+    if (claiming || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped() || Date.now() < sigWait) return;
     claiming = true;
     try {
       const n = S.sigPend, r = await papi('POST', '/sigils/earn', { kind: 'drop', n });
@@ -5627,7 +5632,7 @@
   function sigToday() { const d = sigUtcDay(); return sigCapped() ? L.SIGIL_DROP_DAY : Math.min(L.SIGIL_DROP_DAY, S.sigDay && S.sigDay.d === d ? S.sigDay.n : 0); }
   function limitsData() {
     const t = L.dayLimits(S, Date.now()), list = t.list.slice();
-    if (!HCS) list.splice(1, 0, { k: 'sigil', name: 'Found Sigils banked', note: signedIn() ? (S.sigPend > 0 ? S.sigPend + ' found and waiting to bank.' : 'From chests, locked chests and guardians.') : 'Sign in to bank found Sigils.', used: sigToday(), max: L.SIGIL_DROP_DAY });
+    list.splice(1, 0, { k: 'sigil', name: 'Found Sigils banked', note: signedIn() ? (S.sigPend > 0 ? S.sigPend + ' found and waiting to bank.' : 'From chests, locked chests and guardians.') : 'Sign in to bank found Sigils.', used: sigToday(), max: L.SIGIL_DROP_DAY });
     const left = Math.max(0, t.reset - Date.now()), at = new Date(t.reset).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return { list, when: 'Resets in ' + Math.floor(left / 36e5) + 'h ' + Math.floor(left % 36e5 / 6e4) + 'm (' + at + ' your time)' };
   }
@@ -5644,10 +5649,10 @@
   const qgoBtn = k => QGO[k] ? '<button class="btn small ghost" data-qgo="' + k + '">' + QGO[k][0] + '</button>' : '';
   const qCtx = () => { try { L.questCtx({ on: !!(CL && signedIn()), gob: !!(typeof gp !== 'undefined' && gp.st && gp.st.gob && Date.now() < gp.st.gob.until) }); } catch (e) {} };
   const bountyReady = () => { try { return L.bountyState(S, Date.now()).list.filter(b => b.have >= b.n && !b.got).length; } catch (e) { return 0; } };
-  const questsReady = () => { if (HCS) return bountyReady(); qCtx(); const q = L.questState(S); const got = S.daily.got; return q.filter(x => x.done && !x.got).length + (q.every(x => x.got) && !(got & 8) ? 1 : 0) + bountyReady(); };
+  const questsReady = () => { qCtx(); const q = L.questState(S); const got = S.daily.got; return q.filter(x => x.done && !x.got).length + (q.every(x => x.got) && !(got & 8) ? 1 : 0) + bountyReady(); };
   function paintQuests() {
     qCtx(); const q = L.questState(S), b = $('quests'); if (!b) return;
-    const n = q.filter(x => HCS ? x.done : x.got).length, rd = questsReady(), all = n === 3 && (HCS || (S.daily.got & 8));
+    const n = q.filter(x => x.got).length, rd = questsReady(), all = n === 3 && !!(S.daily.got & 8);
     $('questct').innerHTML = rd ? 'Claim ' + rd : '<small class="ql">Quests </small>' + (all ? 'done' : n + '/3');
     b.classList.toggle('ready', rd > 0); b.classList.toggle('done', !rd && !!all);
     b.title = rd ? 'Daily quests: ' + rd + (rd === 1 ? ' reward' : ' rewards') + ' ready to claim' : all ? 'Daily quests: all done for today' : 'Daily quests: ' + n + ' of 3 done';
@@ -5667,13 +5672,13 @@
     qCtx(); const q = L.questState(S), got = S.daily.got, allGot = q.every(x => x.got), msLeft = Date.parse(L.questDay() + 'T00:00:00Z') + 864e5 - Date.now();
     const pct = v => (Math.round(v * 10000) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + '%';
     const row = x => '<li class="quest' + (x.got ? ' got' : x.done ? ' done' : '') + '"><div><b>' + esc(x.text) + '</b><div class="qbar"><i style="width:' + Math.round(x.have / x.n * 100) + '%"></i></div><small>' + Math.floor(x.have).toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US') + '</small>' + (!x.got && !x.done && x.go ? '<div class="qgorow">' + qgoBtn(x.go) + '</div>' : '') + '</div>' +
-      (HCS ? '' : x.got ? '<span class="qok">' + sigil + '+' + L.QUEST_REWARD + '</span>' : '<button class="btn small" data-q="' + x.i + '"' + (x.done ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_REWARD + '</button>') + '</li>';
+      (x.got ? '<span class="qok">' + sigil + '+' + L.QUEST_REWARD + '</span>' : '<button class="btn small" data-q="' + x.i + '"' + (x.done ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_REWARD + '</button>') + '</li>';
     modal('<div class="maphead"><div><h2>Quests and bounties</h2><small>New quests in ' + Math.max(1, Math.floor(msLeft / 36e5)) + 'h ' + Math.floor(msLeft % 36e5 / 6e4) + 'm. Picked for your hero, and never the same twice in a row.</small></div><button class="iconbtn" id="dq-x" aria-label="Close">&times;</button></div>' +
       bountyHtml() + '<h3 class="sub">Daily quests</h3>' +
       '<ul class="quests">' + q.map(row).join('') +
-      (HCS ? '</ul><p class="note small">Daily quest Sigils are earned on your Normal hero. Nothing earned in Hardcore leaves it.</p>' : '<li class="quest bonus' + (got & 8 ? ' got' : allGot ? ' done' : '') + '"><div><b>Finish all three</b><small>A bonus for clearing the day.</small></div>' + (got & 8 ? '<span class="qok">' + sigil + '+' + L.QUEST_BONUS + '</span>' : '<button class="btn small" data-q="3"' + (allGot ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_BONUS + '</button>') + '</li></ul>') +
+      (HCS ? '<li class="note small">Sigils belong to your account, so your Normal and Hardcore heroes share one set of daily quest Sigils.</li>' : '') + ('<li class="quest bonus' + (got & 8 ? ' got' : allGot ? ' done' : '') + '"><div><b>Finish all three</b><small>A bonus for clearing the day.</small></div>' + (got & 8 ? '<span class="qok">' + sigil + '+' + L.QUEST_BONUS + '</span>' : '<button class="btn small" data-q="3"' + (allGot ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_BONUS + '</button>') + '</li></ul>') +
       (signedIn() || HCS ? '' : '<p class="note">Sign in to claim quest rewards. Your progress still counts.</p>') +
-      (HCS ? '' : '<h3 class="sub">Finding Sigils</h3><p class="note">Now and then a treasure chest or a guardian holds 1 to 3 Sigils. Your odds: <b>' + pct(L.sigilChance(S, 'chest')) + '</b> per chest and <b>' + pct(L.sigilChance(S, 'boss')) + '</b> per guardian. Every 30 floors of your deepest descent adds 0.01%, up to 0.05%, and the Kindling upgrade Sigil Sense adds 0.01% per rank. You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day.</p>') + limitsHtml() +
+      ('<h3 class="sub">Finding Sigils</h3><p class="note">Now and then a treasure chest or a guardian holds 1 to 3 Sigils. Your odds: <b>' + pct(L.sigilChance(S, 'chest')) + '</b> per chest and <b>' + pct(L.sigilChance(S, 'boss')) + '</b> per guardian. Every 30 floors of your deepest descent adds 0.01%, up to 0.05%, and the Kindling upgrade Sigil Sense adds 0.01% per rank. You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day.</p>') + limitsHtml() +
       '<div class="row"><button class="btn ghost" id="dq-ok">Close</button></div>', md => {
         md.querySelector('#dq-x').onclick = closeModal; md.querySelector('#dq-ok').onclick = closeModal;
         md.querySelectorAll('[data-bty]').forEach(btn => btn.onclick = () => {
@@ -5686,7 +5691,6 @@
         md.querySelectorAll('[data-qgo]').forEach(btn => btn.onclick = () => { const g = QGO[btn.dataset.qgo]; closeModal(); if (g) g[1](); });
         md.querySelectorAll('[data-q]').forEach(btn => btn.onclick = async () => {
           if (!signedIn()) { toast('user', 'Sign in first', 'Quest rewards go to your account wallet.', 'warn'); return; }
-          if (HCS) { toast('flame', 'Not in Hardcore', 'Nothing earned in Hardcore leaves it, so daily Sigils are for your Normal hero.', 'warn'); return; }
           const i = +btn.dataset.q; btn.disabled = true;
           try { const r = await papi('POST', '/sigils/earn', { kind: 'quest', i }); S.daily.got = r.mask; if (prof) prof.bal = r.bal; save(); sfx.buy(); toast('star', '+' + r.add + (r.add === 1 ? ' Sigil' : ' Sigils'), i === 3 ? 'All three quests done. See you tomorrow!' : 'Quest complete.', 'feat'); }
           catch (e) { if (e.code === 'claimed') { S.daily.got |= 1 << i; save(); } else toast('lock', 'Could not claim', 'Try again in a moment.', 'warn'); }
@@ -5702,7 +5706,7 @@
     try {
       const st = L.bountyState(S, Date.now());
       (st.list || []).forEach((b, i) => { if (b && !b.got && b.have >= b.n) { const r = L.claimBountyAt(S, i, Date.now()); if (r) { save(); toast('star', 'Bounty paid (auto)', '+' + fmt(r.gold) + ' gold and +' + fmt(r.dust) + ' Dust' + (r.tonic ? ', plus a ' + r.tonic : '') + '.', 'loot'); } } });
-      if (CL && signedIn() && !HCS && S.daily && Array.isArray(S.daily.q)) {
+      if (CL && signedIn() && S.daily && Array.isArray(S.daily.q)) {
         const q = L.questState(S), want = q.filter(x => x.done && !x.got).map(x => x.i);
         if (q.length === 3 && q.every(x => x.done) && !(S.daily.got & 8)) want.push(3);
         for (const i of want) {
@@ -6177,7 +6181,7 @@
     if (!box.innerHTML) box.innerHTML = '<p class="note">Opening the Hall of Fame…</p>';
     try {
       const r = await fetch(CL.api.replace(/\/$/, '') + '/hof'); if (!r.ok) throw r.status;
-      const j = await r.json(), me = S.hero && S.hero.name, medal = ['top1', 'top2', 'top3'];
+      const j0 = await r.json(), j = HCS ? j0.hc || {} : j0, me = S.hero && S.hero.name, medal = ['top1', 'top2', 'top3'];
       // v131: compact. Each record is one line showing its leader; tap to open the top 3 (John: "collapse things").
       const who = p => '<b>' + esc(p.name) + '</b>' + (L.CLASSES[p.cls] ? ' ' + classTag(p.cls) : '');
       const line = (ic, name, lead, val, body, mine) => '<details class="hofd' + (mine ? ' me' : '') + '"><summary>' + icon(ic) + '<span class="hofn">' + name + '</span><span class="hofl1">' + lead + '</span><span class="hofv">' + val + '</span></summary>' + body + '</details>';
@@ -6191,7 +6195,7 @@
       const best = line('shield', 'Best in class', '', cls.filter(c => cb[c]).length + ' of 5',
         '<small>Highest power level, then gear rating</small><ol>' + cls.map(c => { const b = cb[c]; return '<li' + (b && b.name === me ? ' class="me"' : '') + '>' + classTag(c) + (b ? '<span class="hofb"><b>' + esc(b.name) + '</b><small>power level ' + b.lv + ' · gear rating ' + fmt(b.gr) + '</small></span>' : '<i class="hofnone">No one yet</i>') + '</li>'; }).join('') + '</ol>' +
         (S.hero ? '<small>You: power level ' + L.lvl(S, 'you') + ' · gear rating ' + fmt(L.gearRating(S, 'you')) + '</small>' : ''), cls.some(c => cb[c] && cb[c].name === me));
-      box.innerHTML = '<p class="note small">Tap a record for the top 3. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(rec).join('') + best + HOF.slice(2).map(rec).join('') + '</div>';
+      box.innerHTML = '<p class="note small">' + (HCS ? '<b class="hcred">Hardcore Hall of Fame.</b> Only Hardcore heroes are listed here. ' : '') + 'Tap a record for the top 3. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(rec).join('') + best + HOF.slice(2).map(rec).join('') + '</div>';
     } catch (e) { box.innerHTML = '<p class="note">' + (e === 404 ? 'The Hall of Fame opens soon.' : 'The Hall of Fame could not load right now. Try again in a minute.') + '</p>'; hofAt = 0; }
   }
   if (HCS) document.querySelectorAll('#lbseg button').forEach(x => x.classList.toggle('on', x.dataset.lb === 'hc'));
@@ -7265,7 +7269,7 @@
   function nextStep() {
     if (L.heroPoints(S) > 0) return { t: 'Spend your stat point', go: () => switchTab('rekindle') };
     if (L.canUse(S, 'gear') && (S.bag || []).some(it => L.isUpgrade(S, it))) return { t: 'Equip an upgrade', go: () => switchTab('gear') };
-    try { if (!HCS && L.questState(S).some(q => q.done && !q.got)) return { t: 'Claim a daily quest', go: () => openQuests() }; } catch (e) {}
+    try { if (L.questState(S).some(q => q.done && !q.got)) return { t: 'Claim a daily quest', go: () => openQuests() }; } catch (e) {}
     const ids = (S.party || []).filter(Boolean);
     if (ids.some(id => L.trainCost(S, id, 1) <= S.gold)) return { t: 'Train your party', go: () => switchTab('party') };
     return null;
@@ -7415,7 +7419,7 @@
         'If the <b>whole party</b> falls, all gear the party wore is lost (your bag is safe). Clear the floor you fell on within ' + L.HC_PACK_DAYS + ' days to win back ' + Math.round(L.HC_PACK * 100) + '% of it.',
         '<b>Return to camp</b> with anyone still standing and all gear comes home safe, even a dead companion\'s. Campfire workers are never at risk.',
         '<b>Cautious descent</b> (on by default) steps back a floor when someone falls and stops descending. Settings can also send the party home whenever a companion dies.',
-        'Hardcore has its own leaderboard and chat tab, and its Market and Mail only trade with other Hardcore heroes. NP+, the Ember Ring and the world boss are not open to Hardcore yet.']],
+        'Hardcore has its own leaderboard and chat tab, and its Market and Mail only trade with other Hardcore heroes. Hardcore has its own NP+ tier. World bosses can kill a Hardcore party, so check the threat level and escape in time.']],
       ['Controls', 'i:help', 'Everything works with taps; keys are shortcuts.', [
         '<b>Tap, Space or Enter</b>: strike',
         '<b>1 to 5</b>: party abilities. <b>6 to 8</b>: your hero’s specializations.',
@@ -7833,6 +7837,19 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 143, date: 'November 2026', title: 'Hardcore NP+ and small fixes', items: [
+      'Hardcore heroes can start a New Playthrough. Each save keeps its own NP+ tier.',
+      'Sigils belong to your account, so Hardcore heroes can claim daily quest Sigils and find Sigils too. Both saves share one daily set.',
+      'Gulp and the Golden Loot Goblin are open to Hardcore heroes on NP+.',
+      'Let a companion go from any camp, not only the main camp.',
+      'Gear shows its upgrade level out of max +10, and the Armorer says so too.',
+      'Hold works and the Training Grounds are now on the Around the Hold dashboard tile.',
+      'Play in one game tab at a time. A second tab pauses itself so your save stays safe.',
+      'Hardcore heroes can fight the world boss, enter the Ember Ring and have their own Hall of Fame.',
+      'In Hardcore a world boss can kill your party. Tap the boss chip to escape; the damage you dealt still counts.',
+      'Threat level: before a world boss or guardian fight, Hardcore shows how dangerous it is for your party right now.',
+      'Boss shards trade on a Hardcore-only shard market in Hardcore. World boss Sigils are paid once per account each weekend.',
+    ] },
     { v: 142, date: 'November 2026', title: 'Hardcore mode', items: [
       'New Hardcore save: a second slot for a separate run. Switch saves from the top bar or Settings. Heroes, gold and gear never move between saves.',
       'In Hardcore, companions who fall and are not raised within 30 seconds die for good. Healers can still raise them for 3x the mana.',
@@ -8121,6 +8138,10 @@
     showMarketView();
   }
   function showMarketView() {
+    // v143: the Sigil exchange and boss shard market trade gold across players, so they stay shut in Hardcore.
+    // v143: boss shards trade on a Hardcore-only shard market in Hardcore (loot.js shh#); the Sigil exchange stays shut there.
+    if (HCS && trade.view === 'sigils') trade.view = 'market';
+    document.querySelectorAll('#mktseg [data-mv="sigils"]').forEach(b => { b.hidden = HCS; });
     document.querySelectorAll('#mktseg button').forEach(b => b.classList.toggle('on', b.dataset.mv === trade.view));
     if (trade.view === 'guild') trade.view = 'market';
     if (!trade.cls) { const m = L.memberById('you'); trade.cls = m ? m.cls : 'tank'; }
@@ -8428,7 +8449,7 @@
   function paintBoss() {
     const el = $('wbbar'), x = wbState(), inA = S.wb && S.wb.until > x.now;
     let h = '';
-    if (inA) h = icon('skull') + '<span><b>Assault on ' + esc(S.wb.name) + '</b> · ' + wbDur(S.wb.until - x.now) + ' left · your damage <b>' + wbNum(S.wb.score, S.wb.old) + '</b></span>';
+    if (inA) h = icon('skull') + '<span><b>Assault on ' + esc(S.wb.name) + '</b> · ' + wbDur(S.wb.until - x.now) + ' left · your damage <b>' + wbNum(S.wb.score, S.wb.old) + '</b></span><em>Escape</em>';
     else if (x.claim) h = icon('crown') + '<span><b>The world boss has fallen back.</b> Your reward is waiting.</span><em>Claim</em>';
     else if (x.live) {
       const ph = L.wbPhase(x.total, x.w.id);
@@ -8455,15 +8476,72 @@
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
       '<li><b>Mythic loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a Mythic piece of <b>' + esc(s2.name) + '</b>. Mythic gear is above Legendary and very rare: under 3% even for the strongest delvers, higher the more damage you dealt, and full odds only once the server breaks 3 phases. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set from Warden Sable at the Rift Gate, just outside the Hold.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
-      (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
+      (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + (t.hc ? hcTag() : '') + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
       (x.me && x.me.score > 0 ? '<p class="passstate">' + (old ? 'Your damage this event' : 'Your best ' + L.WB_BEST + ' assaults') + ': <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
       '<div class="row">' + (x.claim ? '<button class="btn" id="wb-claim">Claim your reward</button>' : !CL || !signedIn() ? '<button class="btn" id="wb-in">Sign in to fight</button>' : x.live ? (x.ready > 0 ? '<button class="btn" disabled>Next assault in ' + wbDur(x.ready) + '</button>' : '<button class="btn" id="wb-go">Join the assault</button>') : '') + '<button class="btn ghost" id="wb-no">Close</button></div>', md => {
       md.querySelector('#wb-x').onclick = closeModal; md.querySelector('#wb-no').onclick = closeModal;
       const go = md.querySelector('#wb-go'); if (go) go.onclick = () => { closeModal(); joinAssault(); };
+      // v143 Hardcore: the threat level of an assault, before the player commits to it. Deadly asks twice.
+      if (HCS && S.hero && x.live && !S.wb) setTimeout(() => {
+        let t = null; try { t = L.threatOf(S, 'wb', 0, Date.now(), 3); } catch (e) {}
+        if (!t || $('modal').hidden || !md.querySelector('#wb-x') || md.querySelector('.threatbox')) return;
+        const row = md.querySelector('.row:last-of-type'); if (!row) return;
+        row.insertAdjacentHTML('beforebegin', threatBox(t, 'wb'));
+        if (go && t.lv >= 2) { let sure = false; go.onclick = () => { if (!sure) { sure = true; go.textContent = 'Fight anyway'; go.classList.add('hcgo'); return; } closeModal(); joinAssault(); }; }
+      }, 30);
       const cl = md.querySelector('#wb-claim'); if (cl) cl.onclick = () => { const st2 = wb.st, done = st2 && ((st2.w.id === x.claim && st2.me.cl) || (st2.prev && st2.prev.id === x.claim && st2.prev.cl)); if (done) { closeModal(); lootBoss(x.claim).then(() => { loadBoss().then(paintBoss); }); } else claimBoss(x.claim, cl); };
       const si = md.querySelector('#wb-in'); if (si) si.onclick = () => { closeModal(); authForm('in'); };
     });
   }
+  // v143 (John, 27 Nov 2026): world bosses can kill, so the party can always get out. The damage dealt still counts.
+  function escapeBoss() {
+    if (!S.wb || S.wb.gob) return;
+    const dn = S.party.filter(id => id && S.down[id]).length;
+    modal('<div class="center"><h2 class="hch">' + icon('skull') + 'Escape the assault?</h2><p>Your party pulls back from ' + esc(S.wb.name) + '. The damage you dealt still counts' + (HCS ? (dn ? ', and your healer can still raise anyone who is down before time runs out' : '') + '. In Hardcore, staying until the whole party falls loses everything they wear.' : '.') + '</p></div>' +
+      '<div class="row" style="justify-content:center"><button class="btn ghost" id="es-no">Keep fighting</button><button class="btn" id="es-go">Escape</button></div>', md => {
+        md.querySelector('#es-no').onclick = closeModal;
+        md.querySelector('#es-go').onclick = () => { closeModal(); if (L.fleeAssault(S, events)) { save(); toast('skull', 'You escaped', 'The party pulled back from the world boss.', ''); paintBoss(); } };
+      });
+  }
+  // v143 threat level (John, 27 Nov 2026): before a boss fight that could kill the party, say how dangerous it is,
+  // from a few quick trial fights with the party's real gear, skills and damage (L.threatOf).
+  const THREAT = ['Low', 'Risky', 'High', 'Deadly'];
+  function threatText(t, kind) {
+    const tries = t.runs === 1 ? 'one trial fight' : t.runs + ' trial fights';
+    if (t.lv === 3) return 'In ' + tries + ' with your party\'s gear and damage, ' + (t.wipes === t.runs ? 'every one' : t.wipes + ' of them') + ' ended with your ' + (kind === 'wb' ? 'party' : 'party or hero') + ' falling. In Hardcore that means losing the gear they wear.';
+    if (t.lv === 2) return 'In ' + tries + ', companions died. Train, upgrade gear or bring a healer before you fight it.';
+    if (t.lv === 1) return 'In ' + tries + ', someone went down but got back up. Watch your healer\'s mana.';
+    return 'In ' + tries + ', nobody went down.' + (kind === 'guard' && !t.won ? ' Your party could not beat it in 90 seconds, though.' : '');
+  }
+  function threatBox(t, kind) {
+    if (!t) return '';
+    return '<div class="threatbox threat t' + t.lv + '"><h3>' + icon('skull') + 'Threat: ' + THREAT[t.lv] + '</h3><p>' + threatText(t, kind) + (kind === 'guard' && t.won ? ' It fell ' + (t.secs < 2 ? 'in moments.' : 'in about ' + Math.round(t.secs) + ' seconds.') : '') + '</p></div>';
+  }
+  // The guardian ahead (Hardcore): the chip in the scene's corner, refreshed when the floor or the party changes.
+  let thr = { key: '', t: null, f: 0, at: 0 };
+  function guardAhead() { const f = Math.ceil(Math.max(1, S.floor) / L.BOSS_EVERY) * L.BOSS_EVERY; return f <= S.maxFloor + L.BOSS_EVERY ? f : 0; }
+  function paintThreat() {
+    const el = $('threatchip'); if (!el) return;
+    if (!HCS || !S.hero || !S.hc || S.wb || L.atMainCamp(S)) { if (!el.hidden) el.hidden = true; return; }
+    const f = guardAhead(); if (!f) { el.hidden = true; return; }
+    const key = f + ':' + S.party.join(',') + ':' + Object.keys(S.gear || {}).map(k => Object.values(S.gear[k] || {}).join('.')).join('|') + ':' + (S.levels && S.levels.you);
+    if (key !== thr.key && Date.now() - thr.at > 4000) {
+      thr.key = key; thr.at = Date.now(); thr.f = f;
+      setTimeout(() => { try { thr.t = L.threatOf(S, 'guard', f, Date.now(), 3); } catch (e) { thr.t = null; } paintThreat(); }, 50);
+    }
+    const t = thr.f === f ? thr.t : null; if (!t) { el.hidden = true; return; }
+    const h = icon('skull') + '<i class="cb">' + THREAT[t.lv] + '</i><span><b>Guardian of floor ' + f + '</b> · threat ' + THREAT[t.lv] + '</span><em>Details</em>';
+    if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; el.className = 'achip threatchip t' + t.lv; }
+    el.hidden = false;
+  }
+  function openThreat() {
+    const f = thr.f, t = thr.t; if (!t) return;
+    modal('<div class="center"><h2 class="hch">' + icon('skull') + 'The guardian of floor ' + f + '</h2></div>' + threatBox(t, 'guard') +
+      '<p class="note small">The threat level comes from quick trial fights with your party as it is right now: gear, levels, skills and line-up. Change any of them and it updates.</p>' +
+      '<div class="row" style="justify-content:center"><button class="btn" id="th-x">Got it</button></div>', md => { md.querySelector('#th-x').onclick = closeModal; });
+  }
+  $('threatchip') && $('threatchip').addEventListener('click', openThreat);
+  setInterval(() => { if (!document.hidden) paintThreat(); }, 2000);
   function joinAssault() {
     if (!gateUse('boss')) return;
     const x = wbState();
@@ -8493,7 +8571,7 @@
       const g = Math.max(2000, L.pipRate(S) * 1800 * (1 + r.phases));
       S.gold += g; S.stats.goldEarned += g; if (typeof prof !== 'undefined' && prof) prof.bal = r.bal; save();
       closeModal(); sfx.relic();
-      toast('crown', 'World boss reward', '+' + r.sig + ' Sigils and ' + fmt(g) + ' gold. You ranked ' + r.rank + ' of ' + r.n + '.', 'feat');
+      toast('crown', 'World boss reward', (r.sig ? '+' + r.sig + ' Sigils and ' : 'Your account already got this event\'s Sigils, so this hero gets ') + fmt(g) + ' gold. You ranked ' + r.rank + ' of ' + r.n + '.', 'feat');
     } catch (e) { if (btn) btn.disabled = false; toast('lock', 'Could not claim yet', 'Try again in a moment.', 'warn'); }
     wb.busy = false; await lootBoss(id); loadBoss().then(paintBoss); updatePanel(true);
   }
@@ -8513,8 +8591,8 @@
   }
   $('wbbar').addEventListener('click', () => {
     const x = wbState();
-    if (S.wb && S.wb.until > x.now) return;
-    if (x.live && !x.claim && x.ready <= 0 && signedIn()) joinAssault(); else openBoss();
+    if (S.wb && S.wb.until > x.now) { if (!S.wb.gob) escapeBoss(); return; }
+    if (x.live && !x.claim && x.ready <= 0 && signedIn() && !HCS) joinAssault(); else openBoss();
   });
   setTimeout(() => loadBoss().then(paintBoss), 3000);
   setInterval(() => { if (!document.hidden) loadBoss().then(paintBoss); }, 120000);
@@ -8800,7 +8878,7 @@
         const rc = me.rc && me.rc[f.id], rq = rc ? (me.rep || [1, .5, .25, 0])[Math.min(rc[0], 3)] : 1;
         const rm = !rc ? '' : rq > 0 ? '<span class="mu rep">' + icon('refresh') + 'Rematch: ' + Math.round(rq * 100) + '% rating and Laurels</span>' : '<span class="mu bad">' + icon('refresh') + 'Rematch pays nothing for ' + ringIn(rc[1] - Date.now()) + '</span>';
         const brings = (f.lo ? f.lo.a.concat(f.lo.p) : []).map(id => { const k = ringSkill(id); return k ? k.n : ''; }).filter(Boolean);
-        return '<div class="ringfoe"><div class="rffig">' + (theirBanner(f.id) ? bannerSVG(theirBanner(f.id), 'rfban') : '') + ringFig(f.c, outfitHue((looksCache[f.id] || {}).k), 2) + '</div><div class="rfinfo"><div class="nm">' + esc(f.n) + ' ' + classTag(f.c) + '</div><small><span class="rtitle sm rt-' + ringTitle(f.r).toLowerCase() + '">' + ringTitle(f.r) + '</span> ' + f.r.toLocaleString('en-US') + ' &middot; ' + f.w + '&ndash;' + f.l + ' &middot; <i class="odds ' + odd[0] + '">' + odd[1] + '</i></small>' + (mu ? '<small>' + mu + '</small>' : '') + (rm ? '<small>' + rm + '</small>' : '') + (brings.length ? '<small class="brings">Brings ' + brings.map(esc).join(' &middot; ') + '</small>' : '') + '<small class="dim">' + ringStatLine(f.s) + '</small></div>' +
+        return '<div class="ringfoe"><div class="rffig">' + (theirBanner(f.id) ? bannerSVG(theirBanner(f.id), 'rfban') : '') + ringFig(f.c, outfitHue((looksCache[f.id] || {}).k), 2) + '</div><div class="rfinfo"><div class="nm">' + esc(f.n) + (f.hc ? hcTag() : '') + ' ' + classTag(f.c) + '</div><small><span class="rtitle sm rt-' + ringTitle(f.r).toLowerCase() + '">' + ringTitle(f.r) + '</span> ' + f.r.toLocaleString('en-US') + ' &middot; ' + f.w + '&ndash;' + f.l + ' &middot; <i class="odds ' + odd[0] + '">' + odd[1] + '</i></small>' + (mu ? '<small>' + mu + '</small>' : '') + (rm ? '<small>' + rm + '</small>' : '') + (brings.length ? '<small class="brings">Brings ' + brings.map(esc).join(' &middot; ') + '</small>' : '') + '<small class="dim">' + ringStatLine(f.s) + '</small></div>' +
           '<button class="btn small" data-duel="' + f.id + '"' + (en ? '' : ' disabled title="No challenges left. One returns every 30 minutes."') + '>Duel</button></div>';
       }).join('') + '</div>' : '<p class="note">No other heroes have entered the Ring yet. Check back soon, or tell a friend to bring their hero.</p>';
       h += '<div class="row"><button class="btn ghost small" id="ring-ref">' + icon('refresh') + ' New challengers</button></div>';
@@ -8832,7 +8910,7 @@
         h += '<p class="note small">Every team starts at 1,000 team rating. Beating a higher-rated team is worth more.</p>';
         box.innerHTML = h; return;
       }
-      h += st.top.length ? '<ol class="ringtop">' + st.top.map((t, i) => '<li class="' + (t.id === me.id ? 'me' : '') + '"><span class="rk">' + (i + 1) + '</span>' + ((t.id === me.id ? myBanner() : theirBanner(t.id)) ? bannerSVG(t.id === me.id ? myBanner() : theirBanner(t.id), 'tban') : '') + ringFig(t.c, outfitHue((looksCache[t.id] || {}).k), 1) + '<span class="nm c-' + esc(t.c) + '">' + esc(t.n) + '</span><span class="rtitle sm rt-' + ringTitle(t.r).toLowerCase() + '">' + ringTitle(t.r) + '</span><b>' + t.r.toLocaleString('en-US') + '</b><small>' + t.w + '&ndash;' + t.l + '</small></li>').join('') + '</ol>' : '<p class="note">Nobody has fought yet. The first win puts you on top.</p>';
+      h += st.top.length ? '<ol class="ringtop">' + st.top.map((t, i) => '<li class="' + (t.id === me.id ? 'me' : '') + '"><span class="rk">' + (i + 1) + '</span>' + ((t.id === me.id ? myBanner() : theirBanner(t.id)) ? bannerSVG(t.id === me.id ? myBanner() : theirBanner(t.id), 'tban') : '') + ringFig(t.c, outfitHue((looksCache[t.id] || {}).k), 1) + '<span class="nm c-' + esc(t.c) + '">' + esc(t.n) + (t.hc ? hcTag() : '') + '</span><span class="rtitle sm rt-' + ringTitle(t.r).toLowerCase() + '">' + ringTitle(t.r) + '</span><b>' + t.r.toLocaleString('en-US') + '</b><small>' + t.w + '&ndash;' + t.l + '</small></li>').join('') + '</ol>' : '<p class="note">Nobody has fought yet. The first win puts you on top.</p>';
       h += '<p class="note small">Everyone starts at 1,000. Beating a higher-rated hero is worth more. Heroes that defend well while their owner is away climb too.</p>';
     }
     box.innerHTML = h;

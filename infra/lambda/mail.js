@@ -21,6 +21,7 @@ function item(i) {
 }
 const hero = p => db.send(new GetItemCommand({ TableName: H, Key: { pid: S(p) } })).then(r => r.Item || {});
 // NP+ tier and whether the 24 h post-reset trade lock is on (docs/NP-PLUS.md)
+const ilvlCap = (h, it) => Math.ceil(((h && h.fl ? +h.fl.N : 1) + 10) * (1 + 0.1 * Math.max(h && h.np ? +h.np.N : 0, it.t | 0)));
 const tier = h => (h.np || {}).N | 0, locked = h => (h.npAt || {}).N > Date.now() - 864e5;
 const newId = () => Date.now().toString(36).padStart(9, '0') + crypto.randomBytes(3).toString('hex');
 const row = i => {
@@ -48,6 +49,7 @@ exports.handler = async (e) => {
     const [th, mh] = await Promise.all([hero(to), hero(me)]), toName = th.name && th.name.S, myName = mh.name && mh.name.S;
     if (!toName || !myName) return res(404, E);
     if (!!th.hc !== !!mh.hc || !!mh.hc !== hc) return res(409, { error: 'hc' }); // never across the Hardcore wall
+    if (it.ilvl > ilvlCap(mh, it)) return res(400, E); // v143: no item above what the sender could have found
     if (tier(th) !== tier(mh) || (it.t | 0) < tier(mh) || locked(th) || locked(mh)) return res(409, E); // 409 = different NP+ tier, an old-tier item, or the 24 h lock
     if (((await q('out#' + me)).Items || []).length >= 20) return res(400, E);
     BAD.lastIndex = 0;
