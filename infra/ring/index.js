@@ -2,9 +2,10 @@
 // another player's hero (async, like the rest of the multiplayer). The server fights every duel.
 //
 // What decides a duel:
-// - the hero's base strength (the log of its dungeon damage and health, so delving helps only a little),
+// - the same base strength for every hero (800 health, 100 attack): dungeon power never counts (John, 27 Nov 2026:
+//   keep PvP and PvE separate, so no dungeon exploit can carry into the Ring; the old m/v were sent by the client),
 // - the Ringwarden kit: PvP-only gear with Edge (more damage to heroes) and Resolve (less damage from heroes),
-// - the class matchup: every class has the edge on two classes (+12% damage) and is countered by two others,
+// - the class matchup: every class has the advantage over two classes (+4% damage) and is countered by two others,
 // - the class's own nature (tanks are sturdy, healers mend, rogues crit, mages hit hard with spells, necromancers leech),
 // - the Ring skills the player bought with Laurels and chose for their loadout: 2 abilities (used in the order
 //   the player sets, when they make sense) and 2 passives.
@@ -31,6 +32,11 @@ const pidOf = sub => crypto.createHash('sha256').update('lh:' + sub).digest('hex
 // Per rank: [Resolve, Edge, +hp share, +attack share]. Ranks 6-10 need a best rating of 1300, 11-15 need 1600.
 const KIT = [[5, 0, .02, 0], [7, 0, .015, 0], [0, 5, 0, .015], [3, 3, .01, .01], [0, 7, 0, .02]];
 const gate = r => r >= 10 ? 1600 : r >= 5 ? 1300 : 0, cost = r => 60 + 30 * r;
+// v141 (John, 27 Nov 2026): dungeon power never counts. Each class starts from its own Ring base [health, attack],
+// tuned in the sim so every class still wins about half its duels with equal kits; then only Ring kit and skills change it.
+// Sim 27 Nov 2026 (best loadouts, kit ranks 0/5/15): class win rates 42-59%; the old shared base gave 36-66%.
+const RBASE = { tank: [1420, 115], healer: [1250, 140], rogue: [970, 205], mage: [1000, 195], necro: [1140, 150], paladin: [1250, 155] };
+const rbase = c => RBASE[c] || RBASE.necro;
 const EMAX = 10, EINT = 30 * 6e4, START = 1000;
 
 // ---- classes ----
@@ -117,7 +123,7 @@ const cname = x => String(x || '').replace(/[^A-Za-z .'-]/g, '').replace(/\s+/g,
 function stats(x) {
   let R = 0, E = 0, hp = 1, at = 1;
   x.k.forEach((r, i) => { const p = KIT[i]; R += p[0] * r; E += p[1] * r; hp += p[2] * r; at += p[3] * r; });
-  return { hp: Math.round((800 + 28 * x.v) * hp), at: Math.round((100 + 4 * x.m) * at), E, R, c: x.c };
+  return { hp: Math.round(rbase(x.c)[0] * hp), at: Math.round(rbase(x.c)[1] * at), E, R, c: x.c };
 }
 // Skills a hero owns ({id: rank}), with the class's free ability.
 function owned(x) {
@@ -210,11 +216,11 @@ function duel(A, B, rnd) {
 }
 
 // ---- team battles: fighters and the fight ----
-// A companion: the log of its own dungeon damage (m) and health (v), like the hero, plus its companion kit.
+// A companion: the same base as every hero (dungeon power never counts), plus its companion kit.
 function cstats(x, k) {
   let R = 0, E = 0, hp = 1, at = 1;
   (k || [0, 0, 0]).forEach((r, i) => { const p = CKIT[i]; R += p[0] * r; E += p[1] * r; hp += p[2] * r; at += p[3] * r; });
-  return { hp: Math.round((800 + 28 * x.v) * hp), at: Math.round((100 + 4 * x.m) * at), E, R, c: x.c };
+  return { hp: Math.round(rbase(x.c)[0] * hp), at: Math.round(rbase(x.c)[1] * at), E, R, c: x.c };
 }
 const ckOf = (row, id) => ((row.ck || {})[id] || '0.0.0').split('.').map(Number).slice(0, 3);
 // The saved lineup as it will fight: [{id, n, c, s, lo}] with the hero ('you') filled in from the hero's row.
@@ -365,8 +371,8 @@ exports.handler = async (e) => {
         tfoes: tfoes.slice(0, 4).map(tpub), ttop: ttop.slice(0, 25).map(tpub), trank: m && hasTeam(m) && fought(m) ? ttop.indexOf(m) + 1 : 0, tn: ttop.length, tkit: TEAM });
     }
     if (rk === 'PUT /arena') {
-      // The build: the hero's name, class and banner come from the hero board; m and v are the log of the
-      // hero's dungeon damage and health without tonics, so deeper delvers are tougher, but only a little.
+      // The build: the hero's name, class and banner come from the hero board. m and v (the log of dungeon damage
+      // and health) are still stored for old clients but no longer count in any fight (v141).
       const h = await get(H, me), c = x => Math.max(0, Math.min(60, Math.round((+x || 0) * 10) / 10));
       if (!h || !h.name || h.ban) return res(403, { error: 'hero' });
       // The team lineup (optional): exactly the hero ('you') once and two different companions of the player's own,
@@ -468,4 +474,4 @@ exports.handler = async (e) => {
   } catch (x) { if (x.name === 'ConditionalCheckFailedException') return res(409, { error: 'state' }); throw x; }
   return res(404, { error: 1 });
 };
-exports._test = { duel, stats, owned, loadout, SK, BEATS, teamFight, team, cstats, CKIT, ccost, cgate, tpub };
+exports._test = { RBASE, duel, stats, owned, loadout, SK, BEATS, teamFight, team, cstats, CKIT, ccost, cgate, tpub };

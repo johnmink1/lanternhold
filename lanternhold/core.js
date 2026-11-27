@@ -4337,7 +4337,7 @@
   Q({ id: 'duel5', c: 'ring', ev: 'duel', n: 5, w: 5, g: qOn('ring'), t: q => 'Fight ' + q.n + ' duels in the Ember Ring', go: 'ring' });
   Q({ id: 'win2', c: 'ring', ev: 'duel', n: 2, w: 6, g: qOn('ring'), m: d => d.win, t: q => 'Win ' + q.n + ' duels in the Ember Ring', go: 'ring' });
   Q({ id: 'winup', c: 'ring', ev: 'duel', n: 1, w: 6, g: qOn('ring'), m: d => d.win && d.up, t: () => 'Beat a hero rated higher than you in the Ring', go: 'ring' });
-  Q({ id: 'winedge', c: 'ring', ev: 'duel', n: 1, w: 6, g: qOn('ring'), m: d => d.win && d.edge > 0, t: () => 'Win a duel where your class has the edge', go: 'ring' });
+  Q({ id: 'winedge', c: 'ring', ev: 'duel', n: 1, w: 6, g: qOn('ring'), m: d => d.win && d.edge > 0, t: () => 'Win a duel where your class has the advantage', go: 'ring' });
   Q({ id: 'wincounter', c: 'ring', ev: 'duel', n: 1, w: 7, g: qOn('ring'), m: d => d.win && d.edge < 0, t: () => 'Win a duel against a class that counters yours', go: 'ring' });
   Q({ id: 'duelcls', c: 'ring', ev: 'duel', n: 3, w: 5, g: qOn('ring'), u: d => d.cls, t: q => 'Duel heroes of ' + q.n + ' different classes', go: 'ring' });
   Q({ id: 'wineven', c: 'ring', ev: 'duel', n: 1, w: 5, g: qOn('ring'), m: d => d.win && d.even, t: () => 'Win an Even match in the Ring', go: 'ring' });

@@ -52,6 +52,7 @@ const NOTES = (uiConst('PATCH_NOTES') || []);
 for (const n of OLD_NOTES) if (!NOTES.some(m => m.v === n.v)) NOTES.push(n);
 const RING_KIT = uiConst('RING_KIT') || [];
 const TEAM_KIT = uiConst('TEAM_KIT') || [];
+const RING_BASE = uiConst('RING_BASE', '};') || {};
 const RING_ARMS = uiConst('RING_ARMS', '};') || {};
 const RING_TITLES = uiConst('RING_TITLES', ']];') || [];
 const RING_MAX = +(UI.match(/const RING_MAX = (\d+)/) || [])[1] || 15;
@@ -481,7 +482,9 @@ ref({
   desc: 'Lanternhold PvP: Ember Ring duels and team battles, rating titles, Laurels, the Ringwarden kit and the companion Ring kit with their Edge and Resolve per rank.',
   lede: 'Duel other players’ heroes, or bring two companions for a team battle, for rating and Laurels. Tonics and Sigils never count.',
   body: () => '<p>You hold up to ' + RING_EMAX + ' challenges, and one comes back every 30 minutes. Wins pay Laurels and rating; losses still pay a few Laurels. Your hero also defends while you are away.</p>' +
-    (RING_KIT.length ? '<h2 id="kit">Ringwarden kit</h2><p>PvP gear bought with Laurels, ' + RING_MAX + ' ranks per piece. <b>Edge</b> is more damage to heroes, <b>Resolve</b> is less damage from heroes. It works only in the Ring.</p>' +
+    (RING_KIT.length ? '<h2 id="kit">Ringwarden kit</h2><p>PvP gear bought with Laurels, ' + RING_MAX + ' ranks per piece. It works only in the Ring.</p>' +
+      '<p><b>Edge</b> is more damage to other heroes: your damage is multiplied by 1 + Edge / (Edge + 300), so Edge 100 is +25%, 300 is +50% and a full kit (225) is about +43%. <b>Resolve</b> is less damage from heroes: their damage drops by half of Resolve / (Resolve + 300), so Resolve 100 blocks 12.5%, 300 blocks 25% and it can never block more than half. Radiant strikes and poison skip both. Each point adds a little less than the one before.</p>' +
+      '<p>Each class starts the Ring with its own health and attack: ' + Object.entries(RING_BASE).map(([c, b]) => esc((L.CLASSES[c] || {}).name || c) + ' ' + num(b[0]) + ' / ' + b[1]).join(', ') + ' (health / attack). Dungeon gear and power never count, so PvP stays its own climb. Kit ranks raise them by a share: a full kit is about +67% health and +67% attack. Each class has the advantage over two classes (+4% damage) and is countered by two (4% less); the Paladin has neither.</p>' +
       table(['Piece', 'Slot', 'Edge per rank', 'Resolve per rank', 'Health per rank', 'Attack per rank'], RING_KIT.map(k => ['<b>' + esc(k.name) + '</b>', esc(L.SLOT_NAME[k.slot] || k.slot), String(k.E), String(k.R), k.hp ? pct(k.hp, 1) : '–', k.at ? pct(k.at, 1) : '–'])) +
       '<p class="note">Ranks cost 60 Laurels, then 30 more for each rank after. Kit tiers: Plain, Ironbound (ranks 1 to 5), Emberforged (6 to 10) and Starwrought (11 to 15). Higher ranks need a higher rating.</p>' : '') +
     '<h2 id="teams">Team battles</h2><p>Your hero and two of your own companions fight another player’s team, three against three. Borrowed player heroes can’t join. Place them Front, Middle and Back: the front fighter takes most of the blows, rogues go for the weakest foe and healers mend the weakest teammate. Each companion uses its class ability. Team battles use the same challenges as duels, have their own team rating and standings, and never hurt your dungeon party.</p>' +

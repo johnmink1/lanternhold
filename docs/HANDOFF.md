@@ -221,6 +221,13 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
 
+## v141 Ember Ring: PvP kept apart from PvE (27 Nov 2026)
+John: "keep the pvp and pve separate... I don't want someone using an exploit to gain an advantage in both areas" and "heroes need to start with their class specifics".
+- Dungeon power no longer counts in the Ring. The client still sends m/v on PUT /arena (old clients), but `stats()`/`cstats()` ignore them; the client used to report them itself, so an edited game could claim the cap (60) and roughly double its Ring stats.
+- Each class has its own Ring base `RBASE` [health, attack] in infra/ring/index.js, mirrored as `RING_BASE` in ui.js (wiki reads it). Tuned in a sim with each class's best loadout at kit ranks 0/5/15: win rates 42-59% (the old shared base gave 36-66%).
+- Ring numbers have tooltips (`.rnum`) with live Edge/Resolve percentages; matchups say "advantage / countered" so "Edge" only means the stat; after a duel the result shows what each side's Edge added and Resolve blocked (`ringSplit`).
+- Server: infra/deploy/v141-ring.sh (code-only lanternhold-arena update, checks the live md5 first). Must run before or with the v141 client.
+
 ## v140 Guide, wiki, tutorial and clean-up (27 Nov 2026)
 John: "make sure all of the wiki stuff is updated, new player tutorial... look through the game and see what we can clean up". Text and layout only, no mechanics.
 - Guide (`GUIDE` in ui.js, which also builds the wiki's Guide pages) now reads its numbers from core where it can: the unlock list is built from `L.UNLOCKS`, rekindle from `unlockOf('rekindle')`, wipe stop from `WIPE_HOLD`, loadouts from `LOADOUT_FREE/PASS`, NP+ marks from `NP_MODS`. Keep it that way so it cannot go stale. Remember the wiki evaluates `GUIDE` with only `L` in scope: no UI helpers inside it.

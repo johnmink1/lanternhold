@@ -1501,6 +1501,8 @@ h3.sub .tipi{vertical-align:2px}
 .rt-ironclad{color:#9fb6c8}.rt-emberborn{color:var(--ember)}.rt-gilded{color:var(--gold)}.rt-lanternsworn{color:#ffe08a;box-shadow:0 0 8px #f5c24255}.rt-riftbreaker{color:#c78bff;box-shadow:0 0 10px #9b4dff66}
 .ringseg{margin:0 0 10px;width:max-content;max-width:100%}
 .ringbuild{margin:0 2px 10px}
+.rnum{border-bottom:1px dotted currentColor;cursor:help}
+.rdsplit{margin:6px 0 0;opacity:.9}
 .ringfoes,.ringkit{display:grid;gap:8px}
 .ringfoe,.ringpiece{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
 .ringfoe:hover{border-color:var(--line2)}
