@@ -1,4 +1,4 @@
-/* lh-build 202611271720 */
+/* lh-build 202611271904 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2971,3 +2971,4 @@ body.hcmode .brand b{color:#ff8a7a}
 .hclock svg{width:34px;height:34px;color:#ff8a7a}
 .hch{display:flex;align-items:center;justify-content:center;gap:8px;color:#ff6b5a}.hch svg{width:22px;height:22px;flex:0 0 22px}
 .hcnote svg{width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:#ff8a7a}
+.hcb{display:inline-block;margin:0 4px;padding:0 6px;border-radius:9px;font:700 11px/17px var(--ui,inherit);letter-spacing:.3px;color:#fff;background:#8f2318;border:1px solid #ff6b5a;vertical-align:middle;white-space:nowrap}

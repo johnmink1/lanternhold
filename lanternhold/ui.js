@@ -1,4 +1,4 @@
-/* lh-build 202611271720 */
+/* lh-build 202611271904 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -2136,7 +2136,7 @@
       h += (open ? '<p class="note">' + open + (open === 1 ? ' seat is' : ' seats are') + ' open.</p>' : '<p class="note">Your party is full. When a player accepts your invite, you choose who steps out.</p>') +
         '<button class="btn small" id="b-find">' + (boardList ? 'Show other heroes' : 'Browse the guild') + '</button>';
       if (boardMsg) h += '<p class="note">' + esc(boardMsg) + '</p>';
-      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + (g.floor ? ' &middot; reached floor ' + g.floor : '') + '</div></div>' +
+      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (g.hc ? hcTag() : '') + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + (g.floor ? ' &middot; reached floor ' + g.floor : '') + '</div></div>' +
         ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : g.ni ? '<span class="muted" data-tip="This player has party invites turned off and plays solo.">Solo</span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
       if ((S.guests || []).length) h += '<p class="note">To let a player’s hero go, press Dismiss on their seat.</p>';
     }
@@ -2168,7 +2168,7 @@
   }, 15000);
   async function findHeroes() {
     boardMsg = 'Searching the guild…'; paintBoard();
-    try { const r = await api('GET', null, guestIdsQ()); await loadWar(); boardList = (r && r.heroes) || []; applyGuestCards(r); boardMsg = boardList.length ? '' : 'The guild hall is quiet right now. Check back soon.'; }
+    try { const r = await api('GET', null, guestIdsQ()); await loadWar(); boardList = ((r && r.heroes) || []).map(g => HCS ? Object.assign(g, { hc: 1 }) : g); applyGuestCards(r); boardMsg = boardList.length ? '' : 'The guild hall is quiet right now. Check back soon.'; }
     catch (e) { boardMsg = 'Could not reach the Players Guild. Try again in a moment.'; }
     paintBoard();
   }
@@ -3125,7 +3125,7 @@
     profTab = tabs ? (tab || profTab) : 'me';
     const c = L.CLASSES[m.cls], now = Date.now(), side = SIDE_OF_MEMBER(id), sd = side && L.SIDES[side];
     const guest = L.isGuest(S, id), lv = L.lvl(S, id) || 1, inParty = S.party.includes(id), g0 = guest && (S.guests || []).find(x => x.id === id);
-    const head = '<div class="profhead"><div class="profspr c-' + m.cls + '"></div><div class="phid"><h2>' + esc(m.name) + '</h2><small>' + esc(guest ? 'Another player’s hero' : m.title) + '</small><div class="tags">' + classTag(m.cls) + (sd ? '<span class="sidetag" style="--side:' + sd.color + '">' + sd.name + '</span>' : '') + (me ? npBadge(L.npTier(S)) : '') + (guest ? '<span class="you guest">Player</span>' : '') + '</div></div></div>';
+    const head = '<div class="profhead"><div class="profspr c-' + m.cls + '"></div><div class="phid"><h2>' + esc(m.name) + '</h2><small>' + esc(guest ? 'Another player’s hero' : m.title) + '</small><div class="tags">' + classTag(m.cls) + (sd ? '<span class="sidetag" style="--side:' + sd.color + '">' + sd.name + '</span>' : '') + (me ? npBadge(L.npTier(S)) + (HCS ? hcTag() : '') : '') + (guest ? '<span class="you guest">Player</span>' : '') + '</div></div></div>';
     const seg = tabs ? '<div class="seg ptabs" role="tablist"><button data-ptab="me" class="' + (profTab === 'me' ? 'on' : '') + '" role="tab">My hero</button><button data-ptab="pub" class="' + (profTab === 'pub' ? 'on' : '') + '" role="tab">Public profile</button></div>' : '';
     const sheet = () => {
       const dmg = (L.steadyDps(S, id) || L.memberDps(S, id, now) || 0), hp = L.maxHpOf(S, id), heal = m.cls === 'healer' ? L.healPerSec(S, id) : 0;
@@ -5042,7 +5042,7 @@
     const wb = o.wd && o.wd.b && BANNERS[o.wd.b] ? o.wd.b : '';
     return '<div class="pfcard bn-' + bn + (wb ? ' hasban' : '') + '">' + (wb ? '<div class="pfban">' + bannerSVG(wb) + '</div>' : '') + '<div class="pfava fr-' + fr + npRing(o.np) + '><div class="ic c-' + o.cls + ' player' + (ok ? ' dressed' : '') + '">' + (ok ? '<img src="' + SP.spriteURL(o.cls, 2, outfitHue(ok)) + '" alt="">' : icon(CLASS_ICON[o.cls])) + '</div></div>' +
       '<div class="pfmain"><b class="pfname nc-' + nc + '">' + esc(o.name) + '</b>' + (tt ? '<small class="pftitle' + ttCls(pf.t) + '">' + esc(tt) + '</small>' : '') +
-      '<div class="pftags">' + classTag(o.cls) + (o.on ? '<span class="online">Online now</span>' : '') + (o.level ? '<span class="pflv">Power level ' + o.level + (o.floor ? ' · floor ' + o.floor : '') + '</span>' : '') + '</div>' +
+      '<div class="pftags">' + classTag(o.cls) + (o.hc ? hcTag() : '') + (o.on ? '<span class="online">Online now</span>' : '') + (o.level ? '<span class="pflv">Power level ' + o.level + (o.floor ? ' · floor ' + o.floor : '') + '</span>' : '') + '</div>' +
       ((pf.e || []).length ? '<div class="pfemb">' + pf.e.map(emblem).join('') + '</div>' : '') + '</div></div>' +
       (pf.b ? '<p class="pfbio">' + esc(pf.b) + '</p>' : '') +
       (o.w ? '<div class="pfwar">' + warBadge(o.w, true) + '</div>' : '');
@@ -5111,7 +5111,7 @@
           '<p class="note">Once the link is verified, your weeks in the Deep also count for your alliance in the Grand War, in weeks you play at the store too.</p><p class="note">Once the link is verified, your hero carries a Grand War aura for their class. It grows with your war rank, and honors such as Grand Marshal add to it.</p><p class="note">Commanders on the Grand War ladder right now: ' + (warList || []).length + '. Not listed yet? Play a game in the war first.</p>');
     }
     modal('<div class="maphead"><div><h2>Your profile</h2><small>Looks only. Nothing here changes your party’s power.</small></div><button class="iconbtn" id="pe-x" aria-label="Close">&times;</button></div>' +
-      '<div class="pfwrap">' + looksCard(me) + '</div>' +
+      '<div class="pfwrap">' + looksCard(HCS ? Object.assign({}, me, { hc: 1 }) : me) + '</div>' +
       '<div class="pfacct">' +
         '<button class="pft" id="pe-get"><small>' + TOKEN + '</small><b>' + sigil + fmt(prof.bal) + '</b><em>Shop</em></button>' +
         '<button class="pft" id="pe-pass"><small>Lanternholder</small><b>' + (subOn() ? 'Member' : passLeft() ? passLeft() + ' left' : 'Not active') + '</b><em>' + (subOn() ? 'Perks' : passLeft() ? 'Extend' : 'Get it') + '</em></button>' +
@@ -6073,7 +6073,7 @@
       const r = await fetch(CL.api.replace(/\/$/, '') + '/leaderboard' + (hcv ? '?hc=1' : '')); if (!r.ok) throw 0;
       const top = (await r.json()).top || [], me = S.hero && S.hero.name;
       box.innerHTML = (hcv ? '<p class="note hcnote">' + icon('flame') + 'Hardcore heroes only, by deepest floor. Updates every minute.</p>' : '<p class="note">The deepest delvers across the Reach. Sign in to put your hero on the board. Updates every minute.</p>') +
-        (top.length ? '<ol class="lboard">' + top.map((p, i) => '<li class="' + (i < 3 ? 'top' + (i + 1) : '') + (p.name === me ? ' me' : '') + '"><span class="lbr">' + (i + 1) + '</span><span class="lbn"><b>' + esc(p.name) + '</b> ' + classTag(p.cls) + (hcv && p.hx ? '<small>' + fmt(p.hx.n || 0) + ' lost &middot; ' + fmt(p.hx.w || 0) + ' wipes &middot; this run: floor ' + fmt(p.hx.run || 0) + '</small>' : L.SIDES[p.side] ? '<small>' + esc(L.SIDES[p.side].name) + '</small>' : '') + '</span><span class="lbf"><b>Floor ' + p.floor + '</b><small>power level ' + p.level + '</small></span></li>').join('') + '</ol>' : '<p class="note">' + (hcv ? 'No Hardcore heroes yet. Brave enough to be first?' : 'Nobody is on the board yet. Be the first.') + '</p>');
+        (top.length ? '<ol class="lboard">' + top.map((p, i) => '<li class="' + (i < 3 ? 'top' + (i + 1) : '') + (p.name === me ? ' me' : '') + '"><span class="lbr">' + (i + 1) + '</span><span class="lbn"><b>' + esc(p.name) + '</b> ' + classTag(p.cls) + (hcv ? hcTag() : '') + (hcv && p.hx ? '<small>' + fmt(p.hx.n || 0) + ' lost &middot; ' + fmt(p.hx.w || 0) + ' wipes &middot; this run: floor ' + fmt(p.hx.run || 0) + '</small>' : L.SIDES[p.side] ? '<small>' + esc(L.SIDES[p.side].name) + '</small>' : '') + '</span><span class="lbf"><b>Floor ' + p.floor + '</b><small>power level ' + p.level + '</small></span></li>').join('') + '</ol>' : '<p class="note">' + (hcv ? 'No Hardcore heroes yet. Brave enough to be first?' : 'Nobody is on the board yet. Be the first.') + '</p>');
     } catch (e) { box.innerHTML = '<p class="note">The leaderboard could not load right now. Try again in a minute.</p>'; lbAt = 0; }
   }
   // v131 Hall of Fame (John, 26 Nov 2026): records across the Reach from GET /hof (infra/lambda/hof.js). Hidden feats
@@ -6317,6 +6317,8 @@
     });
   }
   // NP+ tier badge (v122): shown on the profile card, the Players Guild board and in chat.
+  // v142 hotfix (John, 27 Nov 2026): a player's Normal and Hardcore heroes can share a name, so Hardcore heroes carry an HC tag.
+  function hcTag() { return '<span class="hcb" title="Hardcore hero">HC</span>'; }
   function npBadge(n) { n = n | 0; return n > 0 ? '<span class="npb" title="New Playthrough tier ' + n + '">NP+' + Math.min(10, n) + '</span>' : ''; }
   // NP+ portrait ring (Chipplin's idea, 25 Nov 2026): a gold ring around the profile picture that grows brighter each tier.
   // Returns the end of a class attribute plus a data-np attribute, e.g. ' npring np3" data-np="3"'.
@@ -6325,7 +6327,7 @@
   function chatName(m) {
     const lk = looksCache[m.from], c = lk && lk.c && lk.c !== 'none' ? lk.c : '', t = lk && lk.t ? (COSMETICS.t.items.find(x => x[0] === lk.t) || [])[1] : '';
     const bn = lk && lk.b && BANNERS[lk.b] ? lk.b : '';
-    return (bn ? bannerSVG(bn, 'chatban') : '') + (c ? '<span class="nc-' + esc(c) + '">' + esc(m.name) + '</span>' : esc(m.name)) + (t ? '<small class="ctitle' + ttCls(lk.t) + '">' + esc(t) + '</small>' : '') + npBadge(m.np);
+    return (bn ? bannerSVG(bn, 'chatban') : '') + (c ? '<span class="nc-' + esc(c) + '">' + esc(m.name) + '</span>' : esc(m.name)) + (t ? '<small class="ctitle' + ttCls(lk.t) + '">' + esc(t) + '</small>' : '') + npBadge(m.np) + (m.hc ? hcTag() : '');
   }
   const msgLine = m => m.from === 'sys' ? '<div class="msg sys ' + esc(m.cls) + '">' + icon('flame') + '<span>' + esc(m.text) + '</span></div>' : '<div class="msg' + (m.from === chat.me ? ' mine' : '') + (mentionsMe(m) ? ' ment' + (chat.flash && chat.flash.has(m.id) ? ' flash' : '') : '') + '"><button class="who c-' + esc(m.cls) + '" data-from="' + esc(m.from) + '" data-id="' + esc(m.id) + '" data-name="' + esc(m.name) + '">' + chatName(m) + '</button><span>' + renderText(m.text) + '</span></div>';
   function paintChat() {
@@ -6514,7 +6516,7 @@
       if (inp.form && atBox.parentNode !== inp.form) inp.form.appendChild(atBox);
       const a = atQuery(inp), mine = S.hero ? S.hero.name.toLowerCase() : '';
       // The Players Guild board adds every registered hero to the list; fetch it once, the first time @ is typed.
-      if (a && !atBoard && !(boardList && boardList.length)) { atBoard = true; api('GET', null, '/heroes').then(r => { if (r && r.heroes && !(boardList && boardList.length)) boardList = r.heroes; paintAt(); }).catch(() => {}); }
+      if (a && !atBoard && !(boardList && boardList.length)) { atBoard = true; api('GET', null, '/heroes').then(r => { if (r && r.heroes && !(boardList && boardList.length)) boardList = r.heroes.map(g => HCS ? Object.assign(g, { hc: 1 }) : g); paintAt(); }).catch(() => {}); }
       atList = a ? knownChatters().filter(p => p.name.toLowerCase() !== mine && p.name.toLowerCase().startsWith(a.q.toLowerCase())).slice(0, 6) : [];
       atBox.hidden = !atList.length; if (atSel >= atList.length) atSel = 0;
       atBox.innerHTML = atList.map((p, i) => '<button type="button" class="' + (i === atSel ? 'on' : '') + '" data-atname="' + esc(p.name) + '">@' + esc(p.name) + '</button>').join('');
@@ -7757,6 +7759,7 @@
       'Hardcore has its own leaderboard and chat tab. Its Market and Mail only trade with other Hardcore heroes.',
       'Hardcore needs sign-in. NP+, the Ember Ring and the world boss are not open to Hardcore heroes yet.',
       'Quest book and Dashboard: see today\'s limits on relics, chests, events and found Sigils, and when they reset.',
+      'Your Hardcore hero can use the same name as your Normal hero. Hardcore heroes show an HC tag in chat, profiles and the Guild.',
     ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',

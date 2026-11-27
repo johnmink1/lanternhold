@@ -20,11 +20,11 @@ const heroOut = i => ({ id: i.pid.S, name: i.name.S, cls: i.cls.S, level: Number
 // ("Pak-Tusjet" = "paktusjet"). Banned players keep their name reserved. Checked only when a player takes a new name,
 // so a name already held by two players (from before this rule) keeps syncing until an admin renames one.
 const nkey = n => String(n || '').toLowerCase().replace(/[^a-z]/g, '');
-async function nameTaken(name, me) {
+async function nameTaken(name, mine) { // mine: this account's own pids (Normal + Hardcore), which may share a name
   const k = nkey(name); let x;
   do {
     const r = await db.send(new ScanCommand({ TableName: T, ProjectionExpression: 'pid, #n, bn', ExpressionAttributeNames: { '#n': 'name' }, ExclusiveStartKey: x }));
-    if ((r.Items || []).some(i => i.pid.S !== me && nkey((i.name || i.bn || {}).S) === k)) return true;
+    if ((r.Items || []).some(i => !mine.includes(i.pid.S) && nkey((i.name || i.bn || {}).S) === k)) return true;
     x = r.LastEvaluatedKey;
   } while (x);
   return false;
@@ -72,7 +72,7 @@ exports.handler = async (e) => {
     // v140 (John 27 Nov): the Paladin is bought once per account with Sigils; a hero shows as one only if the wallet owns it.
     if (b.cls === 'paladin' && W) { const w = (await db.send(new GetItemCommand({ TableName: W, Key: { userId: { S: cl.sub } }, ProjectionExpression: '#o', ExpressionAttributeNames: { '#o': 'own' } }))).Item; if (!(w && w.own && w.own.SS.includes('c.paladin'))) return res(403, { error: 'paladin' }); }
     const cur = (await db.send(new GetItemCommand({ TableName: T, Key: { pid: { S: me } }, ProjectionExpression: '#n', ExpressionAttributeNames: { '#n': 'name' } }))).Item;
-    if (!(cur && cur.name && nkey(cur.name.S) === nkey(name)) && await nameTaken(name, me)) return res(409, { error: 'taken' });
+    if (!(cur && cur.name && nkey(cur.name.S) === nkey(name)) && await nameTaken(name, [pidOf(cl.sub), pidOf(cl.sub + '#hc')])) return res(409, { error: 'taken' });
     const floor = Math.max(1, Math.min(100000, Math.floor(Number(b.floor) || 1)));
     const level = Math.max(1, Math.min(50 + floor * 8, Math.floor(Number(b.level) || 1)));
     const side = SIDES.includes(b.side) ? b.side : 'unsworn', card = cardOf(b.bp), show = showOf(b.ps);
