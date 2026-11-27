@@ -1,4 +1,4 @@
-/* lh-build 202611271925 */
+/* lh-build 202611271942 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -5582,10 +5582,10 @@
   const qgoBtn = k => QGO[k] ? '<button class="btn small ghost" data-qgo="' + k + '">' + QGO[k][0] + '</button>' : '';
   const qCtx = () => { try { L.questCtx({ on: !!(CL && signedIn()), gob: !!(typeof gp !== 'undefined' && gp.st && gp.st.gob && Date.now() < gp.st.gob.until) }); } catch (e) {} };
   const bountyReady = () => { try { return L.bountyState(S, Date.now()).list.filter(b => b.have >= b.n && !b.got).length; } catch (e) { return 0; } };
-  const questsReady = () => { qCtx(); const q = L.questState(S); const got = S.daily.got; return q.filter(x => x.done && !x.got).length + (q.every(x => x.got) && !(got & 8) ? 1 : 0) + bountyReady(); };
+  const questsReady = () => { if (HCS) return bountyReady(); qCtx(); const q = L.questState(S); const got = S.daily.got; return q.filter(x => x.done && !x.got).length + (q.every(x => x.got) && !(got & 8) ? 1 : 0) + bountyReady(); };
   function paintQuests() {
     qCtx(); const q = L.questState(S), b = $('quests'); if (!b) return;
-    const n = q.filter(x => x.got).length, rd = questsReady(), all = n === 3 && (S.daily.got & 8);
+    const n = q.filter(x => HCS ? x.done : x.got).length, rd = questsReady(), all = n === 3 && (HCS || (S.daily.got & 8));
     $('questct').innerHTML = rd ? 'Claim ' + rd : '<small class="ql">Quests </small>' + (all ? 'done' : n + '/3');
     b.classList.toggle('ready', rd > 0); b.classList.toggle('done', !rd && !!all);
     b.title = rd ? 'Daily quests: ' + rd + (rd === 1 ? ' reward' : ' rewards') + ' ready to claim' : all ? 'Daily quests: all done for today' : 'Daily quests: ' + n + ' of 3 done';
@@ -5595,7 +5595,7 @@
     if (st.paid && st.paid.length) { const g = st.paid.reduce((a, x) => a + x.gold, 0), d = st.paid.reduce((a, x) => a + x.dust, 0); toast('star', 'Bounties paid out', 'Finished bounties from the last board: +' + fmt(g) + ' gold, +' + fmt(d) + ' Dust.', 'loot'); delete st.paid; save(); }
     const rows = st.list.map((b, i) => {
       const rw = L.bountyReward(S, b), done = b.have >= b.n, go = b.a && !b.got && !done ? Math.min(S.maxFloor, b.a === b.b ? b.a : Math.max(b.a, Math.min(b.b, S.floor >= b.a && S.floor <= b.b ? S.floor : b.a))) : 0;
-      return '<li class="quest bounty' + (b.got ? ' got' : done ? ' done' : '') + '"><div><b>' + esc(L.bountyText(b)) + '</b><div class="qbar"><i style="width:' + Math.round(b.have / b.n * 100) + '%"></i></div><small>' + b.have + ' / ' + b.n + ' · ' + fmt(rw.gold) + ' gold + ' + rw.dust + ' Dust</small></div>' +
+      return '<li class="quest bounty' + (b.got ? ' got' : done ? ' done' : '') + '"><div><b>' + esc(L.bountyText(b)) + '</b><div class="qbar"><i style="width:' + Math.round(b.have / b.n * 100) + '%"></i></div><small>' + fmt(Math.floor(b.have)) + ' / ' + fmt(b.n) + ' · ' + fmt(rw.gold) + ' gold + ' + rw.dust + ' Dust</small></div>' +
         (b.got ? '<span class="qok">Paid</span>' : done ? '<button class="btn small" data-bty="' + i + '">Claim</button>' : go ? '<button class="btn small ghost" data-farm="' + go + '">' + (S.floor === go ? 'Farming here' : 'Go to floor ' + go) + '</button>' : qgoBtn(L.bountyGo(b))) + '</li>';
     }).join('');
     if (st.locked) return '<h3 class="sub">Bounty board</h3><p class="note small">The bounty board opens when you reach floor ' + L.BOUNTY_FLOOR + '.</p>';
@@ -5604,14 +5604,14 @@
   function openQuests() {
     qCtx(); const q = L.questState(S), got = S.daily.got, allGot = q.every(x => x.got), msLeft = Date.parse(L.questDay() + 'T00:00:00Z') + 864e5 - Date.now();
     const pct = v => (Math.round(v * 10000) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + '%';
-    const row = x => '<li class="quest' + (x.got ? ' got' : x.done ? ' done' : '') + '"><div><b>' + esc(x.text) + '</b><div class="qbar"><i style="width:' + Math.round(x.have / x.n * 100) + '%"></i></div><small>' + x.have.toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US') + '</small>' + (!x.got && !x.done && x.go ? '<div class="qgorow">' + qgoBtn(x.go) + '</div>' : '') + '</div>' +
-      (x.got ? '<span class="qok">' + sigil + '+' + L.QUEST_REWARD + '</span>' : '<button class="btn small" data-q="' + x.i + '"' + (x.done ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_REWARD + '</button>') + '</li>';
+    const row = x => '<li class="quest' + (x.got ? ' got' : x.done ? ' done' : '') + '"><div><b>' + esc(x.text) + '</b><div class="qbar"><i style="width:' + Math.round(x.have / x.n * 100) + '%"></i></div><small>' + Math.floor(x.have).toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US') + '</small>' + (!x.got && !x.done && x.go ? '<div class="qgorow">' + qgoBtn(x.go) + '</div>' : '') + '</div>' +
+      (HCS ? '' : x.got ? '<span class="qok">' + sigil + '+' + L.QUEST_REWARD + '</span>' : '<button class="btn small" data-q="' + x.i + '"' + (x.done ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_REWARD + '</button>') + '</li>';
     modal('<div class="maphead"><div><h2>Quests and bounties</h2><small>New quests in ' + Math.max(1, Math.floor(msLeft / 36e5)) + 'h ' + Math.floor(msLeft % 36e5 / 6e4) + 'm. Picked for your hero, and never the same twice in a row.</small></div><button class="iconbtn" id="dq-x" aria-label="Close">&times;</button></div>' +
       bountyHtml() + '<h3 class="sub">Daily quests</h3>' +
       '<ul class="quests">' + q.map(row).join('') +
-      '<li class="quest bonus' + (got & 8 ? ' got' : allGot ? ' done' : '') + '"><div><b>Finish all three</b><small>A bonus for clearing the day.</small></div>' + (got & 8 ? '<span class="qok">' + sigil + '+' + L.QUEST_BONUS + '</span>' : '<button class="btn small" data-q="3"' + (allGot ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_BONUS + '</button>') + '</li></ul>' +
-      (signedIn() ? '' : '<p class="note">Sign in to claim quest rewards. Your progress still counts.</p>') +
-      '<h3 class="sub">Finding Sigils</h3><p class="note">Now and then a treasure chest or a guardian holds 1 to 3 Sigils. Your odds: <b>' + pct(L.sigilChance(S, 'chest')) + '</b> per chest and <b>' + pct(L.sigilChance(S, 'boss')) + '</b> per guardian. Every 30 floors of your deepest descent adds 0.01%, up to 0.05%, and the Kindling upgrade Sigil Sense adds 0.01% per rank. You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day.</p>' + limitsHtml() +
+      (HCS ? '</ul><p class="note small">Daily quest Sigils are earned on your Normal hero. Nothing earned in Hardcore leaves it.</p>' : '<li class="quest bonus' + (got & 8 ? ' got' : allGot ? ' done' : '') + '"><div><b>Finish all three</b><small>A bonus for clearing the day.</small></div>' + (got & 8 ? '<span class="qok">' + sigil + '+' + L.QUEST_BONUS + '</span>' : '<button class="btn small" data-q="3"' + (allGot ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_BONUS + '</button>') + '</li></ul>') +
+      (signedIn() || HCS ? '' : '<p class="note">Sign in to claim quest rewards. Your progress still counts.</p>') +
+      (HCS ? '' : '<h3 class="sub">Finding Sigils</h3><p class="note">Now and then a treasure chest or a guardian holds 1 to 3 Sigils. Your odds: <b>' + pct(L.sigilChance(S, 'chest')) + '</b> per chest and <b>' + pct(L.sigilChance(S, 'boss')) + '</b> per guardian. Every 30 floors of your deepest descent adds 0.01%, up to 0.05%, and the Kindling upgrade Sigil Sense adds 0.01% per rank. You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day.</p>') + limitsHtml() +
       '<div class="row"><button class="btn ghost" id="dq-ok">Close</button></div>', md => {
         md.querySelector('#dq-x').onclick = closeModal; md.querySelector('#dq-ok').onclick = closeModal;
         md.querySelectorAll('[data-bty]').forEach(btn => btn.onclick = () => {
@@ -7197,7 +7197,7 @@
   function nextStep() {
     if (L.heroPoints(S) > 0) return { t: 'Spend your stat point', go: () => switchTab('rekindle') };
     if (L.canUse(S, 'gear') && (S.bag || []).some(it => L.isUpgrade(S, it))) return { t: 'Equip an upgrade', go: () => switchTab('gear') };
-    try { if (L.questState(S).some(q => q.done && !q.got)) return { t: 'Claim a daily quest', go: () => openQuests() }; } catch (e) {}
+    try { if (!HCS && L.questState(S).some(q => q.done && !q.got)) return { t: 'Claim a daily quest', go: () => openQuests() }; } catch (e) {}
     const ids = (S.party || []).filter(Boolean);
     if (ids.some(id => L.trainCost(S, id, 1) <= S.gold)) return { t: 'Train your party', go: () => switchTab('party') };
     return null;
@@ -7776,6 +7776,7 @@
       'Quest book and Dashboard: see today\'s limits on relics, chests, events and found Sigils, and when they reset.',
       'Your Hardcore hero can use the same name as your Normal hero. Hardcore heroes show an HC tag in chat, profiles and the Guild.',
       'Starting a Hardcore hero no longer loops back to a refused save, even with the game open in another tab.',
+      'Bounty progress shows whole numbers. Hardcore quests no longer offer Sigil claims, since daily Sigils are for your Normal hero.',
     ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
