@@ -1,4 +1,4 @@
-/* lh-build 202611271617 */
+/* lh-build 202611271630 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -8466,8 +8466,9 @@
   const ringPct0 = x => Math.round(x * 1000) / 10 + '%';
   const ringTipE = E => 'Edge ' + E + ': you deal ' + ringPct0(ringEdgeOf(E)) + ' more damage to other heroes. Each point adds a little less (Edge 100 is +25%, 300 is +50%). Ring kit pieces raise it.';
   const ringTipR = R => 'Resolve ' + R + ': other heroes deal ' + ringPct0(ringResOf(R)) + ' less damage to you. Each point adds a little less, and it never blocks more than half (Resolve 100 is 12.5%, 300 is 25%). Radiant strikes ignore it.';
-  const ringTipA = c => 'Ring attack: ' + CLS_NAME(c) + 's start at ' + ringBase(c)[1] + '. Dungeon gear and power never count here; attack ranks on Ring kit pieces raise it.';
-  const ringTipH = c => 'Ring health: ' + CLS_NAME(c) + 's start at ' + fmt(ringBase(c)[0]) + '. Dungeon gear and power never count here; health ranks on Ring kit pieces raise it.';
+  const ringCls = c => L.CLASSES[c] ? CLS_NAME(c) + 's start' : 'Heroes start'; // v141 hotfix: never throw on a missing class
+  const ringTipA = c => 'Ring attack: ' + ringCls(c) + ' at ' + ringBase(c)[1] + '. Dungeon gear and power never count here; attack ranks on Ring kit pieces raise it.';
+  const ringTipH = c => 'Ring health: ' + ringCls(c) + ' at ' + fmt(ringBase(c)[0]) + '. Dungeon gear and power never count here; health ranks on Ring kit pieces raise it.';
   const ringNum = (t, v) => '<span class="rnum" data-tip="' + esc(t) + '" tabindex="0">' + v + '</span>';
   // v141 seasons: the season chip, the awards a hero has won, and the season box on the Standings tab.
   const ringDays = t => Math.max(1, Math.ceil((t - Date.now()) / 864e5));
@@ -8649,8 +8650,8 @@
     const k = teamKitOf(id);
     let R = 0, E = 0, hp = 1, at = 1;
     k.forEach((r, i) => { const p = TEAM_KIT[i]; R += p.R * r; E += p.E * r; hp += p.hp * r; at += p.at * r; });
-    const bs = ringBase((L.memberById(id) || {}).cls);
-    return { hp: Math.round(bs[0] * hp), at: Math.round(bs[1] * at), E, R }; // v141: same class base as the server, dungeon power never counts
+    const c = (L.memberById(id) || {}).cls, bs = ringBase(c);
+    return { hp: Math.round(bs[0] * hp), at: Math.round(bs[1] * at), E, R, c }; // v141: same class base as the server, dungeon power never counts
   }
   // The lineup: the saved one, with companions you no longer have dropped; with none saved, you plus your two strongest.
   function teamLine() {
