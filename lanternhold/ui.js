@@ -1,4 +1,4 @@
-/* lh-build 202611271701 */
+/* lh-build 202611271720 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -7208,14 +7208,15 @@
   // st: 'done' | 'now' | 'next'. ends: the finale's possible endings (side key from L.SIDES, or null).
   const ROADMAP = [
     { id: 'start', tag: 'Where we started', name: 'The road so far', when: 'Nov 22 to 24, 2026', st: 'done', pic: 's:tank,healer,rogue,mage,necro',
-      story: 'Lanternhold opened with five heroes, one lantern and a cellar full of Gloops. 139 updates later, the Deep is a front of the Grand War.',
+      story: 'Lanternhold opened with five heroes, one lantern and a cellar full of Gloops. 142 updates later, the Deep is a front of the Grand War.',
       items: [
         ['flame', 'The first night', 'Updates 1 to 12', ['Tap to strike and train your party.', 'The Campfire and camp jobs.', 'Skill trees, Kindling and a full set of gear slots.']],
         ['shield', 'The war comes down', 'Updates 13 to 28', ['Act One below the Starless Vault.', 'Alliances, banners and the world map.', 'Sigils, Mercy’s Blessing, the Lantern Pass and daily quests.']],
         ['users', 'A living Hold', 'Updates 29 to 73', ['The Trading Post and the Players Guild.', 'Ember Ring duels and world boss weekends.', 'The Loot Goblin, merging, enchanting, the Wardrobe and music.']],
         ['duel', 'Deeper fights', 'Updates 74 to 100', ['Region trials and special attacks.', 'Mana, stamina, burns and stuns.', 'The Ghost Lantern, the merchant, bounties and the Mercy Corps on the road.']],
         ['lantern', 'The Hold grows', 'Updates 102 to 119', ['The Hold’s tents: Enchanter, Armorer and Store.', 'Legendary world boss loot and Victor’s Banner.', 'Bestiary mastery, real weapon types, chat windows and the NPC Guild.']],
-        ['crown', 'The Hold today', 'Updates 120 to 139', ['New Playthrough tiers, Mythic gear and the Rift Gate.', 'A hundred and twenty creatures with home regions, team battles and unique Legendaries.', 'Quests, hero profiles, the Hall of Fame and the Paladin.']],
+        ['crown', 'The Hold grows deeper', 'Updates 120 to 139', ['New Playthrough tiers, Mythic gear and the Rift Gate.', 'A hundred and twenty creatures with home regions, team battles and unique Legendaries.', 'Quests, hero profiles, the Hall of Fame and the Paladin.']],
+        ['star', 'The Hold today', 'Updates 140 to 142', ['Safer saves and a fresh Guide and tutorial.', 'Monthly Ember Ring seasons and Ring Mastery.', 'Your own Dashboard and screen layout, Hardcore mode and today\u2019s limits at a glance.']],
       ] },
     { id: 'act1', tag: 'Act I · Season 1', name: 'The First Incursion', when: 'Now to Jan 24, 2027', st: 'now', pic: 'i:lantern',
       story: 'Fifteen regions, from the Lamplit Cellars down to the Rift Threshold. Play it to find out what waits at the bottom.',
@@ -7227,7 +7228,7 @@
           '<b>Success</b>: gold, hero XP, Dust and loot, sometimes region set pieces. <b>Failure</b>: home hurt, nothing found, rests a few hours. <b>Fallen</b>: on Deadly and Legendary jobs an NPC can fall and leave your company. Their gear always comes home.',
           'For a day after a fall, the <b>Mercy Corps</b> can carry them home for gold and Dust. Legendary lore companions never fall.',
           'Jobs run while you are away. NPCs earn ranks (Recruit, Veteran, Elite, Champion), each with a perk.'], 'odds'],
-        ['lock', 'Waiting for Act II', 'Something to do at the end of the act', ['Reach the end of Act One and your hires can keep adventuring until Season 2 opens.']],
+        ['lock', 'Waiting for Act II', 'Something to do at the end of the act', ['Reach the end of Act One and your hires can keep adventuring until Season 2 opens.', 'Already here: <b>New Playthrough</b> (NP+) starts Act One again at a harder tier once you beat floor 150.'], 'part'],
         ['star', 'The Longest Night', 'Winter festival, week of Dec 21', ['Lanterns hang over the Hold.', 'A short festival quest line.', 'A looks-only lantern style.']],
         ['crown', 'The first crowning', 'Jan 24', ['The alliance holding the Nexus wins Season 1, and its players fly Victor’s Banner all through Act II.']],
       ] },
@@ -7238,7 +7239,7 @@
         ['map', 'The Underreach', '8 new regions, floors 151 to 230', ['New foes, guardians and region sets.', 'The alliance that wins Season 1 leaves its mark on the first new region.']],
         ['hammer', 'Rebuild the Hold', 'The tents become buildings', ['The Campfire grows into a Barracks with more bench room.', 'The Armorer becomes a Forge and the Enchanter a Tower.', 'A new Expedition Gate and Map Room open.']],
         ['users', 'Expeditions, part two', 'Teams of up to three', ['Send up to three NPCs together.', 'Expedition traits such as Trapwise, Steady Hands and Lucky.']],
-        ['duel', 'Ember Ring seasons', 'A ranked season every act', ['A looks-only reward for the top delvers each season.']],
+        ['duel', 'Ember Ring seasons', 'Live now, a ranked season every month', ['Ring seasons came early: one every calendar month instead of one per act. Season 1 ends Dec 31.', 'The top 3 win the Ember Champion title and frame, the top 25 the Season Laurel emblem. Looks only.', 'Ring Mastery came with them, and team battles (your hero plus two companions) are already here too.'], 'early'],
         ['star', 'The Thaw', 'Spring festival, March', ['For one week the Weeping Aqueduct runs clean, and its eels drop spring gifts.']],
       ] },
     { id: 'act3', tag: 'Act III · Season 3', name: 'The War Comes Down', when: 'Apr to Jul 2027', st: 'next', pic: 's:sentinel,hound',
@@ -7250,7 +7251,7 @@
         ['crown', 'Warlords', 'Named alliance champions', ['Alliance elites rise into Warlords who move between regions each week.', 'Beat them to push your alliance’s front.']],
         ['users', 'Company expeditions', 'With your Players Guild', ['Guild members pool their NPCs for long jobs of 12 to 48 hours and share the loot.']],
         ['map', 'Eight more regions', 'Floors 231 to 310', ['New regions, foes, guardians and sets.']],
-        ['dust', 'Rift-glass', 'A new crafting material', ['Found on expeditions and in the new regions.', 'Opens a tenth enchant tier and re-forging an item’s type.']],
+        ['dust', 'Rift-glass', 'A new crafting material', ['Found on expeditions and in the new regions.', 'Opens a tenth enchant tier.', 'Already here: the Armorer’s <b>Reforge</b> (from NP+1) rerolls an item’s enchants and weapon type.'], 'part'],
         ['star', 'Midsummer Ember Games', 'Summer festival, June', ['A festival tournament in the Ember Ring.']],
       ] },
     { id: 'act4', tag: 'Act IV · Season 4', name: 'The Last Surge', when: 'Jul to Oct 2027', st: 'next', pic: 's:wyrm,lich',
@@ -7305,8 +7306,9 @@
         'You earn <b>a quarter</b> of your usual gold for up to <b>8 hours</b>.',
         '<b>Night Watch</b> (Skills tab) stretches that up to 3 days.',
         '<b>Lanternholder</b> adds 4 more hours.']],
-      ['The side panel', 'i:map', 'Eight tabs, each with one job. Locked tabs show the hero level that opens them.', [
-        'On phones, <b>Market</b>, <b>Guild</b>, <b>PvP</b> and <b>Codex</b> sit under the <b>Town</b> button at the bottom, and <b>Fight</b> jumps back up to the battle.',
+      ['The side panel', 'i:map', 'Nine tabs, each with one job. Locked tabs show the hero level that opens them.', [
+        'On phones, the bottom bar holds <b>Fight</b>, <b>Party</b> and three tabs you pick; the rest sit under the <b>Town</b> button.',
+        '<b>Dashboard</b>: your own page. <b>Edit dashboard</b> adds any tile (gold, quests, party, damage meter, shops and more), moves or removes it.',
         '<b>Party</b>: who fights, and in what order.',
         '<b>Camp</b>: resting companions, camp jobs and training.',
         '<b>Gear</b>: dress your characters.',
@@ -7319,7 +7321,8 @@
         'The <b>Why we fight</b> opening plays on your first visit. Replay it any time from <b>Settings</b>.',
         'Lanternhold is free. Once the game’s costs are covered, the proceeds go to the Mercy Corps giving: children’s hospitals, food pantries and local schools.',
         'The <b>music button</b> in the top bar opens the player: eight original tracks, skip, shuffle, volume and mute.',
-        '<b>Settings</b> (the gear button) holds sound, which pop-ups show in the corner, and your backup. The Guide has <b>Replay the tutorial</b>.']],
+        '<b>Settings</b> (the gear button) holds sound, which pop-ups show in the corner, your backup, <b>Replay the tutorial</b> and <b>Open the wiki</b>. On phones, music, full screen and the game version live there too.',
+        '<b>Edit layout</b> in Settings moves or hides parts of the screen, pins the damage meter or fight log under the fight, and picks your phone\'s bottom bar tabs. <b>Reset</b> puts it back.']],
       ['Hardcore mode', 'i:flame', 'A second save for players who are ready to lose companions and gear. Pick it from Switch save in the top bar or Settings.', [
         'Hardcore is its own run with its own hero. Heroes, gold and gear never move between your Normal and Hardcore saves, and you need to be signed in.',
         'A companion who falls is <b>dying for ' + L.HC_DYING + ' seconds</b>. A healer can raise them for <b>' + L.HC_RAISE + 'x the mana</b>. If nobody does, they die for good. With the healer dead, nobody is raised.',
@@ -7363,7 +7366,9 @@
         '<b>Unique Legendaries</b>: eight one-of-a-kind companions, each with an extra bonus on their own camp job. Some turn up at the Guild Hall now and then, some finish a side quest or join on the adventure, and one is caged by a monster somewhere past floor ' + L.CAGE_FLOOR + '.',
         'Some need a hero level, a floor reached or your banner. Costs follow your gold income, so they stay fair at any depth.',
         '<b>Sign on</b> takes a companion spot and pays a wage every hour, even while you are away. <b>2 h</b> is a short contract: paid up front, no wage, no free spot needed (up to 2 at once).',
-        'If your gold runs dry for an hour of wages, the priciest hire walks off to the bench. <b>Let go</b> at the Campfire sends one back. Either way their gear returns to your bag, and they wait on the bench 3 days to be hired back for half price.']],
+        'If your gold runs dry for an hour of wages, the priciest hire walks off to the bench. <b>Let go</b> at the Campfire sends one back. Either way their gear returns to your bag, and they wait on the bench 3 days to be hired back for half price.',
+        'Hires from <b>your own faction</b> (same banner side as your hero) cost 20% less to sign on and 10% less in wages. Their card says <b>Your faction</b>.',
+        'A story companion you never hired can also be <b>let go</b> from the Campfire to free their spot. They wait at the Guild Hall as a Rare offer until the next new faces.']],
       ['Players Guild', 'i:users', 'Fill seats with other players’ heroes. They are stronger than companions.', [
         'Sign in, open the <b>Guild</b> tab, press <b>Invite</b>.',
         'They <b>accept or decline</b>. Accepted heroes join at camp.',
@@ -7371,7 +7376,8 @@
         'Borrowed heroes bring their own gear, stats and skills, up to <b>2×</b> your own hero’s damage and health. They update each time you play.',
         'Each player hero in your party adds <b>+5%</b> party damage and gold (up to two). They never ask for wages.',
         'Tap a name on the board to see that hero\'s public profile.',
-        '<b>Dismiss</b> on a seat lets a hero go.']],
+        '<b>Dismiss</b> on a seat lets a hero go.',
+        'Rather play solo? <b>Settings, Playing with others</b> turns party invites off. Your hero shows as Solo on the board.']],
       ['Your banner', 'i:flare', 'Your hero flies one of five banners, each with a perk.', [
         'Iron Covenant <b>+15% health</b>. Radiant Ascendancy <b>+12% damage</b>. Devouring Tide <b>+15% gold</b>. Mercy Corps <b>+15% healing</b>. Unsworn <b>+5%</b> to all three.',
         '<b>Banner kin</b>: each party member under your banner makes the perk 40% stronger.']],
@@ -7409,7 +7415,8 @@
         'Bounties and daily quests come from about ' + Math.floor(L.QDEFS.length / 10) * 10 + ' kinds across the whole game: hunts and guardians, monster tricks, the Grand War, crafting at the Armorer and Enchanter, training, the Guild, Ember Ring duels, the Market, world boss weekends, and for NP+ heroes Pip, Gulp and the Hold.',
         'You are only offered what your hero can do right now, the three on show are always from different parts of the game, and a kind you saw lately waits its turn.',
         'Some send you back up to older floors. Tap <b>Go to floor</b> on a bounty to farm there (Descend automatically turns off). Others have a button that takes you to the right place.',
-        'Each pays gold and Dust, sometimes a tonic too. Finished bounties you forget to claim are paid when the board changes.']],
+        'Each pays gold and Dust, sometimes a tonic too. Finished bounties you forget to claim are paid when the board changes.',
+        '<b>Today\u2019s limits</b> in the Quest book (also a Dashboard tile) shows each daily cap: guardian relics, chests, events and found Sigils, how much is used and when they reset. Gold, XP, gear and Dust from fights have no daily limit.']],
       ['The Lantern Keeper', 'i:lantern', 'When the store owner is online, every hero gets a boost.', [
         'While the Lantern Keeper is online, every hero gets <b>+' + Math.round(L.KEEPER * 100) + '%</b> damage, healing, gold, hero XP and gear finds.',
         'A gold banner over the fight shows when it is on. It ends a couple of minutes after the Keeper leaves.']],
@@ -7656,13 +7663,14 @@
   const guidePic = p => p.startsWith('s:') ? '<div class="gpic sprites">' + p.slice(2).split(',').map(n => '<img src="' + SP.spriteURL(n, 2, 0) + '" alt="">').join('') + '</div>' : '<div class="gpic">' + icon(p.slice(2)) + '</div>';
   let rmAt = Math.max(0, ROADMAP.findIndex(x => x.st === 'now'));
   const RM_ST = { done: 'Done', now: 'Now', next: 'Planned' };
+  const RM_EARLY = { early: 'Built early', part: 'Part built early' }; // a roadmap item's 5th field: shipped ahead of its act
   const rmShort = x => x.id === 'start' ? 'Start' : x.tag.split(' · ')[0];
   function roadmapHtml() {
     const r = ROADMAP[rmAt];
     const track = '<div class="rmtrack" role="tablist">' + ROADMAP.map((x, i) => '<button class="rmstop ' + x.st + (i === rmAt ? ' on' : '') + '" data-rm="' + i + '" role="tab" aria-selected="' + (i === rmAt) + '"><span class="rmdot"></span><b>' + rmShort(x) + '</b><small>' + x.name + '</small></button>').join('') + '</div>';
     const odds = '<div class="rmodds" aria-label="Example odds"><span class="ok" style="flex:70">Success 70%</span><span class="bad" style="flex:24">Failure 24%</span><span class="fall" style="flex:6"></span></div><small class="rmnote">Example odds for one job. The red sliver is Fallen, 6%.</small>';
     const ends = r.ends ? '<div class="rmends">' + r.ends.map(([k, t, d, y]) => { const sd = L.SIDES[k]; return '<div class="rmend" style="--c:' + sd.color + '"><small>' + (k === 'unsworn' ? 'A secret ending' : sd.name) + '</small><b>' + t + '</b><p>' + d + '</p>' + (y ? '<em>Year Two: ' + y + '</em>' : '') + '</div>'; }).join('') + '</div>' : '';
-    const items = r.items.map(([ic, t, sm, d, x], j) => '<details class="rmitem"' + (x === 'odds' ? ' open' : '') + '><summary>' + icon(ic) + '<span><b>' + t + '</b><small>' + sm + '</small></span></summary><ul>' + d.map(z => '<li>' + z + '</li>').join('') + '</ul>' + (x === 'odds' ? odds : '') + '</details>').join('');
+    const items = r.items.map(([ic, t, sm, d, x], j) => '<details class="rmitem"' + (x === 'odds' ? ' open' : '') + '><summary>' + icon(ic) + '<span><b>' + t + (RM_EARLY[x] ? '<i class="rmearly">' + RM_EARLY[x] + '</i>' : '') + '</b><small>' + sm + '</small></span></summary><ul>' + d.map(z => '<li>' + z + '</li>').join('') + '</ul>' + (x === 'odds' ? odds : '') + '</details>').join('');
     const prev = ROADMAP[rmAt - 1], next = ROADMAP[rmAt + 1];
     return '<div class="rm">' + track + '<section class="rmpanel"><div class="rmhead">' + guidePic(r.pic) + '<div><small class="rmtag">' + r.tag + ' · ' + r.when + '<i class="rmst ' + r.st + '">' + RM_ST[r.st] + '</i></small><h3>' + r.name + '</h3><p>' + r.story + '</p></div></div>' +
       ends + '<div class="rmlist">' + items + '</div>' +
