@@ -1,4 +1,4 @@
-/* lh-build 202611272009 */
+/* lh-build 202611272016 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -7814,6 +7814,7 @@
       'Bounty progress shows whole numbers. Hardcore quests no longer offer Sigil claims, since daily Sigils are for your Normal hero.',
       'A game tab in the background or paused no longer reloads itself for an update and takes over the tab you are playing.',
       'Your Hardcore hero loads on every device you sign in on, and Switch save shows it. Normal saves get a Normal badge at the top to switch saves.',
+      'Hardcore healers save their Hymn for a raise when a companion is dying, instead of spending it on a heal.',
     ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',

@@ -1,4 +1,4 @@
-/* lh-build 202611272009 */
+/* lh-build 202611272016 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -3639,7 +3639,12 @@
       // against a shuffling guardian, keep Shield Wall for the shuffle unless the tank is in trouble
       case 'tank': if (shuffler(s, foe) && !foe.shWind && (s.hp[id] || 0) >= maxHpOf(s, id) * 0.4) return false;
         return !foe.chest && (foe.boss || (s.hp[id] || 0) < maxHpOf(s, id) * 0.6);
-      case 'healer': return !!foe.wounded || s.party.some(x => x && (s.down[x] || (s.hp[x] || 0) < maxHpOf(s, x) * 0.5));
+      case 'healer': {
+        // v142 hotfix (John, 27 Nov 2026): in Hardcore a healer with someone dying waits until it has the mana to raise
+        // them (HC_RAISE x the Hymn), instead of spending the Hymn on a heal and leaving them to die.
+        if (s.hc && s.party.some(x => x && s.down[x])) return resOf(s, id) >= AB_COST * HC_RAISE;
+        return !!foe.wounded || s.party.some(x => x && (s.down[x] || (s.hp[x] || 0) < maxHpOf(s, x) * 0.5));
+      }
       case 'rogue': return true;
       case 'mage': return foe.boss || foe.hp > totalDps(s, now) * 3;
       case 'necro': return !foe.chest;
