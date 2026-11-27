@@ -1,4 +1,4 @@
-/* lh-build 202611262349 */
+/* lh-build 202611270006 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -3863,7 +3863,7 @@
     const tok = await idToken(); if (!tok) throw new Error('signed out');
     const r = await fetch(CL.api.replace(/\/$/, '') + (path || '/save'), { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     if (r.status === 404) return null;
-    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); }
+    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); if (j.error === 'moved') elsewhere(); }
     if (!r.ok) throw new Error('cloud ' + r.status);
     return r.json();
   }
@@ -3886,12 +3886,13 @@
     const bin = atob(d.slice(4)), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
     return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
   }
-  async function pushCloud(quiet) {
+  async function pushCloud(quiet, claim) {
     if (!CL || !signedIn() || !S.hero || dormant) return;
+    if (!claim && !cloudReady) return; // not before this device has checked the account save and claimed it
     try {
       const o = saveObj(), sent = acts.slice();
-      await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId() });
-      lastCloud = Date.now();
+      const r = await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId(), claim: claim ? 1 : 0 });
+      lastCloud = Date.now(); cloudReady = true; syncMark(o.stats.playTime, r && r.updated);
       acts = acts.filter(a => !sent.includes(a)); try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
       if (S.mode === 'multi' && S.hero) publishHero();
       if (!quiet) toast('star', 'Progress synced', 'Your save is stored with your account.', 'feat');
@@ -3932,24 +3933,51 @@
       };
     });
   }
+  // Saves across devices (John, 26 Nov 2026): web, phone and Discord each keep their own copy. One device plays at a
+  // time: opening the game picks the newer save by itself (asking only when both copies changed since the last sync)
+  // and claims the account; any other open device pauses on its next save with "Play here".
+  let cloudReady = false;
+  const SYNC_KEY = 'lh_sync';
+  function syncMark(pt, up) { try { localStorage.setItem(SYNC_KEY, JSON.stringify({ u: sess && sess.id ? claims(sess.id).sub : '', pt: pt || 0, up: up || 0 })); } catch (e) {} }
+  function syncRead() { try { const x = JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); return x && sess && sess.id && x.u === claims(sess.id).sub ? x : null; } catch (e) { return null; } }
   async function reconcile() {
     let rec; try { rec = await api('GET'); } catch (e) { if (!S.hero && $('modal').hidden) setup(); return; }
     const local = saveObj();
+    let take = false; try { take = sessionStorage.getItem('lh_take') === '1'; sessionStorage.removeItem('lh_take'); } catch (e) {}
     if (!rec && !S.hero) { setup('You are signed in, but this account has no hero yet. Create one below and it will be saved to your account.'); return; }
-    if (!rec) { await pushCloud(false); return; }
+    if (!rec) { await pushCloud(false, true); return; }
     if (rec.rst && (S.created || 0) < rec.rst) { playerReset(); return; }
-    let cloud; try { cloud = JSON.parse(await unpackSave(rec.data)); } catch (e) { if (S.hero) await pushCloud(true); else setup(); return; }
+    let cloud; try { cloud = JSON.parse(await unpackSave(rec.data)); } catch (e) { if (S.hero) await pushCloud(true, true); else setup(); return; }
     if (!S.hero) { useSave(cloud); return; }
-    const ct = (cloud.stats && cloud.stats.playTime) || 0;
-    if (Math.abs(ct - local.stats.playTime) < 5) { lastCloud = Date.now(); return; }
+    const ct = (cloud.stats && cloud.stats.playTime) || 0, lt = local.stats.playTime || 0;
+    if (Math.abs(ct - lt) < 5) { await pushCloud(true, true); return; }
+    // "Play here" on a paused device: the account save is the newest by definition.
+    if (take) { useSave(cloud); return; }
+    const sy = syncRead(), localMoved = !sy || Math.abs(lt - sy.pt) >= 5, cloudMoved = !sy || rec.updated !== sy.up;
+    if (sy && !localMoved) { useSave(cloud); return; }               // only the account moved on: load it
+    if (sy && !cloudMoved) { await pushCloud(true, true); return; }  // only this device moved on: send it
     if (!local.stats.kills && !local.embers) { useSave(cloud); return; }
     $('modal').dataset.lock = '1';
-    modal('<h2>Choose a save</h2><p>Your account already has progress, and this device has different progress. Which one do you want to keep? The other is replaced.</p>' +
+    modal('<h2>Choose a save</h2><p>This hero was played on another device and on this one since they last synced. Which one do you want to keep? The other is replaced.</p>' +
       '<div class="choice"><button class="pick" id="c-cloud"><b>Account save</b><small>' + summary(cloud) + '</small></button>' +
       '<button class="pick" id="c-local"><b>This device</b><small>' + summary(local) + '</small></button></div>', m => {
         m.querySelector('#c-cloud').onclick = () => { delete $('modal').dataset.lock; closeModal(); useSave(cloud); };
-        m.querySelector('#c-local').onclick = () => { delete $('modal').dataset.lock; closeModal(); pushCloud(false); };
+        m.querySelector('#c-local').onclick = () => { delete $('modal').dataset.lock; closeModal(); pushCloud(false, true); };
       });
+  }
+  // Another device claimed the account: stop saving here, like a second tab does.
+  function elsewhere() {
+    if (dormant) return;
+    dormant = true;
+    const d = document.createElement('div'); d.id = 'tablock';
+    d.innerHTML = '<div><h2>Playing on another device</h2><p>This hero is open somewhere else, so this ' + (DC ? 'window' : 'device') + ' paused to keep your progress from getting mixed up.</p><button class="btn" id="tablock-go">Play here</button></div>';
+    document.body.appendChild(d);
+    d.querySelector('#tablock-go').onclick = () => { try { sessionStorage.setItem('lh_take', '1'); } catch (e) {} location.reload(); };
+  }
+  // Coming back to a device that sat in the background: check first that no other device took over meanwhile.
+  async function peekCloud() {
+    if (!CL || !signedIn() || dormant || !cloudReady) return;
+    try { const r = await api('GET', null, '/save?peek=1'); if (r && r.dv && r.dv !== devId()) elsewhere(); } catch (e) {}
   }
   function useSave(o) {
     S = L.migrate(o); S.lastSeen = Date.now();
@@ -4182,9 +4210,15 @@
     $('btn-account').hidden = false; paintAccount();
     $('btn-account').addEventListener('click', openAccount);
     if (DC) setTimeout(dcStart, 300); else { dcCodeKeep(); if (signedIn()) setTimeout(reconcile, 800); setTimeout(dcCodeAsk, 1500); }
-    setInterval(() => { if (signedIn() && Date.now() - lastCloud > 60000) pushCloud(true); }, 15000);
+    let recTry = Date.now();
+    setInterval(() => {
+      if (!signedIn() || dormant) return;
+      // The first check of the account save failed (offline?): try again each minute; saving waits for it.
+      if (!cloudReady) { if (Date.now() - recTry > 60000 && $('modal').hidden) { recTry = Date.now(); reconcile(); } return; }
+      if (Date.now() - lastCloud > 60000) pushCloud(true);
+    }, 15000);
     setTimeout(pollInvites, 3000); setInterval(() => { if (!document.hidden) pollInvites(); }, 30000); setInterval(drainJoins, 2000);
-    document.addEventListener('visibilitychange', () => { if (document.hidden && signedIn()) pushCloud(true); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && signedIn()) pushCloud(true); else if (!document.hidden) peekCloud(); });
   }
 
   // ---------- support link ----------
