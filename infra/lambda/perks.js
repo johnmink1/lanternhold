@@ -74,12 +74,13 @@ exports.handler = async (e) => {
     if (bal < 500) return res(400, { error: 'funds' });
     // v140 (John 27 Nov): gifts are paid only from bought Sigils (pb, counted by store.js) less what was gifted (gs),
     // so free Sigils from several accounts cannot be pooled into a pass.
-    const pb = w && w.pb ? +w.pb.N : 0, gs = w && w.gs ? +w.gs.N : 0;
-    if (pb - gs < 500) return res(400, { error: 'bought', left: Math.max(0, pb - gs) });
+    // Hotfix (John 27 Nov): admins (Cognito group) gift from any Sigils, and their gifts are not counted against pb.
+    const pb = w && w.pb ? +w.pb.N : 0, gs = w && w.gs ? +w.gs.N : 0, adm = String(cl['cognito:groups'] || '').includes('admins');
+    if (!adm && pb - gs < 500) return res(400, { error: 'bought', left: Math.max(0, pb - gs) });
     try {
       await db.send(new D.TransactWriteItemsCommand({ TransactItems: [
-        { Update: { TableName: W, Key: K, UpdateExpression: 'SET bal = if_not_exists(bal, :g) - :c, own = if_not_exists(own, :o) ADD gs :c', ConditionExpression: '(attribute_not_exists(bal) OR bal >= :c) AND pb >= :need',
-          ExpressionAttributeValues: { ':g': N(100), ':c': N(500), ':need': N(gs + 500), ':o': { SS: ['f.plain'] } } } },
+        { Update: { TableName: W, Key: K, UpdateExpression: 'SET bal = if_not_exists(bal, :g) - :c, own = if_not_exists(own, :o)' + (adm ? '' : ' ADD gs :c'), ConditionExpression: '(attribute_not_exists(bal) OR bal >= :c)' + (adm ? '' : ' AND pb >= :need'),
+          ExpressionAttributeValues: Object.assign({ ':g': N(100), ':c': N(500), ':o': { SS: ['f.plain'] } }, adm ? {} : { ':need': N(gs + 500) }) } },
         { Update: { TableName: W, Key: RK, UpdateExpression: 'SET pass = :p, gift = :f, bal = if_not_exists(bal, :g), own = if_not_exists(own, :o)', ConditionExpression: was ? 'pass = :w' : 'attribute_not_exists(pass)',
           ExpressionAttributeValues: Object.assign({ ':p': N(until), ':f': S(JSON.stringify([mine.name.S.slice(0, 20), now])), ':g': N(100), ':o': { SS: ['f.plain'] } }, was ? { ':w': N(was) } : {}) } }] }));
     } catch (x) { if (x.name === 'TransactionCanceledException') return res(409, { error: 'state' }); throw x; }
