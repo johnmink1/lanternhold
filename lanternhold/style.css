@@ -1166,7 +1166,7 @@ body.resting .arena{cursor:default}
 .renewnote{margin:10px 0 0}.renewnote b{color:var(--text)}
 @media (max-width:560px){.packs{grid-template-columns:repeat(2,1fr);row-gap:16px}}
 .storelink+.note{margin-top:10px}
-.mercygive .row{margin:10px 0 6px}.mercygive .note{margin:0}
+.mercygive .row{margin:10px 0 12px}.mercygive .note{margin:0}
 /* Mercy's Blessing pill */
 .stat.mercy{color:#8fcf6a;cursor:pointer;font:inherit;font-weight:800;font-size:15px;animation:mercyglow 3s ease-in-out infinite}
 .stat.mercy:hover{border-color:#8fcf6a}

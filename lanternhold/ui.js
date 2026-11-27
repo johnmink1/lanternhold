@@ -7062,6 +7062,7 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 138, date: 'November 2026', title: 'Easier shop, loadouts and a smoother start', items: [
+      'Sigil shop: Give $1 or any amount to our Extra Life team for children’s hospitals. Add your #WarName to credit your alliance.',
       'The Sigil counter at the top now opens the Sigil shop. Signed-out players see a Get button that helps them make an account.',
       'Buying Sigils for the first time explains the one-time store sign-in, and the pack you picked is waiting when you come back.',
       'Gear loadouts: save what the whole party wears and put it back on in one tap at camp. Everyone gets 1; Lanternholder gets 4.',
