@@ -1,4 +1,4 @@
-/* lh-build 202611270006 */
+/* lh-build 202611270013 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4022,7 +4022,7 @@
       confirm: '<button type="button" class="link" id="f-resend">Send a new code</button><button type="button" class="link" data-go="up">Use a different email</button>',
       forgot: '<button type="button" class="link" data-go="in">Back to sign in</button>', reset: '',
     }[mode];
-    modal('<form class="auth" novalidate><h2>' + titles[mode] + '</h2><p>' + lead + '</p>' + (!DC && (mode === 'in' || mode === 'up') ? '<button type="button" class="btn b2g" id="f-b2g">Continue with Born 2 Game</button><div class="or"><span>or use your email</span></div>' : '') + f +
+    modal('<form class="auth" novalidate><h2>' + titles[mode] + '</h2><p>' + lead + '</p>' + (mode === 'in' || mode === 'up' ? '<button type="button" class="btn b2g" id="f-b2g">Continue with Born 2 Game</button><div class="or"><span>or use your email</span></div>' : '') + f +
       '<div class="err" id="f-err"></div><button class="btn" type="submit" id="f-go">' + btn + '</button><div class="links">' + links + '</div>' +
       '<button type="button" class="btn ghost skipacct" id="f-skip">' + (S.hero ? 'Play without an account' : 'Back to making a new hero') + '</button>' +
       '<p class="credits">An account is optional. It only keeps your save safe across devices. We only keep your email and game save. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p></form>', m => {
@@ -4032,7 +4032,7 @@
         const em = m.querySelector('#f-email'); if (em && email) em.value = email;
         const err = m.querySelector('#f-err'); if (note) { err.textContent = note; err.classList.add('ok'); }
         m.querySelectorAll('[data-go]').forEach(x => x.onclick = () => authForm(x.dataset.go, em ? em.value.trim() : email));
-        const bg = m.querySelector('#f-b2g'); if (bg) bg.onclick = async () => { bg.disabled = true; try { await storeSignIn(); } catch (e) { bg.disabled = false; err.textContent = 'Could not reach the Born 2 Game store. Please try again.'; } };
+        const bg = m.querySelector('#f-b2g'); if (bg) bg.onclick = async () => { bg.disabled = true; if (DC) { dcCodeStart(bg, err); return; } try { await storeSignIn(); } catch (e) { bg.disabled = false; err.textContent = 'Could not reach the Born 2 Game store. Please try again.'; } };
         const rs = m.querySelector('#f-resend'); if (rs) {
           const tick = () => { const w = Math.ceil((codeSent(email) + 60000 - Date.now()) / 1000); rs.disabled = w > 0; rs.textContent = w > 0 ? 'Send a new code (' + w + 's)' : 'Send a new code'; if (w > 0 && m.isConnected) setTimeout(tick, 1000); };
           tick();
@@ -4149,14 +4149,17 @@
           catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
         };
         md.querySelector('#dc-old').onclick = () => { delete $('modal').dataset.lock; dcLinkTok = dcTok; authForm('in', '', 'Sign in to link this hero to your Discord account.'); };
-        md.querySelector('#dc-web').onclick = async e => {
-          const b = e.currentTarget; b.disabled = true;
-          try { const j = await dcPost('/discord/code', { token: dcTok }); if (j.linked) { dcStart(); closeModal(); return; } dcPair(j.pair); }
-          catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
-        };
+        md.querySelector('#dc-web').onclick = e => dcCodeStart(e.currentTarget, err);
       });
   }
   // Heroes with no password (Born 2 Game store sign-in): the website confirms a short code while this window waits.
+  // Reached from the Discord welcome screen and from Continue with Born 2 Game on the sign-in form inside Discord.
+  async function dcCodeStart(b, err) {
+    b.disabled = true;
+    if (!dcTok) { b.disabled = false; err.textContent = 'Discord sign-in did not finish. Close and reopen Lanternhold, then try again.'; return; }
+    try { const j = await dcPost('/discord/code', { token: dcTok }); if (j.linked) { delete $('modal').dataset.lock; closeModal(); dcStart(); return; } dcPair(j.pair); }
+    catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
+  }
   let dcPairTimer = 0;
   function dcPair(code) {
     const until = Date.now() + 15 * 6e4, link = 'https://lanternhold.born2gamellc.com/?dclink=' + code;
@@ -4167,7 +4170,7 @@
       '<p class="note small center" id="dc-wait">Waiting for the website. This window signs you in by itself. The code works for 15 minutes.</p>' +
       '<button class="btn ghost wide" id="dc-back">Back</button>', md => {
         md.querySelector('#dc-open').onclick = () => DC.open(link);
-        md.querySelector('#dc-back').onclick = () => { clearInterval(dcPairTimer); dcWelcome(); };
+        md.querySelector('#dc-back').onclick = () => { clearInterval(dcPairTimer); if (signedIn()) { delete $('modal').dataset.lock; authForm('in'); } else dcWelcome(); };
       });
     $('modal').dataset.lock = '1';
     dcPairTimer = setInterval(async () => {
