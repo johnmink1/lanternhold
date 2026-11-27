@@ -1,4 +1,4 @@
-/* lh-build 202611270038 */
+/* lh-build 202611270058 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -197,7 +197,7 @@
   // guardian signature moves by region, and the move each guardian body uses on the in-between boss floors
   const BOSS_SPECIAL = ['gorge', 'rotcloud', 'spores', 'bonespear', 'magma', 'tidal', 'roots', 'void', 'shards', 'charge', 'tidal', 'rotcloud', 'beam', 'volley', 'eclipse'];
   const BODY_SPECIAL = { golem: 'slam', wyrm: 'breath', lich: 'mark' };
-  const FOE_SPECIAL = { slime: 'acid', bat: 'dive', ghost: 'wail', eye: 'mark', shroom: 'spores', rat: 'venombite', thorn: 'lash', eel: 'tidal', sentinel: 'slam', prism: 'beam', hound: 'dive', riftling: 'void', shard: 'shards' };
+  const FOE_SPECIAL = { slime: 'acid', bat: 'dive', ghost: 'wail', eye: 'mark', shroom: 'spores', rat: 'venombite', thorn: 'lash', eel: 'tidal', sentinel: 'slam', prism: 'beam', hound: 'dive', riftling: 'void', shard: 'shards', beetle: 'charge', crab: 'gorge', moth: 'beam' };
   const SPECIAL_FLOOR = 8, SPECIAL_CHANCE = 0.3, SPECIAL_WARN = 1.5, DOT_FIGHTS = 3;
   const DOTS = { burn: { name: 'Burning', dps: 0.05 }, poison: { name: 'Poisoned', dps: 0.035 } };
   // Who a burn or poison hurts most (John, 2026-11-24): fire eats cloth, plate shrugs some of it off;
@@ -232,6 +232,317 @@
     { id: 'skeleton', name: 'Rattlebones' }, { id: 'eye', name: 'Watcher' }, { id: 'shroom', name: 'Capling' }, { id: 'ghost', name: 'Wisp' },
   ];
   const BOSS_SPRITES = ['golem', 'wyrm', 'lich'];
+  // Creature home zones (John, 27 Nov 2026): every region has its own roster of 8 creatures, each a variant of one of
+  // the drawn bodies (fam). Spawns come from the region's roster ROSTER_HOME of the time, the rest are wanderers from
+  // the regions next door. Rarity sets the weight. Bestiary mastery, specials and hunts follow the family (the body).
+  // Row: [id, name, fam, rarity c/u/r/v, size s/m/l, overlay, hue (absolute; null = the region's), fluff]
+  const ROSTER_HOME = 0.8, RAR_W = { c: 30, u: 14, r: 4, v: 1 }, RAR_NAME = { c: 'Common', u: 'Uncommon', r: 'Rare', v: 'Very rare' };
+  const SIZE_X = { s: 0.85, m: 1, l: 1.2 };
+  const FAMILY = { slime: 'Gloop', rat: 'Gnawer', bat: 'Flitterwing', skeleton: 'Rattlebones', eye: 'Watcher', shroom: 'Capling', ghost: 'Wisp',
+    shard: 'Glass Crawler', sentinel: 'Iron Husk', eel: 'Sluice Eel', thorn: 'Thornling', prism: 'Storm Lens', hound: 'Rift Hound', riftling: 'Riftling',
+    beetle: 'Beetle', moth: 'Moth', crab: 'Crab' };
+  const ROSTERS = [
+    [ // 0 The Lamplit Cellars
+      ['slime', 'Gloop', 'slime', 'c', 'm', '', 0, 'Lamp oil left too long near the Rift grows hungry. Gloops are what it becomes. Harmless alone, ruinous in barrels.'],
+      ['rat', 'Gnawer', 'rat', 'c', 'm', '', 0, 'The Hold’s rats went down for the oil and came back up bigger. The Tide uses them as scouts now.'],
+      ['wickbeetle', 'Wick Beetle', 'beetle', 'c', 'm', '', 0, 'Beetles that nest in old lamp wicks. Their shells hold a little warmth, so the Hold’s children carry them about in winter.'],
+      ['lampmoth', 'Lampmoth', 'moth', 'u', 's', '', 20, 'Lampmoths circle any flame bigger than a candle. They mean no harm, but there are always a great many of them.'],
+      ['caskgloop', 'Cask Gloop', 'slime', 'u', 'm', 'plate', 30, 'A Gloop that soaked into a cider cask and kept its shape, hoops and all. It still sloshes when it moves.'],
+      ['pantryrobber', 'Pantry Robber', 'rat', 'u', 's', '', 20, 'Small, quick and always carrying something it should not. Every cellar in the Hold has lost a cheese to one.'],
+      ['cellarking', 'Cellar King', 'rat', 'r', 'l', 'crown', 0, 'The biggest Gnawer anyone has seen, wearing a thimble for a crown. The others bring it the best crumbs.'],
+      ['goldengloop', 'Golden Gloop', 'slime', 'v', 'm', 'spots', -70, 'A Gloop that swallowed a coin purse and turned the colour of it. Delvers say seeing one means the lantern will burn long tonight.'],
+    ],
+    [ // 1 Mosswater Crypts
+      ['ghost', 'Wisp', 'ghost', 'c', 'm', '', 0, 'A wisp is the warmth a person leaves behind. The Pale Oracle says she can tell whose by the colour.'],
+      ['boggloop', 'Bog Gloop', 'slime', 'c', 'm', 'moss', null, 'A Gloop that sat in crypt water until moss grew on it. It does not seem to mind.'],
+      ['mossbones', 'Mossbones', 'skeleton', 'c', 'm', 'moss', null, 'Old bones wrapped in moss like a blanket. They creak less than other skeletons, and they smell of rain.'],
+      ['cryptflitter', 'Crypt Flitter', 'bat', 'u', 's', '', null, 'Little bats that roost in the crypt alcoves. They count delvers as they pass and squeak the total.'],
+      ['cryptcrab', 'Crypt Crab', 'crab', 'u', 'm', 'moss', null, 'Shell-backed scuttlers that carry candle stubs on their backs. Nobody knows where they find them.'],
+      ['mosswatcher', 'Moss Watcher', 'eye', 'u', 'm', 'moss', null, 'A Watcher grown over with moss, like a stone left in a stream. It still sees everything.'],
+      ['lanternwisp', 'Lantern Wisp', 'ghost', 'r', 'l', 'spots', 40, 'A wisp that still remembers holding a light. It drifts ahead of delvers as if showing them the way.'],
+      ['rotbloom', 'Rot Bloom', 'shroom', 'v', 'l', 'crown', 60, 'Grandmother Rot’s favourite. It is very old, very slow, and very sure of itself.'],
+    ],
+    [ // 2 The Glimmer Fungus Deep
+      ['shroom', 'Capling', 'shroom', 'c', 'm', '', 0, 'They walk on their roots and sing in a pitch only the dead can hear. The Choir is what happens when enough of them agree.'],
+      ['glowcap', 'Glowcap Drifter', 'shroom', 'c', 's', 'spots', null, 'Tiny Caplings that float on their own spores. They glow brighter when they are happy, which is rarely near delvers.'],
+      ['sporemoth', 'Spore Moth', 'moth', 'c', 'm', 'spots', null, 'Its wings are dusted with glowing spores. Where it lands, a new Capling sprouts a week later.'],
+      ['luridgloop', 'Lurid Gloop', 'slime', 'u', 'm', 'spots', null, 'A Gloop that ate too many glowcaps. Now it lights up the tunnel, which makes it very easy to find.'],
+      ['glimmerbeetle', 'Glimmer Beetle', 'beetle', 'u', 'm', 'crystal', null, 'Beetles that grow tiny glass crystals on their backs, like a garden. They are proud of them.'],
+      ['sporewing', 'Sporewing', 'bat', 'u', 'm', 'spots', null, 'A Flitterwing that roosts upside down in glowcap fields. It sneezes a lot.'],
+      ['sporematron', 'Spore Matron', 'shroom', 'r', 'l', 'moss', 300, 'A Capling as tall as a door. Smaller Caplings sprout from her shoulders and hop off when she walks.'],
+      ['choirherald', 'Choir Herald', 'shroom', 'v', 'l', 'crown', 40, 'The voice that leads the Mycelial Choir. When it sings, every Capling on the floor turns to listen.'],
+    ],
+    [ // 3 Saltbone Galleries
+      ['skeleton', 'Rattlebones', 'skeleton', 'c', 'm', '', 0, 'Most wear the tatters of lantern-bearer coats or Covenant iron. Vael says they are not angry. They are lost.'],
+      ['saltcrab', 'Salt Crab', 'crab', 'c', 'm', 'barnacle', null, 'Crabs that walked in from an underground sea long gone. They still wave their claws at the tide that is not there.'],
+      ['brinebones', 'Brine Bones', 'skeleton', 'c', 'm', 'barnacle', null, 'Skeletons crusted white with salt. They crunch when they walk, so you always hear them coming.'],
+      ['bleachwing', 'Bleachwing', 'bat', 'u', 'm', '', 170, 'A Flitterwing bleached pale by the salt air. It is hard to see against the white walls.'],
+      ['saltwatcher', 'Salt Watcher', 'eye', 'u', 'm', 'crystal', null, 'Salt crystals grow around this Watcher like frost on a window. It does not blink. None of them do.'],
+      ['bonegnawer', 'Bone Gnawer', 'rat', 'u', 'm', '', null, 'Gnawers that moved into the galleries for the bones. They polish each one before they hide it.'],
+      ['drummer', 'Covenant Drummer', 'skeleton', 'r', 'l', 'plate', null, 'A skeleton in Covenant iron, still beating time on its ribs. The others march when it plays.'],
+      ['gallerywarden', 'Gallery Warden', 'ghost', 'v', 'l', 'chain', 170, 'A wisp wearing chains of salt. It counts every delver who passes and never loses track.'],
+    ],
+    [ // 4 The Cinder Forges
+      ['slaggloop', 'Slag Gloop', 'slime', 'c', 'm', 'ember', null, 'Molten slag that cooled into a Gloop. It is warm to the touch, so please do not touch it.'],
+      ['cinderbeetle', 'Cinder Beetle', 'beetle', 'c', 'm', 'ember', null, 'Beetles that eat soot and glow orange from the inside. Forge workers used them as night-lights.'],
+      ['ashwing', 'Ashwing', 'bat', 'c', 'm', 'ember', null, 'A Flitterwing that flies through smoke without coughing. Its wings leave little trails of sparks.'],
+      ['sootgnawer', 'Soot Gnawer', 'rat', 'u', 'm', '', null, 'Gnawers black with soot from nose to tail. Only their eyes give them away in the dark.'],
+      ['kilncrab', 'Kiln Crab', 'crab', 'u', 'm', 'ember', null, 'A crab that lives inside old kilns. Its shell is baked hard as pottery.'],
+      ['furnaceeye', 'Furnace Eye', 'eye', 'u', 'm', 'ember', null, 'A Watcher that stares into the forge fires until its eye glows. It is not as scary as it looks. Mostly.'],
+      ['forgehand', 'Forge Hand', 'skeleton', 'r', 'l', 'plate', null, 'Bones in a smith’s apron, still hammering on nothing. Ascendancy smiths left it working and never came back.'],
+      ['moltenheart', 'Molten Heart', 'slime', 'v', 'l', 'ember', null, 'A Gloop that fell into the Furnace-Heart and climbed back out glowing. It is warm enough to toast bread on.'],
+    ],
+    [ // 5 The Drowned Archive
+      ['eye', 'Watcher', 'eye', 'c', 'm', '', 0, 'Nobody has seen a Watcher blink. Moss thinks they report to the Ascendancy. Kestrel thinks Moss worries too much.'],
+      ['inkwisp', 'Inkwisp', 'ghost', 'c', 'm', 'spots', 200, 'Spilled ink from the drowned books that still wants to write. It leaves little letters wherever it floats.'],
+      ['archivecrab', 'Archive Crab', 'crab', 'c', 'm', 'barnacle', null, 'Crabs that file things. Nobody knows what they file, or where, but they are very busy.'],
+      ['inkgloop', 'Ink Gloop', 'slime', 'u', 'm', '', 200, 'A Gloop made of spilled ink. Delvers who fight one go home with blue hands for a week.'],
+      ['pagemoth', 'Page Moth', 'moth', 'u', 'm', '', null, 'Moths that eat old paper and fly in the shapes of the letters they ate.'],
+      ['dampflitter', 'Damp Flitter', 'bat', 'u', 's', 'barnacle', null, 'A small, soggy bat. It shakes itself dry on whoever stands nearest.'],
+      ['readinglens', 'Reading Lens', 'eye', 'r', 'l', 'crystal', null, 'A Watcher that wears a reading glass. It stares at delvers as if checking their names against a list.'],
+      ['sunkenscribe', 'Sunken Scribe', 'ghost', 'v', 'l', 'chain', 140, 'The Sunken Magister’s last apprentice, still taking notes. It writes down everything you do.'],
+    ],
+    [ // 6 Hollow Roots
+      ['bat', 'Flitterwing', 'bat', 'c', 'm', '', 0, 'Drawn to any light. A lantern-bearer learns to love them, because they always fly toward the way out.'],
+      ['rootcap', 'Rootcap', 'shroom', 'c', 'm', 'leaf', null, 'A Capling that grew on a tree root instead of the ground. It walks with a slight lean.'],
+      ['barkbeetle', 'Bark Beetle', 'beetle', 'c', 'm', 'leaf', null, 'Its shell looks just like bark. Delvers lean on them by accident more often than you would think.'],
+      ['rootgnawer', 'Root Gnawer', 'rat', 'u', 'm', 'moss', null, 'Gnawers that chew tunnels through the roots. The Root Mother does not like them at all.'],
+      ['hollowmoth', 'Hollow Moth', 'moth', 'u', 'm', 'leaf', null, 'Its wings are shaped like dry leaves. It hides in plain sight until a lantern comes close.'],
+      ['sapgloop', 'Sap Gloop', 'slime', 'u', 'm', '', -80, 'Tree sap that wandered off. It is very sticky and very slow, and it smells of honey.'],
+      ['knotwatcher', 'Knot Watcher', 'eye', 'r', 'l', 'leaf', null, 'A Watcher that grew inside a knot of old wood. The bark around it is shaped like an eyelid that never closes.'],
+      ['rootbloom', 'Root Mother’s Bloom', 'shroom', 'v', 'l', 'crown', 100, 'A flower the Root Mother grew to watch the tunnels for her. It turns to follow anything warm.'],
+    ],
+    [ // 7 The Starless Vault
+      ['voidwatcher', 'Void Watcher', 'eye', 'c', 'm', 'spots', null, 'A Watcher from the dark below the lantern. Its eye shows stars that are not in any sky.'],
+      ['umbralwisp', 'Umbral Wisp', 'ghost', 'c', 'm', '', null, 'A wisp so dim you only see it when it passes in front of something brighter.'],
+      ['starlessflitter', 'Starless Flitter', 'bat', 'c', 'm', '', null, 'Bats that have never seen daylight, and never will. They are fond of lanterns all the same.'],
+      ['nightmoth', 'Night Moth', 'moth', 'u', 'm', 'spots', null, 'Its wings carry little dots of starlight. It is the only moth that flies away from the lantern.'],
+      ['umbralgloop', 'Umbral Gloop', 'slime', 'u', 'm', '', null, 'A Gloop of pure shadow. It swallows light the way other Gloops swallow lamp oil.'],
+      ['vaultsentry', 'Vault Sentry', 'skeleton', 'u', 'm', 'plate', null, 'A skeleton still guarding a vault door that no longer exists. It takes the job very seriously.'],
+      ['starshell', 'Starshell', 'crab', 'r', 'l', 'crystal', null, 'A crab with a shell full of tiny stars. Nobody knows where it found them, and it will not say.'],
+      ['lastlight', 'Last Light', 'ghost', 'v', 'l', 'spots', 30, 'A wisp from the very first lantern carried into the Vault. It is the only light the Unlit has never put out.'],
+    ],
+    [ // 8 The Glass Wastes
+      ['shard', 'Glass Crawler', 'shard', 'c', 'm', '', null, 'Splinters of Rift-glass that learned to walk. They reflect the light you carry and throw it back as a ward.'],
+      ['prismmite', 'Prism Mite', 'shard', 'c', 's', '', 300, 'Glass Crawlers no bigger than a teacup. They travel in clinking crowds.'],
+      ['glassmoth', 'Glass Moth', 'moth', 'c', 'm', 'crystal', null, 'A moth with see-through wings. When it flies past a lantern it throws rainbows on the walls.'],
+      ['shardcrab', 'Shard Crab', 'crab', 'u', 'm', 'crystal', null, 'A crab that wears a broken bottle for a shell. It picks a bigger one each year.'],
+      ['glassgloop', 'Glass Gloop', 'slime', 'u', 'm', 'crystal', null, 'A Gloop that swallowed so much Rift-glass it started to sparkle. It spits it back out when angry.'],
+      ['glintflitter', 'Glint Flitter', 'bat', 'u', 'm', 'crystal', null, 'Bats with glass in their wings. They dive at anything shiny, including your helmet.'],
+      ['mirroreye', 'Mirror Eye', 'eye', 'r', 'l', 'crystal', null, 'A Watcher with a mirror for an eye. When it looks at you, you see yourself looking back.'],
+      ['facet', 'Regent’s Facet', 'shard', 'v', 'l', 'crown', 40, 'A shard that broke off the Glass Regent. It still thinks it is in charge.'],
+    ],
+    [ // 9 The Ironbound Bastion
+      ['sentinel', 'Iron Husk', 'sentinel', 'c', 'm', '', null, 'Empty Covenant armour, still on patrol. They swing wide, as they were drilled to, and hit whoever stands beside you too.'],
+      ['rusthusk', 'Rust Husk', 'sentinel', 'c', 'm', 'chain', null, 'An Iron Husk that has stood in the damp too long. It squeaks at every step.'],
+      ['rivetgnawer', 'Rivet Gnawer', 'rat', 'c', 'm', 'plate', null, 'Gnawers that chew the rivets out of old armour and wear the plates themselves.'],
+      ['bastionbones', 'Bastion Bones', 'skeleton', 'u', 'm', 'plate', null, 'Covenant soldiers who held the wall until the end, and then kept holding it.'],
+      ['ironbeetle', 'Iron Beetle', 'beetle', 'u', 'm', 'plate', null, 'A beetle that grows a shell of real iron. Bastion smiths used to trade them for nails.'],
+      ['oathwisp', 'Oath Wisp', 'ghost', 'u', 'm', '', null, 'All that is left of a promise someone made on these walls. It still means to keep it.'],
+      ['watchpost', 'Watch-Post Eye', 'eye', 'r', 'l', 'plate', null, 'A Watcher fitted with an iron visor by the Covenant. It was put on guard duty and never relieved.'],
+      ['standard', 'Last Standard', 'sentinel', 'v', 'l', 'crown', null, 'An Iron Husk still carrying the Bastion’s banner. It will not lower it for anyone.'],
+    ],
+    [ // 10 The Weeping Aqueduct
+      ['eel', 'Sluice Eel', 'eel', 'c', 'm', '', null, 'They swim up the aqueduct against the current. A cut eel knits itself shut if you let it rest.'],
+      ['silteel', 'Silt Eel', 'eel', 'c', 's', '', 30, 'Young eels that hide in the mud of the channels. They nibble boots.'],
+      ['aqueductcrab', 'Aqueduct Crab', 'crab', 'c', 'm', 'barnacle', null, 'Crabs that ride the current down the aqueduct and walk all the way back up for another go.'],
+      ['brackishgloop', 'Brackish Gloop', 'slime', 'u', 'm', 'barnacle', null, 'A Gloop of salty channel water. Barnacles grow on it, which it finds annoying.'],
+      ['dripcap', 'Drip Cap', 'shroom', 'u', 'm', 'moss', null, 'A Capling that grows under the dripping arches. Its spores come out as a fine mist.'],
+      ['weepingflitter', 'Weeping Flitter', 'bat', 'u', 'm', '', null, 'A bat that cries like the aqueduct. It is not sad. That is just how it talks.'],
+      ['ribboneel', 'Ribbon Eel', 'eel', 'r', 'l', 'spots', 260, 'A long, bright eel that the Brine Matriarch keeps close. It glows when she calls.'],
+      ['weepingwisp', 'Weeping Wisp', 'ghost', 'v', 'l', 'spots', 150, 'The sound the aqueduct makes when it weeps. Delvers hear it long before they see it.'],
+    ],
+    [ // 11 The Bone Orchard
+      ['thorn', 'Thornling', 'thorn', 'c', 'm', '', null, 'Seedlings of the Bone Orchard that walked away from their trees. Their barbs carry a slow venom that keeps working after the fight.'],
+      ['bramblesprout', 'Bramble Sprout', 'thorn', 'c', 's', 'leaf', null, 'A Thornling only a few days old. It is all prickles and no manners.'],
+      ['marrowcap', 'Marrow Cap', 'shroom', 'c', 'm', 'leaf', 0, 'Pale Caplings that grow in the orchard soil. They hum along with the wind through the branches.'],
+      ['orchardgnawer', 'Orchard Gnawer', 'rat', 'u', 'm', '', null, 'Gnawers that steal the orchard’s white fruit. The Keeper chases them off with his shears.'],
+      ['blossommoth', 'Blossom Moth', 'moth', 'u', 'm', 'leaf', null, 'A moth that looks just like a white blossom until it flies off your shoulder.'],
+      ['orchardbones', 'Orchard Bones', 'skeleton', 'u', 'm', 'leaf', null, 'Bones with roots growing through them. They tend the trees and do not like visitors.'],
+      ['petalwisp', 'Petal Wisp', 'ghost', 'r', 'l', 'leaf', 320, 'A wisp that wears a crown of petals. It drifts from tree to tree, as if visiting old friends.'],
+      ['elderthorn', 'Elder Thorn', 'thorn', 'v', 'l', 'crown', 60, 'The oldest Thornling in the orchard. The others still wait for it before they do anything.'],
+    ],
+    [ // 12 Stormglass Spire
+      ['prism', 'Storm Lens', 'prism', 'c', 'm', '', null, 'Shards of the Spire that caught a lightning stroke and kept it. They strike before you see them move.'],
+      ['sparklens', 'Spark Lens', 'prism', 'c', 's', 'spots', 60, 'A small Storm Lens, still learning. It crackles when it is excited, which is always.'],
+      ['stormwing', 'Stormwing', 'bat', 'c', 'm', 'spots', null, 'A bat that rides the Spire’s lightning. Its fur stands straight up.'],
+      ['thundereye', 'Thunder Eye', 'eye', 'u', 'm', 'spots', null, 'A Watcher charged with storm. When it marks you, your hair stands on end first.'],
+      ['staticgloop', 'Static Gloop', 'slime', 'u', 'm', 'spots', null, 'A Gloop full of static. Everything it touches gets a small, annoying shock.'],
+      ['boltmoth', 'Bolt Moth', 'moth', 'u', 'm', 'spots', null, 'Moths that fly toward lightning instead of lanterns. Nobody knows how they survive it.'],
+      ['chargedshard', 'Charged Shard', 'shard', 'r', 'l', 'spots', null, 'A Glass Crawler that climbed the Spire and got struck. It has been buzzing ever since.'],
+      ['choirprism', 'Choir Prism', 'prism', 'v', 'l', 'crown', 300, 'The lens the Spire’s choir tunes to. It hums one note, perfectly, forever.'],
+    ],
+    [ // 13 The Nexus Scar
+      ['hound', 'Rift Hound', 'hound', 'c', 'm', '', null, 'Bred by no alliance, followed by all of them. Wounding one only makes it angry.'],
+      ['scarpup', 'Scar Pup', 'hound', 'c', 's', '', null, 'A young Rift Hound. It already growls like a big one, and it is very proud of that.'],
+      ['warbornbones', 'Warborn Bones', 'skeleton', 'c', 'm', 'plate', null, 'Skeletons from all three alliances, still fighting each other when nobody is looking.'],
+      ['scargnawer', 'Scar Gnawer', 'rat', 'u', 'm', '', null, 'Gnawers that follow the armies for dropped rations. They know every side’s marching songs.'],
+      ['bannereye', 'Banner Eye', 'eye', 'u', 'm', '', null, 'A Watcher that floats over the battle lines, keeping score for nobody.'],
+      ['scarcap', 'Scar Cap', 'shroom', 'u', 'm', 'ember', null, 'A Capling that grows in scorched ground. Its spores smell of smoke.'],
+      ['threefoldhusk', 'Threefold Husk', 'sentinel', 'r', 'l', 'chain', -40, 'Three suits of armour from three alliances, chained into one. They argue about which way to walk.'],
+      ['warhosthound', 'Warhost Hound', 'hound', 'v', 'l', 'crown', 40, 'The hound that runs ahead of the Threefold Warhost. Every other hound in the Scar follows it.'],
+    ],
+    [ // 14 The Rift Threshold
+      ['riftling', 'Riftling', 'riftling', 'c', 'm', '', null, 'Small pieces of the Rift that wandered up toward the lantern. They are curious. They are also very hard to hurt.'],
+      ['riftmote', 'Rift Mote', 'riftling', 'c', 's', 'spots', null, 'A Riftling so small it fits in a cupped hand. Please do not try.'],
+      ['starbornwisp', 'Starborn Wisp', 'ghost', 'c', 'm', 'spots', null, 'A wisp made of starlight from the far side of the Rift. It is a long way from home.'],
+      ['riftmoth', 'Rift Moth', 'moth', 'u', 'm', 'spots', null, 'Moths that flew through the Rift and came back strange. Their wings show other places.'],
+      ['unmadegloop', 'Unmade Gloop', 'slime', 'u', 'm', 'spots', null, 'A Gloop that is not quite finished. Bits of it flicker in and out.'],
+      ['hollowflitter', 'Hollow-lit Flitter', 'bat', 'u', 'm', '', null, 'Bats lit from the inside by Rift light. They look like flying lanterns.'],
+      ['thresholdeye', 'Threshold Eye', 'eye', 'r', 'l', 'crystal', null, 'A Watcher that looks through the Rift instead of at you. That is somehow worse.'],
+      ['firstspark', 'Firstspark', 'riftling', 'v', 'l', 'crown', 40, 'A Riftling that has almost become a star. It hums a tune every delver seems to know.'],
+    ],
+  ];
+  // Field notes: a second page of lore that opens after enough of a kind are defeated (John, 27 Nov 2026).
+  const LORE_AT = { c: 25, u: 10, r: 3, v: 1 };
+  const CREATURE_LORE = {
+    "slime": "Oduya keeps a bucket by the stair for Gloops. She says the trick is to scoop, not swing.",
+    "rat": "Kestrel once trained a Gnawer to fetch coins. It learned, then kept them.",
+    "wickbeetle": "When a Wick Beetle\u2019s glow fades, an old lamp somewhere in the Hold has gone out. Children leave crumbs by the cellar door to keep them bright.",
+    "lampmoth": "Lampmoth wings leave a fine gold dust. Mercy Corps medics brush it onto bandages, because the moths always find their way back to whoever wears them.",
+    "caskgloop": "Nobody admits to leaving the cask open. The cider was very good, everyone agrees.",
+    "pantryrobber": "Every Pantry Robber has a hoard. The biggest one ever found held forty spoons, a boot and a Covenant medal.",
+    "cellarking": "The thimble crown was Moss\u2019s. She noticed it missing the week she arrived and has decided it looks better on him.",
+    "goldengloop": "Old delvers tip their caps when one passes. Nobody remembers who started it, but nobody wants to be the one who stops.",
+    "ghost": "Wisps gather where people once sat by a fire. The Mosswater crypts are full of them, which says something kind about whoever was buried there.",
+    "boggloop": "Bog Gloops grow a new layer of moss every season. Count the rings and you know how long it has been since anyone came down here.",
+    "mossbones": "Vael says these were gardeners. They still tug at weeds when they think no one is looking.",
+    "cryptflitter": "Their squeaks match the number of delvers exactly. Mercy Corps scouts use them to check nobody has been left behind.",
+    "cryptcrab": "Follow a Crypt Crab long enough and it leads you to a shrine full of candle stubs, each one lit. Nobody has ever seen who lights them.",
+    "mosswatcher": "The moss on a Watcher grows only on the side facing the stair. Kestrel says it is watching for something coming down.",
+    "lanternwisp": "If a Lantern Wisp drifts ahead of you, follow it. It has never once led a delver the wrong way.",
+    "rotbloom": "Grandmother Rot planted it the year the crypts flooded. It has outlived every gardener who tried to dig it up.",
+    "shroom": "Caplings sing in rounds. Wren tried to write the tune down and ran out of paper on the third verse.",
+    "glowcap": "On quiet nights in the Deep the Glowcap Drifters rise all at once, like lanterns let go on a festival night.",
+    "sporemoth": "Spore Moths and Caplings help each other. The moths carry the spores, and the Caplings sing them to sleep.",
+    "luridgloop": "Ascendancy prospectors once followed Lurid Gloops to find the richest glowcap beds. The Gloops ate the beds first.",
+    "glimmerbeetle": "Each Glimmer Beetle grows crystals in its own colour. Two beetles with the same colour are said to be siblings.",
+    "sporewing": "A Sporewing sneeze can start a whole new glowcap patch. The Deep would be much darker without them.",
+    "sporematron": "Every Capling in the Deep can trace its roots back to a Spore Matron. They are the grandmothers of the Choir.",
+    "choirherald": "The Herald only sings when the whole Choir is listening. Delvers who have heard it say the tune stays with them for days.",
+    "skeleton": "Some Rattlebones still carry letters in their coat pockets. Moss reads them out loud before the party moves on.",
+    "saltcrab": "Salt Crabs remember the sea that dried up. Hold one to your ear and you can almost hear waves.",
+    "brinebones": "The salt keeps them strong. Oduya respects that. She says the Covenant would have liked them.",
+    "bleachwing": "Bleachwings are almost invisible against the gallery walls. Delvers learn to listen for the flap instead.",
+    "saltwatcher": "The crystals on a Salt Watcher grow a hair\u2019s width each year. The oldest ones look like chandeliers.",
+    "bonegnawer": "Bone Gnawers sort their treasure by size. Their nests are tidier than most barracks.",
+    "drummer": "The Drummer keeps the old Covenant marching beat. Oduya catches herself stepping in time and frowns about it.",
+    "gallerywarden": "The Warden counted every Covenant soldier who walked into the galleries. It is still waiting for the same number to walk out.",
+    "slaggloop": "Slag Gloops pool in the forge channels where the metal once ran. They keep the old furnaces warm for nobody.",
+    "cinderbeetle": "Forge workers kept Cinder Beetles in glass jars by their beds. Some jars are still glowing, on shelves nobody has dusted in years.",
+    "ashwing": "Ashwings nest in chimneys. When the Forges smoke again, it is usually because a flock just landed.",
+    "sootgnawer": "Kestrel\u2019s favourite Gnawer. She says anyone who stays that dirty on purpose is a professional.",
+    "kilncrab": "Kiln Crabs crack their shells every spring and bake a new one. The old shells make very good bowls.",
+    "furnaceeye": "Wren insists the Furnace Eye winked at her. Moss pointed out that Watchers cannot blink. Wren has not let it go.",
+    "forgehand": "The Forge Hand is still finishing an order from the Ascendancy. Nobody has the heart to tell it the buyer is gone.",
+    "moltenheart": "Mercy Corps cooks have been known to warm a pot of soup beside a sleeping Molten Heart. It does not seem to mind sharing.",
+    "eye": "Watchers float in pairs in the Archive, one above each reading table. Whoever studied here was never alone, and never unobserved.",
+    "inkwisp": "If you can read what an Inkwisp writes, it is usually a shopping list. The scribes were people too.",
+    "archivecrab": "Archive Crabs sort fallen pages by colour, then by size, then start again. They have been at it for a hundred years.",
+    "inkgloop": "An Ink Gloop splatter dries into the shape of a word. Wren has collected nine so far and thinks they spell a recipe.",
+    "pagemoth": "Catch a Page Moth and its wings show the last book it ate. Most were very boring.",
+    "dampflitter": "The Damp Flitter is the only bat in the Archive that likes being wet. The others think it is showing off.",
+    "readinglens": "The list the Reading Lens checks is real. It is the Archive\u2019s library card ledger, and almost everyone on it has overdue books.",
+    "sunkenscribe": "The Scribe\u2019s notes on your party are surprisingly kind. It underlined the part where you helped someone.",
+    "bat": "Flitterwings roost in Hollow Roots by the thousand. At dusk they pour up toward the Hold like smoke going the right way.",
+    "rootcap": "Rootcaps lean toward water. Lost delvers have followed them to a spring more than once.",
+    "barkbeetle": "Bark Beetles do not mind being leaned on. They just walk off slowly, taking your elbow with them.",
+    "rootgnawer": "The Root Mother sends Thornlings after Root Gnawers. The Gnawers send their cousins to the Bone Orchard in return. It has been a long feud.",
+    "hollowmoth": "Hollow Moths fall like leaves when a lantern swings past. Delvers who stop to watch say it is the prettiest thing in the Roots.",
+    "sapgloop": "A Sap Gloop left in the sun turns into amber. Kestrel sold one to a jeweller and swears it twitched on the counter.",
+    "knotwatcher": "The Knot Watcher has been in its tree so long the tree has grown a second ring of bark around it, like a hood.",
+    "rootbloom": "The Bloom turns toward anything warm. Delvers who stand very still have watched it follow their lantern across the whole cavern.",
+    "voidwatcher": "The stars in a Void Watcher\u2019s eye move. Wren is mapping them, slowly, and refuses to say what she thinks they are.",
+    "umbralwisp": "Umbral Wisps are shy. Shade your lantern and they come closer, curious about the people who brought light down here.",
+    "starlessflitter": "Starless Flitters cannot see colour. They know your lantern by its warmth, and they are always glad of it.",
+    "nightmoth": "Night Moths fly toward the dark because they are carrying starlight to it. At least, that is what the Mercy Corps tells children.",
+    "umbralgloop": "An Umbral Gloop that swallows a lantern spits it back out lit. Nobody can explain this.",
+    "vaultsentry": "The Sentry asks every delver for the password. Nobody knows it. It lets them through anyway, sighing.",
+    "starshell": "Starshells trade stars with each other. The oldest ones have the dimmest stars, because they gave the bright ones away.",
+    "lastlight": "The Last Light is small and steady. Delvers who see it say they felt braver for the rest of the delve.",
+    "shard": "Glass Crawlers sing when they move, a high clinking note. A whole field of them sounds like wind chimes in a storm.",
+    "prismmite": "Prism Mites gather on any shiny surface. A Covenant shield left in the Wastes was found covered in hundreds, like a mosaic.",
+    "glassmoth": "A Glass Moth\u2019s rainbows point toward water. In the Wastes, that is the most useful thing a moth can do.",
+    "shardcrab": "Shard Crabs carry their old bottles to the young ones when they move house. Nothing in the Wastes goes to waste.",
+    "glassgloop": "Ascendancy lens-grinders once harvested Glass Gloops for their polish. The Gloops did not appreciate it.",
+    "glintflitter": "Kestrel keeps a pocketful of buttons to throw at Glint Flitters. It works every time.",
+    "mirroreye": "Some delvers say the reflection in the Mirror Eye looks a little older. Nobody stays long enough to check.",
+    "facet": "The Facet still gives orders in the Regent\u2019s voice. The other Crawlers ignore it, politely.",
+    "sentinel": "Iron Husks salute Oduya when she passes. She salutes back, every time, and does not talk about it.",
+    "rusthusk": "Rust Husks squeak loudest when it is about to rain on the surface. Bastion soldiers used them as weather vanes.",
+    "rivetgnawer": "A Rivet Gnawer in full plate is very proud and very slow. It is hard not to cheer for it.",
+    "bastionbones": "Bastion Bones still change the guard at midnight. If you stand on the wall then, one will hand you a spear.",
+    "ironbeetle": "Iron Beetles moult once a decade. Bastion smiths used the old shells to patch the gates.",
+    "oathwisp": "An Oath Wisp follows anyone who makes a promise on the walls. Be careful what you swear in the Bastion.",
+    "watchpost": "The Watch-Post Eye still reports to an officer who left long ago. Every hour it says: all quiet.",
+    "standard": "The banner is so faded nobody can read its colours. The Husk carrying it remembers them perfectly.",
+    "eel": "Sluice Eels swim up the aqueduct every night and drift back down every morning. It is the most dependable thing in the deep.",
+    "silteel": "Silt Eels are harmless, but they do like boots. Mercy Corps medics tie their laces twice down here.",
+    "aqueductcrab": "Aqueduct Crabs have worn a groove in the stone from walking back up. It took them three hundred years.",
+    "brackishgloop": "Brackish Gloops scrape their barnacles off against the arches. That is why the aqueduct walls are so smooth.",
+    "dripcap": "Drip Caps drink so much mist they glow faintly blue. Wren calls them the aqueduct\u2019s night-lights.",
+    "weepingflitter": "The Weeping Flitter\u2019s cry is a greeting. Answer it and it will circle you twice before flying off.",
+    "ribboneel": "When the Brine Matriarch calls, the Ribbon Eels light the whole channel. It looks like a road made of lanterns.",
+    "weepingwisp": "The Weeping Wisp is not sad. Moss thinks it is the aqueduct remembering when it was full of clean water.",
+    "thorn": "Thornlings are seedlings that got restless. Plant one in good soil and it will settle down and grow into a tree. Probably.",
+    "bramblesprout": "Bramble Sprouts poke delvers for fun. It is how young Thornlings learn what is soft.",
+    "marrowcap": "Marrow Caps hum the same note as the orchard wind. On calm days they hum it anyway, so the trees do not feel lonely.",
+    "orchardgnawer": "The white fruit of the orchard tastes of honey and chalk. Orchard Gnawers think it is worth any number of shears.",
+    "blossommoth": "Blossom Moths only land on people who are standing still. Delvers sometimes stop just to see if one will choose them.",
+    "orchardbones": "Orchard Bones water the trees with their own helmets. They have never once missed a day.",
+    "petalwisp": "The Petal Wisp visits every tree in the orchard once a year. The trees it visits flower first.",
+    "elderthorn": "The Elder Thorn remembers when the orchard was a garden. It is the only one who still calls it that.",
+    "prism": "Storm Lenses hum before they strike. Delvers who listen for the hum keep their eyebrows.",
+    "sparklens": "Spark Lenses chase each other up and down the Spire like children in a corridor. They leave scorch marks everywhere.",
+    "stormwing": "A Stormwing\u2019s fur crackles when it lands. Every other bat in the Spire refuses to roost next to one.",
+    "thundereye": "The Thunder Eye\u2019s mark leaves a little star-shaped scorch. Some delvers keep it as a badge.",
+    "staticgloop": "Static Gloops stick to the walls by themselves. Ascendancy students used them to hang notes.",
+    "boltmoth": "Bolt Moths fly into lightning and come out faster. Nobody has ever caught one, and many have tried.",
+    "chargedshard": "The Charged Shard climbed the Spire on purpose. Wren respects that kind of ambition.",
+    "choirprism": "The Spire choir tuned to the Prism for a hundred years. When it hums, the whole tower answers.",
+    "hound": "Rift Hounds follow whichever army is winning. Lately they have been following the delvers.",
+    "scarpup": "Scar Pups chew on dropped banners from every side. They do not care whose colours they ruin.",
+    "warbornbones": "Warborn Bones from different alliances fight each other until a delver arrives. Then, for a while, they fight together.",
+    "scargnawer": "Scar Gnawers sing the marching songs of all three armies, badly and all at once.",
+    "bannereye": "The Banner Eye keeps score for every battle in the Scar. By its count, nobody is winning.",
+    "scarcap": "Scar Caps grow where the fighting was worst. Mercy Corps medics say that means even the Scar can heal.",
+    "threefoldhusk": "The Threefold Husk argues with itself in three accents. On good days it agrees on which foot to start with.",
+    "warhosthound": "Every hound in the Scar follows the Warhost Hound, and the Warhost Hound follows the loudest drum.",
+    "riftling": "Riftlings come up toward the lantern to see what light is. Vael says they go back down and tell the others.",
+    "riftmote": "Rift Motes gather on lantern glass like moths. Wipe them off gently. They are very young.",
+    "starbornwisp": "The Starborn Wisp has seen the far side of the Rift. If you listen closely, it is humming a lullaby from there.",
+    "riftmoth": "A Rift Moth\u2019s wings show other places. Delvers have seen meadows, oceans and once, very briefly, the Hold itself.",
+    "unmadegloop": "Unmade Gloops flicker between colours they have not chosen yet. Wren is betting on blue.",
+    "hollowflitter": "Hollow-lit Flitters guide lost Riftlings back toward the dark. They are kinder than they look.",
+    "thresholdeye": "The Threshold Eye has never looked at a delver directly. Moss thinks it is being polite.",
+    "firstspark": "The Firstspark\u2019s tune is the one every delver\u2019s mother hummed. Nobody can explain how it knows."
+  };
+  const CREATURES = [];
+  ROSTERS.forEach((list, r) => list.forEach(([id, name, fam, rar, size, ov, hue, text]) => CREATURES.push({ id, name, fam, r, rar, size, ov, hue: hue == null ? null : hue, text, lore: CREATURE_LORE[id] || '' })));
+  const creatureById = id => CREATURES.find(c => c.id === id);
+  const creatureHue = c => c.hue == null ? BIOMES[c.r].hue : c.hue;
+  // Where a creature shows up: its home region, and the regions next door it wanders into.
+  const creatureRegions = c => [c.r - 1, c.r + 1].filter(x => x >= 0 && x < ROSTERS.length);
+  const rosterOf = f => Math.floor((f - 1) / 10) % ROSTERS.length;
+  function pickCreature(f, r) {
+    const home = rosterOf(f);
+    let rn = home;
+    if (r() >= ROSTER_HOME) { const nb = [home - 1, home + 1].filter(x => x >= 0 && x < ROSTERS.length); rn = nb[Math.floor(r() * nb.length)]; }
+    const list = CREATURES.filter(c => c.r === rn), tot = list.reduce((a, c) => a + RAR_W[c.rar], 0);
+    let x = r() * tot;
+    for (const c of list) { x -= RAR_W[c.rar]; if (x < 0) return c; }
+    return list[0];
+  }
+  // Chance that a normal spawn on floor f is this creature (for the Bestiary and the wiki).
+  function creatureOdds(c, rn) {
+    const share = (from, w) => { const list = CREATURES.filter(x => x.r === from), tot = list.reduce((a, x) => a + RAR_W[x.rar], 0); return w * RAR_W[c.rar] / tot; };
+    if (c.r === rn) return share(rn, ROSTER_HOME);
+    if (Math.abs(c.r - rn) !== 1) return 0;
+    const nb = [rn - 1, rn + 1].filter(x => x >= 0 && x < ROSTERS.length).length;
+    return share(c.r, (1 - ROSTER_HOME) / nb);
+  }
+  // Families that live (home or wandering) somewhere in floors a..b.
+  function famsIn(a, b) { const out = new Set(), fl = []; for (let f = Math.max(1, a); f < b; f += 10) fl.push(f); fl.push(Math.max(1, b)); for (const f of fl) { const rn = rosterOf(f); for (const c of CREATURES) if (creatureOdds(c, rn) > 0) out.add(c.fam); } return out; }
 
   const RELICS = [
     { id: 'locket',   name: "Miner's Locket",          desc: '+6% gold per level',                    per: 0.06 },
@@ -2286,6 +2597,9 @@
     { id: 'foe_prism', title: 'Storm Lenses', group: 'Bestiary', text: 'Shards of the Spire that caught a lightning stroke and kept it. They strike before you see them move.' },
     { id: 'foe_hound', title: 'Rift Hounds', group: 'Bestiary', text: 'Bred by no alliance, followed by all of them. Wounding one only makes it angry.' },
     { id: 'foe_riftling', title: 'Riftlings', group: 'Bestiary', text: 'Small pieces of the Rift that wandered up toward the lantern. They are curious. They are also very hard to hurt.' },
+    { id: 'foe_beetle', title: 'Beetles', group: 'Bestiary', text: 'Hard shells, busy legs and a habit of charging headfirst. Every region grows its own kind, and each is sure it is the best one.' },
+    { id: 'foe_moth', title: 'Moths', group: 'Bestiary', text: 'Wherever a lantern goes, moths follow. Down here some of them have learned to focus the light they love into a burning beam.' },
+    { id: 'foe_crab', title: 'Crabs', group: 'Bestiary', text: 'The underground seas dried up long ago. The crabs never noticed, and they still scuttle sideways through every damp corner of the deep.' },
     { id: 'foe_chest', title: 'Treasure Chests', group: 'Bestiary', text: 'Lantern-bearers stashed supplies for whoever came next. Some chests are still waiting for the right hands.' },
     { id: 'boss', title: 'Guardians', group: 'Bestiary', text: 'Every fifth landing has something that will not move. The old maps call them guardians. The bones call them jailers.' },
     { id: 'set_vigil', title: "Gravewarden's Vigil", group: 'Relics of the Bearers', text: SETS[0].lore },
@@ -2581,16 +2895,16 @@
     const chest = !boss && r() < chestChance(s) && evOk(s, 'chest');
     if (chest) evUse(s, 'chest');
     const b = biomeOf(f);
-    let sprite, name;
+    let sprite, name, cr = null;
     if (boss) {
       sprite = BOSS_SPRITES[Math.floor(f / BOSS_EVERY) % BOSS_SPRITES.length];
       name = (f % 10 === 0) ? b.boss : ['Stone Sentinel', 'Tunnel Wyrm', 'Bone Hierarch'][BOSS_SPRITES.indexOf(sprite)];
     } else if (chest) { sprite = 'chest'; name = 'Treasure Chest'; }
-    else { const fo = b.foe && r() < 0.55 ? b.foe : FOES[Math.floor(r() * FOES.length)]; sprite = fo.id; name = b.adj[Math.floor(r() * b.adj.length)] + ' ' + fo.name; }
+    else { cr = pickCreature(f, r); sprite = cr.fam; name = cr.name; }
     // Grand War warbands: soldiers of the alliances fighting over the Rift.
     const elite = !boss && !chest && f >= 4 && r() < ELITE_CHANCE;
     let side = null;
-    if (elite) { side = b.war.side; name = b.war.units[Math.floor(r() * b.war.units.length)]; sprite = ['skeleton', 'ghost', 'eye'][Math.floor(r() * 3)]; }
+    if (elite) { cr = null; side = b.war.side; name = b.war.units[Math.floor(r() * b.war.units.length)]; sprite = ['skeleton', 'ghost', 'eye'][Math.floor(r() * 3)]; }
     const hp = foeHp(f, boss) * (chest ? 0.5 : elite ? 2.5 : 1);
     // Some foes sneak up and hit the back of the line first.
     let ambush = !boss && !chest && f >= 6 && r() < (elite ? 0.3 : 0.1) ? 2 : 0;
@@ -2602,7 +2916,7 @@
     const mods = chest ? [] : rollMods(f, boss, elite, b, r);
     if (!chest && !pack && f >= SHIELD_FLOOR && r() < (boss ? SHIELD_BOSS_CHANCE : SHIELD_CHANCE)) mods.push('shield');
     const sp = chest ? null : rollSpecial(f, boss, elite, sprite, b, r);
-    return { sp, spAt: 0, spWind: null, name, sprite, boss, chest, elite, side, ambush, pack, hp: hpx, max: hpx, hue: elite ? b.hue + 40 : b.hue, atk: chest ? 0 : foeDps(f, boss) * FOE_SWING * (elite ? 1.3 : 1) * (pack ? 1 + 0.3 * (pack - 1) : 1) * (mods.includes('swift') ? 1.35 : 1), mods, ward: 0, wardAt: 0 };
+    return { sp, spAt: 0, spWind: null, name, sprite, boss, chest, elite, side, ambush, pack, hp: hpx, max: hpx, hue: elite ? b.hue + 40 : cr ? creatureHue(cr) : b.hue, cid: cr ? cr.id : null, rk: cr ? cr.rar : null, sc: cr ? SIZE_X[cr.size] : 1, ov: cr ? cr.ov : '', atk: chest ? 0 : foeDps(f, boss) * FOE_SWING * (elite ? 1.3 : 1) * (pack ? 1 + 0.3 * (pack - 1) : 1) * (mods.includes('swift') ? 1.35 : 1), mods, ward: 0, wardAt: 0 };
   }
   // Locked doors and chests (John, 2026-11-25): now and then the way is barred by a lock instead of a monster. Only a
   // Rogue can pick it (LOCK_TIME seconds, faster with taps; a stunned or fallen Rogue pauses it). A door hides gold, a
@@ -2822,6 +3136,7 @@
     // first: this kill opens the way down (not a repeat kill while farming a floor already cleared)
     events && events.push({ type: 'kill', gold: g, xp, foe, first: !!foe.boss && s.floor >= s.maxFloor });
     unlockLore(s, foe.boss ? 'boss' : 'foe_' + foe.sprite, events);
+    if (foe.cid && !foe.world) { s.bx = s.bx || {}; if (!s.bx[foe.cid]) events && events.push({ type: 'newbeast', cid: foe.cid }); s.bx[foe.cid] = (s.bx[foe.cid] || 0) + (foe.pack || 1); }
     { const bk = beastKey(foe); if (bk) { s.bk = s.bk || {}; const t0 = beastTier(s, bk); s.bk[bk] = (s.bk[bk] || 0) + (foe.pack || 1); const t1 = beastTier(s, bk); if (t1 > t0) { qEv(s, 'beast'); events && events.push({ type: 'beast', key: bk, tier: t1 }); } } }
     if (foe.boss && f % 10 === 0) unlockLore(s, 'g' + (Math.floor((f - 1) / 10) % BIOMES.length), events);
     dropGear(s, foe, rng, events);
@@ -3212,7 +3527,7 @@
       const b = biomeOf(f);
       if (kind === 'shield') foe.mods.push('shield');
       else if (kind === 'pack') { foe.pack = 3; foe.ambush = 2; foe.hp = foe.max = foeHp(f, false) * 3 * 0.85; foe.atk = foeDps(f, false) * FOE_SWING * 1.6; }
-      else if (kind === 'elite') { foe.elite = true; foe.side = b.war.side; foe.name = b.war.units[Math.floor(r() * b.war.units.length)]; foe.sprite = ['skeleton', 'ghost', 'eye'][Math.floor(r() * 3)]; foe.hp = foe.max = foeHp(f, false) * 2.5; foe.atk = foeDps(f, false) * FOE_SWING * 1.3; foe.hue = b.hue + 40; }
+      else if (kind === 'elite') { foe.elite = true; foe.cid = null; foe.rk = null; foe.sc = 1; foe.ov = ''; foe.side = b.war.side; foe.name = b.war.units[Math.floor(r() * b.war.units.length)]; foe.sprite = ['skeleton', 'ghost', 'eye'][Math.floor(r() * 3)]; foe.hp = foe.max = foeHp(f, false) * 2.5; foe.atk = foeDps(f, false) * FOE_SWING * 1.3; foe.hue = b.hue + 40; }
       else if (kind === 'rescue') { foe.rescue = MERCY_NAMES[Math.floor(r() * MERCY_NAMES.length)]; foe.hp *= 1.5; foe.max = foe.hp; }
       else if (kind === 'special') { if (!SPECIALS[sp]) return 'Pick a special attack.'; foe.sp = sp; foe.spAt = now + 3000; foe.spWind = null; }
       else return 'Unknown event.';
@@ -3537,6 +3852,8 @@
     s.formation = 1;
     s.foe = null; s.lantern = 0; s.minions = []; s.abil = {}; s.down = {};
     s.guests = o.guests || [];
+    // Home zones (27 Nov 2026): kills from before count toward the original creature of each family.
+    if (!o.bx) { s.bx = {}; for (const c of CREATURES) if (c.id === c.fam && (s.bk || {})['foe_' + c.fam]) s.bx[c.id] = s.bk['foe_' + c.fam]; }
     s.items = Object.assign({ draught: 1, oil: 0 }, o.items || {}); s.tonic = o.tonic || {}; s.campUntil = o.campUntil || 0; s.jobs = o.jobs || {};
     // Skill trees arrived after some players had already rekindled: 2 points for each past rekindle.
     s.kup = o.kup || {}; s.autoTrain = o.autoTrain || {}; s.skills = o.skills || {}; s.kindling = o.kindling != null ? o.kindling : 2 * ((o.stats && o.stats.rekindles) || 0);
@@ -3816,9 +4133,11 @@
   const qPl = w => /man$/.test(w) ? w.slice(0, -3) + 'men' : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + 'ies' : /(ch|sh|x|Lens)$/.test(w) ? w + 'es' : /(s|Brood|spawn|born)$/.test(w) ? w : w + 's';
 
   // -- The hunt: named monsters in a region you have reached (the old bounty kinds live on here) --
-  for (const fo of FOES) Q({ id: 'hunt_' + fo.id, c: 'hunt', ev: 'kill', n: 14, w: 6, g: qAt(2), add: packN,
-    mk: (s, r) => { const rn = pickReg(s, r), [a, b] = regSpan(s, rn); return { a, b, sp: fo.id, name: fo.name }; },
-    m: (d, s, q) => qFoe(d) && d.foe.sprite === q.sp && qInR(d, q), t: q => 'Hunt ' + q.n + ' ' + qPl(q.name) + ' on floors ' + q.a + '–' + q.b });
+  // Since home zones (27 Nov 2026) each hunt names one common creature of the family in a region where it lives.
+  const huntRegs = (s, fam) => { const top = Math.min(REGIONS - 1, regionNo(qTop(s))), out = []; for (let rn = top; rn >= 0; rn--) if (CREATURES.some(c => c.r === rn && c.fam === fam && c.rar === 'c')) out.push(rn); return out.slice(0, 2); };
+  for (const fam of FOES.map(fo => fo.id).concat(['beetle', 'moth', 'crab'])) Q({ id: 'hunt_' + fam, c: 'hunt', ev: 'kill', n: 14, w: 6, g: s => qTop(s) >= 2 && huntRegs(s, fam).length > 0, add: packN,
+    mk: (s, r) => { const rs = huntRegs(s, fam); if (!rs.length) return null; const rn = rs[Math.floor(r() * rs.length)], cs = CREATURES.filter(c => c.r === rn && c.fam === fam && c.rar === 'c'), c = cs[Math.floor(r() * cs.length)], [a, b] = regSpan(s, rn); return { a, b, sp: fam, cid: c.id, name: c.name }; },
+    m: (d, s, q) => qFoe(d) && (q.cid ? d.foe.cid === q.cid : d.foe.sprite === q.sp) && qInR(d, q), t: q => 'Hunt ' + q.n + ' ' + qPl(q.name) + ' on floors ' + q.a + '–' + q.b });
   BIOMES.forEach((bi, rn) => { if (bi.foe) Q({ id: 'hunt_' + bi.foe.id, c: 'hunt', ev: 'kill', n: 30, w: 6, g: qAt(rn * 10 + 2), add: packN,
     mk: s => { const [a, b] = regSpan(s, rn); return { a, b, sp: bi.foe.id, name: bi.foe.name }; },
     m: (d, s, q) => qFoe(d) && d.foe.sprite === q.sp && qInR(d, q), t: q => 'Hunt ' + q.n + ' ' + qPl(q.name) + ' in ' + bi.name }); });
@@ -3849,7 +4168,9 @@
   Q({ id: 'shieldkill', c: 'tricks', ev: 'kill', n: 8, w: 5, g: qAt(SHIELD_FLOOR + 3), m: qKill(f => (f.mods || []).includes('shield')), t: q => 'Defeat ' + q.n + ' shielded foes' });
   Q({ id: 'shields', c: 'tricks', ev: 'shield', n: 4, w: 4, g: qAt(SHIELD_FLOOR + 3), t: q => 'Break ' + q.n + ' monster shields with your strikes' });
   const SPQ = { acid: ['Acid Spits', 'Gloop'], dive: ['Dives', 'Flitterwing'], wail: ['Wails', 'Wisp'], mark: ['Death Marks', 'Watcher'], spores: ['Choking Spores', 'Capling'], venombite: ['Venom Bites', 'Gnawer'] };
-  for (const k in SPQ) Q({ id: 'sp_' + k, c: 'tricks', ev: 'special', n: 6, w: 5, g: qAt(SPECIAL_FLOOR + 4), m: (d, s) => d.sp === k && qDeep(s, d.f), t: q => 'Weather ' + q.n + ' ' + SPQ[k][0] + ' (' + SPQ[k][1] + 's use them)' });
+  // Only offered when that family lives (or wanders) near your deepest floor; every kind in the family uses the attack.
+  const SPQ_FAM = { acid: 'slime', dive: 'bat', wail: 'ghost', mark: 'eye', spores: 'shroom', venombite: 'rat' };
+  for (const k in SPQ) Q({ id: 'sp_' + k, c: 'tricks', ev: 'special', n: 6, w: 5, g: s => qTop(s) >= SPECIAL_FLOOR + 4 && famsIn(qTop(s) - QDEEP, qTop(s)).has(SPQ_FAM[k]), m: (d, s) => d.sp === k && qDeep(s, d.f), t: q => 'Weather ' + q.n + ' ' + SPQ[k][0] + ' (' + SPQ[k][1] + 's and their kin use them)' });
   Q({ id: 'sp_volley', c: 'tricks', ev: 'special', n: 4, w: 5, g: qAt(SPECIAL_FLOOR + 12), m: (d, s) => d.sp === 'volley' && qDeep(s, d.f), t: q => 'Weather ' + q.n + ' Arrow Volleys from alliance elites' });
   Q({ id: 'shuffles', c: 'tricks', ev: 'shuffle', n: 3, w: 5, g: qAt(SHUFFLE_EVERY + 1), t: q => 'Fight through ' + q.n + ' formation shuffles' });
   Q({ id: 'shufblock', c: 'tricks', ev: 'shufblock', n: 2, w: 6, g: s => qTop(s) > SHUFFLE_EVERY && qHas(s, 'tank'), t: q => 'Block ' + q.n + ' formation shuffles with Shield Wall' });
@@ -4128,7 +4449,7 @@
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
     STATS, STAT_CLASS, STAT_BASE, STAT_AFFINITY, STAT_MAX, RESPEC_COST, statSpent, xpNeed, heroLevel, pointsFor, heroPoints, statScore, addStat, resetStats, statVal, PACK_CHANCE, PACK_GOLD,
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
-    newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, GUEST_REFRESH, GUEST_DROP_HOLD, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec, steadyHeal, steadyClick,
+    CREATURES, ROSTERS, FAMILY, LORE_AT, RAR_W, RAR_NAME, SIZE_X, ROSTER_HOME, creatureById, creatureHue, creatureRegions, creatureOdds, pickCreature, famsIn, newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, GUEST_REFRESH, GUEST_DROP_HOLD, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec, steadyHeal, steadyClick,
     questCtx, qEv, QDEFS, pickQuests, bountyGo, bountyCat, clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
     offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };

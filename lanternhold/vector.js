@@ -1,4 +1,4 @@
-/* lh-build 202611270038 */
+/* lh-build 202611270058 */
 /* Lanternhold illustrated sprites. Each sprite is drawn as layered SVG (outline, shading, rim light, detail),
    tinted per companion or biome, rendered once to an image and then drawn on the arena canvas. */
 (function (root) {
@@ -811,6 +811,83 @@
     ].join('');
   });
 
+  // ---------- home-zone creatures (27 Nov 2026): three new bodies and the overlays that make each kind its own ----------
+  ART.beetle = F(c => {
+    const shell = c.mat('#b0602a'), dark = lit(c.t('#b0602a'), -0.3), leg = '#2a1a12';
+    return [
+      E(80, 152, 54, 5, '#000', ' opacity=".4"'),
+      L_('M52 132 L40 150 M72 136 L66 152 M96 134 L104 152', leg, 4), L_('M58 130 L44 146 M84 136 L82 152 M108 130 L120 148', leg, 4, ' opacity=".7"'),
+      P('M30 124 Q28 82 74 76 Q116 76 122 120 Q120 140 76 142 Q34 142 30 124Z', shell),
+      L_('M76 78 Q74 110 76 142', dark, 2.4),
+      Pn('M40 100 Q50 84 70 82 Q54 92 48 108Z', '#ffffff', ' opacity=".45"'), Pn('M86 84 Q100 86 108 96 Q98 92 90 92Z', '#ffffff', ' opacity=".3"'),
+      ...[[52, 104], [62, 122], [96, 104], [100, 124]].map(([x, y]) => E(x, y, 4, 3, dark, ' opacity=".55"')),
+      Eo(130, 120, 17, 15, c.t('#5a3020')),
+      L_('M138 108 Q150 90 160 88 M132 106 Q138 86 146 80', leg, 2),
+      P('M142 126 Q156 124 158 134 Q150 130 142 132Z', '#2a1a12'), P('M140 132 Q152 138 150 146 Q146 138 138 136Z', '#2a1a12'),
+      eye(c, 136, 116, 2.6, '#ffd36a'),
+    ].join('');
+  });
+  ART.moth = F(c => {
+    const wing = c.t('#c8a070'), w1 = c.lg([lit(wing, 0.18), wing, lit(wing, -0.2)], 0, 0, 1, 1), body = c.mat('#6a4a30'), spot = c.t('#5a3a8a');
+    return [
+      E(80, 154, 30, 3, '#000', ' opacity=".3"'),
+      P('M78 80 Q40 30 14 46 Q6 78 36 96 Q56 102 78 92Z', w1), P('M82 80 Q120 30 146 46 Q154 78 124 96 Q104 102 82 92Z', w1),
+      P('M78 96 Q50 104 40 128 Q56 138 76 116Z', w1), P('M82 96 Q110 104 120 128 Q104 138 84 116Z', w1),
+      Eo(44, 66, 10, 9, '#f4e6c8', ' stroke-width="1.6"'), E(44, 66, 5, 5, spot), Eo(116, 66, 10, 9, '#f4e6c8', ' stroke-width="1.6"'), E(116, 66, 5, 5, spot),
+      L_('M30 60 Q50 72 70 84 M130 60 Q110 72 90 84', lit(wing, -0.25), 1.2, ' opacity=".7"'),
+      Eo(80, 98, 11, 30, body),
+      ...[86, 98, 110].map(y => L_('M71 ' + y + ' Q80 ' + (y + 4) + ' 89 ' + y, lit(c.t('#6a4a30'), -0.25), 1.4)),
+      E(80, 70, 14, 8, '#f0e2c4'),
+      L_('M76 64 Q66 44 56 40 M84 64 Q94 44 104 40', '#3a2a1a', 1.8), L_('M60 44 l-3 -4 M64 48 l-4 -3 M100 44 l3 -4 M96 48 l4 -3', '#3a2a1a', 1.2),
+      eye(c, 74, 74, 2.2, '#ffe08a'), eye(c, 86, 74, 2.2, '#ffe08a'),
+    ].join('');
+  });
+  ART.crab = F(c => {
+    const shell = c.mat('#d0603a'), claw = c.mat('#e0704a'), dk = lit(c.t('#d0603a'), -0.3);
+    return [
+      E(80, 152, 56, 5, '#000', ' opacity=".4"'),
+      L_('M44 128 Q26 136 22 152 M50 134 Q36 144 36 154 M56 138 Q50 146 50 154 M116 128 Q134 136 138 152 M110 134 Q124 144 124 154 M104 138 Q110 146 110 154', dk, 4),
+      P('M34 116 Q34 86 80 84 Q126 86 126 116 Q120 140 80 142 Q40 140 34 116Z', shell),
+      Pn('M44 100 Q56 88 76 88 Q58 96 52 110Z', '#ffffff', ' opacity=".4"'),
+      L_('M50 124 Q80 132 110 124', dk, 1.6, ' opacity=".7"'),
+      L_('M40 104 Q26 92 26 74 M120 104 Q134 92 134 74', dk, 5),
+      P('M14 74 Q12 52 28 50 Q40 54 36 66 Q30 60 26 64 Q34 70 32 78 Q22 84 14 74Z', claw),
+      P('M146 74 Q148 52 132 50 Q120 54 124 66 Q130 60 134 64 Q126 70 128 78 Q138 84 146 74Z', claw),
+      L_('M68 86 V70 M92 86 V70', dk, 3), Eo(68, 66, 6, 6, '#f8f2e4', ' stroke-width="1.8"'), Eo(92, 66, 6, 6, '#f8f2e4', ' stroke-width="1.8"'),
+      C(69, 66, 3, '#14101c'), C(93, 66, 3, '#14101c'), C(70, 65, 1, '#ffffff'), C(94, 65, 1, '#ffffff'),
+      L_('M72 118 Q80 124 88 118', '#3a1a10', 1.8),
+    ].join('');
+  });
+  // Where overlays sit on each body: [top x, top y, middle x, middle y, middle radius].
+  const ANCH = { slime: [80, 70, 80, 114, 40], rat: [116, 70, 84, 112, 30], bat: [80, 64, 80, 92, 18], skeleton: [81, 12, 80, 86, 16],
+    eye: [80, 40, 80, 72, 30], shroom: [80, 48, 80, 82, 40], ghost: [80, 30, 80, 82, 30], shard: [80, 48, 80, 104, 28], sentinel: [80, 22, 80, 96, 30],
+    eel: [124, 44, 104, 96, 16], thorn: [80, 44, 80, 96, 36], prism: [80, 22, 80, 86, 26], hound: [124, 44, 76, 110, 26], riftling: [80, 58, 80, 86, 28],
+    beetle: [76, 78, 76, 110, 34], moth: [80, 64, 80, 98, 14], crab: [80, 86, 80, 112, 34] };
+  const OVL = {
+    crown(c, [tx, ty]) { const g = c.lg(['#fff3b0', '#f5c242', '#a87418']), y = ty + 4;
+      return G(P('M-15 0 L-17 -18 L-8 -9 L0 -22 L8 -9 L17 -18 L15 0Z', g, ' stroke-width="1.8"') + C(0, -22, 2.6, '#ff5a6a') + C(-17, -18, 2, '#7fd6ff') + C(17, -18, 2, '#7fd6ff') + Pn('M-14 -3 H14', 'none', ' stroke="#fff6d0" stroke-width="1.4" opacity=".7"'), 'translate(' + tx + ' ' + y + ') scale(1.3)'); },
+    moss(c, [tx, ty, mx, my, mr]) { const g = '#5f9a3a', gl = '#8fcf6a';
+      return [[-14, 2, 9], [-4, -2, 11], [9, 1, 9], [18, 5, 6]].map(([dx, dy, r]) => E(tx + dx, ty + dy + 4, r, r * 0.6, g, ' stroke="' + OUT + '" stroke-width="1.4"') + E(tx + dx - 2, ty + dy + 2, r * 0.5, r * 0.25, gl, ' opacity=".8"')).join('') +
+        Pn('M' + (mx - mr * 0.6) + ' ' + (my - 4) + ' q3 10 0 16 q-3 -6 0 -16Z', g, ' opacity=".85"') + Pn('M' + (mx + mr * 0.5) + ' ' + (my - 8) + ' q3 8 0 13 q-3 -5 0 -13Z', g, ' opacity=".85"'); },
+    crystal(c, [tx, ty]) { const g = c.lg(['#e6fbff', '#7fd6e8', '#3a8aa8']);
+      return [[-12, 2, 14, -12], [0, 0, 22, 0], [12, 2, 15, 12]].map(([dx, dy, h, tilt]) => G(P('M-5 0 L0 ' + -h + ' L5 0Z', g, ' stroke-width="1.6"') + Pn('M-2 -2 L0 ' + (-h + 4) + ' L1 -2Z', '#ffffff', ' opacity=".7"'), 'translate(' + (tx + dx) + ' ' + (ty + dy + 6) + ') rotate(' + tilt + ')')).join(''); },
+    plate(c, [tx, ty, mx, my, mr]) { const g = c.lg(['#d8dde6', '#8a93a3', '#4a5060'], 0, 0, 0, 1), w = mr * 1.5;
+      return P('M' + (mx - w / 2) + ' ' + (my - 7) + ' H' + (mx + w / 2) + ' V' + (my + 7) + ' H' + (mx - w / 2) + 'Z', g, ' stroke-width="1.8"') +
+        [-0.38, -0.13, 0.13, 0.38].map(k => C(mx + w * k, my, 1.8, '#3a3f4a') + C(mx + w * k - 0.6, my - 0.6, 0.7, '#ffffff')).join(''); },
+    spots(c, [tx, ty, mx, my, mr]) { const col = c.t('#9af0ff');
+      return [[-0.5, -0.3], [0.4, -0.5], [0.1, 0.2], [-0.3, 0.55], [0.55, 0.35]].map(([kx, ky], i) => { const x = mx + kx * mr, y = my + ky * mr, r = i % 2 ? 2.2 : 3;
+        return C(x, y, r * 2.4, col, ' opacity=".35" filter="' + c.glowF(2) + '"') + C(x, y, r, lit(col, 0.2)) + C(x - 0.6, y - 0.6, r * 0.35, '#ffffff'); }).join(''); },
+    chain(c, [tx, ty, mx, my, mr]) { let d = ''; for (let i = 0; i < 6; i++) { const k = i / 5, x = mx - mr + k * mr * 2, y = my - mr * 0.5 + Math.sin(k * Math.PI) * mr * 0.6 + k * mr * 0.4;
+        d += E(x, y, 8, 5, 'none', ' stroke="' + OUT + '" stroke-width="5" transform="rotate(' + (i % 2 ? 70 : -15) + ' ' + x + ' ' + y + ')"') + E(x, y, 8, 5, 'none', ' stroke="#c8cfd8" stroke-width="2.6" transform="rotate(' + (i % 2 ? 70 : -15) + ' ' + x + ' ' + y + ')"'); } return d; },
+    barnacle(c, [tx, ty, mx, my, mr]) { const g = c.lg(['#f4efe4', '#c8bfa8', '#8a8070']);
+      return [[-0.7, 0.3, 9], [-0.4, 0.62, 7], [0.6, 0.45, 8.5], [0.2, -0.55, 6.5]].map(([kx, ky, r]) => { const x = mx + kx * mr, y = my + ky * mr;
+        return P('M' + (x - r) + ' ' + (y + r * 0.6) + ' L' + (x - r * 0.4) + ' ' + (y - r * 0.6) + ' H' + (x + r * 0.4) + ' L' + (x + r) + ' ' + (y + r * 0.6) + 'Z', g, ' stroke-width="1.4"') + E(x, y - r * 0.55, r * 0.35, r * 0.18, '#3a3428'); }).join(''); },
+    ember(c, [tx, ty, mx, my, mr]) { const hot = c.lg(['#fff3c0', '#ffb347', '#ff5a1f'], 0, 0, 0, 1);
+      return L_('M' + (mx - mr * 0.6) + ' ' + (my - mr * 0.2) + ' l' + mr * 0.3 + ' ' + mr * 0.2 + ' l' + mr * 0.2 + ' -' + mr * 0.25 + ' l' + mr * 0.3 + ' ' + mr * 0.3 + ' M' + (mx - mr * 0.2) + ' ' + (my + mr * 0.4) + ' l' + mr * 0.25 + ' -' + mr * 0.15 + ' l' + mr * 0.3 + ' ' + mr * 0.15, '#ff8a2a', 2.4, ' opacity=".9"') +
+        [[-10, 0, 10], [2, -4, 14], [12, 0, 9]].map(([dx, dy, h]) => { const x = tx + dx, y = ty + dy + 6; return Pn('M' + (x - 4) + ' ' + y + ' Q' + (x - 5) + ' ' + (y - h * 0.6) + ' ' + x + ' ' + (y - h) + ' Q' + (x + 5) + ' ' + (y - h * 0.6) + ' ' + (x + 4) + ' ' + y + 'Z', hot, ' opacity=".9"'); }).join(''); },
+    leaf(c, [tx, ty]) { const g = c.lg(['#a8e070', '#5f9a3a', '#3a6a22']);
+      return G(L_('M0 4 Q0 -4 2 -10', '#4a3a1a', 2.4) + P('M2 -10 Q-16 -22 -20 -8 Q-8 -4 2 -10Z', g, ' stroke-width="1.6"') + P('M2 -10 Q16 -26 22 -12 Q12 -6 2 -10Z', g, ' stroke-width="1.6"') + L_('M2 -10 Q-8 -12 -16 -9 M2 -10 Q10 -16 18 -13', '#3a6a22', 1), 'translate(' + tx + ' ' + (ty + 4) + ')'); },
+  };
   ART.chest = F(c => {
     const wood = c.lg(['#a8703a', '#7a4a22', '#4a2c12'], 0, 0, 0, 1), gold = c.lg(['#fff0b8', '#f5c242', '#a87418']), dark = '#2a1608';
     return [
@@ -1060,6 +1137,7 @@
     const sp = String(hue || 0).split('~'), o = OUTFITS[sp[1]];
     const c = new Ctx(o ? 0 : +sp[0] || 0); c.lant = sp[1];
     let inner = '<defs>' + c.defs.join('') + '</defs>', body = a.draw(c);
+    if (sp[2] && OVL[sp[2]] && ANCH[name]) body += OVL[sp[2]](c, ANCH[name]);
     inner = '<defs>' + c.defs.join('') + '</defs>' + body;
     if (o) {
       inner = recolor(inner, o);
