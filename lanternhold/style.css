@@ -1501,6 +1501,8 @@ h3.sub .tipi{vertical-align:2px}
 .rt-ironclad{color:#9fb6c8}.rt-emberborn{color:var(--ember)}.rt-gilded{color:var(--gold)}.rt-lanternsworn{color:#ffe08a;box-shadow:0 0 8px #f5c24255}.rt-riftbreaker{color:#c78bff;box-shadow:0 0 10px #9b4dff66}
 .ringseg{margin:0 0 10px;width:max-content;max-width:100%}
 .ringbuild{margin:0 2px 10px}
+.rnum{border-bottom:1px dotted currentColor;cursor:help}
+.rdsplit{margin:6px 0 0;opacity:.9}
 .ringfoes,.ringkit{display:grid;gap:8px}
 .ringfoe,.ringpiece{display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
 .ringfoe:hover{border-color:var(--line2)}
@@ -2905,3 +2907,16 @@ body.layedit #tab-party .buybar,body.layedit #tab-party .ftips,body.layedit #tab
 .laysheet .lbar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
 .laysheet .lbar button{font:inherit;font-size:12.5px;padding:8px 2px;border-radius:9px;border:1px solid var(--line2);background:var(--bg2);color:var(--muted)}
 .laysheet .lbar button.on{border-color:var(--accent);color:var(--accent)}
+/* v141 Ember Ring: seasons and Ring Mastery */
+.raward{margin-left:4px;color:#ffd27a;border-color:#c8952a}
+.rseasonbox{margin:0 0 10px;padding:8px 10px;border:1px solid var(--line,#2a3346);border-radius:10px;font-size:13px}
+.rseasonbox summary{cursor:pointer}
+.rseasonbox summary svg{display:inline-block;width:14px;height:14px;vertical-align:-2px}
+.rseasonbox summary *{display:inline}
+.rseasonbox p{margin:6px 0 0}
+.rslast{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0 0 10px;font-size:13px}
+.rslast i{font-style:normal;font-weight:700;color:#ffd27a;margin-right:4px}
+.rmastery .tile{display:grid;place-items:center}
+.rmastery .tile svg{width:22px;height:22px}
+.fr-emberchamp{border-color:transparent;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,conic-gradient(from var(--fa,0deg),#ff8a3d,#ffd27a,#c8452a,#ff8a3d) border-box;animation:frnexus 3s linear infinite}
+@media (prefers-reduced-motion:reduce){.fr-emberchamp{animation:none}}

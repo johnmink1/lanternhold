@@ -124,7 +124,7 @@
   });
   document.addEventListener('pointerout', e => { if (tipFor && !tipFor.contains(e.relatedTarget)) { clearTimeout(tipHide); tipHide = setTimeout(hideTip, 60); } });
   document.addEventListener('click', e => {
-    const i = e.target.closest('.tipi,.klant') || (!fine.matches && e.target.closest('.trait[data-tip],.cxp[data-tip],#foetag[data-tip],.purse div.stat[data-tip],.kintag[data-tip]'));
+    const i = e.target.closest('.tipi,.klant') || (!fine.matches && e.target.closest('.trait[data-tip],.cxp[data-tip],#foetag[data-tip],.purse div.stat[data-tip],.kintag[data-tip],.rnum[data-tip]'));
     if (i) { e.preventDefault(); e.stopPropagation(); if (tipFor === i) hideTip(); else { showTip(i); clearTimeout(tipHide); tipHide = setTimeout(hideTip, 5000); } return; }
     if (!fine.matches) hideTip();
   }, true);
@@ -4740,14 +4740,14 @@
     star: 'M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6L12 16.3l-5.4 3 1.3-6-4.6-4.1 6.1-.6z', key: 'M3 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M11 12h10M18 12v3M15 12v2',
     anvil: 'M4 7h13c0 3-2 4-4 4v3h3v3H7v-3h3v-3C7 11 4 9 4 7zM17 7h3', crown: 'M3 8l4 4 5-7 5 7 4-4-2 11H5z', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
     rose: 'M12 13c-3 0-5-2-5-5 2 0 3 1 3.5 2C11 7 12 5 12 5s1 2 1.5 5c.5-1 1.5-2 3.5-2 0 3-2 5-5 5zM12 13v8M12 17c-2 0-3-1-4-2M12 18c2 0 3-1 4-2',
-    raven: 'M3 13c3-1 5-4 9-4 3 0 5 2 6 1l3-1-2 3c0 4-4 7-9 7l-2 3v-3c-2-1-4-3-5-6z', rift: 'M12 2c-2 4 3 6 0 10s3 6 0 10M8 7c-2 2-2 8 0 10M16 7c2 2 2 8 0 10',
+    laurel: 'M12 21V9M12 9c-2-1-3-3-3-5 2 0 3 2 3 5zM12 9c2-1 3-3 3-5-2 0-3 2-3 5zM12 13c-3 0-5-2-5-4 2 0 4 1 5 4zM12 13c3 0 5-2 5-4-2 0-4 1-5 4zM12 17c-3 0-5-2-6-4 2 0 5 1 6 4zM12 17c3 0 5-2 6-4-2 0-5 1-6 4z', raven: 'M3 13c3-1 5-4 9-4 3 0 5 2 6 1l3-1-2 3c0 4-4 7-9 7l-2 3v-3c-2-1-4-3-5-6z', rift: 'M12 2c-2 4 3 6 0 10s3 6 0 10M8 7c-2 2-2 8 0 10M16 7c2 2 2 8 0 10',
   };
   const COSMETICS = {
-    f: { label: 'Frame', items: [['plain', 'Plain Iron', 0], ['iron', 'Covenant Iron', 150], ['radiant', 'Radiant Gilt', 150], ['tide', 'Tide Maw', 150], ['mercy', 'Mercy Laurel', 150], ['ember', 'Ember Ring', 250], ['rift', 'Riftglass', 400], ['nexus', 'Nexus Crown', 600]] },
-    t: { label: 'Title', items: [['delver', 'Delver', 0], ['lampbearer', 'Lampbearer', 80], ['ashborn', 'Ashborn', 120], ['nightwatch', 'of the Night Watch', 120], ['riftwalker', 'Rift-Walker', 200], ['warden', 'Warden of the Hold', 200], ['stormcaller', 'Stormcaller', 200], ['oathkeeper', 'Oathkeeper', 250], ['heir', 'Heir of the Lamp', 400], ['dawn', 'Dawnbringer', -1, 'hidden']] },
+    f: { label: 'Frame', items: [['plain', 'Plain Iron', 0], ['iron', 'Covenant Iron', 150], ['radiant', 'Radiant Gilt', 150], ['tide', 'Tide Maw', 150], ['mercy', 'Mercy Laurel', 150], ['ember', 'Ember Ring', 250], ['emberchamp', 'Ember Champion', -1, 'hidden'], ['rift', 'Riftglass', 400], ['nexus', 'Nexus Crown', 600]] },
+    t: { label: 'Title', items: [['delver', 'Delver', 0], ['lampbearer', 'Lampbearer', 80], ['ashborn', 'Ashborn', 120], ['nightwatch', 'of the Night Watch', 120], ['riftwalker', 'Rift-Walker', 200], ['warden', 'Warden of the Hold', 200], ['stormcaller', 'Stormcaller', 200], ['oathkeeper', 'Oathkeeper', 250], ['heir', 'Heir of the Lamp', 400], ['dawn', 'Dawnbringer', -1, 'hidden'], ['emberchamp', 'Ember Champion', -1, 'hidden']] },
     c: { label: 'Name color', items: [['none', 'Plain', 0], ['gold', 'War Gold', 100], ['violet', 'Nyx Violet', 100], ['ember', 'Ember', 100], ['frost', 'Frost', 100], ['verdant', 'Verdant', 100], ['rift', 'Riftlight', 300]] },
     g: { label: 'Banner', items: [['night', 'Night Watch', 0], ['forge', 'Cinder Forge', 150], ['crypt', 'Mosswater', 150], ['glass', 'Glass Wastes', 150], ['storm', 'Stormglass', 200], ['rift', 'The Rift', 350], ['nexus', 'The Nexus', 500]] },
-    e: { label: 'Emblems', items: [['lantern', 'Lantern', 0], ['shield', 'Shield', 0], ['sword', 'Sword', 0], ['skull', 'Skull', 40], ['flame', 'Flame', 40], ['wave', 'Wave', 40], ['sun', 'Sun', 40], ['moon', 'Moon', 40], ['star', 'Star', 40], ['key', 'Key', 40], ['anvil', 'Anvil', 40], ['crown', 'Crown', 60], ['eye', 'Eye', 60], ['rose', 'Rose', 60], ['raven', 'Raven', 80], ['rift', 'Rift', 100]] },
+    e: { label: 'Emblems', items: [['lantern', 'Lantern', 0], ['shield', 'Shield', 0], ['sword', 'Sword', 0], ['skull', 'Skull', 40], ['flame', 'Flame', 40], ['wave', 'Wave', 40], ['sun', 'Sun', 40], ['moon', 'Moon', 40], ['star', 'Star', 40], ['key', 'Key', 40], ['anvil', 'Anvil', 40], ['crown', 'Crown', 60], ['eye', 'Eye', 60], ['rose', 'Rose', 60], ['raven', 'Raven', 80], ['rift', 'Rift', 100], ['laurel', 'Season Laurel', -1, 'hidden']] },
   };
   const ttCls = id => id === 'dawn' ? ' tt-dawn' : ''; // the one-of-a-kind title glows
   const cosOf = (k, id) => (COSMETICS[k].items.find(x => x[0] === id) || COSMETICS[k].items[0]);
@@ -5150,7 +5150,7 @@
     'Plate armour, a solid hammer and a small steady heal for the whole party.',
     'Oath of Dawn: heals the party for 25% and the party takes 30% less damage for 6s.',
     'Its own skill tree (Dawn, Aegis, Crusade), class gear set and Grand War aura.',
-    'Ember Ring: no class edge and no counter, and for its first two weeks its duels and team battles move no rating.']] };
+    'Ember Ring: no class advantage and no counter, and for its first two weeks its duels and team battles move no rating.']] };
   // after(c): what to do once the class is yours (pick it at setup, or change class). back: where Back goes.
   function openClassUnlock(c, after, back) {
     const d = L.CLASSES[c], price = L.PAID_CLASS[c], own = clsOwned(c), bal = prof ? prof.bal : null, pitch = CLASS_PITCH[c] || ['', []];
@@ -7377,11 +7377,12 @@
         '<b>Mail</b>: send to someone you recruited or chatted with, as a gift or for a price.',
         'Gold and gear have no real-money value.']],
       ['The Ember Ring (PvP)', 'i:duel', 'Duel other players\u2019 heroes, or fight their teams, for Laurels and rating.', [
-        'Opens at hero level ' + L.unlockOf('ring').lv + '. Open the <b>PvP</b> tab (Town on phones) and press <b>Duel</b>. Only your own hero fights; companions, tonics and Sigils never count.',
-        'Each class has the edge on two classes and is countered by two (the Paladin has neither). Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
+        'Opens at hero level ' + L.unlockOf('ring').lv + '. Open the <b>PvP</b> tab (Town on phones) and press <b>Duel</b>. Only your own hero fights. Each class starts with its own Ring health and attack (tanks sturdier, rogues and mages sharper); dungeon gear and power, companions, tonics and Sigils never count.',
+        'Each class has the <b>advantage</b> over two classes (+4% damage) and is <b>countered</b> by two (4% less). The Paladin has neither. Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
         'Rematches against the same hero within a day pay less each time, so spread your duels around.',
+        '<b>Ring seasons</b> last a calendar month (Season 1 runs to the end of December). The top 3 duelists win the Ember Champion title and frame, the top 25 the Season Laurel emblem. Then every rating moves halfway back to 1,000.',
         '10 challenges, one back every 30 minutes. Wins give rating and Laurels, losses a few Laurels; your hero also defends while you are away. A full kit is a long climb.',
-        'Laurels buy the <b>Ringwarden kit</b>: PvP gear with <b>Edge</b> (more damage to heroes) and <b>Resolve</b> (less damage from heroes). It works only in the Ring.',
+        'Laurels buy the <b>Ringwarden kit</b>: PvP gear that works only in the Ring. With all five pieces at +15, <b>Ring Mastery</b> ranks add 1% Ring health and attack each, up to 10. <b>Edge</b> adds damage to other heroes: Edge 100 is +25%, 300 is +50%. <b>Resolve</b> softens their blows: Resolve 100 blocks 12.5%, 300 blocks 25%, and it never blocks more than half. Each point adds a little less than the one before. Tap a Ring number to see what yours does.',
         '<b>Team battles</b> (Team view): your hero and two of your own companions against another player\u2019s team. Borrowed player heroes can\u2019t join. The front fighter takes most of the blows. Companions wear their own <b>companion Ring kit</b>, bought with Laurels. A win pays 10 Laurels, a loss 4.']],
       ['Your profile', 'i:user', 'Your hero sheet, and the card other players see.', [
         'Tap your portrait. <b>My hero</b> shows power level, steady damage, health and deepest floor up top, with sections you can fold open.',
@@ -7498,7 +7499,7 @@
     { v: 139, date: 'November 2026', title: 'The Paladin', items: [
       'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
       'The Paladin is a Sigil class: unlock it once for 1,000 Sigils and every hero on your account can be one. The first change into it is free. It keeps pace with the other classes and never outclasses them.',
-      'Paladins have their own skill tree, class gear set (Oath of the First Dawn), Grand War aura and Ember Ring skills. In the Ring it has no class edge or counter, and its first two weeks move no rating.',
+      'Paladins have their own skill tree, class gear set (Oath of the First Dawn), Grand War aura and Ember Ring skills. In the Ring it has no class advantage or counter, and its first two weeks move no rating.',
       'Your first Sigil pack ever comes with 50% more Sigils, once.',
       'Lantern Surge shout-out: tick the box in the Sigil shop and your hero’s name shows with the Surge your pack lights.',
       'Gift Lanternholder: open another player’s profile in the Players Guild and give them 30 days for 500 Sigils.',
@@ -8331,8 +8332,8 @@
       leech: 'Heal ' + ringPc(v) + ' of the damage you deal.', undying: 'Once per duel, survive a killing blow with ' + ringPc(v) + ' health.', execute: '+' + ringPc(v) + ' damage to foes under 30% health.',
     })[s.fx] + (s.cd ? ' Every ' + s.cd + ' turns.' : '');
   }
-  const NATURE_TEXT = { tank: 'Sturdy: takes 10% less damage.', healer: 'Blessed: heals 1% each turn and takes 6% less damage.', rogue: 'Deadly: +8% critical chance, and crits hit harder.', mage: 'Arcane: abilities hit 10% harder.', necro: 'Hungry: heals 12% of the damage it deals.', paladin: 'Devoted: heals 0.5% each turn and takes 5% less damage. No class edge or counter.' };
-  // 1 if a has the edge on b, -1 if b counters a, 0 otherwise.
+  const NATURE_TEXT = { tank: 'Sturdy: takes 10% less damage.', healer: 'Blessed: heals 1% each turn and takes 6% less damage.', rogue: 'Deadly: +8% critical chance, and crits hit harder.', mage: 'Arcane: abilities hit 10% harder.', necro: 'Hungry: heals 12% of the damage it deals.', paladin: 'Devoted: heals 0.5% each turn and takes 5% less damage. No class advantage or counter.' };
+  // 1 if a has the advantage over b, -1 if b counters a, 0 otherwise.
   const ringEdge = (a, b) => { const m = rg.st && rg.st.match; if (!m) return 0; return m.beats[a].includes(b) ? 1 : m.beats[b].includes(a) ? -1 : 0; };
   const ringWhy = (a, b) => (rg.st && rg.st.match.why[a + '>' + b]) || '';
   const laurel = n => '<span class="laurel">' + icon('crown') + Number(n).toLocaleString('en-US') + '</span>';
@@ -8376,7 +8377,43 @@
     if (w > 0 || l > 0) toast('shield', 'Your hero held the Ring', (w ? w + (w === 1 ? ' challenger beaten' : ' challengers beaten') : '') + (w && l ? ', ' : '') + (l ? l + ' lost' : '') + ' while you were away.' + (w ? ' +' + (w * 2) + ' Laurels.' : ''), w >= l ? 'feat' : '');
   }
   function ringFig(cls, hue, size) { return '<img class="ringspr" src="' + SP.spriteURL(cls, size || 3, hue || 0) + '" alt="">'; }
-  function ringStatLine(s) { return fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack' + (s.E ? ' &middot; Edge ' + s.E : '') + (s.R ? ' &middot; Resolve ' + s.R : ''); }
+  // v141 (John, 27 Nov 2026): every Ring number explains itself. Same formulas as strike() in infra/ring/index.js.
+  // Each class's Ring base [health, attack]; keep in step with RBASE in infra/ring/index.js.
+  const RING_BASE = { tank: [1420, 115], healer: [1250, 140], rogue: [970, 205], mage: [1000, 195], necro: [1140, 150], paladin: [1250, 155] };
+  const ringBase = c => RING_BASE[c] || RING_BASE.necro;
+  const ringEdgeOf = E => E / (E + 300), ringResOf = R => .5 * R / (R + 300);
+  const ringPct0 = x => Math.round(x * 1000) / 10 + '%';
+  const ringTipE = E => 'Edge ' + E + ': you deal ' + ringPct0(ringEdgeOf(E)) + ' more damage to other heroes. Each point adds a little less (Edge 100 is +25%, 300 is +50%). Ring kit pieces raise it.';
+  const ringTipR = R => 'Resolve ' + R + ': other heroes deal ' + ringPct0(ringResOf(R)) + ' less damage to you. Each point adds a little less, and it never blocks more than half (Resolve 100 is 12.5%, 300 is 25%). Radiant strikes ignore it.';
+  const ringTipA = c => 'Ring attack: ' + CLS_NAME(c) + 's start at ' + ringBase(c)[1] + '. Dungeon gear and power never count here; attack ranks on Ring kit pieces raise it.';
+  const ringTipH = c => 'Ring health: ' + CLS_NAME(c) + 's start at ' + fmt(ringBase(c)[0]) + '. Dungeon gear and power never count here; health ranks on Ring kit pieces raise it.';
+  const ringNum = (t, v) => '<span class="rnum" data-tip="' + esc(t) + '" tabindex="0">' + v + '</span>';
+  // v141 seasons: the season chip, the awards a hero has won, and the season box on the Standings tab.
+  const ringDays = t => Math.max(1, Math.ceil((t - Date.now()) / 864e5));
+  const ringSeasonNo = sn => { const [y, m] = sn.split('-').map(Number); return (y - 2026) * 12 + m - 11; };
+  const ringSeasonEnds = z => ringDays(z.ends) + (ringDays(z.ends) === 1 ? ' day' : ' days');
+  function ringSeasonChip(st) { const z = st.season; return z ? '<span class="rseason" data-tip="' + esc('Ring Season ' + z.no + ' ends in ' + ringSeasonEnds(z) + '. See Standings for the rewards.') + '" tabindex="0">' + icon('star') + 'Season ' + z.no + ' <small>' + ringDays(z.ends) + 'd</small></span>' : ''; }
+  const ringAwards = sa => (sa || []).map(a => a.split(':')).sort().map(([sn, p]) => '<span class="rtitle sm raward" title="' + esc('Finished Ring Season ' + ringSeasonNo(sn) + ' in place ' + p) + '">S' + ringSeasonNo(sn) + ' #' + p + '</span>').join('');
+  function ringSeasonBox(st) {
+    const z = st.season; if (!z) return '';
+    let h = '<details class="rseasonbox"><summary>' + icon('star') + ' <b>Ring Season ' + z.no + '</b> ends in ' + ringSeasonEnds(z) + '</summary><p>The top 3 duelists win the <b>Ember Champion</b> title and frame, the top 25 the <b>Season Laurel</b> emblem, all for your profile. Then every duel and team rating moves halfway back to 1,000. Your best rating (for kit tiers) stays.</p></details>';
+    if (z.last && z.last.top.length) h += '<div class="rslast"><small>Ring Season ' + z.last.no + ' champions</small>' + z.last.top.slice(0, 3).map(t => '<span><i>' + t.p + '</i>' + esc(t.n) + ' ' + classTag(t.c) + ' <small>' + t.r.toLocaleString('en-US') + '</small></span>').join('') + '</div>';
+    return h;
+  }
+  function ringStatLine(s, all) { return ringNum(ringTipH(s.c), fmt(s.hp) + ' health') + ' &middot; ' + ringNum(ringTipA(s.c), fmt(s.at) + ' attack') + (s.E || all ? ' &middot; ' + ringNum(ringTipE(s.E || 0), 'Edge ' + (s.E || 0)) : '') + (s.R || all ? ' &middot; ' + ringNum(ringTipR(s.R || 0), 'Resolve ' + (s.R || 0)) : ''); }
+  // After a duel: roughly how much each side's Edge added and Resolve blocked (radiant strikes and poison skip both).
+  function ringSplit(r) {
+    const X = [r.a, r.b], o = [{ e: 0, b: 0 }, { e: 0, b: 0 }];
+    for (const [a, d, c, , tag] of r.log) {
+      if (!(d > 0) || c > 1) continue;
+      const k = tag && ringSkill(tag); if (k && k.fx === 'pierce') continue;
+      const e = ringEdgeOf(X[a].s.E || 0), rv = ringResOf(X[1 - a].s.R || 0);
+      o[a].e += d * e / (1 + e); o[1 - a].b += d * rv / (1 - rv);
+    }
+    const ln = (i, who) => [o[i].e >= 1 ? who + ' Edge: +' + fmt(Math.round(o[i].e)) + ' damage' : '', o[i].b >= 1 ? who + ' Resolve: ' + fmt(Math.round(o[i].b)) + ' blocked' : ''].filter(Boolean).join(' &middot; ');
+    const t = [ln(0, 'Your'), ln(1, esc(r.b.n) + '’s')].filter(Boolean);
+    return t.length ? '<p class="note small rdsplit">' + t.join('<br>') + '</p>' : '';
+  }
   function paintRing() {
     const box = $('ringbox'); if (!box || typeof tab === 'undefined' || tab !== 'ring') return;
     const intro = '<p class="note">Duel other players’ heroes one on one, or bring two of your companions for a team battle. Tonics and Sigils never count. Win Laurels and climb the standings.</p>';
@@ -8385,17 +8422,17 @@
     const st = rg.st;
     if (!st || !st.me) { box.innerHTML = '<div class="ringempty"><h3>The Ember Ring</h3>' + intro + '<p class="note">' + (rg.err || 'Stepping into the Ring…') + '</p>' + (rg.err ? '<button class="btn small" id="ring-retry">Try again</button>' : '') + '</div>'; const b = $('ring-retry'); if (b) b.onclick = () => loadRing(true); return; }
     const me = st.me, you = L.memberById('you'), en = ringEnergy(me), nextIn = me.et - Date.now() - (RING_EMAX - en - 1) * RING_EINT;
-    let h = '<div class="ringhead' + (myBanner() ? ' hasban' : '') + '">' + (myBanner() ? '<div class="rhban">' + bannerSVG(myBanner()) + '</div>' : '') + '<div class="rhfig">' + ringFig(you.cls, lookHue(you), 3) + '</div><div class="rhinfo"><div class="rhtop"><h3>The Ember Ring</h3><span class="rtitle rt-' + ringTitle(me.r).toLowerCase() + '">' + ringTitle(me.r) + '</span></div>' +
+    let h = '<div class="ringhead' + (myBanner() ? ' hasban' : '') + '">' + (myBanner() ? '<div class="rhban">' + bannerSVG(myBanner()) + '</div>' : '') + '<div class="rhfig">' + ringFig(you.cls, lookHue(you), 3) + '</div><div class="rhinfo"><div class="rhtop"><h3>The Ember Ring</h3><span class="rtitle rt-' + ringTitle(me.r).toLowerCase() + '">' + ringTitle(me.r) + '</span>' + ringAwards(me.sa) + '</div>' +
       '<div class="rhrate"><b>' + me.r.toLocaleString('en-US') + '</b> rating' + (st.rank ? ' &middot; rank ' + st.rank + ' of ' + st.n : '') + (me.pk > me.r ? ' &middot; best ' + me.pk.toLocaleString('en-US') : '') + '</div>' +
       '<div class="rhchips"><span title="Wins and losses">' + icon('sword') + me.w + '&ndash;' + me.l + '</span>' + '<span title="Laurels, spent on Ring skills and the Ringwarden kit">' + laurel(me.ll) + '</span>' +
-      '<span title="Challenges refill one every 30 minutes, up to 10" class="' + (en ? '' : 'out') + '">' + icon('flame') + en + '/' + RING_EMAX + (en < RING_EMAX ? ' <small>+1 in ' + fmtTime(Math.max(1, Math.ceil(nextIn / 1000))) + '</small>' : '') + '</span></div></div></div>' +
+      ringSeasonChip(st) + '<span title="Challenges refill one every 30 minutes, up to 10" class="' + (en ? '' : 'out') + '">' + icon('flame') + en + '/' + RING_EMAX + (en < RING_EMAX ? ' <small>+1 in ' + fmtTime(Math.max(1, Math.ceil(nextIn / 1000))) + '</small>' : '') + '</span></div></div></div>' +
       '<div class="seg ringseg">' + [['foes', 'Duels'], ['team', 'Team'], ['skills', 'Skills'], ['kit', 'Kit'], ['top', 'Standings']].map(v => '<button data-rv="' + v[0] + '"' + (rg.view === v[0] || (v[0] === 'team' && rg.view === 'tgear') ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
     if (rg.view === 'foes') {
       const ms = me.s, mp = ringPower(ms);
-      h += '<p class="note small ringbuild"><b>Your hero in the Ring:</b> ' + ringStatLine(ms) + '. Deeper delving helps a little; the Ringwarden kit helps a lot.</p>';
+      h += '<p class="note small ringbuild"><b>Your hero in the Ring:</b> ' + ringStatLine(ms, true) + '. Dungeon power never counts in the Ring: your class, Ring kit and Ring skills do.</p>';
       h += st.foes.length ? '<div class="ringfoes">' + st.foes.map(f => {
         const q = ringPower(f.s) / mp, odd = q > 1.35 ? ['tough', 'Tough fight'] : q < 0.75 ? ['easy', 'You are favored'] : ['even', 'Even match'];
-        const ed = ringEdge(you.cls, f.c), mu = ed > 0 ? '<span class="mu good" title="' + esc(ringWhy(you.cls, f.c)) + '">' + icon('star') + 'Your ' + CLS_NAME(you.cls).toLowerCase() + ' has the edge</span>' : ed < 0 ? '<span class="mu bad" title="' + esc(ringWhy(f.c, you.cls)) + '">' + icon('shield') + 'Counters your ' + CLS_NAME(you.cls).toLowerCase() + '</span>' : '';
+        const ed = ringEdge(you.cls, f.c), mu = ed > 0 ? '<span class="mu good" title="' + esc(ringWhy(you.cls, f.c)) + '">' + icon('star') + 'Your ' + CLS_NAME(you.cls).toLowerCase() + ' has the advantage</span>' : ed < 0 ? '<span class="mu bad" title="' + esc(ringWhy(f.c, you.cls)) + '">' + icon('shield') + 'Counters your ' + CLS_NAME(you.cls).toLowerCase() + '</span>' : '';
         const rc = me.rc && me.rc[f.id], rq = rc ? (me.rep || [1, .5, .25, 0])[Math.min(rc[0], 3)] : 1;
         const rm = !rc ? '' : rq > 0 ? '<span class="mu rep">' + icon('refresh') + 'Rematch: ' + Math.round(rq * 100) + '% rating and Laurels</span>' : '<span class="mu bad">' + icon('refresh') + 'Rematch pays nothing for ' + ringIn(rc[1] - Date.now()) + '</span>';
         const brings = (f.lo ? f.lo.a.concat(f.lo.p) : []).map(id => { const k = ringSkill(id); return k ? k.n : ''; }).filter(Boolean);
@@ -8410,7 +8447,7 @@
     } else if (rg.view === 'skills') {
       h += ringSkillsView(me, you.cls);
     } else if (rg.view === 'kit') {
-      h += '<p class="note small">Ringwarden gear is separate from your dungeon gear and works only in the Ring. <b>Edge</b> adds damage against heroes; <b>Resolve</b> softens their blows. Each piece has ' + RING_MAX + ' ranks: Ironbound, then Emberforged (needs a best rating of 1,300), then Starwrought (1,600).</p><div class="ringkit">';
+      h += '<p class="note small">Ringwarden gear is separate from your dungeon gear and works only in the Ring. <b>Edge</b> adds damage against heroes (100 is +25%); <b>Resolve</b> softens their blows (100 blocks 12.5%, never more than half). Each point adds a little less than the one before. Each piece has ' + RING_MAX + ' ranks: Ironbound, then Emberforged (needs a best rating of 1,300), then Starwrought (1,600).</p><div class="ringkit">';
       h += RING_KIT.map((p, i) => {
         const r = me.k[i] || 0, t = RING_TIER(r), nt = RING_TIER(r + 1), g = ringGate(r), cost = ringCost(r);
         const nm = (r ? t[0] + ' ' : 'Ringwarden ') + (p.id === 'arms' ? RING_ARMS[you.cls] : p.name) + (r ? ' <em>+' + r + '</em>' : '');
@@ -8421,7 +8458,9 @@
         else act = '<button class="btn small" data-kit="' + i + '"' + (me.ll < cost ? ' disabled title="Not enough Laurels"' : '') + '>' + (r ? 'Upgrade' : 'Claim') + ' ' + laurel(cost) + '</button>';
         return '<div class="ringpiece r-' + t[1] + '"><div class="tile r-' + t[1] + (r ? '' : ' ghost') + '"><img class="iimg" src="' + SP.itemIcon(you.cls, p.slot, r ? t[1] : 'common') + '" alt=""></div><div class="rpinfo"><b>' + nm + '</b><small>' + (r ? fx(r) : 'Not claimed yet') + '</small>' + (r < RING_MAX ? '<small class="dim">Next rank: ' + fx(1) + '</small>' : '') + '</div><div class="rpact">' + act + '</div></div>';
       }).join('') + '</div>';
+      h += ringMasteryRow(me);
     } else {
+      h += ringSeasonBox(st);
       h += '<div class="seg ringseg tmtopseg">' + [['duel', 'Duels'], ['team', 'Teams']].map(v => '<button data-rtop="' + v[0] + '"' + (rg.topv === v[0] ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
       if (rg.topv === 'team') {
         const tt = st.ttop || [];
@@ -8441,7 +8480,7 @@
     let h = '<div class="rmatch"><div><b>' + CLS_NAME(cls) + '</b> <small>' + NATURE_TEXT[cls] + '</small></div>' +
       '<div class="rmrow"><span class="mu good">' + icon('star') + 'Strong against</span>' + beats.map(c => '<span class="rmc c-' + c + '" title="' + esc(ringWhy(cls, c)) + '">' + CLS_NAME(c) + '</span>').join('') + '</div>' +
       '<div class="rmrow"><span class="mu bad">' + icon('shield') + 'Weak against</span>' + weak.map(c => '<span class="rmc c-' + c + '" title="' + esc(ringWhy(c, cls)) + '">' + CLS_NAME(c) + '</span>').join('') + '</div>' +
-      '<small class="dim">With the edge you deal 4% more damage; against a counter, 4% less.</small></div>';
+      '<small class="dim">With the advantage you deal 4% more damage; when countered, 4% less.</small></div>';
     h += '<p class="note small">Learn skills with Laurels and choose what your hero brings: ' + sl[0] + ' abilities, used in the order you set whenever they make sense, and ' + sl[1] + ' passives. Your loadout also defends while you are away.</p>';
     const list = st.skills.filter(s => s.c === cls);
     const card = s => {
@@ -8487,12 +8526,20 @@
     if (fst) { list.splice(list.indexOf(k), 1); list.unshift(k); }
     ringSetLoadout(a, p); return true;
   }
+  // v141 Ring Mastery: after the full kit, Laurels keep buying small ranks.
+  function ringMasteryRow(me) {
+    const M = rg.st.mastery; if (!M) return '';
+    const ms = me.ms || 0, full = (me.k || []).length === RING_KIT.length && me.k.every(r => r >= RING_MAX), per = Math.round(M.per * 100);
+    const act = ms >= M.max ? '<span class="rkmax">Mastered</span>' : !full ? '<span class="rklock" title="Raise all five pieces to +' + RING_MAX + ' first">' + icon('lock') + 'Full kit</span>' : '<button class="btn small" data-kit="m"' + (me.ll < M.cost ? ' disabled title="Not enough Laurels"' : '') + '>Rank up ' + laurel(M.cost) + '</button>';
+    return '<div class="ringpiece rmastery"><div class="tile r-legend' + (ms ? '' : ' ghost') + '">' + icon('star') + '</div><div class="rpinfo"><b>Ring Mastery' + (ms ? ' <em>' + ms + '/' + M.max + '</em>' : '') + '</b><small>' + (ms ? '+' + ms * per + '% Ring health and attack' : 'Opens once every piece is +' + RING_MAX) + '</small>' + (ms < M.max ? '<small class="dim">+' + per + '% more each rank, up to ' + M.max + '</small>' : '') + '</div><div class="rpact">' + act + '</div></div>';
+  }
   async function ringKit(i, btn) {
     if (rg.busy) return; rg.busy = true; if (btn) btn.disabled = true;
     try {
       const r = await api('POST', { p: i }, '/arena/kit');
       if (!r || !r.me) throw 0;
       rg.st.me = r.me; sfx.buy(); L.qEv(S, 'ringkit'); save();
+      if (i === 'm') { toast('star', 'Ring Mastery ' + r.me.ms, '+' + Math.round(r.me.ms * rg.st.mastery.per * 100) + '% Ring health and attack. It only counts in the Ring.', 'feat'); rg.busy = false; paintRing(); return; }
       const p = RING_KIT[i], k = r.me.k[i];
       toast('shield', RING_TIER(k)[0] + ' ' + (p.id === 'arms' ? RING_ARMS[L.memberById('you').cls] : p.name) + ' +' + k, 'Your Ringwarden kit grows stronger. It only counts in the Ring.', 'feat');
     } catch (e) { toast('lock', 'Could not upgrade', 'Check your Laurels and try again in a moment.', 'warn'); }
@@ -8518,10 +8565,11 @@
   }
   const teamKitOf = id => { const me = rg.st && rg.st.me; return (((me && me.ck) || {})[id] || '0.0.0').split('.').map(Number); };
   function teamStats(id) {
-    const b = ringBuild(id), k = teamKitOf(id);
+    const k = teamKitOf(id);
     let R = 0, E = 0, hp = 1, at = 1;
     k.forEach((r, i) => { const p = TEAM_KIT[i]; R += p.R * r; E += p.E * r; hp += p.hp * r; at += p.at * r; });
-    return { hp: Math.round((800 + 28 * b.v) * hp), at: Math.round((100 + 4 * b.m) * at), E, R };
+    const bs = ringBase((L.memberById(id) || {}).cls);
+    return { hp: Math.round(bs[0] * hp), at: Math.round(bs[1] * at), E, R }; // v141: same class base as the server, dungeon power never counts
   }
   // The lineup: the saved one, with companions you no longer have dropped; with none saved, you plus your two strongest.
   function teamLine() {
@@ -8586,7 +8634,7 @@
     rg.gid = id;
     const m = L.memberById(id), k = teamKitOf(id), s = teamStats(id), ab = ringSkill(ringFree(m.cls));
     let h = '<div class="tmgear-who">' + line.map(x => '<button data-tmgear="' + esc(x) + '" class="' + (x === id ? 'on' : '') + '">' + ringFig(L.memberById(x).cls, L.memberById(x).hue, 2) + esc(L.memberById(x).name) + '</button>').join('') + '<button class="tmback" data-rv="team">Back to lineup</button></div>';
-    h += '<div class="tmgearhead">' + ringFig(m.cls, m.hue, 3) + '<div><h3>' + esc(m.name) + '’s Ring kit</h3><small>' + classTag(m.cls) + ' ' + rarTag(id) + ' Power level ' + L.lvl(S, id) + '</small><small>In the Ring: ' + fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack' + (s.E ? ' &middot; Edge ' + s.E : '') + (s.R ? ' &middot; Resolve ' + s.R : '') + '</small>' + (ab ? '<small>Fights with: ' + esc(ab.n) + ' (class ability)</small>' : '') + '</div></div>';
+    h += '<div class="tmgearhead">' + ringFig(m.cls, m.hue, 3) + '<div><h3>' + esc(m.name) + '’s Ring kit</h3><small>' + classTag(m.cls) + ' ' + rarTag(id) + ' Power level ' + L.lvl(S, id) + '</small><small>In the Ring: ' + ringStatLine(s) + '</small>' + (ab ? '<small>Fights with: ' + esc(ab.n) + ' (class ability)</small>' : '') + '</div></div>';
     h += '<p class="note small">Companion Ring gear is separate from dungeon gear and counts only in team battles. It stays with this companion. Each piece has ' + TEAM_MAX + ' ranks: Ironbound, then Emberforged (needs a best team rating of 1,300).</p><div class="ringkit">';
     h += TEAM_KIT.map((p, i) => {
       const r = k[i] || 0, t = TEAM_TIER(r), g = teamGate(r), cost = teamCost(r);
@@ -8708,7 +8756,7 @@
     const you = L.memberById('you'), A = r.a, B = r.b, hp = [A.s.hp, B.s.hp];
     const sname = id => { const k = ringSkill(id); return k ? k.n : ''; };
     const kit = x => (x.lo ? x.lo.a.concat(x.lo.p) : []).map(sname).filter(Boolean);
-    const ed = ringEdge(A.c, B.c), edl = ed ? '<div class="rdedge ' + (ed > 0 ? 'good' : 'bad') + '">' + esc(ed > 0 ? ringWhy(A.c, B.c) : ringWhy(B.c, A.c)) + ': ' + esc(ed > 0 ? A.n : B.n) + ' has the edge</div>' : '';
+    const ed = ringEdge(A.c, B.c), edl = ed ? '<div class="rdedge ' + (ed > 0 ? 'good' : 'bad') + '">' + esc(ed > 0 ? ringWhy(A.c, B.c) : ringWhy(B.c, A.c)) + ': ' + esc(ed > 0 ? A.n : B.n) + ' has the advantage</div>' : '';
     const side = (x, i, hue) => '<div class="rdside s' + i + '"><div class="rdname"><b>' + esc(x.n) + '</b>' + classTag(x.c) + '</div><small class="rdkit">' + kit(x).map(esc).join(' &middot; ') + '</small><div class="rdfig"><img src="' + SP.spriteURL(x.c, 5, hue || 0) + '" alt=""><div class="rdpop" id="rd-pop' + i + '"></div></div>' +
       '<div class="bar rdhp"><i id="rd-hp' + i + '" style="width:100%"></i><span id="rd-ht' + i + '">' + fmt(hp[i]) + '</span></div><small>' + ringTitle(x.r) + ' &middot; ' + x.r.toLocaleString('en-US') + '</small></div>';
     modal('<div class="maphead"><div><h2>The Ember Ring</h2><small>' + esc(A.n) + ' challenges ' + esc(B.n) + '</small></div><button class="iconbtn" id="rd-x" aria-label="Close">&times;</button></div>' +
@@ -8748,7 +8796,7 @@
         while (step(true)); paint();
         md.querySelector('.rdside.s' + (r.win ? 1 : 0)).classList.add('fallen');
         const res = md.querySelector('#rd-res'); res.hidden = false; res.className = 'rdres ' + (r.win ? 'won' : 'lost');
-        res.innerHTML = '<h3>' + (r.win ? 'Victory' : 'Defeat') + '</h3><p>' + (r.dr >= 0 ? '+' : '') + r.dr + ' rating &middot; +' + r.ll + ' Laurels' + (r.fw ? ' (first win of the day bonus)' : '') + '</p>' + (r.q < 1 ? '<p class="note small">' + (r.q > 0 ? 'Rematch: ' + Math.round(r.q * 100) + '% of the usual rating and Laurels.' : 'You have fought this hero too often today, so this duel paid nothing. Try another challenger.') + '</p>' : '');
+        res.innerHTML = '<h3>' + (r.win ? 'Victory' : 'Defeat') + '</h3><p>' + (r.dr >= 0 ? '+' : '') + r.dr + ' rating &middot; +' + r.ll + ' Laurels' + (r.fw ? ' (first win of the day bonus)' : '') + '</p>' + (r.q < 1 ? '<p class="note small">' + (r.q > 0 ? 'Rematch: ' + Math.round(r.q * 100) + '% of the usual rating and Laurels.' : 'You have fought this hero too often today, so this duel paid nothing. Try another challenger.') + '</p>' : '') + ringSplit(r);
         r.win ? sfx.relic() : sfx.fail();
         const sk = md.querySelector('#rd-skip'); sk.textContent = 'Back to the Ring'; sk.className = 'btn'; sk.onclick = close;
         rg.at = 0; loadRing(true);
@@ -8765,7 +8813,7 @@
     const tv = e.target.closest('[data-rtop]'); if (tv) { rg.topv = tv.dataset.rtop; paintRing(); return; }
     if (teamClick(e)) return;
     const d = e.target.closest('[data-duel]'); if (d) { ringDuel(d.dataset.duel, d); return; }
-    const k = e.target.closest('[data-kit]'); if (k) { ringKit(+k.dataset.kit, k); return; }
+    const k = e.target.closest('[data-kit]'); if (k) { ringKit(k.dataset.kit === 'm' ? 'm' : +k.dataset.kit, k); return; }
     const sk = e.target.closest('[data-skl]'); if (sk) { ringLearn(sk.dataset.skl, sk); return; }
     if (ringLoadoutClick(e)) return;
     if (e.target.closest('#ring-ref')) { rg.sent = 0; loadRing(true); }
