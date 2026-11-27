@@ -2658,3 +2658,5 @@ body.atench.shopmin .stage .arena{display:none!important}
 .bst small{color:var(--dim);font-size:12px;line-height:1.4}
 .brar{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:999px;background:var(--bg3,#22283a);color:var(--muted)}
 .brar.r-u{color:#9fe0b0}.brar.r-r{color:#ffd36b;background:#3a2c10}.brar.r-v{color:#e2b8ff;background:#2b1a3a}
+.bst .bnote{color:var(--text,#e8e2d4);border-left:2px solid var(--gold,#f2c14e);padding-left:8px}
+.bst .bnext{color:var(--gold,#f2c14e)}

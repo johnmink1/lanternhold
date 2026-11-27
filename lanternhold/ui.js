@@ -3052,7 +3052,7 @@
   const regFloors = rn => (rn * 10 + 1) + '–' + (rn * 10 + 10);
   function creaturesHtml() {
     const bx = S.bx || {}, all = L.CREATURES, found = all.filter(c => bx[c.id]).length;
-    let h = '<h3 class="sub">Creatures <small class="bcount">' + found + '/' + all.length + ' found</small></h3><div class="lore beasts">';
+    let h = '<h3 class="sub">Bestiary: creatures by region <small class="bcount">' + found + '/' + all.length + ' found</small></h3><div class="lore beasts">';
     L.ROSTERS.forEach((list, rn) => {
       const b = L.BIOMES[rn];
       if ((S.maxFloorEver || 1) < rn * 10 + 1) { h += '<div class="lorelock">' + icon('lock') + ' A region you have not reached</div>'; return; }
@@ -3060,7 +3060,7 @@
       h += '<details data-breg="' + rn + '"><summary>' + esc(b.name) + ' <span class="bsub">floors ' + regFloors(rn) + ' · ' + nf + '/' + cs.length + '</span></summary><div class="blist">' + cs.map(c => {
         const got = bx[c.id], wand = L.creatureRegions(c).map(r => L.BIOMES[r].name);
         return '<div class="bst' + (got ? '' : ' unk') + '"><img alt="" data-bpic="' + c.id + '" width="56" height="56"><div><b>' + (got ? esc(c.name) : '???') + '</b> <span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span>' +
-          (got ? '<p>' + esc(c.text) + '</p>' : '') +
+          (got ? '<p>' + esc(c.text) + '</p>' + (got >= L.LORE_AT[c.rar] ? '<p class="bnote"><b>Field notes.</b> ' + esc(c.lore) + '</p>' : '<small class="bnext">Defeat ' + fmt(L.LORE_AT[c.rar] - got) + ' more to unlock its field notes.</small><br>') : '') +
           '<small>Found in: ' + esc(b.name) + ' (home)' + (wand.length ? ' · wanders into ' + esc(wand.join(' and ')) : '') + (got ? ' · ' + fmt(got) + ' defeated' : '') + '</small></div></div>';
       }).join('') + '</div></details>';
     });
@@ -3082,8 +3082,8 @@
       h += '<h3 class="sub">' + g + '</h3><div class="lore">' + groups[g].map(lo => S.lore[lo.id]
         ? '<details><summary>' + esc(lo.title) + (g === 'Bestiary' ? beastTag(lo.id) : '') + '</summary><p>' + esc(lo.text) + '</p>' + (g === 'Bestiary' ? beastBar(lo.id) : '') + '</details>'
         : '<div class="lorelock">' + icon('lock') + ' Not yet discovered</div>').join('') + '</div>';
+      if (g === 'Bestiary') h += creaturesHtml();
     }
-    h += creaturesHtml();
     $('journal').innerHTML = h;
     $('lorecount').textContent = Object.keys(S.lore).filter(k => L.LORE.find(l => l.id === k)).length + '/' + L.LORE.length;
   }
