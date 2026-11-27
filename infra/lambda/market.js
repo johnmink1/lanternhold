@@ -20,6 +20,8 @@ function item(i) {
   if (!(ilvl >= 1 && ilvl <= 1e6 && up >= 0 && up <= 10)) return null;
   return { cls: i.cls, slot: i.slot, rar: i.rar, set: set || undefined, jset: js || undefined, aff: JOB.includes(a.j) && a.v > 0 && a.v <= 0.5 ? { j: a.j, v: +a.v } : undefined, en: /^([a-m][1-9]){0,4}$/.test(i.en) ? i.en : undefined, ty: /^\w{3,11}$/.test(i.ty) ? i.ty : undefined, t: i.t >= 1 && i.t <= 10 ? i.t | 0 : undefined, ilvl, up };
 }
+// v143: no item above what the seller could have found: deepest floor + 10, raised by NP+ (core.js npIlvl, NP_ILVL 0.1).
+const ilvlCap = (h, it) => Math.ceil(((h && h.fl ? +h.fl.N : 1) + 10) * (1 + 0.1 * Math.max(h && h.np ? +h.np.N : 0, it.t | 0)));
 const okName = n => /^[A-Za-z][A-Za-z '\-]{1,15}$/.test(n) && !BAD.test(n.replace(/[^a-z]/gi, ''));
 const price = p => { p = Math.floor(+p); return p >= 1 && p < 1e60 ? p : 0; };
 const newId = () => Date.now().toString(36).padStart(9, '0') + crypto.randomBytes(3).toString('hex');
@@ -34,7 +36,7 @@ exports.handler = async (e) => {
   let b = {}; if (e.body) { try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body, 'base64').toString() : e.body); } catch (x) { return res(400, E); } }
   // NP+ (docs/NP-PLUS.md): each tier has its own market (mkt#<cls>#<tier>), and trading locks for 24 h after a new playthrough.
   const h = (await db.send(new GetItemCommand({ TableName: H, Key: { pid: S(me) } }))).Item || {}, np = h.np ? +h.np.N : 0, lock = h.npAt && +h.npAt.N > now - LOCK;
-  const mk = c => 'mkt#' + c + (hc ? '#hc' : np ? '#' + np : '');
+  const mk = c => 'mkt#' + c + (hc ? '#hc' : '') + (np ? '#' + np : ''); // v143: Hardcore NP+ tiers have their own markets too
   if (lock && (op === 'list' || op === 'buy')) return res(403, { error: 'lock' });
   if (op === 'market') {
     if (q.mine) {
@@ -48,7 +50,7 @@ exports.handler = async (e) => {
   }
   if (op === 'list') {
     const it = item(b.item), p = price(b.price);
-    if (!it || !p || (it.t | 0) < np) return res(400, E);
+    if (!it || !p || (it.t | 0) < np || it.ilvl > ilvlCap(h, it)) return res(400, E);
     if (!okName(String(b.name || ''))) return res(400, NM);
     const mine = await Q('sell#' + me, { Select: 'COUNT' });
     if (mine.Count >= 25) return res(400, { error: 'full' });

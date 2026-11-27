@@ -45,7 +45,9 @@ exports.handler = async (e) => {
       // v140 (John 27 Nov): finds bank only during real play (a cloud save in the last 10 minutes) and at most one per
       // 5 minutes since the last banked find, so a script cannot just claim the daily 15.
       const now = Date.now(), et = w && w.et ? +w.et.N : 0;
-      if (SV) { const sv = (await db.send(new D.GetItemCommand({ TableName: SV, Key: K, ProjectionExpression: 'updated' }))).Item; if (!sv || now - +sv.updated.N > 6e5) return res(200, { ok: true, add: 0, bal, mask, wait: 1 }); }
+      // v143: a Hardcore hero (?hc=1) plays on the '<sub>#hc' save row; Sigils still go to the one account wallet.
+      const hcK = (e.queryStringParameters || {}).hc === '1' ? { userId: S(cl.sub + '#hc') } : K;
+      if (SV) { const sv = (await db.send(new D.GetItemCommand({ TableName: SV, Key: hcK, ProjectionExpression: 'updated' }))).Item; if (!sv || now - +sv.updated.N > 6e5) return res(200, { ok: true, add: 0, bal, mask, wait: 1 }); }
       add = Math.max(0, Math.min(b.n | 0, 15 - dn, Math.floor((now - et) / 3e5))); nd = dn + add; drop = 1;
       if (!add) return res(200, { ok: true, add: 0, bal, mask, wait: dn < 15 ? 1 : 0 });
     } else return res(400, { error: 1 });

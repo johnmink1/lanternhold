@@ -70,9 +70,9 @@ const now0 = 1.8e12;
   const m = L.migrate(o); ev = []; L.tick(m, 0.1, now0, r, ev);
   assert.ok(!m.unlocked.includes(v2) && ev.some(e => e.type === 'hcdie'), 'dying on close = died');
   console.log('ok  closing the game while someone lies dying does not save them');
-  // 7. NP+ and Sigil finds are off
-  assert.ok(!L.npReady(Object.assign(party(), { maxFloorEver: 999 })) && L.sigilChance(s, 'chest') === 0);
-  console.log('ok  NP+ and Sigil finds are closed to Hardcore');
+  // 7. v143 (John): NP+ (own tier) and Sigil finds are open
+  assert.ok(L.npReady(Object.assign(party(), { maxFloorEver: 999 })) && L.sigilChance(s, 'chest') > 0);
+  console.log('ok  NP+ and Sigil finds open (v143)');
   // 7b. v143: the world boss and the Ember Ring are open; a world boss can wipe a Hardcore party; Escape works
   { const w = party(); w.hc.flee = 0; w.hc.caution = 0; for (const id of w.party) if (id) w.gear[id] = {}; // no gear: the boss wins
     assert.ok(!L.HC_OFF.includes('ring') && !L.HC_OFF.includes('boss'), 'Ring and world boss open');

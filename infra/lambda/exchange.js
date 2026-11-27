@@ -3,7 +3,8 @@
 // pointer under sigsell#<seller>. The buyer's Sigils go straight to their wallet, and the gold reaches
 // the seller's mailbox as a 'sale' letter, like a gear sale. Gold itself is kept by the game client.
 const D = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
-const db = new D.DynamoDBClient({}), { TABLE: T, WALLETS: W } = process.env;
+const db = new D.DynamoDBClient({}), { TABLE: T, WALLETS: W, SAVES } = process.env;
+const trust = require('./trust'); // v143: a buyer pays with gold the server trusts, like Market and Mail (trust.js)
 const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard)/i;
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) }), E = { error: 1 };
 const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
@@ -17,6 +18,9 @@ const credit = (sub, n) => ({ Update: { TableName: W, Key: { userId: S(sub) }, U
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, E);
+  // v143 (John, 27 Nov 2026): the exchange swaps account Sigils for one hero's gold, so it stays shut to Hardcore heroes
+  // (their gold never leaves Hardcore).
+  if ((e.queryStringParameters || {}).hc === '1') return res(403, { error: 'hc' });
   const me = pidOf(cl.sub), rk = e.routeKey;
   let b = {}; if (e.body) { try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body, 'base64').toString() : e.body); } catch (x) { return res(400, E); } }
   try {
@@ -45,6 +49,7 @@ exports.handler = async (e) => {
       const L = row(g.Item);
       if (buy ? L.seller === me : L.seller !== me) return res(403, E);
       if (buy && !okName(String(b.name || ''))) return res(400, { error: 'name' });
+      if (buy && !(await trust.canPay(db, SAVES, cl.sub, L.price, 'sigils'))) return res(402, { error: 'gold' });
       const ops = [
         { Delete: { TableName: T, Key: { pk: S('sig#'), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } },
         { Delete: { TableName: T, Key: { pk: S('sigsell#' + L.seller), sk: S(id) } } },

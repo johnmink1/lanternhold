@@ -38,14 +38,16 @@ async function tick(g, now) {
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, { error: 1 });
-  const me = pidOf(cl.sub), now = Date.now(), h = (await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(me) } }))).Item;
+  // v143 (John, 27 Nov 2026): Hardcore NP+ heroes (?hc=1) feed and fight with their own Hardcore hero row and save.
+  const sub = (e.queryStringParameters || {}).hc === '1' ? cl.sub + '#hc' : cl.sub;
+  const me = pidOf(sub), now = Date.now(), h = (await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(me) } }))).Item;
   if (!h || !h.name || h.ban || n(h, 'np') < 1) return res(403, { error: 'np' });
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400, { error: 1 }); }
   let g = (await get('gulp', '#')) || {}, roll = 0;
   const day = 'gulpd#' + new Date(now).toISOString().slice(0, 10);
   if (e.routeKey === 'POST /gulp/feed') {
     const k = Math.floor(+b.n), gold = M(0, mn(1e300, +b.g || 0));
-    if (!(await trust.canPay(db, SAVES, cl.sub, gold, 'gulp'))) return res(402, { error: 'gold' });
+    if (!(await trust.canPay(db, SAVES, sub, gold, 'gulp'))) return res(402, { error: 'gold' });
     if (!(k >= 1 && k <= 50)) return res(400, { error: 1 });
     // Hotfix 26 Nov 2026 (Kyvia): the feeder row wrote its weight to 'w', the table's key, so every feed failed after
     // the counters had moved (gold was never taken). Weight is now 'wt', the feeder row is written first, and a hero

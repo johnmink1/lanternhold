@@ -36,7 +36,8 @@ function update(item, expr, vals, names) {
     const kind = secs[i], body = secs[i + 1];
     for (const c of body.split(/,(?![^(]*\))/).map(s => s.trim())) {
       if (kind === 'SET') { const [a, b] = c.split('=').map(s => s.trim()); let m;
-        if ((m = b.match(/^if_not_exists\((\S+),\s*(\S+)\)\s*\+\s*(\S+)$/))) { const k = nm(a, names), base = k in item ? +item[k].N : +vals[m[2]].N; item[k] = { N: String(base + +vals[m[3]].N) }; }
+        if ((m = b.match(/^if_not_exists\((\S+),\s*(\S+)\)\s*([+-])\s*(\S+)$/))) { const k = nm(m[1], names), base = k in item ? +item[k].N : +vals[m[2]].N; item[nm(a, names)] = { N: String(m[3] === '+' ? base + +vals[m[4]].N : base - +vals[m[4]].N) }; }
+        else if ((m = b.match(/^(\S+)\s*([+-])\s*(:\S+)$/))) { const k = nm(m[1], names), base = k in item ? +item[k].N : 0; item[nm(a, names)] = { N: String(m[2] === '+' ? base + +vals[m[3]].N : base - +vals[m[3]].N) }; }
         else if ((m = b.match(/^if_not_exists\((\S+),\s*(\S+)\)$/))) { if (!(nm(a, names) in item)) item[nm(a, names)] = vals[m[2]]; }
         else item[nm(a, names)] = vals[b]; }
       if (kind === 'ADD') { const [a, b] = c.split(/\s+/); const k = nm(a, names), v = vals[b]; if (v.SS) item[k] = { SS: [...new Set([...(item[k] ? item[k].SS : []), ...v.SS])] }; else item[k] = { N: String((item[k] ? +item[k].N : 0) + +v.N) }; }
