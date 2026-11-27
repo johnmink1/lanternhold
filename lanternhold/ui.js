@@ -3566,8 +3566,10 @@
   }
   function paintTown() {
     const tb = document.querySelector('.tabs [data-town]'); if (!tb) return;
-    tb.classList.toggle('on', ['market', 'guild', 'ring', 'codex'].includes(tab));
-    const td = $('tradedot'), d = $('towndot'); if (td && d) { d.hidden = td.hidden; d.textContent = td.textContent; }
+    const inTown = [...document.querySelectorAll('.tabs .townitem')].map(b => b.dataset.tab);
+    tb.classList.toggle('on', inTown.includes(tab));
+    const td = $('tradedot'), d = $('towndot'), mk = document.querySelector('.tabs [data-tab="market"]');
+    if (td && d) { d.hidden = td.hidden || !(mk && mk.classList.contains('townitem')); d.textContent = td.textContent; }
   }
   setInterval(paintTown, 1500);
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
@@ -3976,6 +3978,132 @@
   // every 30 s, and the Keeper's own game checks right after it publishes its hero.
   setTimeout(loadOnline, 2000); setInterval(loadOnline, 30000);
   { const tt = $('taptip'); if (tt) ['click', 'pointerdown', 'mousedown', 'touchstart'].forEach(ev => tt.addEventListener(ev, e => e.stopPropagation())); }
+  // ---------- v141 screen layout (John 27 Nov: "make each section a module that can be re-arranged and added/removed") ----------
+  // Saved in S.settings.lay so it follows the hero (NP+ keeps settings). Battle, foe and abilities can move but never hide;
+  // the floor bar stays on top of the battle. New heroes get the default layout until the tutorial is done,
+  // because the tutorial points at these sections.
+  const LAY_MODS = {
+    war: ['#warstrip', 'Grand War strip', 'The war room link'], head: ['.stage>.stagehead', 'Floor and chapter', 'Floor arrows, map and chapter goal'],
+    arena: ['#arena', 'Battle'], foe: ['.stage>.foe', 'Foe and health'], tog: ['.stage .foe .toggles', 'Auto toggles', 'Descend and abilities'],
+    skills: ['#abilities', 'Abilities'], meter: ['#meterbox', 'Damage meter'], log: ['#flogbox', 'Fight log'],
+    train: ['#tab-party .buybar', 'Train amount', 'x1, x10, x25, Max'], tips: ['#tab-party .ftips', 'Formation tips'],
+  };
+  const LAY_HIDE = ['war', 'head', 'tog', 'meter', 'log', 'train', 'tips'], LAY_PIN = ['meter', 'log'];
+  const LAY_BAR = ['camp', 'gear', 'rekindle', 'market', 'guild', 'ring', 'codex'], LAY_BAR_N = 3;
+  const LAY_DEF = () => ({ ord: ['foe', 'skills', 'meter', 'log'], hide: {}, pin: {}, side: 'r', bar: ['camp', 'gear', 'rekindle'] });
+  const layReady = () => !!(S.hero && (!S.tut || S.tut.done));
+  function layOf() {
+    const d = LAY_DEF(), o = (S.settings && S.settings.lay) || {};
+    if (!layReady()) return d;
+    const ord = (Array.isArray(o.ord) ? o.ord : []).filter(k => d.ord.includes(k));
+    d.ord.forEach(k => { if (!ord.includes(k)) ord.push(k); });
+    const bar = Array.isArray(o.bar) ? o.bar.filter(k => LAY_BAR.includes(k)).slice(0, LAY_BAR_N) : d.bar;
+    return { ord, hide: Object.assign({}, o.hide), pin: Object.assign({}, o.pin), side: o.side === 'l' ? 'l' : 'r', bar };
+  }
+  function laySet(f) { const l = layOf(); f(l); S.settings.lay = l; save(); applyLayout(); if (layEditing) layBars(); }
+  const layEl = k => document.querySelector(LAY_MODS[k][0]);
+  let layKey = '', layEditing = false;
+  function applyLayout() {
+    const l = layOf(); layKey = JSON.stringify([layReady(), S.settings && S.settings.lay]);
+    LAY_HIDE.forEach(k => { const e = layEl(k); if (e) e.classList.toggle('layoff', !!l.hide[k]); });
+    const st = document.querySelector('.stage'), tp = $('tab-party');
+    // Pinned meter / log move under the fight; otherwise they go back to the end of the Party tab, in their usual order.
+    ['log', 'meter'].forEach(k => { const e = layEl(k); if (!e || !st || !tp) return; const want = l.pin[k] ? st : tp; if (e.parentNode !== want) want.appendChild(e); e.classList.toggle('laypin', !!l.pin[k]); });
+    { const fl = $('flogbox'), me = $('meterbox'); if (fl && me && fl.parentNode === tp && me.parentNode === tp && (me.compareDocumentPosition(fl) & 4)) tp.insertBefore(fl, me); }
+    l.ord.forEach((k, i) => { const e = layEl(k); if (e) e.style.order = i + 1; if (k === 'skills' && $('tonicbar')) $('tonicbar').style.order = i + 1; });
+    document.body.classList.toggle('layleft', l.side === 'l');
+    document.querySelectorAll('.tabs button[data-tab]').forEach(b => { const t = b.dataset.tab; if (t === 'party' || t === 'admin' || !LAY_BAR.includes(t)) return; b.classList.toggle('townitem', !l.bar.includes(t)); });
+    if (typeof paintTown === 'function') paintTown();
+  }
+  try { applyLayout(); } catch (e) {}
+  setInterval(() => { if (JSON.stringify([layReady(), S.settings && S.settings.lay]) !== layKey) applyLayout(); }, 1500);
+  // Desktop: edit in place, a small bar on each section. Phones: a list sheet.
+  function openLayout() {
+    if (!layReady()) { toast('lock', 'Finish the tutorial first', 'You can change your screen layout once the tutorial is done.', ''); return; }
+    closeModal();
+    if (phone()) { layoutSheet(); return; }
+    switchTab('party'); layEditing = true; document.body.classList.add('layedit'); layBars();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function layDone() { layEditing = false; document.body.classList.remove('layedit'); document.querySelectorAll('.laybar,.laytop').forEach(x => x.remove()); save(); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && layEditing) layDone(); });
+  function layMove(l, k, d) { const i = l.ord.indexOf(k), j = i + d; if (i < 0 || j < 0 || j >= l.ord.length) return; l.ord.splice(i, 1); l.ord.splice(j, 0, k); }
+  // Up / down skip sections that are not on the fight side right now (an unpinned meter or log).
+  function layStep(l, k, d) { const live = l.ord.filter(x => !LAY_PIN.includes(x) || l.pin[x]); const i = live.indexOf(k), o = live[i + d]; if (i < 0 || !o) return; const a = l.ord.indexOf(k), b = l.ord.indexOf(o); l.ord[a] = o; l.ord[b] = k; }
+  function layBars() {
+    document.querySelectorAll('.laybar,.laytop').forEach(x => x.remove());
+    const l = layOf();
+    Object.keys(LAY_MODS).forEach(k => {
+      const e = layEl(k); if (!e || l.hide[k]) return;
+      const mov = l.ord.includes(k) && (!LAY_PIN.includes(k) || l.pin[k]);
+      const b = document.createElement('div'); b.className = 'laybar' + (k === 'tog' ? ' in' : ''); b.dataset.k = k;
+      b.innerHTML = '<b>' + LAY_MODS[k][1] + '</b>' +
+        (mov ? '<button data-la="up" aria-label="Move up">&uarr;</button><button data-la="dn" aria-label="Move down">&darr;</button>' : '') +
+        (LAY_PIN.includes(k) ? '<button data-la="pin">' + (l.pin[k] ? 'Back to Party tab' : 'Pin under the fight') + '</button>' : '') +
+        (LAY_HIDE.includes(k) ? '<button data-la="hide" class="hide">Hide</button>' : (k === 'arena' || k === 'foe' || k === 'skills' ? '<small>always shown</small>' : ''));
+      (e.tagName === 'DETAILS' && e.querySelector('summary') || e).appendChild(b); // a folded <details> only shows its summary
+    });
+    const hid = LAY_HIDE.filter(k => l.hide[k]);
+    const t = document.createElement('div'); t.className = 'laytop';
+    t.innerHTML = '<b>Editing your screen</b><span>Move sections with the arrows. Hide what you don\'t use.</span>' +
+      '<span class="layhid">' + (hid.length ? hid.map(k => '<button data-show="' + k + '">+ ' + LAY_MODS[k][1] + '</button>').join('') : '<i>Nothing hidden</i>') + '</span>' +
+      '<button class="btn ghost small" data-la="side">Tabs on the ' + (l.side === 'l' ? 'right' : 'left') + '</button>' +
+      '<button class="btn ghost small" data-la="reset">Reset to default</button><button class="btn small" data-la="done">Done</button>';
+    $('app').prepend(t);
+  }
+  document.addEventListener('click', e => {
+    if (!layEditing) return;
+    const sh = e.target.closest('.laytop [data-show]'); if (sh) { laySet(l => { delete l.hide[sh.dataset.show]; }); return; }
+    const a = e.target.closest('.laybar [data-la], .laytop [data-la]'); if (!a) return;
+    e.preventDefault(); e.stopPropagation();
+    const k = a.closest('.laybar') && a.closest('.laybar').dataset.k, act = a.dataset.la;
+    if (act === 'done') { layDone(); return; }
+    if (act === 'reset') { S.settings.lay = LAY_DEF(); save(); applyLayout(); layBars(); return; }
+    laySet(l => {
+      if (act === 'side') l.side = l.side === 'l' ? 'r' : 'l';
+      else if (act === 'hide') l.hide[k] = 1;
+      else if (act === 'pin') { if (l.pin[k]) delete l.pin[k]; else l.pin[k] = 1; }
+      else layStep(l, k, act === 'up' ? -1 : 1);
+    });
+  }, true);
+  function layoutSheet() {
+    const row = (k, l) => {
+      const m = LAY_MODS[k], mov = l.ord.includes(k) && (!LAY_PIN.includes(k) || l.pin[k]), canHide = LAY_HIDE.includes(k), on = !l.hide[k];
+      const sub = LAY_PIN.includes(k) ? (l.pin[k] ? 'Under the fight' : 'In the Party tab') : canHide ? (m[2] || '') : 'always shown';
+      return '<div class="lrow' + (on ? '' : ' off') + '"><span>' + m[1] + (sub ? '<small>' + sub + '</small>' : '') + '</span>' +
+        '<span class="ar">' + (LAY_PIN.includes(k) && on ? '<button data-lp="' + k + '">' + (l.pin[k] ? 'To tab' : 'Pin') + '</button>' : '') +
+        (mov && on ? '<button data-lu="' + k + '" aria-label="Move up">&uarr;</button><button data-ld="' + k + '" aria-label="Move down">&darr;</button>' : '') + '</span>' +
+        (canHide ? '<input type="checkbox" class="lsw" data-lh="' + k + '"' + (on ? ' checked' : '') + ' aria-label="Show ' + m[1] + '">' : '<small class="llock">Locked</small>') + '</div>';
+    };
+    const paint = () => {
+      const l = layOf(), mb = $('laysheet'); if (!mb) return;
+      const fight = ['war', 'head', 'arena'].concat(l.ord.filter(k => !LAY_PIN.includes(k) || l.pin[k])).concat(['tog']);
+      const tabbed = ['train', 'tips'].concat(LAY_PIN.filter(k => !l.pin[k]));
+      mb.innerHTML = '<h2>Screen layout</h2><p class="setnote">Move sections or switch off the ones you don\'t use. The battle, foe and abilities always stay.</p>' +
+        '<h3 class="sethead">Fight screen</h3>' + fight.map(k => row(k, l)).join('') +
+        '<h3 class="sethead">Party tab</h3>' + tabbed.map(k => row(k, l)).join('') +
+        '<h3 class="sethead">Bottom bar</h3><p class="setnote">Pick ' + LAY_BAR_N + ' tabs to sit next to Fight and Party. The rest live under Town.</p>' +
+        '<div class="lbar">' + LAY_BAR.map(t => { const b = document.querySelector('.tabs [data-tab="' + t + '"]'); return '<button data-lb="' + t + '" class="' + (l.bar.includes(t) ? 'on' : '') + '">' + esc(b && b.querySelector('span') ? b.querySelector('span').textContent.trim() : t) + '</button>'; }).join('') + '</div>' +
+        '<div class="row"><button class="btn ghost" id="lay-reset">Reset to default</button><button class="btn" id="lay-done">Done</button></div>';
+    };
+    modal('<div id="laysheet" class="laysheet"></div>', () => {
+      const m = $('laysheet'); paint();
+      m.addEventListener('click', e => {
+        const t = e.target.closest('button'); if (!t) return;
+        if (t.id === 'lay-done') { save(); closeModal(); return; }
+        if (t.id === 'lay-reset') { S.settings.lay = LAY_DEF(); save(); applyLayout(); paint(); return; }
+        if (t.dataset.lu || t.dataset.ld) laySet(l => layStep(l, t.dataset.lu || t.dataset.ld, t.dataset.lu ? -1 : 1));
+        else if (t.dataset.lp) laySet(l => { const k = t.dataset.lp; if (l.pin[k]) delete l.pin[k]; else l.pin[k] = 1; });
+        else if (t.dataset.lb) {
+          const k = t.dataset.lb, l0 = layOf();
+          if (!l0.bar.includes(k) && l0.bar.length >= LAY_BAR_N) { toast('lock', 'The bar is full', 'Tap a tab that is on to take it off first.', ''); return; }
+          laySet(l => { l.bar = l.bar.includes(k) ? l.bar.filter(x => x !== k) : l.bar.concat(k); });
+        } else return;
+        paint();
+      });
+      m.addEventListener('change', e => { const c = e.target.closest('[data-lh]'); if (!c) return; laySet(l => { if (c.checked) delete l.hide[c.dataset.lh]; else l.hide[c.dataset.lh] = 1; }); paint(); });
+    });
+  }
   // ---------- settings ----------
   $('btn-settings').addEventListener('click', openSettings);
   function openSettings() {
@@ -3990,6 +4118,7 @@
       (CL ? '<label class="setrow setnotif"><span>Lanternholder tips<small>A short note when a limit Lanternholder lifts gets in your way, at most once a day</small></span><input type="checkbox" id="s-nudge"' + (S.nudgeOff ? '' : ' checked') + '></label>' : '') +
       '<p style="margin-top:16px">Your progress saves automatically in this browser. Copy a backup to move it to another device.</p>' +
       '<div class="row"><button class="btn ghost" id="s-export">Copy backup</button><button class="btn ghost" id="s-import">Load backup</button><button class="btn danger" id="s-reset">Erase progress</button></div>' +
+      '<h3 class="sethead">Screen layout</h3><p class="setnote">' + (layReady() ? 'Move or hide parts of the screen to suit how you play.' : 'Opens once the tutorial is done.') + '</p><div class="row"><button class="btn ghost" id="s-lay"' + (layReady() ? '' : ' disabled') + '>Edit layout</button></div>' +
       '<div class="row"><button class="btn ghost" id="s-tut">Replay the tutorial</button><a class="btn ghost" href="https://lanternhold.born2gamellc.com/wiki/" target="_blank" rel="noopener">Open the wiki</a><button class="btn ghost" id="s-intro">Watch the intro</button>' + (fsOk() ? '<button class="btn ghost" id="s-full">' + (fsEl() ? 'Leave full screen' : 'Play full screen') + '</button>' : '') + '</div>' +
       '<div id="s-extra"></div>' +
       (window.LH_SUPPORT_URL ? '<p style="margin-top:16px">Lanternhold is free with no ads. If you enjoy it, you can <a style="color:var(--gold)" target="_blank" rel="noopener" href="' + window.LH_SUPPORT_URL + '">buy the developer a coffee</a>. It supports the time that goes into the game. It is not a charity donation and gives nothing in game. Thank you.</p>' : '') +
@@ -4013,6 +4142,7 @@
         m.querySelector('#s-close').onclick = () => { save(); closeModal(); };
         m.querySelector('#s-full') && (m.querySelector('#s-full').onclick = () => { save(); closeModal(); toggleFull(); });
         m.querySelector('#s-tut').onclick = () => { S.tut = { i: 0, done: false }; coachCtx = null; closeModal(); switchTab('party'); save(); };
+        m.querySelector('#s-lay').onclick = openLayout;
         m.querySelector('#s-intro').onclick = () => { save(); closeModal(); if (window.LHIntro) LHIntro.play(); };
         m.querySelector('#s-export').onclick = () => {
           save(); const code = backupCode(localStorage.getItem(SAVE_KEY) || '');
