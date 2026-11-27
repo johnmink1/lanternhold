@@ -25,8 +25,11 @@ exports.handler = async (e) => {
   if (rk === 'GET /epoch') return res(200, { epoch: await getEpoch() });
   if (rk === 'GET /leaderboard') {
     const all = await scanAll(HEROES), online = all.filter(i => i.name && !i.ban && i.seen && Date.now() - i.seen.N < 18e4).length;
-    const top = all.filter(i => i.name && i.fl && !i.ban)
-      .map(i => ({ name: i.name.S, cls: i.cls.S, level: +i.lv.N, floor: +i.fl.N, side: i.sd ? i.sd.S : 'unsworn' }))
+    // v142 Hardcore (John 27 Nov 2026): ?hc=1 ranks only Hardcore heroes (row flag hc), the plain board only Normal ones.
+    const hcb = (e.queryStringParameters || {}).hc === '1';
+    const hxOf = i => { try { return i.hx ? JSON.parse(i.hx.S) : {}; } catch (x) { return {}; } };
+    const top = all.filter(i => i.name && i.fl && !i.ban && !!(i.hc && i.hc.N === '1') === hcb)
+      .map(i => Object.assign({ name: i.name.S, cls: i.cls.S, level: +i.lv.N, floor: +i.fl.N, side: i.sd ? i.sd.S : 'unsworn' }, hcb ? { hx: hxOf(i) } : {}))
       .sort((a, c) => c.floor - a.floor || c.level - a.level).slice(0, 50);
     // The Lantern Keeper (John, 2026-11-24): a member of the Cognito "admins" group with a hero seen in the last 3 minutes
     // switches on a +25% buff for every player. Only the group decides it, never a hero name.

@@ -23,7 +23,8 @@ exports.handler = async (e) => {
   if (!cl || !cl.sub) return res(401, { error: 'auth' });
   let b = {};
   if (e.body) { try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body, 'base64').toString() : e.body); } catch (x) { return res(400, { error: 'json' }); } }
-  const me = pidOf(cl.sub), wk = { userId: S(cl.sub) }, hk = { pid: S(me) };
+  // v142: the wallet (Sigils, looks) is the account's; the hero row is the slot's (?hc=1 = the Hardcore hero).
+  const me = pidOf((e.queryStringParameters || {}).hc === '1' ? cl.sub + '#hc' : cl.sub), wk = { userId: S(cl.sub) }, hk = { pid: S(me) };
   const wallet = async () => (await db.send(new D.UpdateItemCommand({ TableName: W, Key: wk, ReturnValues: 'ALL_NEW',
     UpdateExpression: 'SET bal = if_not_exists(bal, :g), own = if_not_exists(own, :o)', ExpressionAttributeValues: { ':g': { N: '100' }, ':o': { SS: ['f.plain'] } } }))).Attributes;
   const hero = async id => (await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(id) } }))).Item;

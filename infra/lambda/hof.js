@@ -20,7 +20,7 @@ exports.handler = async () => {
     const adm = new Set(((await idp.send(new ListUsersInGroupCommand({ UserPoolId: POOL, GroupName: 'admins' }))).Users || []).map(u => u.Username));
     const cut = Date.now() - 60 * 864e5, rows = [];
     for (const i of items) {
-      if (!i.name || i.ban || (i.u && adm.has(i.u.S)) || !i.hf || !i.seen || +i.seen.N < cut) continue;
+      if (!i.name || i.ban || i.hc || (i.u && adm.has(i.u.S)) || !i.hf || !i.seen || +i.seen.N < cut) continue;
       let h; try { h = JSON.parse(i.hf.S); } catch (e) { continue; }
       const c0 = i.c0 ? +i.c0.N : 0, np = i.np ? +i.np.N : 0;
       rows.push({ name: i.name.S, cls: i.cls ? i.cls.S : '', lv: i.lv ? +i.lv.N : 0, np, ts: c0 || Date.now(), h,

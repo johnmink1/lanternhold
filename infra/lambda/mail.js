@@ -34,7 +34,9 @@ const q = pk => db.send(new QueryCommand({ TableName: T, KeyConditionExpression:
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, E);
-  const me = pidOf(cl.sub), rk = e.routeKey.split('/').pop(), now = Date.now();
+  // v142 Hardcore (?hc=1): the Hardcore slot is its own mailbox, and letters only go between heroes of the same mode.
+  const hc = (e.queryStringParameters || {}).hc === '1', sub = hc ? cl.sub + '#hc' : cl.sub;
+  const me = pidOf(sub), rk = e.routeKey.split('/').pop(), now = Date.now();
   let b = {}; if (e.body) { try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body, 'base64').toString() : e.body); } catch (x) { return res(400, E); } }
   if (rk === 'mail') {
     const [i, o] = await Promise.all([q('inbox#' + me), q('out#' + me)]);
@@ -45,6 +47,7 @@ exports.handler = async (e) => {
     if (!it || !/^[0-9a-f]{16}$/.test(to) || to === me || !(p < 1e60)) return res(400, E);
     const [th, mh] = await Promise.all([hero(to), hero(me)]), toName = th.name && th.name.S, myName = mh.name && mh.name.S;
     if (!toName || !myName) return res(404, E);
+    if (!!th.hc !== !!mh.hc || !!mh.hc !== hc) return res(409, { error: 'hc' }); // never across the Hardcore wall
     if (tier(th) !== tier(mh) || (it.t | 0) < tier(mh) || locked(th) || locked(mh)) return res(409, E); // 409 = different NP+ tier, an old-tier item, or the 24 h lock
     if (((await q('out#' + me)).Items || []).length >= 20) return res(400, E);
     BAD.lastIndex = 0;
@@ -67,11 +70,11 @@ exports.handler = async (e) => {
     ops.push({ Delete: { TableName: T, Key: K('out#' + L.from, id) } });
     const acc = rk === 'accept';
     if (!acc && rk !== 'decline') return res(404, E);
-    if (acc && L.price > 0 && !(await trust.canPay(db, SAVES, cl.sub, L.price, 'mail'))) return res(402, { error: 'gold' });
+    if (acc && L.price > 0 && !(await trust.canPay(db, SAVES, sub, L.price, 'mail'))) return res(402, { error: 'gold' });
     if (!acc || L.price > 0) ops.push({ Put: { TableName: T, Item: { ...K('inbox#' + L.from, newId()), type: S(acc ? 'payment' : 'return'), from: S(me), fromName: S(L.toName), item: S(JSON.stringify(L.item)), gold: S(acc ? L.price : 0), at: N(now), ttl: N(Math.floor(now / 1000) + 5184000) } } });
   }
   try { await db.send(new TransactWriteItemsCommand({ TransactItems: ops })); }
   catch (x) { if (x.name === 'TransactionCanceledException') return res(404, E); throw x; }
-  if (rk === 'claim' && L.gold > 0) await trust.credit(db, SAVES, cl.sub, L.gold);
+  if (rk === 'claim' && L.gold > 0) await trust.credit(db, SAVES, sub, L.gold);
   return res(200, { ok: true, letter: L });
 };

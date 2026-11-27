@@ -17,9 +17,14 @@
 //   a save with much less play time replaces the stored one, the stored one is copied too (sk = 'b' + time). Admins
 //   restore any copy (admin.js POST /admin/restore). The table also has point-in-time recovery (35 days).
 // - Market and Mail sales credit the seller's crd (gold the server knows arrived), which the gold rule allows for.
+// v142 Hardcore (John, 27 Nov 2026): ?hc=1 is the account's second save slot. It is stored as its own player
+// (userId '<sub>#hc', so its own pid, snapshots, activity log and hero row). hccheck.js refuses a Hardcore save whose
+// deaths or lost gear came undone (409 'hcback'), and any save carried between the two slots (409 'hcslot').
+// DELETE on the Hardcore slot (start over) keeps the row with an rst stamp, so an old copy can't come back.
 const D = require('@aws-sdk/client-dynamodb');
 const zlib = require('zlib'), crypto = require('crypto');
 const SC = require('./savecheck');
+const HC = require('./hccheck');
 const db = new D.DynamoDBClient({});
 const { TABLE, TRADE, HEROES, WALLETS } = process.env, MODE = process.env.SAVECHECK || 'log';
 const DAY = 864e5, SNAP_DAYS = 35, HELD_DAYS = 30, BACK = 1800;
@@ -38,7 +43,7 @@ function snap(s) {
   return { g: n(s.gold), d: n(s.dust), k: n(s.kindling), e: n(s.embers), x: n(s.hxp), f: n(s.maxFloorEver), fl: n(s.floor),
     b: Array.isArray(s.bag) ? s.bag.length : 0, ki: n(t.kills), bk: n(t.bossKills), ge: n(t.goldEarned), pt: n(t.playTime),
     ls: n(s.lastSeen), cr: n(s.created), tk: n(s.wbTok), sh: Object.values(sh).reduce((a, v) => a + n(v), 0), np: n(s.np),
-    wp: n(s.wagesPaid), hr: s.hires ? Object.keys(s.hires).length : 0, rk: n(t.rekindles) };
+    wp: n(s.wagesPaid), hr: s.hires ? Object.keys(s.hires).length : 0, rk: n(t.rekindles), ...(s.hc ? { hc: [n(s.hc.n), n(s.hc.hf), n(s.hc.w), n(s.hc.lostN)] } : {}) };
 }
 // Gear rating: 100 x the gear bonus of everything the player's own hero wears (core.js gearRating, same numbers).
 const RAR = { common: 0.04, fine: 0.08, rare: 0.14, epic: 0.24, set: 0.18, goblin: 0.26, legend: 0.34, mythic: 0.5 };
@@ -88,18 +93,20 @@ async function copySave(sub, sk, data, now, sv, why) {
     sum: { S: JSON.stringify({ g: p.g, f: p.f, pt: p.pt, np: p.np, x: p.x, why }) }, ttl: { N: String(Math.floor(now / 1000) + SNAP_DAYS * 86400) } } }));
 }
 exports.handler = async (event) => {
-  const sub = event.requestContext && event.requestContext.authorizer && event.requestContext.authorizer.jwt && event.requestContext.authorizer.jwt.claims.sub;
-  if (!sub) return res(401, { error: 'not signed in' });
+  const sub0 = event.requestContext && event.requestContext.authorizer && event.requestContext.authorizer.jwt && event.requestContext.authorizer.jwt.claims.sub;
+  if (!sub0) return res(401, { error: 'not signed in' });
+  const hc = !!(event.queryStringParameters && event.queryStringParameters.hc === '1'), sub = hc ? sub0 + '#hc' : sub0;
   const method = event.requestContext.http.method;
   const Key = { userId: { S: sub } };
   if (method === 'GET') {
     const r = await db.send(new D.GetItemCommand({ TableName: TABLE, Key }));
-    if (!r.Item) return res(404, { error: 'no save' });
+    // hc: 1 tells a Hardcore game this server keeps the Hardcore slot apart (an older server would hand back the Normal save).
+    if (!r.Item || !r.Item.data || !r.Item.data.S) return r.Item && r.Item.rst ? res(200, { data: '', updated: Number(r.Item.updated.N), rst: Number(r.Item.rst.N), dv: '', hc: hc ? 1 : 0 }) : res(404, { error: 'no save', hc: hc ? 1 : 0 });
     const dv = r.Item.dv ? r.Item.dv.S : '';
     // ?peek=1: only who plays and when it last saved, so a device coming back can check without downloading the save.
-    if (event.queryStringParameters && event.queryStringParameters.peek) return res(200, { updated: Number(r.Item.updated.N), dv });
+    if (event.queryStringParameters && event.queryStringParameters.peek) return res(200, { updated: Number(r.Item.updated.N), dv, hc: hc ? 1 : 0 });
     // rst: an admin reset this player; games created before it start over
-    return res(200, { data: r.Item.data.S, updated: Number(r.Item.updated.N), rst: r.Item.rst ? Number(r.Item.rst.N) : 0, dv });
+    return res(200, { data: r.Item.data.S, updated: Number(r.Item.updated.N), rst: r.Item.rst ? Number(r.Item.rst.N) : 0, dv, hc: hc ? 1 : 0 });
   }
   if (method === 'PUT') {
     let body = event.body || '';
@@ -109,6 +116,15 @@ exports.handler = async (event) => {
     if (typeof b.data !== 'string') return res(400, { error: 'missing data' });
     const now = Date.now();
     const sv = parse(b.data);
+    // Hardcore: deaths and lost gear never come undone, and no save crosses between the slots (always on).
+    let hcd = null;
+    if (sv) {
+      let prev = null;
+      if (hc) { const h = (await db.send(new D.GetItemCommand({ TableName: TABLE, Key, ProjectionExpression: 'hcd', ConsistentRead: true }))).Item; try { prev = h && h.hcd ? JSON.parse(h.hcd.S) : null; } catch (e) {} }
+      const hk = HC.check(hc, sv, prev);
+      if (!hk.ok) { console.log('hc refused', pidOf(sub), hk.why); return res(409, { error: hk.why === 'hcslot' || hk.why === 'normal' ? 'hcslot' : 'hcback', why: hk.why }); }
+      hcd = hc ? hk.hcd : null;
+    }
     // The save check reads the trusted reference first (a small read: only ck, crd, the device and the play time).
     let ck = null, crd = 0, chk = null, row = null;
     if (MODE !== 'off' && sv && TRADE) try {
@@ -148,6 +164,7 @@ exports.handler = async (event) => {
     const dv = String(b.dv || '').slice(0, 24), claim = !!b.claim && !!dv;
     let cond = '(attribute_not_exists(rst) OR rst <= :c)', vals = { ':d': { S: b.data }, ':u': { N: String(now) }, ':f': { N: String(Number(b.floor) || 0) }, ':c': { N: String(Number(b.created) || 0) } };
     let upd = 'SET #d = :d, updated = :u, floor = :f';
+    if (hcd) { upd += ', hcd = :h'; vals[':h'] = { S: JSON.stringify(hcd) }; }
     if (dv) { upd += ', dv = :v'; vals[':v'] = { S: dv }; if (!claim) cond += ' AND (attribute_not_exists(dv) OR dv = :v)'; }
     else cond += ' AND attribute_not_exists(dv)'; // hotfix 27 Nov 04:47 UTC: an old tab with no device id can't overwrite a newer save
     // Trusted reference: an accepted, clean save becomes the new reference; a held save accepted in log mode does not.
@@ -179,6 +196,8 @@ exports.handler = async (event) => {
     return res(200, { ok: true, updated: now });
   }
   if (method === 'DELETE') {
+    // Hardcore start-over: the row stays as an rst stamp, so a copy made before it is refused (409 'reset').
+    if (hc) { const now = Date.now(); await db.send(new D.PutItemCommand({ TableName: TABLE, Item: { userId: { S: sub }, rst: { N: String(now) }, updated: { N: String(now) }, data: { S: '' } } })); return res(200, { ok: true }); }
     await db.send(new D.DeleteItemCommand({ TableName: TABLE, Key }));
     return res(200, { ok: true });
   }
