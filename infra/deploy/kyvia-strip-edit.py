@@ -1,6 +1,9 @@
 # Remove what an edited backup bought (John, 27 Nov 2026: "warn her, remove the gain and block the bug", "push immediately").
 # Player pid e695f1f606a55c95 loaded a hand-edited backup between 22:51:50 and 22:52:28 UTC on 26 Nov (gold 227.7B -> 999.2T)
-# and spent it on Gilded Caskets and camp renovations until ~23:03 UTC.
+# and spent it on Gilded Caskets and camp renovations until ~23:03 UTC. A second edited backup at 00:23 UTC on 27 Nov
+# added ~876B gold (24.4B -> 900.6B, play time back 24 s), spent on reforges. She set gold earned back by hand at 23:18.
+# Fix: undo the casket-window renovations and Curios, remove casket gear still held, and take the second edit's gold
+# back out of what she holds now (floored at 0). Gold earned is left as is (already back to normal).
 # Run in AWS CloudShell: python3 kyvia-strip-edit.py        (dry run: prints what would change)
 #                        APPLY=1 python3 kyvia-strip-edit.py (backs up the save item to ~/lhbak, then writes the fix)
 import os, json, gzip, base64, time, boto3
@@ -35,10 +38,9 @@ gone_ids = {it['uid'] for it in gone}
 reno = {k: v for k, v in (s.get('reno') or {}).items() if T0 <= v <= T1}
 cur = {k: v for k, v in (s.get('curios') or {}).items() if T0 <= v <= T1}
 worn = [(m, p) for m, slots in (s.get('gear') or {}).items() for p, u in slots.items() if u in gone_ids]
-fake_earned = after['ge'] - before['ge']
+FAKE2 = 876e9  # second edit, 00:22:14 -> 00:23:43 UTC: 2.443e10 -> 9.006e11 gold
 print('player', hero.get('name', {}).get('S'), 'save gz' if gz else 'save plain', 'updated', item['updated']['N'])
-print('gold now', s.get('gold'), '-> +', before['g'], '(her real gold before the edit)')
-print('goldEarned', s['stats'].get('goldEarned'), '-> -', fake_earned)
+print('gold now', s.get('gold'), '->', max(0, (s.get('gold') or 0) - FAKE2))
 print('remove', len(gone), 'items:', sorted({(it.get('rar'), 'curio' if it.get('cu') else it.get('slot')) for it in gone}))
 print('worn among them:', worn)
 print('renovations to undo:', list(reno))
@@ -51,8 +53,7 @@ s['bag'] = [it for it in s['bag'] if it.get('uid') not in gone_ids]
 for m, p in worn: del s['gear'][m][p]
 for k in reno: del s['reno'][k]
 for k in cur: del s['curios'][k]
-s['gold'] = (s.get('gold') or 0) + before['g']
-s['stats']['goldEarned'] = max(0, s['stats'].get('goldEarned', 0) - fake_earned)
+s['gold'] = max(0, (s.get('gold') or 0) - FAKE2)
 s['stats']['playTime'] = s['stats'].get('playTime', 0) + 30  # newer than any copy on her device, so a reload takes this one
 out = json.dumps(s, separators=(',', ':'))
 data = 'gz1:' + base64.b64encode(gzip.compress(out.encode())).decode() if gz else out
