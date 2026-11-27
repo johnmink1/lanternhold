@@ -8266,6 +8266,8 @@
   const teamName = (t, i) => esc(t.hero ? t.n : t.n || '');
   const teamHue = (t, owner) => t.hero ? (owner === rg.st.me.id ? lookHue(L.memberById('you')) : outfitHue((looksCache[owner] || {}).k)) : ((L.memberById(t.id) || {}).hue || 0);
   function teamView(me, you) {
+    // the server learns team battles in its own deploy; until then, say so instead of sending fights it would treat as duels
+    if (!rg.st.tkit) return '<p class="note">Team battles open soon. Check back after the next update.</p>';
     const line = teamLine(), pool = teamPool(), en = ringEnergy(me), full = line.length === 3, saved = !!(me.tl && me.tl.length === 3) && !rg.tl;
     let h = '<p class="note small tmnote">Fight another player’s team with your hero and two companions. Borrowed player heroes can’t join, only companions you hired or found. The front fighter takes most of the blows; rogues go for the weakest foe and healers mend the weakest teammate.</p>';
     h += '<div class="tmhead"><span><b>' + (me.tr || 1000).toLocaleString('en-US') + '</b> team rating</span><span class="rtitle sm rt-' + ringTitle(me.tr || 1000).toLowerCase() + '">' + ringTitle(me.tr || 1000) + '</span>' + (rg.st.trank ? '<span>rank ' + rg.st.trank + ' of ' + rg.st.tn + '</span>' : '') + '<span title="Team wins and losses">' + icon('sword') + (me.tw || 0) + '&ndash;' + (me.tx || 0) + '</span><span>' + laurel(me.ll) + '</span></div>';
@@ -8334,7 +8336,7 @@
     const mv = e.target.closest('[data-tmmove]'), out = e.target.closest('[data-tmout]'), add = e.target.closest('[data-tmin]'), gear = e.target.closest('[data-tmgear]'), ck = e.target.closest('[data-ckit]'), tf = e.target.closest('[data-tfight]');
     if (gear) { rg.gid = gear.dataset.tmgear; rg.view = 'tgear'; paintRing(); return true; }
     if (ck) { teamKit(+ck.dataset.ckit, ck); return true; }
-    if (tf) { teamFight(tf.dataset.tfight, tf); return true; }
+    if (tf) { if (rg.st && rg.st.tkit) teamFight(tf.dataset.tfight, tf); return true; }
     if (!mv && !out && !add) return false;
     const line = teamLine().slice();
     if (mv) { const i = +mv.dataset.tmmove, j = (i + line.length - 1) % line.length; if (line.length > 1) [line[i], line[j]] = [line[j], line[i]]; }
@@ -8350,7 +8352,7 @@
     try {
       // refresh the lineup's builds first, so the companions fight as strong as they are now
       if (Date.now() - rg.sent > 5 * 6e4) { const t = teamLine(); const u = await api('PUT', Object.assign(ringBuild(), t.length === 3 ? { tl: teamBody(t) } : {}), '/arena'); if (u && u.me) rg.st.me = u.me; rg.sent = Date.now(); }
-      r = await api('POST', { id, team: 1 }, '/arena/fight'); if (!r || !r.log) throw 0;
+      r = await api('POST', { id, team: 1 }, '/arena/fight'); if (!r || !r.log || !r.team) throw 0;
     } catch (e) { rg.busy = false; if (btn) btn.disabled = false; toast('lock', 'The battle did not start', 'The Ring could not be reached. Your challenge was not spent.', 'warn'); return; }
     rg.st.me = r.me; rg.busy = false;
     playTeam(r);
