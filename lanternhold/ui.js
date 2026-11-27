@@ -1,4 +1,4 @@
-/* lh-build 202611271613 */
+/* lh-build 202611271617 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -3675,6 +3675,7 @@
       if (cx === 'stats') { if (force || lastFeatCount !== L.featCount(S)) updateFeats(); updateLedger(); }
     }
     if (tab === 'rekindle') updateRekindle();
+    if (tab === 'dash' && force) paintDash(true);
     lastRelicCount = Object.keys(S.relics).length; lastFeatCount = L.featCount(S);
     $('relcount').textContent = lastRelicCount + '/' + L.RELICS.length;
     $('featcount').textContent = lastFeatCount + '/' + featsShown().length;
@@ -4022,7 +4023,7 @@
     train: ['#tab-party .buybar', 'Train amount', 'x1, x10, x25, Max'], tips: ['#tab-party .ftips', 'Formation tips'],
   };
   const LAY_HIDE = ['war', 'head', 'tog', 'meter', 'log', 'train', 'tips'], LAY_PIN = ['meter', 'log'];
-  const LAY_BAR = ['camp', 'gear', 'rekindle', 'market', 'guild', 'ring', 'codex'], LAY_BAR_N = 3;
+  const LAY_BAR = ['dash', 'camp', 'gear', 'rekindle', 'market', 'guild', 'ring', 'codex'], LAY_BAR_N = 3;
   const LAY_DEF = () => ({ ord: ['foe', 'skills', 'meter', 'log'], hide: {}, pin: {}, side: 'r', bar: ['camp', 'gear', 'rekindle'] });
   const layReady = () => !!(S.hero && (!S.tut || S.tut.done));
   function layOf() {
@@ -4137,6 +4138,88 @@
       m.addEventListener('change', e => { const c = e.target.closest('[data-lh]'); if (!c) return; laySet(l => { if (c.checked) delete l.hide[c.dataset.lh]; else l.hide[c.dataset.lh] = 1; }); paint(); });
     });
   }
+  // ---------- v141 Dashboard (John 27 Nov: "a custom dashboard page... a player can build their dashboard by adding ANY tile") ----------
+  // Every tile reads what the game already shows elsewhere and offers one-tap jumps. Buttons use data-dt (switch tab),
+  // data-dq (click an existing control by selector), data-df (a function in DASH_FN) or data-camp (the camp handler).
+  // The tile list is saved in S.settings.dash.
+  const DASH_DEF = ['purse', 'depth', 'quests', 'party', 'pack', 'places'];
+  const dT = (t, l) => '<button class="btn ghost small" data-dt="' + t + '">' + (l || 'Open') + '</button>';
+  const dQ = (q, l) => '<button class="btn ghost small" data-dq="' + q + '">' + l + '</button>';
+  const dF = (f, l) => '<button class="btn ghost small" data-df="' + f + '">' + l + '</button>';
+  const dC = (c, l) => '<button class="btn ghost small" data-camp="' + c + '">' + l + '</button>';
+  const dLock = f => f && S.hero && !L.canUse(S, f) ? '<p class="dlock">' + icon('lock') + lockMsg(f) + '</p>' : '';
+  const dTxt = id => { const e = $(id); return e ? e.textContent.trim() : ''; };
+  const DASH_FN = {
+    mail: () => { switchTab('market'); const b = document.querySelector('#mktseg [data-mv="mail"]'); if (b) b.click(); },
+    rekindle: () => { switchTab('rekindle'); const b = document.querySelector('#tab-rekindle [data-v="rekindle"]'); if (b) b.click(); },
+    tree: () => { switchTab('rekindle'); const b = document.querySelector('#tab-rekindle [data-v="tree"]'); if (b) b.click(); },
+    boss: () => openBoss(), chat: () => openChat(true), layout: () => openLayout(), hero: () => profileModal('you'),
+    journal: () => { switchTab('codex'); const b = document.querySelector('#codexseg [data-cx="journal"]'); if (b) b.click(); },
+    board: () => { switchTab('codex'); const b = document.querySelector('#codexseg [data-cx="board"]'); if (b) b.click(); },
+  };
+  const DASH = {
+    purse: { n: 'Gold and power', i: 'coin', d: 'Gold, party damage, Dust and Embers.', v: now => '<b class="dbig">' + fmt(S.gold) + ' <small>gold</small></b><p>' + fmt(L.totalDps(S, now)) + ' damage/s · ' + fmt(S.dust || 0) + ' Dust · ' + fmt(S.embers) + ' Embers</p>', a: () => dC('store', 'Store') },
+    depth: { n: 'Depth and chapter', i: 'map', d: 'Your floor, deepest floor and chapter goal.', v: () => '<b class="dbig">Floor ' + S.floor + '</b><p>Deepest ' + (S.maxFloorEver || 1) + ' · Chapter ' + L.chapterOf(S) + '</p><p class="dsub">' + esc(dTxt('goaltext')) + '</p>', a: () => dQ('#btn-map', 'Map of the Deep') },
+    quests: { n: 'Quests and bounties', i: 'flare', d: 'Daily quests and bounties done.', v: () => '<b class="dbig">' + esc(dTxt('questct')) + '</b><p>Daily quests and bounties</p>', a: () => dQ('#quests', 'Open quests') },
+    party: { n: 'Party', i: 'users', d: 'Who is in your marching order, front to back.', w: 1, v: () => '<ul class="dlist">' + S.party.map((id, k) => { const m = L.memberById(id); return m ? '<li><span>' + (k + 1) + '. ' + esc(m.name) + ' ' + classTag(m.cls) + '</span><b>Power level ' + fmt(S.levels[id] || 0) + '</b></li>' : ''; }).join('') + '</ul>', a: () => dT('party', 'Train party') + dQ('#f-auto', 'Auto-arrange') + dQ('#f-train', 'Training Grounds') },
+    meter: { n: 'Damage meter', i: 'sword', d: 'Who deals your damage, last 30 seconds.', v: now => { const r = L.damageMeter(S, now), t = r.reduce((a, x) => a + x.dps, 0) || 1; return r.length ? '<ul class="dlist">' + r.slice(0, 5).map(x => { const m = METER_NAME[x.key] ? null : L.memberById(x.key); return '<li><span>' + esc(m ? m.name : METER_NAME[x.key] ? METER_NAME[x.key][0] : x.key) + '</span><b>' + fmt(x.dps) + '/s · ' + Math.round(x.dps / t * 100) + '%</b></li>'; }).join('') + '</ul>' : '<p class="dsub">No damage yet. Fight for a few seconds.</p>'; } },
+    flog: { n: 'Fight log', i: 'skull', d: 'The last few things that happened in fights.', w: 1, v: () => FLOG.length ? '<ul class="dlist dlog">' + FLOG.slice(0, 5).map(x => '<li><span>' + x.text + '</span></li>').join('') + '</ul>' : '<p class="dsub">Nothing yet.</p>' },
+    pack: { n: 'Pack', i: 'bag', d: 'Pack space and auto-scrap.', v: () => { const n = L.packCount(S), c = L.bagCap(S); return '<b class="dbig">' + fmt(n) + (S.boh ? ' <small>Bag of Holding</small>' : ' <small>/ ' + fmt(c) + '</small>') + '</b><p>Auto-scrap ' + esc(dTxt('g-autos') || 'Off') + (!S.boh && n >= c ? ' · <span class="dwarn">full, new finds are sold</span>' : '') + '</p>'; }, a: () => dLock('gear') || dT('gear', 'Gear') + dQ('#g-auto', 'Auto-scrap') + dQ('#g-scrap', 'Mass scrap') },
+    skills: { n: 'Hero and skills', i: 'star', d: 'Hero level, stat points and Kindling to spend.', v: () => { const hp = L.heroPoints(S); return '<b class="dbig">Hero level ' + L.heroLv(S) + '</b><p>' + (hp > 0 ? '<span class="dgood">' + hp + ' stat point' + (hp === 1 ? '' : 's') + ' to spend</span>' : 'No stat points waiting') + (S.kindling ? ' · ' + S.kindling + ' Kindling' : '') + '</p>'; }, a: () => dT('rekindle', 'Stats') + dF('tree', 'Skill tree') + dF('hero', 'My hero') },
+    rekindle: { n: 'Rekindle', i: 'lantern', d: 'Embers you would gain by rekindling now.', v: () => { const ok = L.canUse(S, 'rekindle'), e = L.embersFor(S); return '<b class="dbig">+' + fmt(e) + ' <small>Embers</small></b><p>' + (ok ? (e > 0 ? 'Ready when you are' : 'Go deeper to earn Embers') : 'Opens at hero level ' + L.unlockOf('rekindle').lv) + '</p>' + (S.np ? '<p class="dsub">New Playthrough NP+' + S.np + '</p>' : ''); }, a: () => dF('rekindle', 'Rekindle') },
+    places: { n: 'Around the Hold', i: 'lamp', d: 'Quick trips to the shops, the Hold and camp.', w: 1, v: () => '', a: () => dC('ench', 'Enchanter') + dC('arm', 'Armorer') + dC('store', 'Store') + dC('hold', 'The Hold') + dC('go', 'Return to camp') },
+    camp: { n: 'Camp', i: 'flame', d: 'Companions resting by the fire and their jobs.', v: () => { const n = (S.unlocked || []).filter(id => id !== 'you' && !S.party.includes(id)).length; return '<b class="dbig">' + n + ' <small>at camp</small></b><p>Companions out of the party work camp jobs</p>'; }, a: () => dLock('camp') || dT('camp', 'Camp') },
+    boss: { n: 'World boss', i: 'skull', d: 'The weekend world boss and the Golden Loot Goblin.', v: () => { const b = $('wbbar'), g = $('gobbar'); const t = [b, g].filter(x => x && !x.hidden).map(x => esc(x.textContent.trim())).join(' · '); return t ? '<p>' + t + '</p>' : '<p class="dsub">No world boss right now. It comes on weekends.</p>'; }, a: () => dLock('boss') || dF('boss', 'World boss') },
+    ring: { n: 'Ember Ring', i: 'duel', d: 'Duels and team battles against other players.', v: () => '<p>Duels and team battles</p>', a: () => dLock('ring') || dT('ring', 'Go to the Ring') },
+    market: { n: 'Market and mail', i: 'coin', d: 'Player market and your mailbox.', v: () => { const m = dTxt('mailn'); return '<p>' + (m ? '<span class="dgood">' + esc(m) + ' in your mailbox</span>' : 'Mailbox is empty') + '</p>'; }, a: () => dLock('buy') || dT('market', 'Market') + dF('mail', 'Mailbox') },
+    guild: { n: 'Players Guild', i: 'crown', d: 'Players online and the hero board.', v: () => '<b class="dbig">' + esc(dTxt('onlinect') || '0') + ' <small>online</small></b>', a: () => dLock('guild') || dT('guild', 'Guild') },
+    codex: { n: 'Codex', i: 'book', d: 'Feats, relics, journal and leaderboard.', v: () => '<p>' + L.featCount(S) + ' feats · ' + Object.keys(S.relics || {}).length + '/' + L.RELICS.length + ' relics</p>', a: () => dT('codex', 'Codex') + dF('journal', 'Journal') + dF('board', 'Leaderboard') },
+    tonics: { n: 'Tonics', i: 'oil', d: 'Tonics working right now.', v: () => { const t = $('tonicbar'); const x = t && !t.hidden ? t.textContent.replace(/\s+/g, ' ').trim() : ''; return '<p' + (x ? '' : ' class="dsub"') + '>' + esc(x || 'No tonics active') + '</p>'; }, a: () => dC('store', 'Store') },
+    buffs: { n: 'Blessings', i: 'flare', d: 'Lantern Keeper, Lantern Surge and Mercy\'s Blessing.', v: () => { const on = [['keeperbar', 'Lantern Keeper is here'], ['surge', 'Lantern Surge'], ['mercy', 'Mercy\'s Blessing']].filter(([id]) => $(id) && !$(id).hidden).map(([id, n]) => n + (dTxt(id) ? ' ' + esc(dTxt(id)) : '')); return '<p' + (on.length ? '' : ' class="dsub"') + '>' + (on.length ? on.join(' · ') : 'No blessings right now') + '</p>'; } },
+    chat: { n: 'Chat', i: 'chat', d: 'Open chat with other players.', v: () => '<p>Global, Banner, Trade, Help, Party and Whispers</p>', a: () => dF('chat', 'Open chat') },
+    help: { n: 'Help and settings', i: 'help', d: 'Guide, settings and screen layout.', v: () => '', a: () => dQ('#btn-guide', 'Guide') + dQ('#btn-settings', 'Settings') + dF('layout', 'Edit layout') },
+  };
+  let dashEdit = false;
+  const dashList = () => { const d = S.settings && Array.isArray(S.settings.dash) ? S.settings.dash : DASH_DEF; return d.filter((k, i) => DASH[k] && d.indexOf(k) === i); };
+  function dashSet(list) { S.settings.dash = list; save(); paintDash(true); }
+  function paintDash(force) {
+    const box = $('dashbox'); if (!box || tab !== 'dash') return;
+    const now = Date.now(), list = dashList();
+    const head = '<div class="dashhead"><div><b>Dashboard</b><small>' + (dashEdit ? 'Move or remove tiles, or add any tile you like.' : 'Your own page. Add any tile.') + '</small></div><span>' +
+      (dashEdit ? '<button class="btn ghost small" data-dd="add">+ Add tile</button><button class="btn ghost small" data-dd="reset">Reset</button><button class="btn small" data-dd="done">Done</button>' : '<button class="btn ghost small" data-dd="edit">Edit dashboard</button>') + '</span></div>';
+    if (force || box.dataset.k !== list.join() + dashEdit) {
+      box.dataset.k = list.join() + dashEdit;
+      box.innerHTML = head + (list.length ? '<div class="dash' + (dashEdit ? ' editing' : '') + '">' + list.map(k => '<section class="dtile' + (DASH[k].w ? ' wide' : '') + '" data-tile="' + k + '"><h4>' + icon(DASH[k].i) + DASH[k].n +
+        (dashEdit ? '<span class="dtools"><button data-dm="-1" aria-label="Move back">&larr;</button><button data-dm="1" aria-label="Move forward">&rarr;</button><button data-dm="x" aria-label="Remove tile">&times;</button></span>' : '') +
+        '</h4><div class="dval"></div><div class="dacts"></div></section>').join('') + '</div>' : '<p class="note">Your dashboard is empty. <button class="linkbtn" data-dd="add">Add a tile</button></p>');
+    }
+    box.querySelectorAll('.dtile').forEach(t => {
+      const d = DASH[t.dataset.tile]; let v = '', a = '';
+      try { v = d.v(now); a = d.a ? d.a() : ''; } catch (e) { v = '<p class="dsub">Not available right now.</p>'; }
+      const vv = t.querySelector('.dval'), aa = t.querySelector('.dacts');
+      if (vv.dataset.h !== v) { vv.dataset.h = v; vv.innerHTML = v; }
+      if (aa.dataset.h !== a) { aa.dataset.h = a; aa.innerHTML = a; aa.hidden = !a; }
+    });
+  }
+  setInterval(() => paintDash(false), 700);
+  function dashAdd() {
+    const have = dashList(), rest = Object.keys(DASH).filter(k => !have.includes(k));
+    modal('<h2>Add a tile</h2><p class="setnote">Pick anything you want on your dashboard. You can add every tile.</p>' +
+      (rest.length ? '<div class="dpick">' + rest.map(k => '<button data-addt="' + k + '">' + icon(DASH[k].i) + '<span><b>' + DASH[k].n + '</b><small>' + DASH[k].d + '</small></span><em>Add</em></button>').join('') + '</div>' : '<p class="note">Every tile is already on your dashboard.</p>') +
+      '<div class="row"><button class="btn" id="d-close">Done</button></div>', m => {
+        m.querySelector('#d-close').onclick = closeModal;
+        m.querySelectorAll('[data-addt]').forEach(b => b.onclick = () => { dashSet(dashList().concat(b.dataset.addt)); b.remove(); if (!m.querySelector('[data-addt]')) closeModal(); });
+      });
+  }
+  document.addEventListener('click', e => {
+    const box = e.target.closest('#dashbox'); if (!box) return;
+    const dd = e.target.closest('[data-dd]'), dm = e.target.closest('[data-dm]'), dt = e.target.closest('[data-dt]'), dq = e.target.closest('[data-dq]'), df = e.target.closest('[data-df]');
+    if (dd) { const a = dd.dataset.dd; if (a === 'add') dashAdd(); else if (a === 'reset') dashSet(DASH_DEF.slice()); else { dashEdit = a === 'edit'; if (!dashEdit) save(); paintDash(true); } return; }
+    if (dm) { const k = dm.closest('[data-tile]').dataset.tile, l = dashList(), i = l.indexOf(k); if (dm.dataset.dm === 'x') l.splice(i, 1); else { const j = i + +dm.dataset.dm; if (j < 0 || j >= l.length) return; l.splice(i, 1); l.splice(j, 0, k); } dashSet(l); return; }
+    if (dt) { const b = document.querySelector('.tabs [data-tab="' + dt.dataset.dt + '"]'); if (b) b.click(); else switchTab(dt.dataset.dt); return; }
+    if (dq) { const el = document.querySelector(dq.dataset.dq); if (el) el.click(); return; }
+    if (df && DASH_FN[df.dataset.df]) DASH_FN[df.dataset.df]();
+  });
   // ---------- settings ----------
   $('btn-settings').addEventListener('click', openSettings);
   function openSettings() {
@@ -7487,6 +7570,7 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
+      'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
       'Edit layout (Settings): move or hide parts of the screen, pin the damage meter or fight log under the fight, and pick your phone\'s bottom bar tabs.',
       'Ember Ring seasons: monthly, Season 1 ends 31 Dec. The top 3 win the Ember Champion title and frame, the top 25 the Season Laurel emblem.',
       'Ring Mastery: after a full Ringwarden kit, Laurels buy +1% Ring health and attack per rank, up to 10.',

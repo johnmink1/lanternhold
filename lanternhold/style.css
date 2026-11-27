@@ -1,4 +1,4 @@
-/* lh-build 202611271613 */
+/* lh-build 202611271617 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2920,3 +2920,31 @@ body.layedit #tab-party .buybar,body.layedit #tab-party .ftips,body.layedit #tab
 .rmastery .tile svg{width:22px;height:22px}
 .fr-emberchamp{border-color:transparent;background:linear-gradient(var(--bg2),var(--bg2)) padding-box,conic-gradient(from var(--fa,0deg),#ff8a3d,#ffd27a,#c8452a,#ff8a3d) border-box;animation:frnexus 3s linear infinite}
 @media (prefers-reduced-motion:reduce){.fr-emberchamp{animation:none}}
+/* v141 Dashboard tab: tiles the player picks (ui.js DASH, saved in S.settings.dash) */
+.dashhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 10px}
+.dashhead b{display:block;font:700 15px var(--title);letter-spacing:.04em}.dashhead small{color:var(--muted);font-size:12.5px}
+.dashhead>span{display:flex;gap:6px;flex-wrap:wrap}
+.dash{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.dtile{border:1px solid var(--line);border-radius:12px;background:var(--bg2);padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.dtile.wide{grid-column:1/-1}
+.dtile h4{margin:0;display:flex;align-items:center;gap:6px;font:700 11.5px var(--title);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dtile h4 svg{width:14px;height:14px;color:var(--accent)}
+.dtile .dtools{margin-left:auto;display:flex;gap:4px}
+.dtile .dtools button{font:inherit;font-size:13px;width:26px;height:24px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--text);cursor:pointer}
+.dash.editing .dtile{outline:2px dashed color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:1px}
+.dval p{margin:0;font-size:13px}.dval .dsub{color:var(--muted);font-size:12.5px}
+.dbig{display:block;font-size:20px;font-weight:800;line-height:1.2}.dbig small{font-size:12px;color:var(--muted);font-weight:600}
+.dgood{color:var(--gold)}.dwarn{color:#ff9c88}
+.dlist{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:13px}
+.dlist li{display:flex;justify-content:space-between;gap:8px;align-items:center}.dlist li b{font-weight:600;color:var(--muted);white-space:nowrap}
+.dlog li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dacts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.dlock{margin:0;font-size:12.5px;color:var(--muted)}.dlock svg{width:12px;height:12px;vertical-align:-1px;margin-right:4px}
+.dpick{display:grid;gap:6px;max-height:60vh;overflow:auto;margin:8px 0 12px}
+.dpick button{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--text);font:inherit;cursor:pointer}
+.dpick button svg{width:18px;height:18px;color:var(--accent)}.dpick small{display:block;color:var(--muted);font-size:12px}
+.dpick em{font-style:normal;font-weight:700;color:var(--accent);font-size:13px}
+@media (min-width:721px) and (max-width:1240px){.tabs [data-tab="dash"] span{display:none}.tabs button{padding-left:5px;padding-right:5px}}
+@media (max-width:720px){.dash{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.dtile{padding:9px 10px}.dbig{font-size:17px}.dacts .btn{padding:5px 9px;font-size:12.5px}}
+@media (min-width:721px) and (max-width:1040px){.tabs button{font-size:13px;padding-left:4px;padding-right:4px;gap:4px}}
+@media (max-width:720px){.dtile h4{flex-wrap:wrap}.dash.editing .dtile .dtools{width:100%;margin-left:0;order:-1;justify-content:flex-end}}
