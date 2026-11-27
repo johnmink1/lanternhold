@@ -87,6 +87,7 @@ exports.handler = async (event) => {
     let cond = '(attribute_not_exists(rst) OR rst <= :c)', vals = { ':d': { S: b.data }, ':u': { N: String(now) }, ':f': { N: String(Number(b.floor) || 0) }, ':c': { N: String(Number(b.created) || 0) } };
     let upd = 'SET #d = :d, updated = :u, floor = :f';
     if (dv) { upd += ', dv = :v'; vals[':v'] = { S: dv }; if (!claim) cond += ' AND (attribute_not_exists(dv) OR dv = :v)'; }
+    else cond += ' AND attribute_not_exists(dv)'; // hotfix 27 Nov 04:47 UTC: an old tab with no device id can't overwrite a newer save
     try {
       await db.send(new D.UpdateItemCommand({ TableName: TABLE, Key, UpdateExpression: upd,
         ConditionExpression: cond, ExpressionAttributeNames: { '#d': 'data' }, ExpressionAttributeValues: vals }));
