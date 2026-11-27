@@ -1,4 +1,4 @@
-/* lh-build 202611270233 */
+/* lh-build 202611270447 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4134,7 +4134,10 @@
     // "Play here" on a paused device: the account save is the newest by definition.
     if (take) { useSave(cloud); return; }
     const sy = syncRead(), localMoved = !sy || Math.abs(lt - sy.pt) >= 5, cloudMoved = !sy || rec.updated !== sy.up;
-    if (sy && !localMoved) { useSave(cloud); return; }               // only the account moved on: load it
+    // An account save with far less play time than this device (an old copy saved from a forgotten tab) is never
+    // loaded quietly: the player chooses (27 Nov 2026, Chipplin lost a 35 h save this way).
+    const cloudBehind = ct < lt - 1800;
+    if (sy && !localMoved && !cloudBehind) { useSave(cloud); return; } // only the account moved on: load it
     if (sy && !cloudMoved) { await pushCloud(true, true); return; }  // only this device moved on: send it
     if (!local.stats.kills && !local.embers) { useSave(cloud); return; }
     $('modal').dataset.lock = '1';
