@@ -4639,7 +4639,7 @@
       body = '<p class="note">Play in the Grand War? Link your commander and your war rank and honors appear on your card and in the Players Guild. The Born 2 Game team checks each link before it shows, so nobody can borrow your name.</p>' +
         (prof.wl ? '<div class="wlink"><div>' + (c ? warBadge(prof.wl, true) : '<b>' + esc(prof.wl) + '</b>') + '</div><small>' + (prof.wv ? 'Verified. Your badges are showing and your hero carries a Grand War aura.' : 'Waiting for the team to confirm it is you. Mention it in the Grand War Discord to speed it up.') + '</small><button class="btn small ghost" id="pe-unlink">Remove link</button></div>' :
           '<div class="wform"><input id="pe-cmd" list="pe-cmds" placeholder="Your commander name in the Grand War" autocomplete="off"><datalist id="pe-cmds">' + (warList || []).map(c => '<option value="' + esc(c.n) + '">').join('') + '</datalist><button class="btn small" id="pe-link">Request link</button></div>' +
-          '<p class="note">Once the link is verified, your hero carries a Grand War aura for their class. It grows with your war rank, and honors such as Grand Marshal add to it.</p><p class="note">Commanders on the Grand War ladder right now: ' + (warList || []).length + '. Not listed yet? Play a game in the war first.</p>');
+          '<p class="note">Once the link is verified, your weeks in the Deep also count for your alliance in the Grand War, in weeks you play at the store too.</p><p class="note">Once the link is verified, your hero carries a Grand War aura for their class. It grows with your war rank, and honors such as Grand Marshal add to it.</p><p class="note">Commanders on the Grand War ladder right now: ' + (warList || []).length + '. Not listed yet? Play a game in the war first.</p>');
     }
     modal('<div class="maphead"><div><h2>Your profile</h2><small>Looks only. Nothing here changes your party’s power.</small></div><button class="iconbtn" id="pe-x" aria-label="Close">&times;</button></div>' +
       '<div class="pfwrap">' + looksCard(me) + '</div>' +
@@ -5578,7 +5578,7 @@
     const mine = L.sideOf(S);
     const left = SEASON.surge - Date.now(), d = Math.max(0, Math.floor(left / 864e5));
     box.innerHTML =
-      '<section class="wroom-hero"><small>Born 2 Game · The Shattered Reach</small><h3>The Grand War</h3><p>Three alliances fight across thirteen sectors for the Nexus. Lanternhold is the war’s hidden front: the Lantern Deep, a tear of the Nyx Rift sealed under a Covenant hold.</p>' +
+      '<section class="wroom-hero"><small>Born 2 Game · The Shattered Reach</small><h3>The Grand War</h3><p>Three alliances fight for the Nexus, sector by sector, at the Born 2 Game store’s tables. Lanternhold is the war’s only online front: the Lantern Deep, a tear of the Nyx Rift sealed under a Covenant hold.</p>' +
       '<div class="wstats"><div><b>Season ' + SEASON.n + '</b><small>' + SEASON.name + '</small></div><div><b>' + (left > 0 ? d + ' days' : 'Now') + '</b><small>until the Rift surges</small></div><div><b>Act One</b><small>ends with the season</small></div></div>' +
       '<a class="btn small" href="' + WAR_URL + '" target="_blank" rel="noopener">Open the war room ↗</a></section>' +
       '<h3 class="sub">The alliances</h3><div class="wcards">' + ['covenant', 'radiant', 'tide'].map(k => warCard(k, k === mine)).join('') + '</div>' +
@@ -5586,7 +5586,7 @@
       '<h3 class="sub">How the war began</h3><div class="wlore">' +
       '<p><b>The Rift.</b> It began as a wound in a dead-star sector: the Nyx Rift, a tear in the sky bleeding light that should not exist. Then it kept tearing. It cut sideways through the walls between realities and dragged whole worlds into one broken space, the Shattered Reach. Thirteen sectors that were never meant to share a sky now share one.</p>' +
       '<p><b>The Nexus.</b> At the centre of the Reach, where every swallowed reality is knotted to every other, burns the Nexus. When the Rift surges at the end of each season, the alliance holding the most sectors seizes it and decides the Rift’s fate: sealed, ruled, or torn wider.</p>' +
-      '<p><b>The Lantern Deep.</b> One thin tear of the Rift runs under the Hold, and a lantern that has never gone out sits on top of it like a cork. Every alliance believes the Deep is a back door to the Nexus. Nobody up top believes in this front. The warbands down here know better.</p>' +
+      '<p><b>The Lantern Deep.</b> One thin tear of the Rift runs under the Hold, and a lantern that has never gone out sits on top of it like a cork. Every alliance believes the Deep is a back door to the Nexus, and the commanders up top have started to listen: they hold it from home between store nights.</p>' +
       '<p><b>The Mercy Corps.</b> In the middle of it all, medics who answer to no banner carry the wounded out of every battle. In the real world the Corps raises food, toys and funds for local charities, and every supply run reinforces an alliance.</p></div>' +
       '<h3 class="sub">Seasons and acts</h3><ol class="wtime">' +
       '<li class="now"><b>Season 1 · The First Incursion</b><small>Nov 1, 2026 to Jan 24, 2027. Lanternhold Act One: fifteen regions down to the Lampmother.</small></li>' +
@@ -6984,6 +6984,11 @@
       ['Grand War aura', 'i:shield', 'Verified Grand War commanders carry a class aura.', [
         '2% to 10% by war rank. Honors add more.',
         'Set your commander name on your profile’s Grand War tab. Auras are earned, never bought.']],
+      ['The Lantern Deep front', 'i:lantern', 'Your week in the Deep can hold ground for your alliance in the Grand War.', [
+        'Link your hero to your Grand War commander on your profile’s Grand War tab. Once it is verified, your progress counts.',
+        'Each war week, new floors, New Playthrough tiers and power levels add up to <b>up to 3 war points</b>, the same as one store win.',
+        'It counts only in weeks you also play or show up at a Born 2 Game store event. Lanternhold adds to the war, it never replaces the tables.',
+        'Points land on the stratum of your deepest floor. Hold the most strata and your alliance holds the Lantern Deep, a sector toward the Nexus.']],
     ] },
     { id: 'social', name: 'Playing together', icon: 'chat', topics: [
       ['Accounts', 'i:user', 'A free account saves your progress online, on any device.', [
