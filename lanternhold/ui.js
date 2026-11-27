@@ -1,4 +1,4 @@
-/* lh-build 202611271701 */
+/* lh-build 202611271720 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -7239,7 +7239,7 @@
         ['map', 'The Underreach', '8 new regions, floors 151 to 230', ['New foes, guardians and region sets.', 'The alliance that wins Season 1 leaves its mark on the first new region.']],
         ['hammer', 'Rebuild the Hold', 'The tents become buildings', ['The Campfire grows into a Barracks with more bench room.', 'The Armorer becomes a Forge and the Enchanter a Tower.', 'A new Expedition Gate and Map Room open.']],
         ['users', 'Expeditions, part two', 'Teams of up to three', ['Send up to three NPCs together.', 'Expedition traits such as Trapwise, Steady Hands and Lucky.']],
-        ['duel', 'Ember Ring seasons', 'Live now, a ranked season every month', ['Ring seasons came early: one every calendar month instead of one per act. Season 1 ends Dec 31.', 'The top 3 win the Ember Champion title and frame, the top 25 the Season Laurel emblem. Looks only.', 'Ring Mastery and team battles (your hero plus two companions) came with them.'], 'early'],
+        ['duel', 'Ember Ring seasons', 'Live now, a ranked season every month', ['Ring seasons came early: one every calendar month instead of one per act. Season 1 ends Dec 31.', 'The top 3 win the Ember Champion title and frame, the top 25 the Season Laurel emblem. Looks only.', 'Ring Mastery came with them, and team battles (your hero plus two companions) are already here too.'], 'early'],
         ['star', 'The Thaw', 'Spring festival, March', ['For one week the Weeping Aqueduct runs clean, and its eels drop spring gifts.']],
       ] },
     { id: 'act3', tag: 'Act III · Season 3', name: 'The War Comes Down', when: 'Apr to Jul 2027', st: 'next', pic: 's:sentinel,hound',
@@ -7415,7 +7415,8 @@
         'Bounties and daily quests come from about ' + Math.floor(L.QDEFS.length / 10) * 10 + ' kinds across the whole game: hunts and guardians, monster tricks, the Grand War, crafting at the Armorer and Enchanter, training, the Guild, Ember Ring duels, the Market, world boss weekends, and for NP+ heroes Pip, Gulp and the Hold.',
         'You are only offered what your hero can do right now, the three on show are always from different parts of the game, and a kind you saw lately waits its turn.',
         'Some send you back up to older floors. Tap <b>Go to floor</b> on a bounty to farm there (Descend automatically turns off). Others have a button that takes you to the right place.',
-        'Each pays gold and Dust, sometimes a tonic too. Finished bounties you forget to claim are paid when the board changes.']],
+        'Each pays gold and Dust, sometimes a tonic too. Finished bounties you forget to claim are paid when the board changes.',
+        '<b>Today\u2019s limits</b> in the Quest book (also a Dashboard tile) shows each daily cap: guardian relics, chests, events and found Sigils, how much is used and when they reset. Gold, XP, gear and Dust from fights have no daily limit.']],
       ['The Lantern Keeper', 'i:lantern', 'When the store owner is online, every hero gets a boost.', [
         'While the Lantern Keeper is online, every hero gets <b>+' + Math.round(L.KEEPER * 100) + '%</b> damage, healing, gold, hero XP and gear finds.',
         'A gold banner over the fight shows when it is on. It ends a couple of minutes after the Keeper leaves.']],
