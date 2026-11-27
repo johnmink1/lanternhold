@@ -219,6 +219,18 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
 
+## v138 shop, onboarding and QoL bundle (27 Nov 2026)
+
+John read the review doc "Lanternhold review: quality of life and Sigil sales" (https://claude.ai/artifact/YGnSWkTaeCQRAPPLuerX3L) and said "build it". Sales baseline at the review: 3 Sigil pack orders ever (all 24 Nov), 0 Lanternholder members.
+- Shop: the top Sigil counter opens `getSigils()` (signed out: a Get chip and `sigilsSignUp`). `storeIntro(packId)` explains the one-time Born 2 Game store sign-in before the redirect; the tapped pack is kept in `sessionStorage lh_wantpack` and marked `.pack.want` when the shop reopens. Return with `?store=paid` shows a "Checking your purchase" toast.
+- Funnel: `shopTrack(step, what)` counts `S.stats.shop[step]` and adds `[t, 'shop', 'open'|'signin'|'checkout:<pack>'|'credit:<n>'|'nudge:<why>']` to the admin activity log.
+- Lanternholder notes (`nudgeOk(key)`, once per UTC day per key, never while `passOn`, Settings > Lanternholder tips sets `S.nudgeOff`): Welcome back line when the away clock ran out (`passMore`), trial ends tomorrow / trial ended (`trialCheck`, `S.trialWarn`/`S.trialEnd`), pack full (`autosell`). `nudgeToast` makes a toast tappable.
+- Lanternholder perks added: auto-claim of finished bounties and daily quests (`autoClaim`, every 20 s, Settings switch `S.settings.autoClaim`) and gear loadouts (core `saveLoadout`/`wearLoadout`, `LOADOUT_FREE` 1, `LOADOUT_PASS` 4, `S.loadouts`; Wear needs camp like any gear change).
+- Onboarding: `checkStory` waits for 5 taps or 25 s before the first story beat; name Suggest (`heroNameIdea`); "Good for new players" tag on Iron Covenant; Next step chip (`nextStep`/`paintNextStep`, `#nextstep` under the stage bar, until hero level 12, x sets `S.nextOff`).
+- Mechanics (John approved): Ember Ring unlock hero level 10 -> 6, world boss 18 -> 12; wipe stop `WIPE_HOLD` 3 in `wipe()` (event `wipehold`, `s.wipeRun`, reset in `clearFloor`). Sim baseline (rogue hero, 3 h from floor 8): wipes 124 -> 66, gold +9%.
+- Phones: Market, Guild, PvP and Codex are `.townitem` tabs shown through the Town button (`townOpen`, `#townmenu`); desktop unchanged.
+- Hold works note for NP+ (`worksCheck`, once a day). Save pushes never overlap (`pushCloud` queues behind `pushCloud1`).
+
 ## Creature home zones (v134, 27 Nov 2026)
 
 John picked "120 now, about 200 by Act III". `ROSTERS` in core.js lists 8 creatures per region (`[id, name, fam, rarity, size, overlay, hue, fluff]`).

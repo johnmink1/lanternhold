@@ -11,7 +11,7 @@
   const REKINDLE_FLOOR = 75;
   const PARTY_SIZE = 5;
   const REVIVE_TIME = 15;
-  const RETRY_AFTER = 75;
+  const RETRY_AFTER = 75, WIPE_HOLD = 3;
   const FOE_GAP = 0.75;  // seconds before the next foe steps up, so an overpowered party cannot chain hundreds of kills a second
 
   // ---------- classes ----------
@@ -1131,10 +1131,10 @@
     { id: 'buy',      lv: 5,  name: 'Market: buying',    icon: 'coin',   desc: 'Buy gear other players have listed.' },
     { id: 'jobs',     lv: 6, name: 'Camp jobs',         icon: 'hammer', desc: 'Put resting companions to work. One job to start, then more at hero levels 10, 15, 20, 25 and 30.' },
     { id: 'guild',    lv: 8, name: 'Players Guild',     icon: 'crown',  desc: 'Recruit other players\u2019 heroes into your party.' },
-    { id: 'ring',     lv: 10, name: 'The Ember Ring',    icon: 'duel',   desc: 'Duel other players\u2019 parties for Laurels.' },
+    { id: 'ring',     lv: 6, name: 'The Ember Ring',    icon: 'duel',   desc: 'Duel other players\u2019 parties for Laurels.' },
     { id: 'sell',     lv: 12, name: 'Market: selling',   icon: 'coin',   desc: 'Sell and send gear, and trade on the Sigil exchange.' },
     { id: 'rekindle', lv: 15, name: 'Rekindling',        icon: 'star',   desc: 'Start a new descent from floor ' + REKINDLE_FLOOR + ' or deeper for Embers and Kindling.' },
-    { id: 'boss',     lv: 18, name: 'World boss',        icon: 'skull',  desc: 'Join the weekend assaults on the shared world boss.' },
+    { id: 'boss',     lv: 12, name: 'World boss',        icon: 'skull',  desc: 'Join the weekend assaults on the shared world boss.' },
     { id: 'jset',     lv: 18, name: 'Job sets',          icon: 'hammer', desc: 'Guardians and chests start dropping job set pieces.' },
   ];
   const JOB_SLOT_LV = [6, 10, 15, 20, 25, 30];
@@ -2224,6 +2224,28 @@
     return worst ? [worst] : [];
   }
   function unequip(s, id, pos) { if (s.gear[id]) delete s.gear[id][pos]; }
+  // v138 gear loadouts: save what the whole party wears and put it back on in one go (at camp, like any gear change).
+  // One slot for everyone, LOADOUT_PASS with Lanternholder (convenience only: it never adds stats).
+  const LOADOUT_FREE = 1, LOADOUT_PASS = 4;
+  const loadoutSlots = s => passOn(s) ? LOADOUT_PASS : LOADOUT_FREE;
+  function saveLoadout(s, i, name) {
+    if (!(i >= 0 && i < loadoutSlots(s))) return false;
+    const g = {};
+    for (const id of Object.keys(s.gear || {})) { const m = memberById(id); if (!m || m.guest) continue; const w = {}; for (const [p, uid] of Object.entries(s.gear[id] || {})) if (uid && itemOf(s, uid)) w[p] = uid; if (Object.keys(w).length) g[id] = w; }
+    s.loadouts = s.loadouts || []; s.loadouts[i] = { n: String(name || 'Set ' + (i + 1)).slice(0, 20), g, at: Date.now() };
+    return true;
+  }
+  function wearLoadout(s, i) {
+    const lo = (s.loadouts || [])[i]; if (!lo || !(i < loadoutSlots(s))) return -1;
+    let n = 0;
+    for (const [id, w] of Object.entries(lo.g || {})) {
+      const m = memberById(id); if (!m || m.guest || !s.unlocked.includes(id)) continue;
+      // robes and chest/legs swap each other out, so put robes on last
+      const order = Object.entries(w).sort((a, b) => (a[0] === 'robe') - (b[0] === 'robe'));
+      for (const [p, uid] of order) { if (!itemOf(s, uid)) continue; const cur = s.gear[id] && s.gear[id][p]; if (cur === uid) continue; const was = wornAt(s, uid); if (was) unequip(s, was[0], was[1]); if (equip(s, id, uid, p)) n++; }
+    }
+    return n;
+  }
   const upgradeCost = it => foeGold(Math.max(1, it.ilvl), false) * 25 * Math.pow(1.7, it.up) * (it.rar === 'set' ? 2 : 1);
   const UP_MAX = 10;
   function upgrade(s, uid) {
@@ -3169,6 +3191,7 @@
 
   function clearFloor(s, events, boss) {
     qEv(s, 'floor', { f: s.floor, clean: !s.qdown }); s.qdown = 0;
+    if (s.wipeRun && s.wipeRun.f <= s.floor) s.wipeRun = null;
     // Past the end of Act One the way is sealed until Season 2.
     if (s.floor >= ACT_ONE_END && !actTwoOpen()) {
       if (s.floor >= s.maxFloor) { s.maxFloor = Math.max(s.maxFloor, ACT_ONE_END + 1); if (s.maxFloor > s.maxFloorEver) { s.maxFloorEver = s.maxFloor; qEv(s, 'newfloor'); events && events.push({ type: 'newfloor', floor: s.maxFloor }); } }
@@ -3375,6 +3398,11 @@
     for (const id of s.party) if (id) { delete s.down[id]; s.hp[id] = maxHpOf(s, id) * 0.6; }
     s.minions = [];
     s.autoAdvance = false; s.retryAt = now + RETRY_AFTER * 1000;
+    // v138 wipe stop (John, 27 Nov 2026): after WIPE_HOLD wipes in a row on the same floor, stay one floor up
+    // instead of retrying forever (NP+ logs showed 116 wipes in 6 hours). Descend switches it back on.
+    const wf = s.floor;
+    s.wipeRun = s.wipeRun && s.wipeRun.f === wf ? { f: wf, n: s.wipeRun.n + 1 } : { f: wf, n: 1 };
+    if (s.wipeRun.n >= WIPE_HOLD) { s.retryAt = 0; s.wipeRun = null; events && events.push({ type: 'wipehold', f: wf }); }
     gotoFloor(s, Math.max(1, s.floor - 1));
   }
 
@@ -4454,7 +4482,7 @@
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
     CREATURES, ROSTERS, FAMILY, LORE_AT, REVEAL, SPECIAL_CHANCE, SPECIAL_FLOOR, RAR_W, RAR_NAME, SIZE_X, ROSTER_HOME, creatureById, creatureHue, creatureRegions, creatureOdds, pickCreature, famsIn, newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, GUEST_REFRESH, GUEST_DROP_HOLD, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec, steadyHeal, steadyClick,
     questCtx, qEv, QDEFS, pickQuests, bountyGo, bountyCat, clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
-    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_BEST, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
+    WIPE_HOLD, LOADOUT_FREE, LOADOUT_PASS, loadoutSlots, saveLoadout, wearLoadout, offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_BEST, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LH = api;
