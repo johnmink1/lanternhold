@@ -1,4 +1,4 @@
-/* lh-build 202611271911 */
+/* lh-build 202611271925 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -20,7 +20,14 @@
   const events = [];
 
   function load() {
-    try { const raw = localStorage.getItem(SAVE_KEY); if (raw) return L.migrate(JSON.parse(raw)); } catch (e) {}
+    try {
+      const raw = localStorage.getItem(SAVE_KEY); if (!raw) return null;
+      const o = JSON.parse(raw);
+      // v142 hotfix (John, 27 Nov 2026): a hero without a Hardcore run in the Hardcore slot is not a Hardcore save (the
+      // server refuses it, and it looped). Set it aside and start a fresh Hardcore hero.
+      if (HCS && o && o.hero && !o.hc) { localStorage.setItem('lanternhold.save.hc.bad', raw); localStorage.removeItem(SAVE_KEY); localStorage.removeItem('lh_acts_hc'); localStorage.removeItem('lh_sync_hc'); return null; }
+      return L.migrate(o);
+    } catch (e) {}
     return null;
   }
   // ---------- one tab at a time ----------
@@ -31,9 +38,9 @@
   let tabChan = null;
   try { tabChan = new BroadcastChannel('lanternhold-tabs'); } catch (e) {}
   function goDormant() {
-    if (dormant) return; save(); dormant = true;
+    if (dormant) return; dormant = true; // no save here: the newer tab already loaded the save, and an old copy would overwrite it
     const d = document.createElement('div'); d.id = 'tablock';
-    d.innerHTML = '<div><h2>Lanternhold is open in another tab</h2><p>Only one tab can play at a time, so your progress never gets mixed up. This tab has stopped and saved.</p><button class="btn" id="tablock-go">Play here instead</button></div>';
+    d.innerHTML = '<div><h2>Lanternhold is open in another tab</h2><p>Only one tab can play at a time, so your progress never gets mixed up. This tab has stopped.</p><button class="btn" id="tablock-go">Play here instead</button></div>';
     document.body.appendChild(d);
     d.querySelector('#tablock-go').onclick = () => location.reload();
   }
@@ -45,6 +52,7 @@
   try { localStorage.setItem('lh_tab', TAB_ID + ':' + Date.now()); } catch (e) {}
   function save() {
     if (dormant) return;
+    if (HCS && S.hero && !S.hc) return; // v142 hotfix: never write a non-Hardcore hero into the Hardcore slot
     S.lastSeen = Date.now();
     const o = Object.assign({}, S); delete o.foe; delete o.enchAt; delete o.shopK;
     if (o.shuf) { o.party = L.shufBase(S); delete o.shuf; } // never save a shuffled line
@@ -4677,14 +4685,15 @@
   let heldShown = false;
   function heldSave(why) {
     if (heldShown || dormant) return; heldShown = true;
-    if (why) { // v142 Hardcore: a death or lost gear came undone, or a save crossed between the Normal and Hardcore slots
+    if (why) { dormant = true; // v142 hotfix: a refused save stops this tab, so it never keeps writing behind the message
+      // v142 Hardcore: a death or lost gear came undone, or a save crossed between the Normal and Hardcore slots
       modal('<div class="center"><h2 class="hch">' + icon('flame') + 'Your save was not accepted</h2><p>' + (why === 'hcslot' ? 'A hero can\'t move between the Normal and Hardcore slots, so the server refused this save.' : 'In Hardcore, deaths and lost gear never come undone. This save is older than one the server already has.') + ' Your account keeps its last good save.</p></div>' +
         // v142 hotfix: a Hardcore slot holding a save that isn't a Hardcore run can't be fixed by reloading (it looped);
         // offer a way out instead: back to the Normal hero, or a fresh Hardcore hero.
         '<div class="row" style="justify-content:center">' + (why === 'hcslot' && HCS ? '<button class="btn ghost" id="hs-norm">Play my Normal hero</button><button class="btn" id="hs-new">Start Hardcore over</button>' : '<button class="btn" id="hs-load">Load my last good save</button>') + '</div>', md => {
           const ld = md.querySelector('#hs-load'); if (ld) ld.onclick = () => { try { sessionStorage.setItem('lh_take', '1'); } catch (e) {} location.reload(); };
           const nb = md.querySelector('#hs-norm'); if (nb) nb.onclick = () => { dormant = true; try { localStorage.setItem('lh_slot', ''); } catch (e) {} location.reload(); };
-          const nw = md.querySelector('#hs-new'); if (nw) nw.onclick = () => { dormant = true; try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(SYNC_KEY); } catch (e) {} S = L.newState(); location.reload(); };
+          const nw = md.querySelector('#hs-new'); if (nw) nw.onclick = () => { dormant = true; try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(SYNC_KEY); localStorage.removeItem(ACT_KEY); } catch (e) {} S = L.newState(); location.reload(); };
         });
       return;
     }
@@ -4711,6 +4720,7 @@
   }
   function useSave(o) {
     S = L.migrate(o); S.lastSeen = Date.now();
+    if (HCS && S.hero && !S.hc) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(saveObj())); } catch (e) {}
     location.reload();
   }
@@ -6196,7 +6206,7 @@
   }
   // @mentions (John, 24 Nov 2026): Banner and Trade are checked in the background too, only to catch pings.
   const BG_ROOMS = ['dm', 'global', 'banner', 'trade', 'help', 'hc'];
-  const CH_NAME = { global: 'Global', banner: 'Banner', trade: 'Trade', help: 'Help', party: 'Party', dm: 'Whispers' };
+  const CH_NAME = { global: 'Global', banner: 'Banner', trade: 'Trade', help: 'Help', hc: 'Hardcore', party: 'Party', dm: 'Whispers' };
   const mentionsMe = m => { if (!S.hero || !m || m.from === chat.me || m.from === 'sys' || chat.muted.has(m.from)) return false;
     const t = String(m.text || '').toLowerCase(), n = '@' + S.hero.name.toLowerCase(); let i = t.indexOf(n);
     while (i >= 0) { const c = t[i + n.length]; if (!c || !/[a-z'\-]/.test(c)) return true; i = t.indexOf(n, i + 1); } return false; };
@@ -7765,6 +7775,7 @@
       'Hardcore needs sign-in. NP+, the Ember Ring and the world boss are not open to Hardcore heroes yet.',
       'Quest book and Dashboard: see today\'s limits on relics, chests, events and found Sigils, and when they reset.',
       'Your Hardcore hero can use the same name as your Normal hero. Hardcore heroes show an HC tag in chat, profiles and the Guild.',
+      'Starting a Hardcore hero no longer loops back to a refused save, even with the game open in another tab.',
     ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
