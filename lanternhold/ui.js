@@ -1,4 +1,4 @@
-/* lh-build 202611270449 */
+/* lh-build 202611270632 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -9,6 +9,7 @@
 
   // ---------- state ----------
   let S = load() || L.newState();
+  const LOADED_SEEN = S.lastSeen || 0; // time away is measured from here: init code may save (and move lastSeen) before the offline grant
   const events = [];
 
   function load() {
@@ -1129,6 +1130,10 @@
   // floating numbers (DOM, crisp text)
   let floaters = 0;
   let recentFloats = [];
+  // v140: status words (Poisoned, Burning) show once per burst instead of over every hero at the same moment, which piled
+  // up on phones. The badge over each hero still counts its fights left.
+  const statusAt = {};
+  function statusFloat(text, cls, xFrac, yFrac) { const t = performance.now(); if (t - (statusAt[text] || 0) < 1500) return; statusAt[text] = t; floatText(text, cls, xFrac, yFrac); }
   function floatText(text, cls, xFrac, yFrac) {
     if (floaters > 26) return;
     const el = document.createElement('div');
@@ -1208,7 +1213,7 @@
       case 'lockpass': flog('fight', 'The party walks past the ' + (e.k === 'door' ? 'locked door' : 'locked chest')); break;
       case 'lockopen': flog('loot', (e.id ? nm(e.id) : 'Your Rogue') + ' opens the ' + (e.k === 'door' ? 'door' : 'chest') + ': <b class="good">' + (e.gold ? fmt(e.gold) + ' gold' : fmt(e.dust) + ' Dust') + '</b>' + (e.sigil ? ' and a <b>Sigil</b>' : '')); break;
       case 'goblinkill': flog('loot', '<b class="good">Loot Goblin slain</b>' + (e.item ? ', ' + esc(L.gearName(e.item)) + ' recovered' : '')); break;
-      case 'herolevel': flog('party', nm('you') + ' reaches <b>level ' + e.lv + '</b>'); break;
+      case 'herolevel': flog('party', nm('you') + ' reaches <b>hero level ' + e.lv + '</b>'); break;
     }
   }
   let flogFilter = 'all';
@@ -1269,7 +1274,7 @@
       } else if (e.type === 'block') {
         const a = mAnim(e.target); floatText('Block', 'dodge', a.x / W, (a.y - 6) / H);
       } else if (e.type === 'cc') {
-        const a = mAnim(e.id); floatText(e.k === 'stun' ? 'Stunned!' : 'Disarmed!', 'crit', a.x / W, (a.y - 16) / H);
+        const a = mAnim(e.id); statusFloat(e.k === 'stun' ? 'Stunned!' : 'Disarmed!', 'crit', a.x / W, (a.y - 16) / H);
         if (!(S.stats.ccSeen || {})[e.k]) { S.stats.ccSeen = Object.assign({}, S.stats.ccSeen, { [e.k]: 1 }); toast(e.k === 'stun' ? 'flare' : 'sword', L.memberById(e.id).name + (e.k === 'stun' ? ' is stunned' : ' is disarmed'), e.k === 'stun' ? 'A stunned hero cannot attack, heal or use abilities for a few seconds. Tanks shake it off twice as fast, and Shield Wall makes them immune.' : 'A disarmed hero fights barehanded: 35% damage, half healing and no abilities until it grabs its weapon back a few seconds later. Tanks recover twice as fast.', ''); }
       } else if (e.type === 'ccend') {
         const a = mAnim(e.id); if (e.k === 'disarm') floatText('Weapon back', 'heal', a.x / W, (a.y - 16) / H);
@@ -1310,9 +1315,9 @@
         floatText(sp.name || 'Special', 'crit', FOE_X - 0.1, 0.28);
         sfx.thud(); tone(90, 0.3, 'square', 0.04, 60);
       } else if (e.type === 'dot') {
-        const a = mAnim(e.id), mu = L.dotMult(e.id, e.k); floatText((e.k === 'burn' ? 'Burning' : 'Poisoned') + (mu >= 2 ? ' x2' : mu < 0.5 ? ' (resists)' : ''), e.k === 'burn' ? 'crit' : 'heal', a.x / W, (a.y - 14) / H);
+        const a = mAnim(e.id), mu = L.dotMult(e.id, e.k); statusFloat((e.k === 'burn' ? 'Burning' : 'Poisoned') + (mu >= 2 ? ' x2' : mu < 0.5 ? ' (resists)' : ''), e.k === 'burn' ? 'crit' : 'heal', a.x / W, (a.y - 14) / H);
       } else if (e.type === 'poison') {
-        const a = mAnim(e.id); if (Math.random() < 0.5) floatText('Poisoned', 'heal', a.x / W, (a.y - 12) / H);
+        const a = mAnim(e.id); statusFloat('Poisoned', 'heal', a.x / W, (a.y - 12) / H);
       } else if (e.type === 'shieldup') {
         floatText(e.again ? 'Shield up again!' : 'Shielded! Tap to break it', 'skill', FOE_X, 0.22); tone(660, 0.18, 'sine', 0.04, 880);
         if (!S.stats.shieldSeen) { S.stats.shieldSeen = 1; toast('shield', 'A shielded foe', 'While its shield is up your party deals ' + Math.round(L.SHIELD_CUT * 100) + '% less damage. Tap the foe to knock the shield down (about ' + Math.round(1 / L.SHIELD_TAP) + ' taps). Left alone it wears away in about ' + L.SHIELD_DECAY.foe + ' seconds.', ''); }
@@ -1470,10 +1475,12 @@
     t.innerHTML = icon(ic) + '<div><b></b><small></small></div>';
     t.querySelector('b').textContent = title; t.querySelector('small').textContent = sub || '';
     const box = $('toasts'); box.appendChild(t);
-    while (box.children.length > (innerWidth < 560 ? 2 : 3)) box.firstChild.remove();
+    // Phones: at most 2 at once, and only 1 in the first 10 s after loading (the welcome-back burst); the rest wait in the bell.
+    const small = innerWidth <= 720, cap = small ? (performance.now() < 10000 ? 1 : 2) : 3;
+    while (box.children.length > cap) box.firstChild.remove();
     t.onclick = () => t.remove();
     // Stays up longer, and waits while the pointer rests on it. Every pop-up is kept in the bell too.
-    let left = 7000, at = Date.now(), timer = 0;
+    let left = small ? 5000 : 7000, at = Date.now(), timer = 0;
     const go = () => { timer = setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, left); at = Date.now(); };
     t.onmouseenter = () => { clearTimeout(timer); left = Math.max(1500, left - (Date.now() - at)); };
     t.onmouseleave = go; go();
@@ -1617,12 +1624,12 @@
     const curR = L.regionNo(S.maxFloorEver), tr = curR < L.REGIONS - 1 && L.regionNeed(S, (curR + 1) * 10 + 1) ? L.trialOf(S, curR) : null;
     const fu = focus && L.unlockOf(focus);
     let h = '<div class="road">' + (fu ? '<div class="roadlock">' + icon('lock') + '<div><b>' + esc(fu.name) + ' opens at hero level ' + fu.lv + '</b><small>' + esc(fu.desc) + ' Your hero earns XP from every fight, and more from deeper floors and guardians.</small></div></div>' : '') +
-      '<div class="roadhead"><div><h3>The road ahead</h3><small>' + esc(heroName()) + ' is hero level <b>' + lv + '</b> &middot; ' + pct + '% to level ' + (lv + 1) + '</small></div></div>' +
+      '<div class="roadhead"><div><h3>The road ahead</h3><small>' + esc(heroName()) + ' is hero level <b>' + lv + '</b> &middot; ' + pct + '% to hero level ' + (lv + 1) + '</small></div></div>' +
       '<div class="bar roadxp"><i style="width:' + pct + '%"></i></div><ul class="roadlist">' +
       L.UNLOCKS.map(u => { const on = L.canUse(S, u.id); return '<li class="' + (on ? 'open' : '') + (u.id === focus ? ' focus' : '') + '"><span class="ric">' + icon(on ? u.icon : 'lock') + '</span><div><b>' + esc(u.name) + '</b><small>' + esc(u.desc) + '</small></div><em>' + (on ? 'Open' : 'Hero level ' + u.lv) + '</em></li>'; }).join('') +
       '</ul>' + (tr ? '<div class="roadlock">' + icon('map') + '<div><b>Region trial: ' + esc(trialName(curR)) + '</b><small>To reach floors ' + ((curR + 1) * 10 + 1) + ' and deeper: defeat ' + L.TRIAL_ELITES + ' alliance elites here (' + tr.elites + '/' + L.TRIAL_ELITES + ') and beat the guardian on floor ' + ((curR + 1) * 10) + (tr.guardian ? ' (done)' : '') + '.</small></div></div>' : '') +
       '<p class="note small">' +
-      'Your campfire holds ' + L.fireCap(S) + ' companions now, not counting your party; it grows at hero levels ' + L.ROSTER_LV.join(', ') + '. Camp job slots open at levels ' + L.JOB_SLOT_LV.join(', ') + '.</p></div>';
+      'Your campfire holds ' + L.fireCap(S) + ' companions now, not counting your party; it grows at hero levels ' + L.ROSTER_LV.join(', ') + '. Camp job slots open at hero levels ' + L.JOB_SLOT_LV.join(', ') + '.</p></div>';
     return h;
   }
   const trialName = r => (L.BIOMES[r] || { name: 'Region ' + (r + 1) }).name;
@@ -2027,7 +2034,7 @@
     const h = L.hallState(S), now = Date.now(), wph = L.wagesPerHour(S), away = L.offlineEarnPerSec(S) * 3600;
     const next = Math.max(0, (h.at + L.NPC_ROTATE - now) / 1000), rr = L.npcRerollCost(S), full = L.companions(S).length >= L.rosterCap(S);
     let x = '<h3 class="sub" id="npcg">NPC Guild</h3><div class="growcard npcg">' +
-      '<p>Hire companions for gold or Dust. Rarer ones fight harder and work camp jobs better, but cost more and draw a bigger wage every hour, even while you are away. Legendaries are the lore companions of the story and a few unique wanderers. A wage never passes a share of your income, and full region masteries, Charisma and a Quartermaster at camp bring it down. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p>' +
+      '<p>Hire companions for gold or Dust. They draw a wage every hour, even while you are away.</p><details class="howto"><summary>How hiring works</summary><p>Rarer hires fight harder and work camp jobs better, but cost more and draw a bigger wage. Legendaries are the lore companions of the story and a few unique wanderers. A wage never passes a share of your income, and full region masteries, Charisma and a Quartermaster at camp bring it down. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p></details>' +
       '<div class="npcstat"><span data-tip="Half that while you are away.">Wages <b>' + fmt(wph) + ' gold/h</b></span>' + (() => { const rl = L.wageRelief(S); return '<span data-tip="' + esc('Takes a share off every hire\u2019s wage, up to ' + Math.round(L.WAGE_RELIEF_MAX * 100) + '%. ' + (rl.parts.length ? rl.parts.map(p => p[0] + ' ' + Math.round(p[1] * 100) + '%').join(', ') + '. ' : '') + 'Earn more with all three mastery stars in a region (' + Math.round(L.WAGE_RELIEF_MAST * 100) + '% each), Charisma and a Quartermaster at camp.') + '">Wage relief <b>' + Math.round(rl.total * 100) + '%</b></span>'; })() + '<span data-tip="What your party brings home each hour while you are away. You earn more while you play.">Away income <b>' + fmt(away) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
       '<button class="btn small ghost" data-npcreroll' + ((S.dust || 0) >= rr ? '' : ' disabled') + '>New faces now · ' + fmt(rr) + ' Dust</button></div>' +
       (full ? '<p class="note">Every companion spot is taken. Let someone go from the Campfire, or take a 2 hour contract.</p>' : '') +
@@ -2083,7 +2090,7 @@
         '<button class="btn small" id="b-find">' + (boardList ? 'Show other heroes' : 'Browse the guild') + '</button>';
       if (boardMsg) h += '<p class="note">' + esc(boardMsg) + '</p>';
       if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + (g.floor ? ' &middot; reached floor ' + g.floor : '') + '</div></div>' +
-        ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
+        ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : g.ni ? '<span class="muted" data-tip="This player has party invites turned off and plays solo.">Solo</span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
       if ((S.guests || []).length) h += '<p class="note">To let a player’s hero go, press Dismiss on their seat.</p>';
     }
     w.innerHTML = h + '</div>';
@@ -2132,7 +2139,7 @@
     const g = (boardList || []).find(x => x.id === gid); if (!g || inv.sent[gid]) return;
     inv.sent[gid] = g; paintBoard();
     try { await api('POST', { id: gid, act: 'ask' }, '/invite'); }
-    catch (e) { delete inv.sent[gid]; paintBoard(); toast('lock', 'Invite not sent', 'That hero could not be reached. Try another.', 'warn'); return; }
+    catch (e) { delete inv.sent[gid]; const solo = /409/.test(e && e.message); if (solo) g.ni = 1; paintBoard(); toast('lock', 'Invite not sent', solo ? g.name + ' has party invites turned off.' : 'That hero could not be reached. Try another.', 'warn'); return; }
     S.sentInv = S.sentInv || {}; S.sentInv[gid] = { name: g.name, cls: g.cls, at: Date.now() };
     sfx.buy(); toast('users', 'Invite sent to ' + g.name, g.on ? 'They are online now. Their hero joins your party once they accept.' : 'They will see it next time they play. Their hero joins your party once they accept.', '');
   }
@@ -2150,7 +2157,7 @@
     const join = () => {
       L.addGuest(S, { id: 'p_' + g.id, name: g.name, cls: g.cls, side: g.side, level: g.level, bp: g.bp }); L.qEv(S, 'guest', { id: g.id });
       const gg = (S.guests || []).find(x => x.id === 'p_' + g.id); if (gg) { gg.pf = g.pf || null; gg.w = g.w || ''; gg.wd = g.wd || null; }
-      sfx.buy(); toast('users', g.name + ' joins your party', 'They accepted your invite. A ' + L.CLASSES[g.cls].name + ' at level ' + g.level + '.', 'feat');
+      sfx.buy(); toast('users', g.name + ' joins your party', 'They accepted your invite. A ' + L.CLASSES[g.cls].name + ' at power level ' + g.level + '.', 'feat');
       updateSeats(true); updateAbilities(true); paintBoard();
     };
     if (S.party.includes(null)) return join();
@@ -2178,7 +2185,8 @@
     inv.busy = 1;
     try {
       const r = await api('GET', null, '/invites');
-      inv.asks = r.asks || [];
+      inv.asks = S.settings.noInv ? [] : r.asks || [];
+      if (typeof r.solo === 'number' && !!r.solo !== !!S.settings.noInv) S.settings.noInv = r.solo ? 1 : 0;
       for (const g of inv.asks) if (!inv.seen[g.id]) { inv.seen[g.id] = 1; toast('users', g.name + ' invited you', 'They want ' + S.hero.name + ' in their party. Answer in the Guild tab.', 'feat'); }
       S.sentInv = S.sentInv || {};
       for (const id of Object.keys(S.sentInv)) if (!(r.sent || []).includes(id)) delete S.sentInv[id];
@@ -2266,7 +2274,7 @@
   });
   // ---------- inventory filters (v117) ----------
   const INV_KINDS = [['all', 'All'], ['weapon', 'Weapons'], ['off', 'Off-hands'], ['armor', 'Armour'], ['jewel', 'Jewellery']];
-  const INV_SORTS = [['best', 'Best first'], ['level', 'Level'], ['rarity', 'Rarity'], ['type', 'Type'], ['new', 'Newest']];
+  const INV_SORTS = [['best', 'Best first'], ['level', 'Power level'], ['rarity', 'Rarity'], ['type', 'Type'], ['new', 'Newest']];
   const INV = { kind: 'all', rar: 'all', who: 'all', sort: 'best' };
   try { Object.assign(INV, JSON.parse(localStorage.getItem('lh_inv') || '{}')); } catch (e) {}
   const invSave = () => { try { localStorage.setItem('lh_inv', JSON.stringify(INV)); } catch (e) {} };
@@ -2353,7 +2361,7 @@
     el.innerHTML = '<span class="lo-h">Loadouts</span>' + Array.from({ length: L.LOADOUT_PASS }, (_, i) => {
       const lo = los[i], open = i < have;
       if (!open) return '<button class="lo lo-lock" data-lolock="' + i + '" data-tip="More loadouts come with Lanternholder.">' + icon('lock') + '<b>Set ' + (i + 1) + '</b></button>';
-      return '<span class="lo' + (lo ? ' has' : '') + '"><b>' + esc(lo ? lo.n : 'Set ' + (i + 1)) + '</b>' + (lo ? '<button class="btn small" data-lowear="' + i + '">Wear</button>' : '') + '<button class="btn small ghost" data-losave="' + i + '">' + (lo ? 'Save' : 'Save current') + '</button></span>';
+      return '<span class="lo' + (lo ? ' has' : '') + '"><b>' + esc(lo ? lo.n : 'Set ' + (i + 1)) + '</b>' + (lo ? '<button class="btn small" data-lowear="' + i + '">Wear</button>' : '') + '<button class="btn small ghost" data-losave="' + i + '" data-tip="Remember what everyone wears now">Save</button></span>';
     }).join('');
   }
   document.addEventListener('click', e => {
@@ -3360,7 +3368,7 @@
     const box = $('relics');
     box.innerHTML = L.RELICS.map(r => {
       const lv = S.relics[r.id] || 0;
-      return lv ? '<div class="relic">' + icon('relic') + '<span class="lvl">Level ' + lv + '</span><b>' + r.name + '</b><small>' + r.desc + '</small></div>'
+      return lv ? '<div class="relic">' + icon('relic') + '<span class="lvl">Relic level ' + lv + '</span><b>' + r.name + '</b><small>' + r.desc + '</small></div>'
                 : '<div class="relic unknown">' + icon('relic') + '<span class="lvl">Undiscovered</span><b>???</b><small>Found somewhere in the deep.</small></div>';
     }).join('');
     $('relcount').textContent = Object.keys(S.relics).length + '/' + L.RELICS.length;
@@ -3665,7 +3673,7 @@
       $('pips').innerHTML = boss ? '<i class="boss now"></i>' : Array.from({ length: L.FOES_PER_FLOOR }, (_, i) => '<i class="' + (i < S.foeIdx ? 'done' : i === S.foeIdx ? 'now' : '') + '"></i>').join('');
     }
     $('goalch').textContent = 'Chapter ' + L.chapterOf(S);
-    { let g = L.currentGoal(S), trial = trialGoal(); if (trial) g = trial; if (S.maxFloorEver > L.ACT_ONE_END && !L.actTwoOpen()) { const d = Math.max(0, L.ACT_TWO_AT - Date.now()), dd = Math.floor(d / 864e5), hh = Math.floor(d / 36e5) % 24; g = 'Act Two opens with Season 2, in ' + (dd ? dd + 'd ' : '') + hh + 'h'; } if ($('goaltext').textContent !== g) $('goaltext').textContent = g; }
+    { let g = L.currentGoal(S), trial = trialGoal(); if (trial) g = trial; if (S.maxFloorEver > L.ACT_ONE_END && !L.actTwoOpen()) { const d = Math.max(0, L.ACT_TWO_AT - Date.now()), dd = Math.floor(d / 864e5), hh = Math.floor(d / 36e5) % 24; g = 'Act Two opens with Season 2, in ' + (dd ? dd + 'd ' : '') + hh + 'h'; } if ($('goaltext').textContent !== g) $('goaltext').textContent = g; if (!trial) $('goal').dataset.tip = $('goalch').textContent + ': ' + g; }
     paintGoblinHunt();
     const f = S.foe;
     if (f) {
@@ -3956,7 +3964,7 @@
   // ---------- players online (heroes seen in the last 3 minutes) ----------
   async function loadOnline() {
     if (!CL || document.hidden) return;
-    try { const r = await fetch(CL.api.replace(/\/$/, '') + '/leaderboard'); if (!r.ok) return; const j = await r.json(); if (j.keeper) { const was = L.keeperOn(S); S.keeper = { name: String(j.keeper).slice(0, 20), until: Date.now() + 150000 }; if (!was) { paintKeeper(); toast('lantern', 'The Lantern Keeper is here', S.keeper.name + ' is online: +25% damage, healing, gold, hero XP and gear finds for every hero while they stay.', 'feat'); } } else if (S.keeper) { S.keeper = null; paintKeeper(); } if (typeof j.online !== 'number') return; $('onlinect').textContent = Math.max(j.online, signedIn() && S.hero ? 1 : 0).toLocaleString('en-US'); $('online').hidden = false; } catch (e) {}
+    try { const r = await fetch(CL.api.replace(/\/$/, '') + '/leaderboard?t=' + Math.floor(Date.now() / 15000), { cache: 'no-store' }); if (!r.ok) return; const j = await r.json(); if (j.keeper) { const was = L.keeperOn(S); S.keeper = { name: String(j.keeper).slice(0, 20), until: Date.now() + 150000 }; if (!was) { paintKeeper(); toast('lantern', 'The Lantern Keeper is here', S.keeper.name + ' is online: +25% damage, healing, gold, hero XP and gear finds for every hero while they stay.', 'feat'); } } else if (S.keeper) { S.keeper = null; paintKeeper(); } if (typeof j.online !== 'number') return; $('onlinect').textContent = Math.max(j.online, signedIn() && S.hero ? 1 : 0).toLocaleString('en-US'); $('online').hidden = false; } catch (e) {}
   }
   $('online').addEventListener('click', () => switchTab('guild'));
   function paintKeeper() {
@@ -3964,7 +3972,9 @@
     el.hidden = !on; if (on) { el.innerHTML = icon('lantern'); el.dataset.tip = 'The Lantern Keeper is here. ' + S.keeper.name + ' is online: +' + Math.round(L.KEEPER * 100) + '% damage, healing, gold, hero XP and gear finds for every hero.'; }
   }
   setInterval(paintKeeper, 15000);
-  setTimeout(loadOnline, 2000); setInterval(loadOnline, 60000);
+  // v140 (John 27 Nov): the Lantern Keeper buff starts as soon as the Keeper signs in. Fresh reads (no 60 s cache),
+  // every 30 s, and the Keeper's own game checks right after it publishes its hero.
+  setTimeout(loadOnline, 2000); setInterval(loadOnline, 30000);
   { const tt = $('taptip'); if (tt) ['click', 'pointerdown', 'mousedown', 'touchstart'].forEach(ev => tt.addEventListener(ev, e => e.stopPropagation())); }
   // ---------- settings ----------
   $('btn-settings').addEventListener('click', openSettings);
@@ -3972,20 +3982,28 @@
     modal('<h2>Settings</h2>' +
       '<label class="setrow"><span>Sound effects</span><input type="checkbox" id="s-sound"' + (S.settings.sound ? ' checked' : '') + '></label>' +
       (window.LHMusic ? '<label class="setrow"><span>Music</span><input type="checkbox" id="s-music"' + (LHMusic.on() ? ' checked' : '') + '></label>' +
-        '<p class="setnote">Pick tracks, set the volume or mute from the <button class="linkbtn" id="s-musicpanel">music player</button> (the note button at the top).</p>' : '') +
+        '<p class="setnote">Pick tracks, set the volume or mute from the <button class="linkbtn" id="s-musicpanel">music player</button>' + (phone() ? '.' : ' (the note button at the top).') + '</p>' : '') +
       '<h3 class="sethead">Notifications</h3><p class="setnote">Choose which pop-ups show in the corner. Switched-off ones still go to the bell.</p>' +
       TOAST_KINDS.map(([k, n, d]) => '<label class="setrow setnotif"><span>' + n + '<small>' + d + '</small></span><input type="checkbox" data-notif="' + k + '"' + (toastOff(k) ? '' : ' checked') + '></label>').join('') +
+      '<h3 class="sethead">Playing with others</h3><label class="setrow setnotif"><span>Party invites from players<small>Off: nobody can invite your hero to their party, and waiting invites are declined. Play solo with your companions and NPC hires.</small></span><input type="checkbox" id="s-inv"' + (S.settings.noInv ? '' : ' checked') + '></label>' +
       '<label class="setrow setnotif"><span>Auto-claim (Lanternholder)<small>Finished bounties and daily quests claim themselves while Lanternholder is on</small></span><input type="checkbox" id="s-aclaim"' + (S.settings.autoClaim === false ? '' : ' checked') + '></label>' +
       (CL ? '<label class="setrow setnotif"><span>Lanternholder tips<small>A short note when a limit Lanternholder lifts gets in your way, at most once a day</small></span><input type="checkbox" id="s-nudge"' + (S.nudgeOff ? '' : ' checked') + '></label>' : '') +
       '<p style="margin-top:16px">Your progress saves automatically in this browser. Copy a backup to move it to another device.</p>' +
       '<div class="row"><button class="btn ghost" id="s-export">Copy backup</button><button class="btn ghost" id="s-import">Load backup</button><button class="btn danger" id="s-reset">Erase progress</button></div>' +
-      '<div class="row"><button class="btn ghost" id="s-intro">Watch the intro</button>' + (fsOk() ? '<button class="btn ghost" id="s-full">' + (fsEl() ? 'Leave full screen' : 'Play full screen') + '</button>' : '') + '</div>' +
+      '<div class="row"><button class="btn ghost" id="s-tut">Replay the tutorial</button><a class="btn ghost" href="https://lanternhold.born2gamellc.com/wiki/" target="_blank" rel="noopener">Open the wiki</a><button class="btn ghost" id="s-intro">Watch the intro</button>' + (fsOk() ? '<button class="btn ghost" id="s-full">' + (fsEl() ? 'Leave full screen' : 'Play full screen') + '</button>' : '') + '</div>' +
       '<div id="s-extra"></div>' +
       (window.LH_SUPPORT_URL ? '<p style="margin-top:16px">Lanternhold is free with no ads. If you enjoy it, you can <a style="color:var(--gold)" target="_blank" rel="noopener" href="' + window.LH_SUPPORT_URL + '">buy the developer a coffee</a>. It supports the time that goes into the game. It is not a charity donation and gives nothing in game. Thank you.</p>' : '') +
       '<p class="credits">Lanternhold &middot; A Grand War game by Born 2 Game, LLC. &copy; 2026 Born 2 Game, LLC. Made with care, no ads, no tracking.</p>' +
+      '<p class="setver">' + esc(($('ver') && $('ver').textContent) || '') + '</p>' +
       '<div class="row"><button class="btn" id="s-close">Done</button></div>', m => {
         m.querySelector('#s-sound').onchange = e => { S.settings.sound = e.target.checked; };
         m.querySelector('#s-aclaim').onchange = e => { S.settings.autoClaim = e.target.checked; save(); };
+        m.querySelector('#s-inv').onchange = async e => {
+          const on = e.target.checked; S.settings.noInv = on ? 0 : 1; if (!on) { inv.asks = []; paintBoard(); } save();
+          if (!CL || !signedIn()) return;
+          try { await api('POST', { act: 'solo', on: !on }, '/invite'); toast('users', on ? 'Party invites are on' : 'Party invites are off', on ? 'Other players can invite your hero again.' : 'Nobody can invite your hero now. Waiting invites were declined.', ''); }
+          catch (x) { toast('lock', 'Could not change invites', 'Try again in a moment.', 'warn'); }
+        };
         const nd = m.querySelector('#s-nudge'); if (nd) nd.onchange = () => { S.nudgeOff = nd.checked ? 0 : 1; save(); };
         m.querySelectorAll('[data-notif]').forEach(c => c.onchange = () => { const off = Object.assign({}, S.settings.toastOff); if (c.checked) delete off[c.dataset.notif]; else off[c.dataset.notif] = 1; S.settings.toastOff = off; save(); });
         if (window.LHMusic) {
@@ -3994,6 +4012,7 @@
         }
         m.querySelector('#s-close').onclick = () => { save(); closeModal(); };
         m.querySelector('#s-full') && (m.querySelector('#s-full').onclick = () => { save(); closeModal(); toggleFull(); });
+        m.querySelector('#s-tut').onclick = () => { S.tut = { i: 0, done: false }; coachCtx = null; closeModal(); switchTab('party'); save(); };
         m.querySelector('#s-intro').onclick = () => { save(); closeModal(); if (window.LHIntro) LHIntro.play(); };
         m.querySelector('#s-export').onclick = () => {
           save(); const code = backupCode(localStorage.getItem(SAVE_KEY) || '');
@@ -4051,6 +4070,19 @@
   const passLink = '<button class="linkbtn" data-openpass>Lanternholder</button>';
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-openpass]'); if (b) { e.preventDefault(); shopTrack('nudge', b.dataset.openpass || 'link'); openPass(); } });
   // ---------- offline ----------
+  // v140 (John 27 Nov): time away is measured with the server's clock for signed-in players, so moving the device
+  // clock forward no longer pays an offline window. Away time waits in S.awayQ until the next cloud save; the reply's
+  // server time (`updated`) minus the last one, less the time the game actually ran in between (playTime), is the most
+  // that can be paid. Signed-out players keep the device clock (they cannot trade or show on boards).
+  function clockSafe() { return !!(CL && signedIn() && S.srvAt); }
+  function awaySettle(now, pt) {
+    const at = S.srvAt, ap = S.srvPt || 0; S.srvAt = now; S.srvPt = pt;
+    const q = S.awayQ || 0; if (!(q > 0)) return;
+    const fromLoad = !!S.awayLoad; S.awayQ = 0; S.awayLoad = 0;
+    const real = at ? (now - at) / 1000 - Math.max(0, pt - ap) + 60 : q, sec = Math.max(0, Math.min(q, real));
+    if (q - sec > 600) actPush([Date.now(), 'clock', Math.round(q), Math.round(sec)]);
+    grantOffline(sec, fromLoad); save();
+  }
   function grantOffline(sec, fromLoad) {
     const away = sec, win = L.offlineWindow(S);
     sec = Math.min(win, sec);
@@ -4077,7 +4109,7 @@
     const now = Date.now();
     let dt = (now - lastLogic) / 1000; lastLogic = now;
     if (S.hero) {
-      if (dt > 5) grantOffline(dt, false);
+      if (dt > 5) { if (clockSafe()) { S.awayQ = (S.awayQ || 0) + dt; if (dt > 60) pushCloud(true); } else grantOffline(dt, false); }
       else if (dt > 0) L.tick(S, dt, now, null, events);
     }
     handleEvents();
@@ -4136,7 +4168,7 @@
     const tok = await idToken(); if (!tok) throw new Error('signed out');
     const r = await fetch(CL.api.replace(/\/$/, '') + (path || '/save'), { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     if (r.status === 404) return null;
-    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); if (j.error === 'moved') elsewhere(); }
+    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); if (j.error === 'moved') elsewhere(); if (j.error === 'held') heldSave(); }
     if (!r.ok) throw new Error('cloud ' + r.status);
     return r.json();
   }
@@ -4177,6 +4209,7 @@
       const o = saveObj(), sent = acts.slice();
       const r = await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId(), claim: claim ? 1 : 0 });
       lastCloud = Date.now(); cloudReady = true; syncMark(o.stats.playTime, r && r.updated);
+      if (r && r.updated) awaySettle(r.updated, o.stats.playTime);
       acts = acts.filter(a => !sent.includes(a)); try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
       if (S.mode === 'multi' && S.hero) publishHero();
       if (!quiet) toast('star', 'Progress synced', 'Your save is stored with your account.', 'feat');
@@ -4187,7 +4220,7 @@
     try {
       let ref = ''; try { ref = localStorage.getItem('lh_ref') || ''; } catch (e) {}
       const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S), ps: myShowcase() }, '/hero');
-      nameAsk = false; if (!prof) loadProfile();
+      nameAsk = false; if (!prof) loadProfile(); if (isAdmin() && !L.keeperOn(S)) loadOnline();
       const n = r && r.recruits;
       if (n > 0) {
         const g = Math.max(20, L.pipRate(S) * 600) * n;
@@ -4250,6 +4283,19 @@
       '<button class="pick" id="c-local"><b>This device</b><small>' + summary(local) + '</small></button></div>', m => {
         m.querySelector('#c-cloud').onclick = () => { delete $('modal').dataset.lock; closeModal(); useSave(cloud); };
         m.querySelector('#c-local').onclick = () => { delete $('modal').dataset.lock; closeModal(); pushCloud(false, true); };
+      });
+  }
+  // v140 save check (John, 27 Nov 2026): the server compares each save with the last one it trusted and holds a save
+  // that gained more than real time allows (an edited save or backup, or a cheat tool). The account keeps the last
+  // good save; this game stops syncing and offers to load it. An admin can review the held copy and approve it.
+  let heldShown = false;
+  function heldSave() {
+    if (heldShown || dormant) return; heldShown = true;
+    modal('<div class="center"><h2>Your save was not accepted</h2><p>The server checks every save against the last one it accepted. This one gained more gold or progress than the time played allows, so it was held for the team to review. Your account still has your last good save.</p>' +
+      '<p class="note">If you think this is a mistake, tell us on Discord. The held save is kept, and the team can approve it.</p>' +
+      '<div class="row" style="justify-content:center"><button class="btn ghost" id="hs-stay">Keep playing here</button><button class="btn" id="hs-load">Load my last good save</button></div>', md => {
+        md.querySelector('#hs-stay').onclick = () => { closeModal(); toast('lock', 'Not syncing', 'Progress on this device stays here until a save passes the check.', 'warn'); };
+        md.querySelector('#hs-load').onclick = () => { try { sessionStorage.setItem('lh_take', '1'); } catch (e) {} location.reload(); };
       });
   }
   // Another device claimed the account: stop saving here, like a second tab does.
@@ -4622,7 +4668,7 @@
   function giftPass(g, back) {
     const bal = prof ? prof.bal : null, short = bal != null && bal < L.PASS_COST;
     shopTrack('open', 'gift');
-    modal('<div class="center"><div class="cosbuy">' + sigil + '</div><h2>Gift Lanternholder</h2><p>Give <b>' + esc(g.name) + '</b> 30 days of Lanternholder (auto-train, more bag room, more time away, auto-claim and gear loadouts) for <b>' + L.PASS_COST + ' ' + TOKEN + '</b> from your wallet. It adds to any time they already have, and they see your hero’s name.</p>' +
+    modal('<div class="center"><div class="cosbuy">' + sigil + '</div><h2>Gift Lanternholder</h2><p>Give <b>' + esc(g.name) + '</b> 30 days of Lanternholder (auto-train, more bag room, more time away, auto-claim and gear loadouts) for <b>' + L.PASS_COST + ' ' + TOKEN + '</b> from your wallet. Gifts are paid with ' + TOKEN + ' you bought, not ones earned in play. It adds to any time they already have, and they see your hero’s name.</p>' +
       (short ? '<p class="note">You have ' + fmt(bal) + ' ' + TOKEN + '.</p>' : '') +
       '<div class="row" style="justify-content:center"><button class="btn ghost" id="gf-no">Back</button>' + (short ? '<button class="btn" id="gf-get">Get ' + TOKEN + '</button>' : '<button class="btn" id="gf-go">Gift for ' + L.PASS_COST + ' ' + TOKEN + '</button>') + '</div></div>', md => {
         md.querySelector('#gf-no').onclick = () => back();
@@ -4633,7 +4679,7 @@
             const r = await papi('POST', '/store/pass', { what: 'gift', to: g.id });
             if (prof) prof.bal = r.bal; actPush([Date.now(), 'shop', 'gift']); sfx.buy(); updatePanel(true); closeModal();
             toast('star', 'Gift sent', esc(r.name || g.name) + ' has 30 more days of Lanternholder. That was kind of you!', 'feat');
-          } catch (e) { go.disabled = false; toast('lock', 'The gift did not go through', e.code === 'funds' ? 'Not enough ' + TOKEN + '.' : e.code === 'to' ? 'That hero cannot get gifts right now.' : e.code === 'hero' ? 'Your hero needs a name on the server first. Try again after the next sync.' : 'Try again in a moment.', 'warn'); }
+          } catch (e) { go.disabled = false; toast('lock', 'The gift did not go through', e.code === 'funds' ? 'Not enough ' + TOKEN + '.' : e.code === 'bought' ? 'Gifts are paid with bought ' + TOKEN + ' only, and you do not have ' + L.PASS_COST + ' of those left.' : e.code === 'to' ? 'That hero cannot get gifts right now.' : e.code === 'hero' ? 'Your hero needs a name on the server first. Try again after the next sync.' : 'Try again in a moment.', 'warn'); }
         };
       });
   }
@@ -5086,18 +5132,21 @@
   // re-toasted "Daily find limit reached" every time. Now the capped UTC day is remembered (lh_sigcap): no more
   // claims or toasts until the next UTC day, when the saved Sigils bank as usual.
   function sigUtcDay() { return new Date().toISOString().slice(0, 10); }
-  var sigCap; // set lazily: sigCapped() can run from the event handler before this line has run
+  var sigWait = 0, sigCap; // set lazily: sigCapped() can run from the event handler before this line has run
   function sigCapped() {
     if (sigCap === undefined) { sigCap = ''; try { sigCap = localStorage.getItem('lh_sigcap') || ''; } catch (e) {} }
     return sigCap === sigUtcDay();
   }
   async function claimFound() {
-    if (claiming || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped()) return;
+    if (claiming || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped() || Date.now() < sigWait) return;
     claiming = true;
     try {
       const n = S.sigPend, r = await papi('POST', '/sigils/earn', { kind: 'drop', n });
       S.sigPend = Math.max(0, (S.sigPend || 0) - n) + (n - r.add); if (prof) prof.bal = r.bal; save();
-      if (r.add < n) {
+      // v140: the server banks found Sigils only while you are really playing (a cloud save in the last 10 minutes),
+      // at most one per 5 minutes. `wait` means try again later, not the daily cap.
+      if (r.wait) sigWait = Date.now() + 3e5;
+      else if (r.add < n) {
         sigCap = sigUtcDay(); try { localStorage.setItem('lh_sigcap', sigCap); } catch (e) {}
         toast('star', 'Daily find limit reached', 'You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day. The rest are saved for tomorrow.', '');
       }
@@ -5259,7 +5308,7 @@
     };
     box.innerHTML = '<div class="chead"><div><h3>' + esc(L.memberById('you').name) + ', hero level ' + h.lv + ' ' + c.name + '</h3><small>Earns XP from every fight ' + tipI('Your hero earns XP even when they sit out. Bigger foes give more. Each level gives a stat point.') + '</small></div>' +
       '<div class="kbal cpts' + (pts ? ' on' : '') + '">' + icon('star') + '<b>' + pts + '</b><small>' + (pts === 1 ? 'Point' : 'Points') + '</small></div></div>' +
-      '<div class="cxp" data-tip="' + esc(xpTip()) + '"><i style="width:' + Math.min(100, h.xp / h.need * 100).toFixed(1) + '%"></i><span>' + fmt(Math.floor(h.xp)) + ' / ' + fmt(h.need) + ' XP to level ' + (h.lv + 1) + '<em class="cxr">XP &times;' + xpRate() + '</em></span></div>' +
+      '<div class="cxp" data-tip="' + esc(xpTip()) + '"><i style="width:' + Math.min(100, h.xp / h.need * 100).toFixed(1) + '%"></i><span>' + fmt(Math.floor(h.xp)) + ' / ' + fmt(h.need) + ' XP to hero level ' + (h.lv + 1) + '<em class="cxr">XP &times;' + xpRate() + '</em></span></div>' +
       '<div class="cgrid">' + L.STATS.map(row).join('') + '</div>' +
       '<div class="kfoot"><span>About stats ' + tipI('Favoured stats count half again. Stats work while your hero is in the party. A reset costs ' + L.RESPEC_COST + ' ' + TOKEN + '.') + '</span>' + ((S.attr && Object.keys(S.attr).length) ? '<button class="btn ghost small" id="c-reset">Reset stats</button>' : '') + '</div>';
   }
@@ -5367,13 +5416,14 @@
     if (!r.ok) throw new Error(r.status === 403 ? 'This account is not an admin.' : j.error === 'self' ? 'You cannot ban yourself.' : j.error === 'player' ? 'That player has not played since bans were added, so their account cannot be found yet.' : j.error === 'name' ? 'The name you typed does not match the hero.' : 'The server said no (' + r.status + ').');
     return j;
   }
-  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [];
+  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [], adminHeld = [];
   function paintAdminTab() { const t = $('tabadmin'); if (t) t.hidden = !isAdmin(); }
   async function loadAdmin() {
     $('adminbox').innerHTML = '<p class="note">Loading players…</p>';
     try { adminList = await adminApi('GET', '/admin/players'); } catch (e) { $('adminbox').innerHTML = '<p class="note">' + esc(e.message) + '</p>'; return; }
     try { adminLinks = (await adminApi('GET', '/admin/links')).links || []; await loadWar(); } catch (e) { adminLinks = []; }
     try { adminLog = (await adminApi('GET', '/admin/audit')).log || []; } catch (e) { adminLog = []; }
+    try { adminHeld = (await adminApi('GET', '/admin/held')).held || []; } catch (e) { adminHeld = []; }
     paintAdmin();
   }
   // Where players came from: the first ?ref= tag (or referring site) each signed-in hero arrived with (server field rf).
@@ -5387,6 +5437,32 @@
     return '<h3 class="sub">Where players came from</h3><p class="note">Each signed-in hero, by the link or site they first arrived from. Active = seen in the last 7 days.</p>' +
       '<div class="adm-list adm-refs">' + rows.map(k => '<div class="adm-row"><span class="adm-n"><b>' + esc(REF_NAME[k] || k) + '</b><small>' + esc(k) + '</small></span><span class="adm-rc"><b>' + t[k].n + '</b> hero' + (t[k].n === 1 ? '' : 'es') + ' &middot; ' + t[k].wk + ' active</span></div>').join('') + '</div>';
   }
+  // v140 held saves (the server's save check) and snapshots: one row per held player; "Saves" opens a player's copies.
+  const flagText = f => esc(f.t || f.k);
+  function heldList() {
+    if (!adminHeld.length) return '';
+    const nm = id => { const p = adminList.players.find(x => x.id === id); return p ? p.name : id; };
+    return '<h3 class="sub">Held saves</h3><p class="note">Saves the server check did not accept. In watch mode they were saved anyway and only noted here.</p><div class="adm-list">' +
+      adminHeld.sort((a, c) => c.at - a.at).map(h => '<div class="adm-row"><span class="adm-n"><b>' + esc(nm(h.id)) + '</b><small>' + new Date(h.at).toLocaleString() + (h.mode === 'log' ? ' &middot; watch mode, saved anyway' : ' &middot; refused') + '<br>' + h.flags.map(flagText).join('<br>') + '</small></span>' +
+        '<span class="adm-act"><button class="btn small ghost" data-saves="' + h.id + '">Saves</button></span></div>').join('') + '</div>';
+  }
+  async function openSaves(p) {
+    let r; try { r = await adminApi('GET', '/admin/saves?id=' + p.id); } catch (x) { toast('lock', 'Could not load saves', x.message, 'warn'); return; }
+    const sum = m => m ? 'gold ' + fmt(m.g || 0) + ', deepest floor ' + (m.f || 0) + (m.np ? ', NP+' + m.np : '') + ', ' + Math.round((m.pt || 0) / 360) / 10 + ' h played' : '';
+    modal('<h2>' + esc(p.name) + ': saves</h2>' +
+      (r.held ? '<h3 class="sub">Held save</h3><p class="note">' + new Date(r.held.at).toLocaleString() + '<br>' + r.held.flags.map(flagText).join('<br>') + '</p><div class="row"><button class="btn small ghost" data-hdrop="1">Drop it</button><button class="btn small" data-rest="held">Approve: make it their save</button></div>' : '<p class="note">No held save.</p>') +
+      '<h3 class="sub">Snapshots</h3><p class="note">The first save of each day (UTC), and a copy taken before an older save replaced a newer one. Kept 35 days.</p>' +
+      (r.snaps.length ? '<div class="adm-list">' + r.snaps.map(x => '<div class="adm-row"><span class="adm-n"><b>' + (x.sk[0] === 'b' ? 'Before an older copy, ' + new Date(x.at).toLocaleString() : x.sk) + '</b><small>' + sum(x.sum) + '</small></span><span class="adm-act"><button class="btn small ghost" data-rest="' + esc(x.sk) + '">Restore</button></span></div>').join('') + '</div>' : '<p class="note">None yet.</p>') +
+      '<div class="row"><button class="btn ghost" id="sv-x">Close</button></div>', md => {
+        md.querySelector('#sv-x').onclick = closeModal;
+        const go = async (path, body, done) => { if (adminBusy) return; adminBusy = true; try { const x = await adminApi('POST', path, body); closeModal(); toast('star', done, x.floor != null ? 'Now ' + fmt(x.gold) + ' gold, deepest floor ' + x.floor + '. Their open game asks them to press Play here.' : '', 'feat'); } catch (x) { toast('lock', 'That did not work', x.message, 'warn'); } adminBusy = false; loadAdmin(); };
+        md.querySelectorAll('[data-rest]').forEach(b => b.onclick = () => {
+          if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.textContent = 'Press again to replace their save'; return; }
+          go('/admin/restore', { id: p.id, from: b.dataset.rest }, 'Save restored for ' + p.name);
+        });
+        const d = md.querySelector('[data-hdrop]'); if (d) d.onclick = () => go('/admin/held/drop', { id: p.id }, 'Held save dropped');
+      });
+  }
   function paintAdmin() {
     if (!adminList) return;
     const ago = t => { if (!t) return 'never'; const m = Math.floor((Date.now() - t) / 6e4); return m < 2 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.floor(m / 60) + ' h ago' : Math.floor(m / 1440) + ' d ago'; };
@@ -5394,13 +5470,13 @@
     const on = adminList.players.filter(p => p.on).length, banned = adminList.players.filter(p => p.banned).length;
     $('adminbox').innerHTML =
       '<div class="adm-stats"><div><small>Players</small><b>' + adminList.players.length + '</b></div><div><small>Online now</small><b>' + on + '</b></div><div><small>Banned</small><b>' + banned + '</b></div><div><small>Last wipe</small><b>' + (adminList.epoch ? new Date(adminList.epoch).toLocaleDateString() : 'never') + '</b></div></div>' +
-      refTally(adminList.players) +
+      heldList() + refTally(adminList.players) +
       '<div class="adm-bar"><input id="adm-q" type="search" placeholder="Find a player by name" value="' + esc(adminQ) + '"><button class="btn small ghost" id="adm-re">Refresh</button></div>' +
       '<div class="adm-list">' + (list.length ? list.map(p => '<div class="adm-row' + (p.banned ? ' banned' : '') + '"><span class="adm-n"><b>' + esc(p.name || 'Unnamed') + '</b>' + (p.cls ? ' ' + classTag(p.cls) : '') + '<small>' + (p.banned ? 'Banned' : (p.on ? '<span class="online">Online now</span> &middot; ' : 'Seen ' + ago(p.seen) + ' &middot; ') + 'power level ' + p.level + ', floor ' + p.floor) + '</small></span>' +
-        '<button class="btn small ghost" data-log="' + p.id + '">View Log</button>' +
+        '<button class="btn small ghost" data-log="' + p.id + '">View Log</button><button class="btn small ghost" data-saves="' + p.id + '">Saves</button>' +
         (p.canBan ? '<button class="btn small ghost" data-grant="' + p.id + '">Sigils</button><button class="btn small ghost" data-reset="' + p.id + '">Reset</button>' : '') + (p.banned ? '<button class="btn small ghost" data-unban="' + p.id + '">Unban</button>' : '<button class="btn small danger" data-ban="' + p.id + '"' + (p.canBan ? '' : ' disabled title="They need to play once more before they can be banned"') + '>Ban</button>') + '</div>').join('') : '<p class="note">No players match.</p>') + '</div>' +
       '<h3 class="sub">Grand War links</h3>' + (adminLinks.length ? '<p class="note">Players asking to show their Grand War commander badges. Approve only when you know the player is that commander, for example from Discord.</p><div class="adm-list">' + adminLinks.sort((a, c) => a.wv - c.wv).map(l => '<div class="adm-row"><span class="adm-n"><b>' + esc(l.name || 'Unnamed') + '</b> wants to be <b>' + esc(l.wl) + '</b><small>' + (commander(l.wl) ? warBadge(l.wl) : 'Not on the war ladder right now') + (l.wv ? ' &middot; <span class="online">Verified</span>' : ' &middot; Waiting') + '</small></span>' + (l.wv ? '' : '<button class="btn small" data-lok="' + l.id + '">Approve</button>') + '<button class="btn small ghost" data-lno="' + l.id + '">' + (l.wv ? 'Remove' : 'Reject') + '</button></div>').join('') + '</div>' : '<p class="note">No players have asked to link a Grand War commander yet.</p>') +
-      '<h3 class="sub">Admin log</h3>' + (adminLog.length ? '<div class="adm-list">' + adminLog.map(l => '<div class="adm-row"><span class="adm-n"><b>' + (l.act === 'wipe' ? 'Server wiped' : 'Reset ' + esc(l.name || 'a player') + (l.self ? ' (their own account)' : '')) + '</b><small>' + esc(l.by) + ' &middot; ' + new Date(l.at).toLocaleString() + (l.act === 'reset' ? ' &middot; ' + (l.sigils ? 'Sigils and purchases wiped too' : 'Sigils and purchases kept') : '') + '</small></span></div>').join('') + '</div>' : '<p class="note">No player resets or server wipes yet.</p>') +
+      '<h3 class="sub">Admin log</h3>' + (adminLog.length ? '<div class="adm-list">' + adminLog.map(l => '<div class="adm-row"><span class="adm-n"><b>' + (l.act === 'wipe' ? 'Server wiped' : /^restore/.test(l.act) ? 'Restored a save for ' + esc(l.name || 'a player') : l.act === 'held-drop' ? 'Dropped a held save of ' + esc(l.name || 'a player') : 'Reset ' + esc(l.name || 'a player') + (l.self ? ' (their own account)' : '')) + '</b><small>' + esc(l.by) + ' &middot; ' + new Date(l.at).toLocaleString() + (l.act === 'reset' ? ' &middot; ' + (l.sigils ? 'Sigils and purchases wiped too' : 'Sigils and purchases kept') : '') + '</small></span></div>').join('') + '</div>' : '<p class="note">No player resets or server wipes yet.</p>') +
       '<div class="adm-danger"><h3 class="sub">Wipe the server</h3><p class="note">Deletes every cloud save, every hero on the guild board and every market listing and letter. Everyone, signed in or not, starts over from a new game the next time they open Lanternhold. Bans, Sigils, bought looks, Sigil market listings, store links and Grand War links stay in place. This cannot be undone.</p><button class="btn danger" id="adm-wipe">Wipe the server…</button></div>';
   }
   $('tab-admin').addEventListener('input', e => { if (e.target.id === 'adm-q') { adminQ = e.target.value; const pos = e.target.selectionStart; paintAdmin(); const q = $('adm-q'); q.focus(); q.setSelectionRange(pos, pos); } });
@@ -5414,6 +5490,8 @@
       catch (x) { toast('lock', 'That did not work', x.message, 'warn'); }
       adminBusy = false; loadAdmin(); return;
     }
+    const sv = e.target.closest('[data-saves]');
+    if (sv) { const p = adminList.players.find(x => x.id === sv.dataset.saves); if (p) openSaves(p); return; }
     const lg = e.target.closest('[data-log]');
     if (lg) { const p = adminList.players.find(x => x.id === lg.dataset.log); if (p) openPlayerLog(p); return; }
     const gr = e.target.closest('[data-grant]');
@@ -6632,34 +6710,37 @@
   const TUT = [
     { id: 'strike', title: 'Strike!', text: 'Tap the monster to hit it yourself. Your party fights on its own too, but every tap helps. Try a few.', target: '#arena', tab: null, ready: () => true, done: c => S.stats.clicks >= c.clicks + 5, noNext: true },
     { id: 'gold', title: 'Gold', text: 'Every monster drops gold, even while you are away. Gold is how your party grows stronger.', target: '.stat.gold', ready: () => true },
-    { id: 'train', title: 'Train your party', text: 'Spend gold to train. Higher levels mean more damage, health and healing. You can train anyone in your party anywhere, even deep in the dungeon.', target: '#seats .buy:not([disabled])', tab: 'party', ready: () => S.gold >= 10, done: c => sumLevels() > c.levels, noNext: true },
+    { id: 'train', title: 'Train your party', text: 'Spend gold to train. Each Train raises a fighter\'s power level: more damage, health and healing. You can train anyone in your party anywhere, even deep in the dungeon.', target: '#seats .buy:not([disabled])', tab: 'party', ready: () => S.gold >= 10, done: c => sumLevels() > c.levels, noNext: true },
     { id: 'abil', title: 'Abilities', text: 'Each class has a special move. They fire by themselves, or press keys 1 to 5 (or tap them) to use one right when you need it.', target: '#abilities', ready: () => true },
     { id: 'order', title: 'Marching order', text: 'The top of this list stands at the front. Keep your tank up front, healers in the middle so they reach everyone, and watch the back for ambushes.', target: '.formhead', tab: 'party', ready: () => S.party.filter(Boolean).length >= 2 },
-    { id: 'boss', title: 'Guardians', text: 'Every fifth floor has a guardian. Beat it before the lantern oil runs out, or your party falls back to train and try again.', target: '#lanternwrap', ready: () => S.foe && S.foe.boss },
-    { id: 'gear', title: 'You found gear', text: 'Monsters drop weapons, armor, trinkets and rings. Open Gear to see them. You change gear at the main camp on floor 1, or anywhere with a Campfire Draught. A green arrow marks an upgrade.', target: '.tabs [data-tab="gear"]', ready: () => S.bag.length > 0, done: () => tab === 'gear', noNext: true },
+    { id: 'boss', title: 'Guardians', text: 'Every fifth floor has a guardian. Beat it before the lantern oil runs out, or your party falls back to train and try again. After ' + L.WIPE_HOLD + ' defeats in a row it waits one floor up: train, then switch Descend back on.', target: '#lanternwrap', ready: () => S.foe && S.foe.boss },
+    { id: 'gear', title: 'You found gear', text: 'Monsters drop weapons, armor, trinkets and rings. Open Gear to see them. You change gear at the main camp on floor 1, or anywhere with a Campfire Draught. A green arrow marks an upgrade.', target: '.tabs [data-tab="gear"]', ready: () => S.bag.length > 0 && L.canUse(S, 'gear'), done: () => tab === 'gear', noNext: true },
     { id: 'camp', title: 'Camp', text: 'The main camp on floor 1 is where you swap companions and train them; going back restarts you at the top of the region. A Campfire Draught from the Store lets you change gear right where you are.', target: '#campbar', tab: 'party', ready: () => S.floor > 1 && S.maxFloorEver >= 4 },
     { id: 'traits', title: 'Companion traits', text: 'Each companion has three traits: one for a party seat, one for a class they like fighting beside, and one for resting at camp. Working traits glow gold, so try moving people around.', target: '#seats .traits', tab: 'party', ready: () => S.unlocked.length >= 3 && !!document.querySelector('#seats .traits') },
-    { id: 'map', title: 'Map of the Deep', text: 'See how far you have come, which guardians you have beaten, and travel back to any floor you have reached.', target: '#btn-map', ready: () => S.maxFloorEver >= 8 },
-    { id: 'stats', title: 'Your character', text: 'Your hero earns XP from every fight. Each level brings a stat point. Open Skills and spend it on Strength, Wisdom, Luck and the rest. Your class favours two of them.', target: '.tabs [data-tab="rekindle"]', ready: () => !!S.hero && L.heroPoints(S) > 0 },
-    { id: 'end', title: 'You are ready', text: 'That is the basics. The story will introduce new companions as you descend. Open the Guide (the ? at the top) any time for the details.', target: '#btn-guide', ready: () => true },
+    { id: 'map', title: 'Map of the Deep', text: 'See how far you have come and which guardians you have beaten. From hero level ' + L.unlockOf('map').lv + ' you can travel back to any floor you have reached.', target: '#btn-map', ready: () => S.maxFloorEver >= 8 },
+    { id: 'stats', title: 'Your character', text: 'Your hero earns XP from every fight. Each hero level brings a stat point. Open Skills and spend it on Strength, Wisdom, Luck and the rest. Your class favours two of them.', target: '.tabs [data-tab="rekindle"]', ready: () => !!S.hero && L.heroPoints(S) > 0 },
+    { id: 'quests', title: 'Quests and bounties', text: 'Three daily quests and three bounties, picked for what your hero can do right now. They pay gold, Dust and Sigils. Many have a button that takes you straight there.', target: '#quests', ready: () => true },
+    { id: 'town', title: 'More of the Hold', text: 'More of the Hold opens as your hero levels up: the Ember Ring at hero level ' + L.unlockOf('ring').lv + ', the Players Guild at ' + L.unlockOf('guild').lv + ', the world boss at ' + L.unlockOf('boss').lv + '. Codex, Progress shows the whole road. On phones, Market, Guild, PvP and Codex sit under Town.', target: () => phone() ? '.tabs [data-town]' : '.tabs [data-tab="codex"]', ready: () => true },
+    { id: 'end', title: 'You are ready', text: 'That is the basics. The story will introduce new companions as you descend, and the Next step hint under the chapter goal shows what to do next. Open the Guide (the ? at the top) any time for the details.', target: '#btn-guide', ready: () => true },
   ];
   let coachCtx = null, coachEl = null;
   function tutState() { if (!S.tut) { S.tut = { i: 0, done: false }; S.seenNotes = S.notesShown = NOTES_V; } return S.tut; }
   function coachHide() { $('coach').hidden = true; if (coachEl) coachEl.classList.remove('tut-hi'); coachEl = null; }
   function coachShow(step, i) {
     if (step.tab && tab !== step.tab) switchTab(step.tab);
-    const el = document.querySelector(step.target);
+    const el = document.querySelector(typeof step.target === 'function' ? step.target() : step.target);
     if (!el || !el.offsetParent) { coachHide(); return; }
     if (coachEl !== el) {
       if (coachEl) coachEl.classList.remove('tut-hi'); coachEl = el; el.classList.add('tut-hi');
       const r0 = el.getBoundingClientRect(), roomBottom = innerWidth <= 720 ? innerHeight - 190 : innerHeight - 20;
-      if (r0.top < 60 || r0.bottom > roomBottom) el.scrollIntoView({ block: innerWidth <= 720 ? 'start' : 'center', behavior: 'smooth' });
+      if (r0.top < (innerWidth <= 720 ? 140 : 60) || r0.bottom > roomBottom) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
     $('coachstep').textContent = 'Tutorial ' + (i + 1) + ' of ' + TUT.length;
     $('coachtitle').textContent = step.title; $('coachtext').textContent = step.text;
     $('coachnext').hidden = !!step.noNext; $('coachnext').textContent = i === TUT.length - 1 ? 'Got it' : 'Next';
     const c = $('coach'); c.hidden = false;
-    if (innerWidth <= 720) { c.style.left = '12px'; c.style.right = '12px'; c.style.top = 'auto'; c.style.bottom = '12px'; c.classList.remove('up'); return; }
+    // Phones: the card sits at the bottom, or at the top when it points at the bottom tab bar (Town) so it never covers it.
+    if (innerWidth <= 720) { const low = el.getBoundingClientRect().top > innerHeight - 200; c.style.left = '12px'; c.style.right = '12px'; c.style.top = low ? '12px' : 'auto'; c.style.bottom = low ? 'auto' : '12px'; c.classList.remove('up'); return; }
     const r = el.getBoundingClientRect(), cw = c.offsetWidth, ch = c.offsetHeight;
     let top = r.bottom + 14, up = false;
     if (top + ch > innerHeight - 10) { top = r.top - ch - 14; up = true; }
@@ -6708,13 +6789,14 @@
   // st: 'done' | 'now' | 'next'. ends: the finale's possible endings (side key from L.SIDES, or null).
   const ROADMAP = [
     { id: 'start', tag: 'Where we started', name: 'The road so far', when: 'Nov 22 to 24, 2026', st: 'done', pic: 's:tank,healer,rogue,mage,necro',
-      story: 'Lanternhold opened with five heroes, one lantern and a cellar full of Gloops. 119 updates later, the Deep is a front of the Grand War.',
+      story: 'Lanternhold opened with five heroes, one lantern and a cellar full of Gloops. 139 updates later, the Deep is a front of the Grand War.',
       items: [
         ['flame', 'The first night', 'Updates 1 to 12', ['Tap to strike and train your party.', 'The Campfire and camp jobs.', 'Skill trees, Kindling and a full set of gear slots.']],
         ['shield', 'The war comes down', 'Updates 13 to 28', ['Act One below the Starless Vault.', 'Alliances, banners and the world map.', 'Sigils, Mercy’s Blessing, the Lantern Pass and daily quests.']],
         ['users', 'A living Hold', 'Updates 29 to 73', ['The Trading Post and the Players Guild.', 'Ember Ring duels and world boss weekends.', 'The Loot Goblin, merging, enchanting, the Wardrobe and music.']],
         ['duel', 'Deeper fights', 'Updates 74 to 100', ['Region trials and special attacks.', 'Mana, stamina, burns and stuns.', 'The Ghost Lantern, the merchant, bounties and the Mercy Corps on the road.']],
-        ['lantern', 'The Hold today', 'Updates 102 to 119', ['The Hold’s tents: Enchanter, Armorer and Store.', 'Legendary world boss loot and Victor’s Banner.', 'Bestiary mastery, real weapon types, chat windows and the NPC Guild.']],
+        ['lantern', 'The Hold grows', 'Updates 102 to 119', ['The Hold’s tents: Enchanter, Armorer and Store.', 'Legendary world boss loot and Victor’s Banner.', 'Bestiary mastery, real weapon types, chat windows and the NPC Guild.']],
+        ['crown', 'The Hold today', 'Updates 120 to 139', ['New Playthrough tiers, Mythic gear and the Rift Gate.', 'A hundred and twenty creatures with home regions, team battles and unique Legendaries.', 'Quests, hero profiles, the Hall of Fame and the Paladin.']],
       ] },
     { id: 'act1', tag: 'Act I · Season 1', name: 'The First Incursion', when: 'Now to Jan 24, 2027', st: 'now', pic: 'i:lantern',
       story: 'Fifteen regions, from the Lamplit Cellars down to the Rift Threshold. Play it to find out what waits at the bottom.',
@@ -6782,14 +6864,15 @@
         'Each tap hits for <b>1 + 5% of your party damage per second</b>. The Grim Whetstone relic adds 25% per level, and a critical hit does 5x. Hover the <b>i</b> in the arena corner to see your tap damage.',
         'Each floor has <b>8 monsters</b>. Clear them to go deeper.',
         'Monsters drop <b>gold</b>. Spend it to <b>train</b> your party in the Party tab. Training raises a character\'s <b>power level</b>.',
-        'Every <b>25 power levels</b> a character gets a big power jump.']],
+        'Every <b>25 power levels</b> a character gets a big power jump.',
+        'New here? The <b>Next step</b> hint under the chapter goal points at the most useful thing to do now, until hero level 12. Tap it to go there.']],
       ['Power level and hero level', 'i:star', 'Two different levels. Power level is how strong each fighter is; hero level is how far your own hero has come.', [
         '<b>Power level</b>: every character in your party has one, your hero included. Raise it with gold (<b>Train</b> on the Party tab). It sets damage and health, and gear needs a power level to wear. Rekindling resets it.',
         '<b>Hero level</b>: your own hero\'s experience level, from fighting. It gives stat points and opens new parts of the game. It is never reset.',
         'So a hero can be hero level 11 and power level 142 at the same time. Your Party card shows power level; the Skills tab and Codex show hero level.']],
       ['Hero level and unlocks', 'i:star', 'New parts of the game open as your hero levels up. Codex, Progress shows the whole road.', [
-        'Level <b>3</b>: Gear. <b>5</b>: the Campfire. <b>8</b>: map travel and buying on the Market. <b>10</b>: camp jobs.',
-        '<b>12</b>: the Players Guild. <b>15</b>: the Ember Ring. <b>18</b>: selling and the Sigil exchange. <b>20</b>: rekindling. <b>25</b>: world boss and job sets.',
+        [...new Set(L.UNLOCKS.map(u => u.lv))].sort((x, y) => x - y).map(lv => 'Hero level <b>' + lv + '</b>: ' + L.UNLOCKS.filter(u => u.lv === lv).map(u => u.name.replace(/^The /, 'the ')).join(', ')).join('. ') + '.',
+        'More camp job slots open at hero levels ' + L.JOB_SLOT_LV.slice(1).join(', ') + '.',
         'Hero XP grows with depth, and guardians give the most.']],
       ['Region trials', 'i:map', 'Each region has a trial that opens the way to the next one.', [
         'Defeat <b>' + L.TRIAL_ELITES + ' alliance elites</b> in the region (the bannered warband foes) and beat its <b>guardian</b>.',
@@ -6804,6 +6887,7 @@
         '<b>Night Watch</b> (Skills tab) stretches that up to 3 days.',
         '<b>Lanternholder</b> adds 4 more hours.']],
       ['The side panel', 'i:map', 'Eight tabs, each with one job. Locked tabs show the hero level that opens them.', [
+        'On phones, <b>Market</b>, <b>Guild</b>, <b>PvP</b> and <b>Codex</b> sit under the <b>Town</b> button at the bottom, and <b>Fight</b> jumps back up to the battle.',
         '<b>Party</b>: who fights, and in what order.',
         '<b>Camp</b>: resting companions, camp jobs and training.',
         '<b>Gear</b>: dress your characters.',
@@ -6816,7 +6900,7 @@
         'The <b>Why we fight</b> opening plays on your first visit. Replay it any time from <b>Settings</b>.',
         'Lanternhold is free. Once the game’s costs are covered, the proceeds go to the Mercy Corps giving: children’s hospitals, food pantries and local schools.',
         'The <b>music button</b> in the top bar opens the player: eight original tracks, skip, shuffle, volume and mute.',
-        '<b>Settings</b> (the gear button) holds sound, the tutorial and your save.']],
+        '<b>Settings</b> (the gear button) holds sound, which pop-ups show in the corner, and your backup. The Guide has <b>Replay the tutorial</b>.']],
       ['Controls', 'i:help', 'Everything works with taps; keys are shortcuts.', [
         '<b>Tap, Space or Enter</b>: strike',
         '<b>1 to 5</b>: party abilities. <b>6 to 8</b>: your hero’s specializations.',
@@ -6830,7 +6914,8 @@
         '<b>Rogue</b>: most damage, dodges a quarter of attacks. Backstab hits hard.',
         '<b>Mage</b>: Ember Storm quadruples damage for a few seconds.',
         '<b>Necromancer</b>: raises skeletons that fight and soak blows.',
-        '<b>Paladin</b> (a Sigil class, your hero only): plate and a small steady party heal. Oath of Dawn heals the party and shields it for a few seconds. A sidegrade, never stronger.']],
+        '<b>Paladin</b> (a Sigil class, your hero only): plate and a small steady party heal. Oath of Dawn heals the party and shields it for a few seconds. A sidegrade, never stronger.',
+        'Unlock the Paladin once for <b>' + L.PAID_CLASS.paladin.toLocaleString('en-US') + ' Sigils</b> and every hero on your account can be one. Your first change into it is free. Companions and hired NPCs are never Paladins.']],
       ['Marching order', 's:tank,rogue,healer,mage,necro', 'The top of the Party list stands in front, nearest the monster.', [
         'A <b>tank</b> in the front two draws attacks.',
         'Heals get <b>15% weaker per step</b> of distance, so healers go in the middle.',
@@ -6858,6 +6943,7 @@
         'Invites to <i>you</i> show at the top with <b>Accept</b> and <b>Decline</b>. Accepting lends a copy of your hero and earns you gold.',
         'Borrowed heroes bring their own gear, stats and skills, up to <b>2×</b> your own hero’s damage and health. They update each time you play.',
         'Each player hero in your party adds <b>+5%</b> party damage and gold (up to two). They never ask for wages.',
+        'Tap a name on the board to see that hero\'s public profile.',
         '<b>Dismiss</b> on a seat lets a hero go.']],
       ['Your banner', 'i:flare', 'Your hero flies one of five banners, each with a perk.', [
         'Iron Covenant <b>+15% health</b>. Radiant Ascendancy <b>+12% damage</b>. Devouring Tide <b>+15% gold</b>. Mercy Corps <b>+15% healing</b>. Unsworn <b>+5%</b> to all three.',
@@ -6866,6 +6952,8 @@
     { id: 'fight', name: 'Combat', icon: 'sword', topics: [
       ['Monsters', 's:slime,rat,skeleton', 'Monsters hit back. If the whole party falls, it retreats a floor and tries again.', [
         'Retreats last about a minute. Use it to train and check gear.',
+        'After <b>' + L.WIPE_HOLD + ' defeats in a row</b> on the same floor, the party holds one floor up and <b>Descend automatically</b> switches off. Train, then switch it back on.',
+        'Far above your deepest floor, foes come in <b>swarms</b> of 3 to 5 that fall together. Gold and loot are the same as fighting them one by one.',
         '<b>Grand War soldiers</b> (with a banner) are tougher and drop more.']],
       ['Mana and stamina', 'i:flare', 'Healers, mages and necromancers use mana. Rogues, tanks and paladins use stamina.', [
         'The blue bar under a hero is <b>mana</b>, the gold bar is <b>stamina</b>. Both hold ' + L.RES_MAX + ' and refill on their own: mana at ' + L.RES_REGEN.mana + ' a second, stamina at ' + L.RES_REGEN.stamina + ' a second.',
@@ -6936,7 +7024,7 @@
         'If the wall breaks, the Guardian takes the stage. <b>Nothing lands on it</b>, and the foe behind it waits.',
         'Slow down for about three seconds and it withdraws. You lose nothing but the time.']],
       ['World boss weekends', 's:colossus', 'One giant Rift boss every weekend that all signed-in players fight together.', [
-        'Runs Friday to Sunday (UTC). A purple bar on the stage shows it; tap it to join a <b>two-minute assault</b>, once every 15 minutes.',
+        'Opens at hero level ' + L.unlockOf('boss').lv + ' for signed-in players. Runs Friday to Sunday (UTC). A purple bar on the stage shows it; tap it to join a <b>two-minute assault</b>, once every 15 minutes.',
         'Every assault chips the shared health bar, but only your <b>best ' + L.WB_BEST + ' assaults</b> count toward your rank, Sigils and Mythic roll.',
         'Every point of <b>real damage</b> counts, so the stronger your party, the more you chip off. Going deeper never lowers it.',
         'Each boss resists two classes (−30%) and is weak to one (+30%); the boss window shows which. It hits hard and uses a special attack.',
@@ -6991,12 +7079,16 @@
         'Change gear at <b>camp</b>. <b>Equip best</b> does it in one tap.',
         'A <b>green arrow</b> marks an upgrade. The corner number (Lv) is the power level needed.',
         'Upgrade with gold, or salvage what you do not need.']],
+      ['Gear loadouts', 'i:gear-armor', 'Save what your whole party wears and put it back on in one tap.', [
+        'The <b>Loadouts</b> row is in the Gear tab, Equipped view. <b>Save</b> remembers what everyone wears now; <b>Wear</b> puts it all back on, at camp like any gear change.',
+        'Everyone gets ' + L.LOADOUT_FREE + ' loadout. Lanternholder gets ' + L.LOADOUT_PASS + '.']],
       ['Rarity and sets', 'i:crown', 'Rare and epic gear is a real find, and gets likelier deeper down.', [
+        'Rarities: <b>Common</b>, <b>Fine</b>, <b>Rare</b>, <b>Epic</b>, set pieces, <b>Legendary</b> and, above them all, <b>Mythic</b> from world boss weekends.',
         'From floor 15, guardians can drop <b>set pieces</b>. Two or three of a set add bonuses.',
         'A <b>Forager</b> at camp improves all drops.']],
       ['Job gear', 'i:hammer', 'Some pieces boost a camp job (orange dot).', [
         'Fine 2%, rare 6%, epic 15% chance to roll one.',
-        'Each job has a 3-piece job set from floor 20 once your hero reaches level ' + L.unlockOf('jset').lv + ': <b>2 pieces +40%</b>, <b>3 pieces +100%</b>.']],
+        'Each job has a 3-piece job set from floor 20 once your hero reaches hero level ' + L.unlockOf('jset').lv + ': <b>2 pieces +40%</b>, <b>3 pieces +100%</b>.']],
       ['Your pack', 'i:bag', 'The pack holds 40 items to start.', [
         'Kindling adds <b>+10 slots</b> up to six times. Lanternholder adds 10.',
         'When full, the weakest common item is sold automatically.',
@@ -7012,9 +7104,9 @@
       ['The campfire roster', 'i:users', 'Your party’s 4 companion seats never count. On top of them, the campfire holds 4 resting companions, plus one more at hero levels 10, 20 and 30.', [
         'When a new companion arrives and the fire is full, dismiss someone for good to keep them, or turn them away.',
         'Up to 3 more spots can be added for ' + L.ROSTER_COST + ' Sigils each. They are yours for good.']],
-      ['Camp jobs', 'i:hammer', 'Opens at hero level ' + L.JOB_SLOT_LV[0] + ' with one job slot; one more slot at levels ' + L.JOB_SLOT_LV.slice(1).join(', ') + '.', [
+      ['Camp jobs', 'i:hammer', 'Opens at hero level ' + L.JOB_SLOT_LV[0] + ' with one job slot; one more slot at hero levels ' + L.JOB_SLOT_LV.slice(1).join(', ') + '.', [
         '<b>Forager</b>: gear drops. <b>Runesmith</b>: damage. <b>Herbalist</b>: healing.',
-        '<b>Armorer</b>: health. <b>Prospector</b>: gold. <b>Lamplighter</b>: lantern oil.',
+        '<b>Armorer</b>: health. <b>Prospector</b>: gold. <b>Lamplighter</b>: lantern oil. <b>Quartermaster</b>: lower NPC wages.',
         'Grows with level; <b>+50%</b> when the job suits their class. A <i>Hard worker</i> trait adds more.']],
       ['The Store and tonics', 'i:cup', 'Tonics are small boosts for 10 or 15 minutes. Open <b>Store</b> on the camp bar.', [
         'Combat: <b>+15% damage</b>, <b>+15% health</b>, <b>+20% healing</b>, <b>+5% crit</b> (gold only).',
@@ -7023,7 +7115,7 @@
         '<b>Campfire Draught</b>: change gear anywhere for 60 seconds and keep your floor. <b>Lantern Oil</b>: +15 seconds against a guardian.']],
     ] },
     { id: 'grow', name: 'Getting stronger', icon: 'star', topics: [
-      ['Your character', 'i:user', 'Your hero earns XP from every fight and gets a stat point each level.', [
+      ['Your character', 'i:user', 'Your hero earns XP from every fight and gets a stat point each hero level.', [
         '<b>STR</b> damage. <b>DEX</b> crits and dodge. <b>CON</b> health. <b>INT</b> ability power.',
         '<b>WIS</b> healing and faster abilities. <b>CHA</b> gold. <b>LCK</b> a little of everything.',
         'Your class <b>favours two stats</b>; points there count 50% more.',
@@ -7031,10 +7123,10 @@
       ['Skill tree and Kindling', 'i:flare', 'Rekindling earns Kindling, spent on your hero’s class tree.', [
         'Three branches of four skills. The fourth teaches a new ability (keys 6 to 8).',
         'Kindling also buys pack space, extra rings and a second trinket slot.',
-        'Reset the tree free at camp. Change class at camp for 15 Kindling.']],
-      ['Rekindling', 'i:lantern', 'At hero level 20, from floor 75 or deeper, start again from floor 1 for permanent Embers.', [
+        'Reset the tree free at camp. Change class at camp for ' + L.CLASS_CHANGE_COST + ' Kindling.']],
+      ['Rekindling', 'i:lantern', 'At hero level ' + L.unlockOf('rekindle').lv + ', from floor ' + L.REKINDLE_FLOOR + ' or deeper, start again from floor 1 for permanent Embers.', [
         'Each <b>Ember</b> adds 4% damage and gold forever.',
-        'Companions, gear, relics and your character stay; levels reset.',
+        'Companions, gear, relics and your character stay; power levels reset.',
         'Embers count from floor 60, so a deeper descent pays far more. Your hero keeps their level.',
         'Rekindle when progress slows down.']],
       ['Training Grounds', 'i:sword', 'A practice dummy on the Party tab for comparing setups.', [
@@ -7045,12 +7137,18 @@
         'Each start pays <b>+25 Sigils</b> and shows your tier as a badge on your profile, the Players Guild board and in chat.',
         'Per tier: monsters <b>+25%</b> health and damage, gear drops at <b>+10%</b> item level, and you keep <b>+2%</b> damage, health and gold for good.',
         '<b>Resets</b>: gold, Dust, floors, power and hero levels, stat points, skills, Kindling, gear, Embers, relics, companions, hires and the story. <b>Kept</b>: everything bought with Sigils, your profile, journal lore, feats, Ember Ring rating and Rift tokens.',
-        'Trading is per tier: you see and buy only your tier’s market, mail only goes to heroes on your tier, trading opens 24 hours after you start, and gear from an earlier tier can not be worn. Your old listings, offers and unclaimed mail are cleared when you start.']],
+        'Trading is per tier: you see and buy only your tier’s market, mail only goes to heroes on your tier, trading opens 24 hours after you start, and gear from an earlier tier can not be worn. Your old listings, offers and unclaimed mail are cleared when you start.',
+        'Each tier is a real climb: monsters get tougher the deeper you go, foes drop more gold, and training costs more. From NP+' + L.NP_TDUST_TIER + ', Healers, Mages and Necromancers past power level ' + L.NP_TDUST_LV + ' also need Dust to train.',
+        'From NP+' + L.NP_MARK_TIER + ', monsters can carry <b>marks</b>: ' + Object.values(L.NP_MODS).map(m => '<b>' + m.name + '</b> (' + m.desc.replace(/ \(NP\+\)$/, '').replace(/^[^:]*: /, '').replace(/^./, x => x.toLowerCase()) + ')').join(', ') + '.']],
       ['NP+ gold sinks', 'i:coin', 'From NP+1: Pip, Gulp and the Golden Loot Goblin, plus Reforge, the Dust Press and Hold works.', [
         '<b>Pip the Dicer</b> sells Lucky Crates for gold (30 minutes, 3 hours or 12 hours of your income). Coffers and Caskets can hold one of <b>8 Curios</b>; every 10th Casket without one is sure to have one.',
         '<b>Gulp the Hoard Mimic</b> eats morsels of gold (10 minutes of income, 12 a day). The fed counter is shared by all NP+ heroes.',
         'Each morsel makes the <b>Golden Loot Goblin</b> slightly more likely. When it appears you have <b>30 minutes</b> to beat it in 2-minute assaults, or it escapes. Bring a Rogue for its dashes. The reward is the <b>Gilded</b> ring set and Gilded shards.',
         '<b>Reforge</b> (Armorer), the <b>Dust Press</b> (Enchanter) and <b>Hold works</b> (Hold view) also take gold. The NP+ market keeps a 5% fee on sales.']],
+      ['The Bestiary', 's:beetle,moth,crab', L.CREATURES.length + ' creatures, ' + L.ROSTERS[0].length + ' to a region. Each one spawns most in its home region.', [
+        'Open it in the <b>Codex</b>, Journal. Creatures are listed by home region; ones you have not met show as silhouettes. Rare and very rare ones glow.',
+        'Tap <b>Details</b> on a creature you have met: picture, home, spawn odds and size. Its strength and special attack are revealed after a few defeats, and its field notes after more.',
+        'Defeating a family’s creatures also builds that family’s <b>mastery</b>, shown on every row.']],
       ['Story, journal and map', 'i:book', 'The story unfolds as you descend.', [
         'Replay scenes in the <b>Journal</b>.',
         'The <b>Map of the Deep</b> shows every region and lets you travel to floors you have reached. Each region’s dossier lists its <b>possible loot</b> with your real odds per kill, after your drop bonuses.']],
@@ -7059,17 +7157,20 @@
       ['Earning Sigils', 'i:star', 'You can earn Sigils without spending money.', [
         '<b>Daily quests</b> (top bar): 1 Sigil each, 2 more for all three.',
         'Chests and guardians sometimes hold 1 to 3.',
-        'Trade gold for Sigils with other players on the exchange.']],
+        'Trade gold for Sigils with other players on the exchange.',
+        '<b>Support the game</b> in the Sigil shop gives free one-time Sigils for linking your Discord or itch.io account.']],
       ['What Sigils buy', 'i:crown', 'Looks, convenience and speed-ups. Never combat power.', [
         '<b>Lanternholder</b> (premium): Auto-train, +10 bag slots, +4 h away, auto-claim for bounties and daily quests, 4 gear loadouts. Get it for 500 Sigils (30 days, nothing renews) or as a $4.99 monthly membership. New heroes get a free 3-day trial.',
-        '<b>Bag of Holding</b> (6,500, once): an endless pack.',
+        '<b>Bag of Holding</b> (6,500, once): an endless pack. The <b>Paladin</b> class (' + L.PAID_CLASS.paladin.toLocaleString('en-US') + ', once per account).',
         '<b>Speed-up tonics</b> and Campfire Draughts. <b>Wardrobe</b> outfits and lanterns. Profile frames, titles and colors.',
-        'Buy packs with <b>Get Sigils</b> after signing in with your Born 2 Game store account. Packs are one-time purchases and never renew.',
+        'Buy packs with <b>Get Sigils</b> (tap the Sigil counter at the top) after signing in with your Born 2 Game store account. Packs are one-time purchases and never renew. Your first pack ever comes with 50% more Sigils.',
+        '<b>Gift Lanternholder</b>: open another player’s profile from the Players Guild and give them 30 days for 500 Sigils.',
         'Sigils can also be sold to other players for gold on the Sigil exchange in the Market, or bought there with gold.',
-        'Every pack bought lights a <b>Lantern Surge</b> for all players: +25% gold and XP.']],
+        'Every pack bought lights a <b>Lantern Surge</b> for all players: +25% gold and XP. Tick the shout-out box and your hero’s name shows with it.']],
       ['Mercy’s Blessing', 'i:cross', 'Real donations to the Grand War’s Mercy Corps bless every player.', [
         '<b>+10% gold</b>, <b>+10% health</b>, <b>+20% healing</b> while it burns.',
-        'Each $10, 5 food items or toy adds 2 hours, up to 7 days.']],
+        'Each $10, 5 food items or toy adds 2 hours, up to 7 days.',
+        'Give from the game: the Sigil shop has <b>$1</b> and <b>any amount</b> buttons for our Extra Life team, for children’s hospitals. Add your #WarName to credit your alliance.']],
       ['Victor’s Banner', 'i:crown', 'The alliance that wins a Grand War season holds the Nexus, and its heroes here get stronger.', [
         '<b>+8% damage, health, healing and gold</b>, and fallen allies get back up in <b>10 seconds</b> instead of 15.',
         'Fly that alliance’s banner to get it. It lasts until the next season is crowned.']],
@@ -7086,10 +7187,12 @@
       ['Accounts', 'i:user', 'A free account saves your progress online, on any device.', [
         'Accounts are optional. <b>Play without an account</b> keeps your hero on this device only.',
         '<b>Continue with Born 2 Game</b> signs you in with your store account, or sign up with any email and the code we send you.',
-        'Sign in to use the Players Guild, the Market, the Ember Ring, world boss weekends and Sigils.']],
+        'Sign in to use the Players Guild, the Market, the Ember Ring, world boss weekends and Sigils.',
+        'Each hero name belongs to one player. If yours is already taken, the game asks you to pick another.',
+        'One device plays at a time. Open the game somewhere else and the first one pauses with <b>Play here</b>, so your save never splits.']],
       ['Discord', 'i:discord', 'Join us on the Grand War Discord.', [
         'Tap the Discord button at the top, or <a href="https://discord.gg/6G7E7rhGFu" target="_blank" rel="noopener">join here</a>.',
-        '<b>#lanternhold-chat</b> for players, <b>#lanternhold-bugs</b> for bug reports and <b>#lanternhold-ideas</b> for suggestions.']],
+        'The Lanternhold section has channels to chat with other delvers, report bugs and suggest features.']],
       ['Chat', 'i:chat', 'Global, Trade, Party and Banner channels.', [
         'Press <b>Chat</b> at the bottom right to open the window, and the dash to tuck it away again. A bubble on the button counts unread messages.',
         '<b>Whispers</b> are private chats, one per player. Each conversation is a tab along the top of the Whispers channel: their messages on the left, yours on the right. Tap <b>+</b> to start a new one, or tap a name in any channel and choose Whisper.',
@@ -7101,14 +7204,18 @@
         '<b>Mail</b>: send to someone you recruited or chatted with, as a gift or for a price.',
         'Gold and gear have no real-money value.']],
       ['The Ember Ring (PvP)', 'i:duel', 'Duel other players\u2019 heroes, or fight their teams, for Laurels and rating.', [
-        'Open the <b>PvP</b> tab and press <b>Duel</b>. Only your own hero fights; companions, tonics and Sigils never count.',
-        'Each class has the edge on two classes and is countered by two. Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
+        'Opens at hero level ' + L.unlockOf('ring').lv + '. Open the <b>PvP</b> tab (Town on phones) and press <b>Duel</b>. Only your own hero fights; companions, tonics and Sigils never count.',
+        'Each class has the edge on two classes and is countered by two (the Paladin has neither). Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
         'Rematches against the same hero within a day pay less each time, so spread your duels around.',
         '10 challenges, one back every 30 minutes. Wins give rating and Laurels, losses a few Laurels; your hero also defends while you are away. A full kit is a long climb.',
         'Laurels buy the <b>Ringwarden kit</b>: PvP gear with <b>Edge</b> (more damage to heroes) and <b>Resolve</b> (less damage from heroes). It works only in the Ring.',
         '<b>Team battles</b> (Team view): your hero and two of your own companions against another player\u2019s team. Borrowed player heroes can\u2019t join. The front fighter takes most of the blows. Companions wear their own <b>companion Ring kit</b>, bought with Laurels. A win pays 10 Laurels, a loss 4.']],
-      ['Your profile', 'i:user', 'The card other players see.', [
-        'Tap your portrait, then <b>Customize profile</b>: frame, title, color, banner, emblems and a bio.']],
+      ['Your profile', 'i:user', 'Your hero sheet, and the card other players see.', [
+        'Tap your portrait. <b>My hero</b> shows power level, steady damage, health and deepest floor up top, with sections you can fold open.',
+        '<b>Public profile</b> lets you choose what other players see, with a live preview. Name, class, power level and looks always show.',
+        '<b>Customize profile</b>: frame, title, color, banner, emblems and a bio.']],
+      ['Hall of Fame', 'i:crown', 'Records from across the Reach.', [
+        'Open <b>Codex</b>, Leaderboard, Hall of Fame: fastest to NP+1, net worth, the best of each class by power level and gear rating, guardian slayers and more.']],
       ['The Wardrobe', 'i:star', 'Outfits, lanterns and war banners, looks only.', [
         'Open it from the <b>Wardrobe</b> button in the Gear tab, from your portrait, or from the Quartermaster.',
         'Outfits recolor a hero from helm to boots; the rarest add an aura. Buy one once and dress any hero in your company in it.',
@@ -7205,6 +7312,16 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 140, date: 'November 2026', title: 'Safer saves and a fresh Guide', items: [
+      'Your account keeps a daily copy of your save for 35 days, and the server checks every save, Market buy and Mail payment.',
+      'Settings: turn off party invites to play solo, replay the tutorial, open the wiki.',
+      'The Guide, wiki and tutorial are up to date, with new wiki pages for NP+, NPC hires and Mythic sets.',
+      'Phones: the top buttons fit one row, fewer pop-ups at once, and tidier loadouts, Codex and Market.',
+      'Poisoned, Burning and Stunned show once per burst. The chapter goal no longer gets cut off.',
+      'The Lantern Keeper boost starts within moments of the Keeper signing in.',
+      'Fair play: time away uses the server clock, gifts use bought Sigils, found Sigils bank while you play, and Paladins must be unlocked.',
+      'A lighter download. Older patch notes are on the wiki.',
+    ] },
     { v: 139, date: 'November 2026', title: 'The Paladin', items: [
       'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
       'The Paladin is a Sigil class: unlock it once for 1,000 Sigils and every hero on your account can be one. The first change into it is free. It keeps pace with the other classes and never outclasses them.',
@@ -7346,555 +7463,6 @@
       'An NPC hire\u2019s wage now comes from their own stats: a base fee for their rarity, plus more for each power level and for the damage and health their gear gives. Your income and your other companions no longer change it. Hover a hire\u2019s rarity tag to see the breakdown.',
       'Mages, necromancers and healers now cost Dust when they sign on, on top of gold. Wages are still gold only.',
     ] },
-    { v: 119, date: 'November 24, 2026', title: 'Wages at a glance', items: [
-      'Hover your gold and Dust in the top bar for a small table: income, NPC wages per hour in red, what you keep after wages, and what hires have cost you so far.',
-      'Fixed: very big saves (thousands of items) could not sync to your account, so the account save fell behind. Big saves are now packed down to about a tenth of the size.',
-      'NPC Guild prices are now set when a hire appears at the Hall or walks to the bench, and hold until the next new faces. They no longer creep up while you save for them.',
-      'Sorry: everyone who went to the bench before this fix (walked off unpaid or let go while the old full-rate wages ran) comes back for free.',
-      'Fixed: NPC Guild hire prices and wages no longer jump around. They used to count a mage\u2019s spell as always on (prices up to 70% too high) and drop when a companion was down or sent to the Campfire. Prices now follow your best five companions at full strength, so the price you see is the price you pay.',
-      'Wages are now half rate while you are away, so they take the same share of your smaller away income. Before, a big roster could cost more than the party brought home overnight and hires walked off.',
-      'The gold hover and the NPC Guild now show your away income (what your party brings home while you are gone) and your wages while away.',
-      'Fixed: Scrap for gold at the Armorer (and Scrap for Dust at the Enchanter) could show Melt 0 even with spare gear listed, because a Rarity filter picked on the Upgrade or Merge tab still applied. The rarity buttons on the scrap tab now decide alone.',
-      'Fixed: typing @ in the desktop chat windows shows the list of players again (Tab, Enter or a click fills in the name). It only worked in the phone chat before.',
-    ] },
-    { v: 118, date: 'November 24, 2026', title: 'The NPC Guild', items: [
-      'The Guild Hall now has an NPC Guild next to the Players Guild. Hire companions for gold or Dust: Common, Uncommon, Rare, Epic or Legendary. Rarer hires fight harder and work camp jobs better, but cost more.',
-      'Hires draw an hourly wage, even while you are away. Sign one on to take a companion spot, or take a 2 hour contract when you have no room: paid up front, no wage.',
-      'New faces arrive every 4 hours; New faces now rerolls them for Dust. Some hires need a hero level, a floor reached or your banner.',
-      'The lore companions (Sir Ashe, the Pale Oracle, Varga, Brann and the Hollow King) are now Legendary hires. When the story reaches them, they wait at the Guild Hall. If you already have them, they stay with you, on a Legendary wage.',
-      'If your gold can’t cover an hour of wages, the priciest hire walks off. Let go sends one back by choice. Their gear always returns to your bag, and they wait on the bench 3 days to be hired back for half price.',
-      'The world boss and Loot Goblin bars moved into the battle scene as small chips in the top-left corner, so they no longer squash the picture.',
-    ] },
-    { v: 117, date: 'November 24, 2026', title: 'Real weapons, one inventory and the banner lantern', items: [
-      'Weapons now have types with their own jobs. Sword (Tank, Rogue): +2% life steal. Dagger (Rogue): +5% critical hits. Mace (Tank, Healer): +8% damage to bosses. Morningstar (Tank): +15% damage. Staff (Healer, Mage) and Scepter (Necro, Healer): +10% healing or spell power. Wand (Mage, Necro): +10% mana regen and +3% critical hits.',
-      'Off-hands too: Shield (Tank) +4% block, Parrying dagger (Rogue) +3% dodge, Tome (Healer, Necro) +8% healing and life drain, Orb (Mage) +4% critical hits.',
-      'Armour goes by weight: plate for Tanks, leather for Rogues, cloth for Healers, Mages and Necromancers. Rings and trinkets fit any class. Your old gear keeps its stats and gets a type.',
-      'New, detailed item art, so you can tell a sword from a staff at a glance.',
-      'One inventory: every spare piece in one list. Filter by weapons, off-hands, armour or jewellery, by rarity and by who can use it, and sort by best, level, rarity, type or newest. Each item shows which classes can use it.',
-      'The banner lantern: the more Grand War territories your banner holds right now, the stronger you are here. +1% damage, health, healing and gold per territory, up to +15%. Hover the lantern at the top right to see it.',
-      '@ mentions are loud now: a toast, a chime, a flashing @you line, a glowing chat button and a count on the browser tab.',
-      'Chat bar on wider screens, bottom right: an icon for each channel and a tab for each whisper, each with its unread or @ count. Click one and that chat pops out in its own small window. Keep several open at once; click a title to tuck it back into the bar. The game leaves room for the bar, so it never covers your skills.',
-      'The Armorer and the Enchanter use the same filters as your pack on every tab: weapons, off-hands, armour or jewellery, rarity, who can use it, and sort. Scrap and mass merge only touch what the filters show.',
-      'Shops: the Armorer and Enchanter tabs stay in view on every tab; the shop scene no longer grows tall enough to push them off screen.',
-      'Big and ultrawide screens: the game grows with your screen and the fight scene keeps a sensible shape, so your party is bigger and no longer stands under a giant empty wall.',
-      'Mercy Corps wounded companions have their own art: a bandaged medic on a bedroll.'] },
-    { v: 116, date: 'November 24, 2026', title: 'Specialist shops and a Help channel', items: [
-      'The Armorer’s forge: every merge at the Armorer carries 25% less risk than merging in the field. The Armorer now has a Mass merge tab too.',
-      'The Enchanter’s touch: enchants moved at the Enchanter keep their tier and have a 15% chance to come out one tier stronger.',
-      'Enchanting in the field is back. It works at any camp, but the enchant loses one tier and costs 50% more Dust.',
-      'Merge, mass merge and enchant screens show what you would get at the shop.',
-      'New Help channel in chat for questions. Other delvers and the Lantern Keepers can answer.'] },
-    { v: 115, date: 'November 24, 2026', title: '@ mentions find everyone', items: [
-      'The @ list now includes every hero on the Players Guild board, not only people who chatted lately.'] },
-    { v: 114, date: 'November 24, 2026', title: '@ mentions in chat', items: [
-      'Type @ in chat and start a name to mention another player. Pick from the list with a tap, Tab or Enter.',
-      'When someone mentions you in Global, Banner, Trade or Party, you get a pop-up and a sound, it goes in the bell, and the chat button and channel tab light up. The message is highlighted in gold.',
-      'Fixed: on tall screens the Enchanter and Armorer scenes stretched very tall on the Scrap tab. Every shop scene now keeps its shape on every tab.'] },
-    { v: 113, date: 'November 24, 2026', title: 'Faster hero levels', items: [
-      'Hero levels come much faster: about twice as fast early on and four to seven times as fast from level 20. Your hero keeps all the XP it has, so most heroes jump up several levels right away.',
-      'Every part of the game opens sooner: Gear at 2, the Campfire at 3, Map travel and Market buying at 5, Camp jobs at 6, the Players Guild at 8, the Ember Ring at 10, Market selling at 12, Rekindling at 15, and the world boss and job sets at 18.',
-      'Camp job slots now open at hero levels 6, 10, 15, 20, 25 and 30.'] },
-    { v: 112, date: 'November 24, 2026', title: 'Smoother full screen', items: [
-      'Going in and out of full screen (the button or F11) no longer leaves the page wider than your window. The wider layout now turns on whenever the game really fills your screen, F11 included, and turns off the moment it doesn’t.'] },
-    { v: 111, date: 'November 24, 2026', title: 'Full screen help', items: [
-      'If your browser keeps the game inside its window when you press full screen, the game now tells you to press F11 instead, which always works on a computer.'] },
-    { v: 110, date: 'November 24, 2026', title: 'Full screen button stays put', items: [
-      'The full screen button no longer hides when the top bar is crowded. The icons squeeze a little instead.'] },
-    { v: 109, date: 'November 24, 2026', title: 'Bestiary mastery and full screen', items: [
-      'Bestiary mastery: every 500 of one kind of creature you defeat gives +1% damage and +1% hero XP against that kind, up to +10% at 5,000. Open a creature’s page in the Codex Journal to see your count, a progress bar and the next step. Counting starts today.',
-      'The XP bar breakdown shows your Bestiary bonus against the foe you are fighting.',
-      'New full screen button at the top right (also in Settings). The game fills your whole screen with no browser bars, and spreads out wider so you can see more. Press Esc or the button again to leave.'] },
-    { v: 108, date: 'November 24, 2026', title: 'Victor’s Banner', items: [
-      'The alliance that wins a Grand War season now holds the Nexus in Lanternhold too. Every hero under its banner gets +8% damage, health, healing and gold, and fallen allies get back up in 10 seconds instead of 15.',
-      'It lasts until the next season is crowned. Look for the crown line under your marching order once Season 1 ends.'] },
-    { v: 107, date: 'November 24, 2026', title: 'Visit the Store', items: [
-      'The Store is now a shop you walk into, like the Enchanter and the Armorer. Old Thessaly runs the counter, with shelves of glowing tonics behind her.',
-      'Tonics and Supplies sit in tabs under the scene. Buy and drink without leaving the shop.',
-      'Every shop header has buttons to hop straight to the other two shops.'] },
-    { v: 106, date: 'November 24, 2026', title: 'Bigger shop scenes', items: [
-      'The Enchanter and the Armorer no longer shrink the party and the shopkeeper in short, wide windows. The sign and lanterns tuck in under the ceiling instead.',
-    ] },
-    { v: 105, date: 'November 24, 2026', title: 'Legendary world boss loot', items: [
-      'World bosses now drop Legendary loot. When an event ends, a draw picks who wins the boss’s Legendary (if one drops) and who gets each of its boss shards.',
-      'Every whole point of boss score is one ticket, and anyone who hit the boss gets at least one. The more phases the server breaks, the better the odds of a Legendary and the more shards drop.',
-      'Each world boss has its own four-piece Legendary set (weapon, chest, ring, amulet) with 2-piece and 4-piece bonuses. Legendaries are bound to the winner.',
-      'Boss shards upgrade that boss’s Legendary pieces at the Armorer. Buy and sell shards on the new Boss shards market.',
-      'The Enchanter and the Armorer now scale to your window, so the party and the shopkeeper fill the scene on wide, tall and phone screens.',
-    ] },
-    { v: 104, date: 'November 24, 2026', title: 'Leaving the shops', items: [
-      'Fixed: pressing Return to camp, Descend or Draught while in the Enchanter or Armorer now leaves the shop.',
-    ] },
-    { v: 103, date: 'November 24, 2026', title: 'Shops at camp', items: [
-      'Fixed: visiting the Enchanter or the Armorer from the main camp showed the campfire instead of the shop.',
-    ] },
-    { v: 102, date: 'November 24, 2026', title: 'The Hold’s tents', items: [
-      'The Enchanter’s shop is rebuilt: your whole party stands where it does in a fight and the Enchanter stands behind his counter where a monster would. All the choices are in the counter panel below.',
-      'New: the Armorer. Upgrade gear with gold, merge two copies into one, or melt spare gear for twice the gold of a normal scrap (no Dust).',
-      'The camp card is cleaner: one big Return to camp button, then a row with the Enchanter, Armorer, Store and your Draughts.',
-      'Tap The Hold at the top of the Map of the Deep to see its tents (Campfire, Enchanter, Armorer, Store) and travel to one.',
-    ] },
-    { v: 100, date: 'November 24, 2026', title: 'The Mercy Corps on the road', items: [
-      'Rare Mercy Corps encounters, from floor 5, while you are playing. Now and then a monster holds a Mercy Corps companion captive: defeat it to free them and get +30% hero XP for 15 minutes.',
-      'Sometimes you find a Mercy Corps companion lying wounded on the path instead. Nobody fights: your healers pour their healing into them, Lantern Hymn mends a big chunk, and every tap is a bandage. Heal them to full within 45 seconds for Mercy’s Thanks, +15% damage and healing for 15 minutes. If time runs out, other medics carry them to safety, and nothing is lost.',
-      'Both buffs show in the tonic bar under the fight with their time left, and the rescue counts in the XP bar’s bonus list.',
-      'Enchanting and merging gear now give hero XP: more for higher enchant tiers and higher merges, and half for a merge that fails.',
-    ] },
-    { v: 99, date: 'November 24, 2026', title: 'The Enchanter’s shop, rebuilt', items: [
-      'The Enchanter has been redrawn: an old, hooded enchanter with half-moon spectacles and a glowing crystal, standing behind his counter in front of a turning rune circle. Your hero walks in at full size.',
-      'The top of the screen now says you are in the Enchanter’s Shop, with a Leave shop button, instead of showing the dungeon floor.',
-      'His question hangs in a speech bubble above him: Enchant an item, Disenchant or Scrap for Dust.',
-      'Enchanting is now done one plain question at a time in the counter under the scene, with no pop-ups: pick the item, pick the enchant, then confirm. A short summary says exactly what moves, what is used up and what it costs, and the items you pick appear on the counter.',
-      'Scrapping for Dust happens right at the counter too.',
-    ] },
-    { v: 98, date: 'November 24, 2026', title: 'The Enchanter’s shop', items: [
-      'Visiting the Enchanter now takes your party out of the Deep and into the Enchanter’s shop. Your hero walks in through the door to the counter, and the Enchanter waits behind it among shelves of glowing bottles.',
-      'The shop’s buttons hang above the Enchanter, where monsters usually stand: Enchant, Disenchant, Scrap for Dust and Leave shop. The counter below the scene lists your items; pick one to work on it.',
-      'Leave shop takes the party straight back to the floor you left.',
-    ] },
-    { v: 97, date: 'November 24, 2026', title: 'A clearer Sigil shop', items: [
-      'Lanternholder is now the one name for premium. Get it with 500 Sigils for 30 days (nothing renews), or as the $4.99 monthly membership. The old Lantern Pass is the same thing under its new name, and any days you had are kept.',
-      'The Sigil shop is laid out in three parts: what Sigils are for (Lanternholder, Bag of Holding, Wardrobe, profile looks, the Sigil exchange), Lanternholder with both ways to get it side by side, and the Sigil packs.',
-      'Your profile shows your Sigils, Lanternholder, Wardrobe and Bag of Holding as four tidy tiles, with your card looks below.',
-    ] },
-    { v: 96, date: 'November 24, 2026', title: 'The Enchanter', items: [
-      'Enchanting and disenchanting now happen at the Enchanter. Press Enchanter on the battle screen (or Enchant on any item) to visit. Your party stops diving while you are there: nobody fights, nothing new turns up and you keep your floor.',
-      'The Enchanter has three tabs: Enchant (pick any item with a socket, worn or not, and move an enchant onto it), Disenchant (break down a spare item to move one of its enchants) and Scrap for Dust.',
-      'Press Leave when you are done and the party carries on from the same floor. Reloading the game also ends a visit.',
-    ] },
-    { v: 95, date: 'November 24, 2026', title: 'XP in the fight log', items: [
-      'The fight log now shows the hero XP each kill gave you, with all your bonuses counted, next to the gold: "Defeated Gloop +120 gold, +6.4 XP". Ambushes also show how many foes were in the group.',
-    ] },
-    { v: 94, date: 'November 24, 2026', title: 'More ambushes', items: [
-      'Ambushes (groups of 2 to 4 monsters) now come twice as often: 6% of fights from floor 3, up from 3%.',
-      'The ambush tag now shows its XP bonus. Each monster in the group adds 2× hero XP, so an ambush of 3 gives XP ×6 (and 6× gold). Hover the tag (or tap it) for the details.',
-    ] },
-    { v: 93, date: 'November 24, 2026', title: 'A quieter Lantern Keeper', items: [
-      'The Lantern Keeper banner above the fight is now a small glowing lantern in the corner of the battle scene. Hover it (or tap it on a phone) to see who is online and the +25% bonus.',
-    ] },
-    { v: 92, date: 'November 24, 2026', title: 'See your XP bonuses', items: [
-      'The XP bar on your character sheet now shows your total hero XP rate, like XP ×1.18. Hover the bar (or tap it on a phone) to see every bonus that adds to it: class skills, war aura, Scholar’s Ink, Lantern Surge, companion traits, enchants and region mastery, plus the Lantern Keeper when he is online.',
-    ] },
-    { v: 91, date: 'November 24, 2026', title: 'Merchant, bounties and the Lantern Keeper', items: [
-      'New: the wandering merchant. Now and then, while you play, a merchant stops beside the fight for 2 minutes with one deal at half price: tonics, Campfire Draughts, Lantern Oil or Dust. Tap the merchant to see it.',
-      'New: the bounty board, in the Quests window. Three bounties at a time, new every 4 hours, built from the floors you have reached: hunt certain monsters on certain floors, beat a guardian a few times, open chests and more. Each pays gold and Dust, sometimes a tonic.',
-      'Bounties that send you back up have a Go to floor button. Finished bounties you forget to claim are paid when the board changes.',
-      'New: the Lantern Keeper. When the store owner is online, every hero gets +25% damage, healing, gold, hero XP and gear finds. A gold banner over the fight shows when it is on.'
-    ] },
-    { v: 90, date: 'November 24, 2026', title: 'Shielded foes', items: [
-      'New: shielded monsters. From floor 12 some monsters, and many guardians, fight inside a pale blue shield. While it is up your party deals 65% less damage.',
-      'Tap the fight to break it: each tap knocks about 10% off (a critical tap 20%), so about 10 taps does it, and your party is back to full strength.',
-      'Not watching? The shield wears away on its own in about 14 seconds (16 for a guardian), so idle runs never get stuck. Guardians raise it once more at half health.'
-    ] },
-    { v: 89, date: 'November 24, 2026', title: 'Mastery hero XP', items: [
-      'Region mastery now speeds up hero levels too. Every mastery goal adds +1% hero XP, and a region with all three goals done adds +2% more (+5% per fully mastered region).',
-      'It counts the mastery you already have, so many heroes get a boost right away. Your total shows under Region mastery in the Codex.'
-    ] },
-    { v: 88, date: 'November 24, 2026', title: 'Burns, poison, stuns and disarms', items: [
-      'Burning now hurts heroes in cloth (healers, mages, necromancers) twice as much. Tanks in plate take a quarter less.',
-      'Poison now bites everyone a quarter harder, except necromancers, who take only a quarter of it.',
-      'New: Stun. Ground Slam, Tidal Crash and Belly Flop can stun heroes, who cannot attack, heal or use abilities for 3 seconds. Stars circle a stunned hero\u2019s head.',
-      'New: Disarm. Shield Charge and the new Disarming Lash (Thornlings) knock a hero\u2019s weapon away: 35% damage, half healing and no abilities for 8 seconds, until it grabs it back.',
-      'Tanks shake off stuns and disarms twice as fast, and Shield Wall makes them immune. Dodging or blocking the hit avoids it.',
-      'Ability buttons show when a hero is stunned or disarmed and for how long.'
-    ] },
-    { v: 87, date: 'November 24, 2026', title: 'Ghost Lantern, and a balance pass', items: [
-      'New: the Ghost Lantern. Now and then, while you are playing, a ghost lantern drifts into the fight and slowly saps your party’s damage or healing (10% at most). Tap it to shatter it for gold, Dust or a free tonic. Ignore it and it fades after 30 seconds with nothing lost.',
-      'Healers: Lantern Hymn can now be sung with whatever mana is left (it uses up to 30), but still never while out of mana. Healing costs a little less mana. Parties fall far less often than they did in v86.',
-      'Resting at camp now fills every mana and stamina bar.',
-      'Tank and healer heroes hit harder (3× and 5× their old damage) so every class reaches the deep floors at a similar pace. Companions are unchanged.',
-      'Damage numbers and messages that pop up at the same spot now stack instead of landing on top of each other, and stay inside the fight window.',
-      'Phones: the bottom tab bar no longer sticks out a couple of pixels and lets the page wiggle sideways.'
-    ] },
-    { v: 86, date: 'November 24, 2026', title: 'Mana, stamina and new gear stats', items: [
-      'Healers, mages and necromancers now have a blue mana bar. Rogues and tanks have a gold stamina bar. Both refill over time.',
-      'Abilities and class specials cost mana or stamina. If a hero is short, it waits for the bar to refill.',
-      'Healing costs mana. A healer that runs out of mana stops healing and fights with basic attacks until its mana comes back.',
-      'New enchants that help only the hero wearing the item: Flow (mana or stamina regen), Leech (life steal), Bulwark (block chance) and Plating (defense).',
-      'Rings and trinkets roll Flow and Leech more often. Armor and shields roll Bulwark and Plating more often. Weapons roll Leech.',
-      'Hero profiles show mana or stamina, regen, life steal, block and defense. Your existing gear and enchants are unchanged.'
-    ] },
-    { v: 85, date: 'November 24, 2026', title: 'Fight panel fix', items: [
-      'Fixed: after changing floors, the fight panel could keep showing the last guardian (with its lantern timer) while your party was really fighting something else. Between foes it now says the next foe is on the way.'
-    ] },
-    { v: 84, date: 'November 24, 2026', title: 'Notification tabs', items: [
-      'The bell now sorts notifications into tabs: Loot, Fights, Progress, Players and Other. Tap one to read just that log. Each tab shows how many it holds and a dot for new ones.',
-      'The bell keeps the last 120 notifications instead of 50.'
-    ] },
-    { v: 83, date: 'November 24, 2026', title: 'Quieter guardian farming', items: [
-      'The "guardian defeated, the way down is open" pop-up now shows only the first time you beat a guardian, not on every kill while you farm it.'
-    ] },
-    { v: 82, date: 'November 24, 2026', title: 'Farming guardians, and a cleaner top bar', items: [
-      'With Descend automatically off, beating a guardian now keeps you on its floor so you can farm it again. Before, a guardian kill always pushed you down a floor.',
-      'The top bar fits itself to your screen and zoom: it drops labels and then the title before anything can overlap. The online count no longer sits on the Lanternhold title.',
-      'The floor dots in the battle header no longer touch the region name.'
-    ] },
-    { v: 81, date: 'November 24, 2026', title: 'Where sets drop, and your gold is back', items: [
-      'Every set card in the Gear tab, and every set piece you open, now says where it drops, with a Farm floor button that takes your party there and keeps it on that floor.',
-      'Region sets drop in their own region, best from its guardian. Class sets drop from any guardian from floor 15.',
-      'Fixed: on some laptop-sized screens your gold was hidden under the online count in the top bar.'
-    ] },
-    { v: 80, date: 'November 24, 2026', title: 'Special attacks', items: [
-      'Every guardian now has a special attack it winds up every 10 seconds or so. Each region guardian has its own signature move, like Furnace-Heart\u2019s Magma Wave or the Root Mother\u2019s Grasping Roots.',
-      'Some monsters past floor 8 have one too: acid that splashes the heroes beside the target, bats that dive at the back of the line, spores that poison everyone.',
-      'A red banner warns you, and a red ring shows who will be hit. Marked spots cannot be drawn away by a tank.',
-      'Burns and poison now last ' + L.DOT_FIGHTS + ' fights, with a countdown badge over each hero. A healer\u2019s ability, Purify or a rest at the campfire clears them.',
-      'No special can take more than about a third of a hero\u2019s health in one go, so they hurt without one-shotting anyone.'
-    ] },
-    { v: 79, date: 'November 24, 2026', title: 'A tidier battle header', items: [
-      'Floor, Map of the Deep, your chapter goal and the world boss now sit in one framed panel on top of the battle, instead of floating above it.',
-      'The header is shorter, so the battle scene gets more room (about 70 px more on a laptop).'
-    ] },
-    { v: 78, date: 'November 24, 2026', title: 'One tab at a time', items: [
-      'If Lanternhold is open in two tabs, the older one now stops and says so. Before, both kept saving over each other, so quest claims, auto-scrap and tonics could come undone after a refresh.',
-      'Tap Play here instead on a stopped tab to pick it back up.'] },
-    { v: 77, date: 'November 24, 2026', title: 'Tonic stacks stay visible', items: [
-      'An active tonic now shows how many more of it you carry next to its timer, so drinking one no longer makes the rest of your stack seem to disappear. Tap it to drink another and add time.',
-      'If a tonic is already near its 60-minute cap, tapping it tells you so instead of doing nothing.'] },
-    { v: 76, date: 'November 24, 2026', title: 'Room at the fire, and closing whispers', items: [
-      'Companions in your party no longer count against the campfire. You can keep your 4 party companions plus 4 more resting at the fire, and the fire still grows at hero levels 10, 20 and 30.',
-      'Whisper tabs have a small &times; to close a conversation. It comes back if that player whispers you again.'] },
-    { v: 75, date: 'November 24, 2026', title: 'Whispers and the notification bell', items: [
-      'Each whisper conversation now has its own tab along the top of the Whispers channel, and the latest one opens on its own.',
-      'Their messages sit on the left and yours on the right, like a messenger app.',
-      'Tap + to start a new whisper with someone who has been chatting lately. No more hunting for a name to tap.',
-      'New: the bell at the top keeps your last 50 pop-ups, so you can reread any that went by too fast. Pop-ups also stay up longer, and wait while your pointer rests on one.'] },
-    { v: 74, date: 'November 24, 2026', title: 'Region trials', items: [
-      'The hero level gates between regions are gone. Instead each region has a trial: defeat ' + L.TRIAL_ELITES + ' alliance elites there (the bannered warband foes) and beat its guardian, and the way to the next region opens.',
-      'Progress shows on screen as you fight, and in Codex, Progress. Hero level still opens new parts of the game, like camp jobs, the Ember Ring and rekindling.',
-      'If you were held at a gate, you are through: the trial counts as done for the region you are in. Beat its guardian again and keep going.'] },
-    { v: 73, date: 'November 23, 2026', title: 'Power level and hero level', items: [
-      'The level shown on each Party card is now called power level. It is what training with gold raises, and what gear needs.',
-      'Your hero level (from XP, which opens new parts of the game) is now always called hero level, so the two never get mixed up. A hero can be hero level 11 with a power level of 142.',
-      'The Guide and the wiki explain both.'] },
-    { v: 72, date: 'November 23, 2026', title: 'A tidier Hold', items: [
-      'The hero setup screen is wider on computers, so class and banner names no longer spill out of their cards.',
-      'On phones, all four currencies fit the top bar again (Embers and Dust were cut off once gold reached millions). Quests and blessings sit just under them.',
-      'The PvP tab has its own crossed-swords icon, so it no longer looks like the Fight button.',
-      'Tanks now carry the Covenant chevron on their shields and in their class icon.',
-      'A few names were changed: region 6 is now the Drowned Archive, its guardian the Sunken Magister, and the healer Wayfarer branch has Lamplight Song and Quick Breath. Your skills and gear are unchanged.',
-      'The Guide covers the newer parts of the game: the PvP tab, the Why we fight opening, the music player, whispers and the unread bubble in chat, and playing without an account.'] },
-    { v: 71, date: 'November 23, 2026', title: 'A calmer marching order', items: [
-      'The Party tab is easier to read. Each companion shows only the traits that are working right now, with their effect. The others share one quiet line, and you can hover or tap it to see what they would do.',
-      'Send to campfire is now a small flame button next to Auto, and on phones the Train, Auto and campfire buttons sit in one row under each companion.'] },
-    { v: 70, date: 'November 23, 2026', title: 'Raise your colors', items: [
-      'The Wardrobe has a new Banners tab with 11 war banners, from the free Delver’s Pennant to the gold-fringed Last Lantern.',
-      'Your banner flies behind your party and shows on your hero card in the Ember Ring, on challenger cards, in the standings, on your Players Guild card and next to your name in chat.',
-      'Banners are looks only. They never change your party’s power.'] },
-    { v: 69, date: 'November 23, 2026', title: 'Know what you are hunting', items: [
-      'Every region on the Map of the Deep now shows its possible loot: the region set, class and job set pieces, each gear rarity, relics, Sigils and the Loot Goblin’s Sack.',
-      'Each drop shows your own odds per kill from bosses, chests, elites, ambushes and ordinary foes, worked out from the same rules the game uses, after your Keen Eye, Luck, Forager, Finder enchants, companion traits and Seeker’s Charm.',
-      'The header shows your total drop bonus. Tap the (i) for the breakdown. Lantern Surge and region mastery raise gold and XP, not drop chances, so they do not change these numbers.'] },
-    { v: 68, date: 'November 23, 2026', title: 'Guild invites fixed', items: [
-      'Fixed: the Invite buttons in the Guild tab did nothing. Pressing Invite now sends the invite right away, shows Invited with a Cancel button, and pops up a notice. The same fix covers accepting or declining party invitations and opening a hero’s profile from the Guild tab.'] },
-    { v: 67, date: 'November 23, 2026', title: 'The Nexus Guardian', items: [
-      'The Nexus has started listening to the Deep. A rhythm that never tires, strikes that land too fast for too long or with perfectly even spacing, sounds to it like a siege engine at the wall.',
-      'When it hears one, the back wall starts to crack and glow. Keep it up and the Nexus Guardian breaks through and takes the stage. Nothing lands on it, not your strikes and not your party.',
-      'Ease your strikes for a few seconds and it loses interest, withdraws, and the fight picks up right where it was. Normal tapping, even fast tapping, never calls it.',
-      'World boss assaults listen too: strikes with that rhythm do not count toward your score.'] },
-    { v: 66, date: 'November 23, 2026', title: 'Fresh starts on request', items: [
-      'Admins can now reset a single account back to a brand-new game, for testing or when a player asks for a clean slate. You get a notice when it happens, and purchased Sigils are kept unless you ask for them to go too.',
-      'A server-wide reset now also keeps Sigil exchange listings and store links in place.'] },
-    { v: 65, date: 'November 23, 2026', title: 'Why we fight', items: [
-      'A new opening for Lanternhold: the Shattered Reach, the Nyx Rift, the five who answer the call, and why we fight.',
-      'It plays once on your first visit. Tap to move through it or skip it any time, and watch it again from Settings.'] },
-    { v: 64, date: 'November 23, 2026', title: 'A slower, deeper descent', items: [
-      'Lanternhold is now paced to be savored, not rushed. New parts of the game open as your hero levels up: Gear at 3, the Campfire at 5, map travel and market buying at 8, camp jobs at 10, the Players Guild at 12, the Ember Ring at 15, selling and the Sigil exchange at 18, rekindling at 20, and the world boss and job sets at 25.',
-      'Each new region needs a hero level to enter. Until then your party keeps working the region it is in. Hero XP needs more per level, and deeper floors and guardians give the most.',
-      'Region mastery: every region has three goals (beat its guardian, defeat 20 alliance elites, find a piece of its set). Each one finished is +1% damage, health or gold for good. See Codex, Progress.',
-      'Your campfire now holds 4 companions, plus one at hero levels 10, 20 and 30. When a new companion arrives and it is full, dismiss someone for good or turn them away. Up to 3 more spots for 300 Sigils each.',
-      'Camp jobs start with one slot and gain one at levels 15, 20, 25, 30 and 35.',
-      'Rekindling now needs hero level 20 and floor 75, and Embers count from floor 60, so a deep descent pays far more than a quick one.',
-      'Nothing you already have is taken away: your hero keeps their level, every floor you reached stays open, companions over the new limit stay, and features you already use stay unlocked.'] },
-    { v: 63, date: 'November 23, 2026', title: 'Whispers and unread messages', items: [
-      'New: whispers. Tap a player’s name in any chat channel and choose Whisper to message them privately. Your conversations live in the new Whispers tab, and tapping a name there whispers back.',
-      'The chat button now shows a red bubble with how many new messages are waiting in Global and Whispers, and a new whisper pops up a notice even while chat is closed.'] },
-    { v: 62, date: 'November 23, 2026', title: 'Music for the Deep', items: [
-      'Lanternhold now has its own soundtrack: eight original pieces, from the Hearthfire Waltz at camp to the Ember Ring battle theme and a quiet piano nocturne for late watches.',
-      'Tap the note button at the top to open the player. Skip forward or back, pick any track, shuffle, set the volume or mute. Your choices are remembered on this device.',
-      'Music starts on your first tap and streams one track at a time, so it stays light on phones. You can turn it off in Settings too.'] },
-    { v: 61, date: 'November 23, 2026', title: 'Auto-scrap fixed', items: [
-      'Fixed: auto-scrap kept most drops. It treated anything a benched companion, or a hero not yet high enough level, might someday wear as an upgrade. Now only a piece someone in your party can wear right now, and that beats their gear, is kept.',
-      'New: the Auto-scrap window shows how many pieces already in your pack match your settings, with a button to scrap them all at once. Locked and worn gear, sets and each party member’s best spare piece are kept.'] },
-    { v: 60, date: 'November 23, 2026', title: 'Fair fights in the Ember Ring', items: [
-      'Duelling the same hero again within a day now pays less each time: full rewards, then half, then a quarter, then nothing. This covers rating and Laurels for both heroes.',
-      'Challenger cards show when a rematch pays less, and when it will pay in full again.'] },
-    { v: 59, date: 'November 23, 2026', title: 'Lock gear in its slot', items: [
-      'New: lock a piece someone is wearing to keep it in that slot. Tap the slot on the Gear tab and choose Lock, or lock it from its item card.',
-      'Equip best now skips locked slots and tells you how many it skipped. Locked slots show a padlock, and a locked piece is still safe from scrap and the Loot Goblin.'] },
-    { v: 58, date: 'November 23, 2026', title: 'The Ember Ring: abilities, counters and Ring skills', items: [
-      'Heroes now fight with their class abilities in duels: Shield Bash stuns, Mend heals, Backstab and Fireball burst, Life Drain steals health, and more.',
-      'Every class has the edge on two classes and is countered by two others. Challenger cards show who has the edge, and what each foe brings.',
-      'New Skills view in the PvP tab: learn and rank up 6 Ring skills per class with Laurels, then pick 2 abilities (in the order you want them used) and 2 passives.',
-      'Your loadout also defends while you are away, so build it with care. Every class starts with its first ability for free.',
-      'Fixed: world boss assaults said the server could not record them. Every assault now counts toward the shared health bar.'] },
-    { v: 57, date: 'November 23, 2026', title: 'The Wardrobe', items: [
-      'New: the Wardrobe. Dress any hero in your company in one of nine outfits, from Emberforged and Hoarfrost to the Riftborn and Lanternsworn regalia with their own auras. Buy an outfit once and every hero can wear it.',
-      'New lantern styles: Moonlit, Marsh Wisp, Rosefire, Riftglass, Sunforged, Soulflame and Starless. Your lantern hangs beside your lead hero and colours the light around your party.',
-      'Other players see your hero’s outfit in the Players Guild, as a recruited guest and in the Ember Ring. Your name color and title now show in chat too.',
-      'Looks only, bought with Sigils. Nothing in the Wardrobe changes your party’s power. Open it from the Gear tab, your portrait, or the Quartermaster.'] },
-    { v: 55, date: 'November 23, 2026', title: 'Region sets and the Goblin’s Sack', items: [
-      'New: region sets. All fifteen regions of the Deep now drop their own four-piece armor set for any class. Two pieces boost one stat, and four pieces add a big damage and health bonus that multiplies all of your gear, so a finished set stays strong through rekindles.',
-      'Region pieces only drop in their own region and they are rare, with guardians your best chance. Collecting a full set is a real hunt.',
-      'New: kill a Loot Goblin and there is a tiny chance he drops the Loot Goblin’s Sack, a +15% party gold trinket. Global chat hears about it when one drops.'] },
-    { v: 54, date: 'November 23, 2026', title: 'The Lanternhold Wiki', items: [
-      'New: the Lanternhold Wiki at lanternhold.born2gamellc.com/wiki. Every class and skill tree, companion, region, monster, set, enchant and relic, with search.',
-      'It is built from the game itself, so it updates whenever the game does. Open it from Full wiki in the Guide (the ? at the top).'] },
-    { v: 53, date: 'November 23, 2026', title: 'Easier sign-up', items: [
-      'Fixed: confirming a new account could reject a correct-looking code after asking for several. The game no longer sends extra codes on its own, tells you when the newest one was sent, and ignores spaces in the code.',
-      'Every sign-in screen now has Play without an account. Accounts are optional and only keep your save safe across devices.',
-      'Returning players can tap Sign in on the very first screen to load their hero, with no need to make a new one first.'] },
-    { v: 52, date: 'November 23, 2026', title: 'Auto-scrap and a cleaner pack', items: [
-      'New: Auto-scrap. Tick the rarities you never want, and new drops of those turn straight into gold and Dust without taking pack space. Set pieces and upgrades for your party are always kept.',
-      'The pack view has a tidy header: a space meter that turns red when the pack is full, and one Bulk actions menu for mass sell, merge and scrap.'] },
-    { v: 51, date: 'November 23, 2026', title: 'Tidier tabs and a fight log', items: [
-      'Gear now has two views, Equipped and Pack, so you are not scrolling past one to reach the other.',
-      'Skills is split into Stats, Skill tree and Rekindle.',
-      'Camp companions take up far less room. Traits show as names; hover one for details.',
-      'New Fight log at the bottom of the Party tab: kills, critical strikes, abilities, falls, ambushes and loot, with filters.'] },
-    { v: 50, date: 'November 23, 2026', title: 'Lantern Surge', items: [
-      'New: Lantern Surge. Whenever any player buys a Sigil pack, every hero in the game gets +25% gold and +25% XP.',
-      'Each pack adds time for everyone: 30 minutes for 500 Sigils, up to six and a half hours for 6,500, stacking up to a day ahead.',
-      'A lightning chip in the top bar shows how long the surge has left. Tap it for details.'] },
-    { v: 49, date: 'November 23, 2026', title: 'The Ember Ring: a longer climb', items: [
-      'Ringwarden gear is now something to earn over time. A win pays 8 Laurels (up to 12 against a stronger hero), and a loss still pays 3.',
-      'The first win each day adds 10 more, and your hero earns 2 for every challenger it beats while you are away.',
-      'Kit ranks cost more: 60 Laurels for the first rank of a piece, rising by 30 with each rank. Laurels you already have are kept.'] },
-    { v: 48, date: 'November 23, 2026', title: 'Dust and Mass merge', items: [
-      'Scrapping gear now gives Dust as well as gold. Your Dust shows in the top bar.',
-      'Enchanting and disenchanting cost Dust, more for higher tiers.',
-      'New Mass merge button in the Gear tab. Pick how high to go, see the expected losses, then merge every spare pair at once. Worn and locked items are never touched.',
-      'Fixed: after rekindling at the main camp there was no button to start fighting again.'] },
-    { v: 47, date: 'November 23, 2026', title: 'Enchantments and Disenchant', items: [
-      'Gear now has enchant sockets, more for rarer items and items from deeper floors. Every item you already own has had its enchants rolled.',
-      'Enchants like Might, Vigor, Keen and Fortune help the whole party while anyone in it wears the item.',
-      'Disenchant an item you can\u2019t use to move one of its enchants onto one you can. The disenchanted item is destroyed.',
-      'New Discord button at the top: chat with players, report bugs and share ideas on the Grand War Discord.'] },
-    { v: 46, date: 'November 23, 2026', title: 'Merge your gear', items: [
-      'Have two of the same item? Open one and choose Merge. They become a single piece one upgrade higher, keeping the better job bonus.',
-      'Every merge carries a risk: if it fails, both pieces are destroyed for good. The higher the result, the bigger the risk.',
-      'Luck and Intelligence lower the risk, up to half. The exact odds show before you confirm, and locked items can never be merged.'] },
-    { v: 45, date: 'November 23, 2026', title: 'A cleaner screen', items: [
-      'The top bar is tidier. Gold, damage, Embers and Sigils now sit together in one strip.',
-      'Hover over almost anything to see what it does. On a phone, tap the small i badges.',
-      'The camp bar, marching order, campfire and banner sections are shorter, with the details in tooltips.'] },
-    { v: 44, date: 'November 23, 2026', title: 'The Ember Ring: duels between players', items: [
-      'Open the new PvP tab to duel other players\u2019 heroes one on one. Only your own hero fights: no companions, tonics or Sigils.',
-      'Wins earn Laurels and rating. Climb from Ashen through Ironclad, Emberborn, Gilded and Lanternsworn to Riftbreaker on the Ring standings.',
-      'Spend Laurels on the Ringwarden kit, a separate set of PvP gear with 15 ranks per piece. Its Edge and Resolve count only in the Ring.',
-      'You get 10 challenges, and one returns every 30 minutes. Your hero also defends while you are away and earns Laurels for every challenger it beats.'] },
-    { v: 43, date: 'November 23, 2026', title: 'Main camp and field camps', items: [
-      'Return to camp now takes you to the main camp with no gold cost. Swap companions, recruit, train and change gear there.',
-      'When you head back down you start at the top of the region you left. Floor 99 takes you back to floor 91.',
-      'A Campfire Draught makes a field camp right where you are. Change your party\'s gear for 60 seconds and keep your floor. Companion swaps need the main camp.'] },
-    { v: 42, date: 'November 23, 2026', title: 'Mass sell', items: [
-      'New Mass sell button next to Mass scrap in your Gear tab. Pick rarities and list many pieces on the market at once, each at its current value.',
-      'Worn and locked items are never listed. You can keep the best piece of each kind and anything you have upgraded.',
-      'You can now have up to 25 items on the market at a time, up from 10.'] },
-    { v: 41, date: 'November 23, 2026', title: 'Lock your favorite gear', items: [
-      'Tap any item in your pack and choose Lock. A small padlock shows on its tile.',
-      'Locked items are never touched by Mass scrap, auto-selling when your pack is full, or the Loot Goblin.',
-      'You can still equip and upgrade them. Unlock an item when you want to sell, send or salvage it.'] },
-    { v: 40, date: 'November 23, 2026', title: 'World boss weekends', items: [
-      'A giant of void crystal, the Rift Colossus, has broken through beneath the Hold. Every signed-in player fights the same boss and fills one shared health bar.',
-      'Tap the purple bar on the stage to join a two-minute assault. You can go again every 15 minutes. Strike and use your abilities for more damage.',
-      'Damage counts at the strength of your deepest floor, so everyone helps. Each phase broken makes the next one tougher.',
-      'When the event ends, claim Sigils: 3 for taking part, 1 per phase broken (up to 5) and 5 more for the top three, plus a purse of gold.',
-      'From now on a new world boss attacks every weekend, Friday to Sunday (UTC). This first one runs until Friday as a preview.',
-      'Updates now install by themselves. The game waits until the new version is fully out, saves, and reloads, so the Update button should no longer get stuck.'] },
-    { v: 39, date: 'November 23, 2026', title: 'Players online', items: [
-      'A green counter next to the Lanternhold name shows how many players are online right now. Tap it to see heroes in the Guild.'] },
-    { v: 38, date: 'November 23, 2026', title: 'Clearer store and the Lanternholder membership', items: [
-      'Sigil packs are plain one-time purchases. You pay once, nothing renews, and the checkout no longer shows a duration.',
-      'New: Lanternholder, a $4.99 monthly membership. While it is active you get Auto-train, 10 extra bag slots and 4 more hours of offline earnings, with no Sigils to spend.',
-      'The Get Sigils screen now shows one-time packs and the monthly membership separately, and says plainly that the membership renews until you cancel.',
-      'Cancel any time under My Subscriptions in your Born 2 Game account. Perks stay on until the end of the month you paid for.'] },
-    { v: 37, date: 'November 23, 2026', title: 'The Loot Goblin and a cleaner screen', items: [
-      'Watch out for the Loot Goblin. From floor 8 a sneaky thief can jump your party. Kill it within 20 seconds or it runs off with an item from your pack. Gear you are wearing is never taken.',
-      'If it gets away, a green note under your chapter goal shows the floor where it is hiding. Reach that floor and kill it to get your item back. Every goblin you kill drops six times the gold.',
-      'On a computer the whole game now fits on one screen. Only the side panel scrolls.',
-      'Ability buttons are bigger and easier to read: full names, a clear Ready glow and a cooldown bar.',
-      'The Players Guild has its own Guild tab.',
-      'Chat is now a floating window. Press Chat at the bottom right to open it, and the dash to tuck it away.',
-      'Your Sigil balance shows as soon as the game opens.'] },
-    { v: 36, date: 'November 23, 2026', title: 'Companion traits and a new Guide', items: [
-      'Every story companion now has three traits, rolled when they join: a position trait for one party seat, a kinship trait that works beside a certain class, and a camp trait for resting at the fire.',
-      'Working traits glow gold on the Party and Camp tabs. Rearrange your party to switch on as many as you can.',
-      'Camp traits can boost a companion’s camp job, cut training costs, add gold or heal the party faster at camp.',
-      'The Guide is rebuilt: topics sorted into categories, short points, and pictures.'] },
-    { v: 35, date: 'November 23, 2026', title: 'Easier big numbers', items: [
-      'Big numbers now read 2.40M, 13.1B and 250T (million, billion, trillion) instead of scientific notation.'] },
-    { v: 34, date: 'November 23, 2026', title: 'Tonics at the Quartermaster', items: [
-      'Seven new tonics: Draught of Fury (+15% damage), Ironbark Tonic (+15% health), Mender’s Brew (+20% healing), Keen-Eye Elixir (+5% crit), Prospector’s Luck (+15% gold), Seeker’s Charm (+15% gear drops) and Scholar’s Ink (+25% hero XP).',
-      'Each lasts 10 or 15 minutes. Different tonics stack, and drinking the same one again adds time, up to an hour.',
-      'Everything costs gold. The speed-ups (Prospector’s Luck, Seeker’s Charm, Scholar’s Ink and the Campfire Draught) can also be bought with Sigils. Open the Store on the camp bar.',
-      'Tonics you carry show above your abilities. Tap one to drink it.'] },
-    { v: 33, date: 'November 23, 2026', title: 'A new home', items: [
-      'Lanternhold now lives at lanternhold.born2gamellc.com. The old address brings you here, along with the progress saved on your device.',
-      'If you play with an account, sign in once more here. Your saved progress is waiting.'] },
-    { v: 32, date: 'November 23, 2026', title: 'Bag of Holding', items: [
-      'New in the store: the Bag of Holding. Buy it once for 6,500 Sigils and your pack never fills up again, so loot is never sold off for lack of space.',
-      'Find it on the Gear tab next to your pack, under Market and Sigils, or in your profile.'] },
-    { v: 31, date: 'November 23, 2026', title: 'Party invites', items: [
-      'Recruiting a player now sends them an invite. Their hero joins your party only after they accept.',
-      'Invites you receive show at the top of the Players Guild on the Party tab, with Accept and Decline. You also get a notice when one arrives.',
-      'An accepted hero joins at camp. If your party is full, you choose who steps out.'] },
-    { v: 30, date: 'November 23, 2026', title: 'A new look', items: [
-      'Every hero, companion and monster has been redrawn as detailed illustrated art, with armor, cloth, lighting and glowing eyes.',
-      'The dungeon, the doorway and the camp under the stars are redrawn too, with torchlight, flagstones and a crackling campfire.',
-      'The arena now draws at your screen’s full sharpness.'] },
-    { v: 29, date: 'November 23, 2026', title: 'Your character, and ambushes', items: [
-      'Your hero now earns XP and levels up. Each level brings a stat point to spend on Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma or Luck. Find the character sheet at the top of the Skills tab.',
-      'Each class favours two stats, and points there count half again. Luck touches everything: loot, chests, crits, gold, Sigil finds and ambush spoils.',
-      'Ambushes: now and then two to four monsters team up and jump your party. They are tougher and strike the back of the line, but pay several times the gold and often drop gear.',
-      'Resetting your stats costs 50 Sigils, so place points with care.',
-      'Veteran heroes start with XP for their past fights, so you may have points waiting already.'] },
-    { v: 28, date: 'November 23, 2026', title: 'Fly your banner', items: [
-      'New Banner chat: talk only with heroes who fly the same banner as you. Find it next to Global in the chat.',
-      'Banner kin: every party member who marches under your banner makes your banner perk 40% stronger. A full party of kin more than doubles it. Players you recruited before today need to be recruited again to count.'] },
-    { v: 27, date: 'November 23, 2026', title: 'Daily quests and Sigils in the deep', items: [
-      'New: daily quests. Three quests a day, the same for every hero. Each one pays 1 Sigil, and finishing all three pays 2 more. Tap the quest counter at the top of the screen.',
-      'Treasure chests and guardians can now hold 1 to 3 Sigils. It is rare: about 0.05% per chest and 0.1% per guardian to start.',
-      'Your odds grow as you go deeper (+0.01% for every 30 floors, up to +0.05%) and with the new Kindling upgrade Sigil Sense (+0.01% per rank, 5 ranks).',
-      'Found Sigils go straight to your wallet when you are signed in. Up to 15 found Sigils can be banked each day.'] },
-    { v: 26, date: 'November 23, 2026', title: 'The Lantern Pass and Born 2 Game sign-in', items: [
-      'You can now sign in with your Born 2 Game store account. Press Continue with Born 2 Game on the sign-in screen. If you already linked your store account to a hero, it opens that hero.',
-      'New: the Lantern Pass. For 500 Sigils you get 30 days of convenience: the Auto-train buttons, 10 extra bag slots and 4 more hours of offline earnings. It never adds power.',
-      'Every hero gets a free 3-day trial, starting now. Open it from your profile or tap a locked Auto button.',
-      'Sigils can be bought in the Born 2 Game store or bought from other players for gold on the Sigil exchange, so the pass is open to everyone.'] },
-    { v: 25, date: 'November 23, 2026', title: 'Sigil packs and Mercy’s Blessing', items: [
-      'New: Mercy’s Blessing. Whenever someone gives to the Grand War’s Mercy Corps, every hero gets +10% gold, +10% party health and +20% healing. Each $10, 5 food items or toy adds 2 hours, up to 7 days. Watch for the green heart at the top of the screen.',
-      'Sigil packs are here: 500 for $4.99, 1,100 for $9.99, 2,400 for $19.99 and 6,500 for $49.99. Press Get Sigils on your profile or in the Sigil exchange.',
-      'Sign in once with your Born 2 Game store account. Packs you buy in the store land in your hero’s wallet automatically, usually within a minute.',
-      'Sigils still only buy looks, or gold from other players on the exchange. They never buy power.'] },
-    { v: 24, date: 'November 23, 2026', title: 'Automatic updates', items: [
-      'When a new version comes out, the game now saves your progress and reloads itself after a short countdown, so everyone always plays the latest version with the latest fixes.'] },
-    { v: 23, date: 'November 23, 2026', title: 'Smaller numbers and the Sigil exchange', items: [
-      'Gold, damage, health and prices have been rescaled. Numbers now stay small and plain, written out in full with commas instead of letters like K or M. The pace of the climb is about the same.',
-      'Your gold was converted so it still buys the same amount of training. Your levels, floors, gear and Embers are unchanged.',
-      'Embers now give +4% damage and gold each, and relics and gear percentages are smaller to match the new scale. Your party is just as strong for its depth as before.',
-      'New in the Trading Post: the Sigil exchange. Sell Sigils to other players for gold, or buy theirs. Listings are sorted by the best price per Sigil.',
-      'Global chat now welcomes every new hero, with the alliance they fight for.',
-      'Gear listed on the market before this update is hidden from shoppers. If you had something listed, take it down from My listings and list it again at a new price.'] },
-    { v: 22, date: 'November 23, 2026', title: 'Grand War auras', items: [
-      'Verified Grand War commanders now carry an aura for their hero’s class. Tanks get the Bulwark Aura (party health, less damage taken), healers the Mending Aura (healing), rogues the Shadow Aura (gold, critical hits), mages the Ember Aura (party damage, critical hits) and necromancers the Grave Aura (party damage, gear drops).',
-      'The aura grows with your rank on the Grand War ladder, from 2% at Recruit to 10% at the top rank. Past seasons as Grand Marshal or champion make it a quarter stronger each.',
-      'War honors add their own bonus: Grand Marshal gives the Marshal’s Banner (+5% party damage), Alliance Champion the Champion’s Mantle (+5% party health) and Nexus Holder the Nexus Tithe (+10% gold).',
-      'Your aura shows on your hero’s portrait. Auras are earned in the war and can never be bought.',
-      'Your Sigils now show in the top bar when you are signed in. Tap them to open your profile.'] },
-    { v: 21, date: 'November 22, 2026', title: 'Profiles, Sigils and Grand War badges', items: [
-      'Your hero now has a profile card that other players see in the Players Guild: a frame, a title, a name color, a banner, up to six emblems and a short bio. Open it from your hero’s portrait and press Customize profile.',
-      'Sigils buy looks for your card. Every account starts with 100. Looks never change your party’s power, and they stay with your account even through a server reset.',
-      'Grand War commanders can link their commander name. Once the team confirms it, your war rank, alliance and honors show on your card and next to your name in the guild.',
-      'Returning to camp now costs gold once you are past floor 10. The deeper you are, the more the climb costs, so a Campfire Draught is often the cheaper choice for a quick change.'] },
-    { v: 20, date: 'November 22, 2026', title: 'One look, one war', items: [
-      'The whole game now wears the Grand War colors: deep night-blue panels, war-gold highlights and the same lettering as the Grand War site, so the war pages and the rest of the game finally match.',
-      'Tidier header on phones: everything fits on one line.'] },
-    { v: 19, date: 'November 22, 2026', title: 'The world map', items: [
-      'The map now fits on one screen. All fifteen regions sit along the road from the Hold to the Nyx Rift, each with its own painted window, ten floor pips and a check once its guardian falls.',
-      'Tap a region to zoom in: its ten floors, story chapters and other delvers up close, with the region’s dossier beside it. Use the arrows to walk region to region, and World map to step back out.',
-      'Your hero is marked on the map, and the badge on a region shows how many other delvers have reached it.'] },
-    { v: 18, date: 'November 22, 2026', title: 'A map worth reading', items: [
-      'The Map of the Deep is redrawn. Every region has its own painted scenery: lamp-lit cellars, glowing fungus, a lava river in the Cinder Forges, the drowned archive window, the Bastion walls, lightning on the Stormglass Spire and the Rift itself.',
-      'Tap any region for its dossier: its history, which alliance’s warbands hold it, its native monster and trick, its guardian, the story chapters that happen there, and quick travel buttons.',
-      'A strip of all fifteen regions across the top. Unexplored regions stay under the fog until you reach them.',
-      'Other delvers from the leaderboard now appear on the map at their deepest floor.',
-      'An expedition record shows regions charted, guardians felled and chapters seen, and the Act One seal waits at the bottom.'] },
-    { v: 17, date: 'November 22, 2026', title: 'Auto-train and the night watch', items: [
-      'New Auto toggle under each Train button. Switch it on and that character trains whenever you have the gold, cheapest level first. Companions at the campfire auto-train while you are at camp.',
-      'While you are away your party earns a quarter of its usual gold, for up to 8 hours.',
-      'Night Watch, a new Kindling upgrade, keeps your party earning 16 hours longer per rank, up to 3 days. After that, progress waits until you return.'] },
-    { v: 16, date: 'November 22, 2026', title: 'The Grand War comes to the Deep', items: [
-      'A Grand War strip across the top shows the current season, the week, and how long until the Rift surges. Tap it to open the war room.',
-      'A new War page in the Codex: the three alliances with their banners, how the war began, the Nexus, the Mercy Corps, and how Lanternhold’s acts follow the war’s seasons.',
-      'Alliance banner art when you pledge your hero.',
-      'Lanternhold is a Grand War game by Born 2 Game, LLC.'] },
-    { v: 15, date: 'November 22, 2026', title: 'Kindling upgrades and class changes', items: [
-      'Four new ways to spend Kindling in the Skills tab: Lantern Edge (party damage), Ember Purse (gold), Deep Reservoir (lantern time) and Slow-burning Draught (longer Campfire Draughts). They are permanent.',
-      'Change your hero’s class at camp for 15 Kindling. Every Kindling you spent on the skill tree comes back first. Pack space, gear slots and upgrades stay as they are.',
-      'Gear your party wears no longer sits in the pack. It shows on each character, and the pack only counts what is free.'] },
-    { v: 14, date: 'November 22, 2026', title: 'Specializations and a leaderboard', items: [
-      'At camp the Gear tab shows your party first. Companions resting at the campfire are folded away underneath.',
-      'Train anyone in your party anywhere, even deep in the dungeon. Companions resting at the campfire still train at camp.',
-      'Specializations: each branch of your hero’s skill tree now ends in a new ability, 3 per class, for 15 in all. Learned abilities join the ability bar on keys 6 to 8.',
-      'A Leaderboard in the Codex shows the deepest delvers across the Reach.',
-      'Admins can now reset the server for a fresh season and remove players who break the rules.'] },
-    { v: 13, date: 'November 22, 2026', title: 'Act One: below the Starless Vault', items: [
-      'Seven new regions below the Starless Vault: the Glass Wastes, the Ironbound Bastion, the Weeping Aqueduct, the Bone Orchard, the Stormglass Spire, the Nexus Scar and the Rift Threshold.',
-      'The story goes on through chapter 15, with seven new guardians and the truth about the Lampmother waiting on floor 150.',
-      'Monsters now have tricks: Enraged, Warded, Regenerating, Venomous, Cleaving and Swift. Each region has its own favourite, and guardians get more of them the deeper you go.',
-      'Act One ends on floor 150. Act Two opens with Season 2 of the Grand War, and the game counts down to it once you get there.',
-      'Seven new monsters for the Bestiary, plus new journal pages for every region and guardian.',
-      'Tap any gear slot on the Gear tab to see every piece that fits it, compared with what is worn now, and equip one straight from the list.'] },
-    { v: 12, date: 'November 22, 2026', title: 'Skill trees, Kindling and a full set of gear slots', items: [
-      'Every class now has a skill tree for your hero, with three branches of three skills each.',
-      'Rekindling gives Kindling: 2 at floor 50, plus 1 for every 10 floors deeper. If you rekindled before today, you already have 2 for each time.',
-      'Spend Kindling on skills, a bigger pack, extra rings (up to 5) and a second trinket slot for any character.',
-      'Gear now has real slots: main hand, offhand, helmet, trinket, chest, legs, feet and rings. Robes cover the chest and legs together. Your old weapons, armor and trinkets moved into their new slots.',
-      'At camp the party sits around a campfire. Nobody fights while you rest, and everyone heals up.',
-      'The side panel is split into Party, Camp, Gear, Skills, Market and Codex, so there is far less scrolling.',
-      'Rare gear can carry a camp-job bonus, marked with an orange dot. It boosts that job while the wearer works it at the campfire.',
-      'Six new job sets, one for each camp job, drop very rarely from guardians and chests from floor 20. Two pieces give +40% to that job, three give +100%.',
-      'A new Market tab: browse gear as a grid of cards, filter by slot and rarity, sort by price or power, and tap a card to compare it with what you wear before you buy. Mailbox and Players Guild sit right beside it.'] },
-    { v: 11, date: 'November 22, 2026', title: 'Camp jobs and rarer loot', items: [
-      'Companions at the campfire can take camp jobs: Forager, Runesmith, Herbalist, Armorer, Prospector and Lamplighter.',
-      'Each job helps the whole party all the time. It grows with the companion’s level and is stronger when it suits their class, so it pays to train your whole roster.',
-      'Train resting companions right at the campfire.',
-      'Gear is rarer now, and high-tier gear starts very rare and gets more common the deeper you go. Thanks for the feedback, Chipplin.',
-      'Guardians no longer always drop gear, and set pieces are rarer.',
-      'Items have a level requirement, shown in the corner of each piece. Companions must reach it to wear the item.',
-      'Monsters get tougher faster the deeper you go. The first floors are gentler than before.',
-      'Rekindling now unlocks at floor 50 and gives fewer Embers, so each one is a bigger milestone.',
-      'A new item window with a clear stat block, comparison, and upgrade preview.',
-      'When a companion heads back to camp mid-run you see them walk off, their seat says they returned to camp, and their bonus leaves with them.',
-      'In the dungeon the Gear tab only shows the party you brought. Your campfire roster appears again once you are back at camp.'] },
-    { v: 10, date: 'November 22, 2026', title: 'Make camp', items: [
-      'Party changes now happen at camp, at the top of the stair: swapping companions, recruiting, training companions and changing gear.',
-      'Return to camp from the camp bar in the Party or Gear tab, then Descend straight back to where you were.',
-      'New Campfire Draught: make camp anywhere for 60 seconds. You start with one.',
-      'New Lantern Oil: 15 more seconds against a guardian.',
-      'The Quartermaster’s store by the campfire sells both.',
-      'Your own hero can still train anywhere, and you can rearrange the marching order at any time.'] },
-    { v: 9, date: 'November 22, 2026', title: 'The Trading Post', items: [
-      'A market: list gear for gold, browse what other players are selling, and buy it.',
-      'Player mail: send gear to players you have recruited or chatted with, as a gift or with a price they can accept or decline.',
-      'Sales and payments arrive in your mailbox. A badge on the bag button shows new mail.'] },
-    { v: 8, date: 'November 22, 2026', title: 'A cleaner look', items: [
-      'New gear screen: see each companion holding their gear, with weapon, armor and trinket slots and your pack laid out as an inventory grid.',
-      'Hand-drawn pixel icons for every weapon, armor and trinket, framed in their rarity colour.',
-      'Party portraits now show each companion’s pixel art.',
-      'Easier to swap companions: every seat has a To campfire button, and recruiting with a full party asks who steps out.',
-      'Tabs have icons, and on phones they sit in a bar along the bottom of the screen.',
-      'Formation tips fold away until you want them.'] },
-    { v: 7, date: 'November 22, 2026', title: 'Campfire and Players Guild', items: [
-      'Every game is now multiplayer. Your progress is untouched.',
-      'The Campfire: story companions rest here. Bring them along whenever you like, and see who joins next.',
-      'The Players Guild: recruit heroes made by other players. Heroes whose owners are playing right now are marked Online now.',
-      'A Players Guild button at the top of the Party tab takes you straight there.',
-      'Raised skeletons now visibly lunge and claw at monsters.'] },
-    { v: 6, date: 'November 22, 2026', title: 'Help for new delvers', items: [
-      'A step-by-step tutorial for new players that points at the real buttons.',
-      'The Delver’s Guide: open the ? at the top for a handbook on every system.',
-      'Mass scrap in the Gear tab: salvage many pieces at once by rarity, keeping your best and upgraded gear.',
-      'These patch notes. They open once after each update, and you can find them in the Guide.'] },
-    { v: 5, date: 'November 22, 2026', title: 'Chat, map and item links', items: [
-      'Chat with Global, Trade and Party channels (free account needed). Tap a name to mute or report.',
-      'Ctrl+click an item, or use Link in chat, to show it off in chat.',
-      'The Map of the Deep: see every region, the guardians you have beaten, and travel back to any floor.',
-      'An Update ready button appears at the top when a new version is out.'] },
-    { v: 4, date: 'November 22, 2026', title: 'Marching order', items: [
-      'Rearrange your party. The front takes the hits, so keep your tank there.',
-      'Healers heal less the farther they stand from who they heal.',
-      'Some monsters ambush from behind and strike the rear first. A tank at the back guards it.'] },
-    { v: 3, date: 'November 22, 2026', title: 'Gear made clear', items: [
-      'The Gear tab shows what fits each companion, with Equip buttons, upgrade tags and Equip best.',
-      'Tap any companion for their profile: bio, alliance, class, ability, stats and gear.',
-      'Multiplayer: the hero board is live. Recruit other players’ heroes and earn gold when yours is recruited.'] },
-    { v: 2, date: 'November 22, 2026', title: 'A front of the Grand War', items: [
-      'Create your own hero and lead a party of five: Tank, Healer, Rogue, Mage and Necromancer.',
-      'Monsters fight back. Healers and tanks matter.',
-      'A 15-chapter story set beneath the Hold, on a hidden front of the Grand War. Pledge your banner when you start.',
-      'Class gear with rarities, upgrades and five class sets. A lore journal that fills as you explore.',
-      'Solo and Multiplayer modes. Optional accounts with cloud saves.'] },
   ];
   const NOTES_V = PATCH_NOTES[0].v;
   try { const ve = $('ver'), b = window.LH_BUILD || ''; if (ve) { ve.textContent = 'v' + NOTES_V + (b ? ' \u00b7 build ' + b.slice(4, 8) + '.' + b.slice(8) : ''); ve.dataset.tip = 'Version ' + NOTES_V + (b ? ', build ' + b + ' (UTC). The game updates itself when a new build is out.' : ''); } } catch (e) {}
@@ -7902,7 +7470,7 @@
     S.seenNotes = S.notesShown = NOTES_V; save();
     modal('<div class="maphead"><div><h2>What’s new</h2><small>Patch notes for Lanternhold.</small></div><button class="iconbtn" id="n-x" aria-label="Close">&times;</button></div><div class="notes">' +
       PATCH_NOTES.map((n, i) => '<section' + (i ? '' : ' class="latest"') + '><div class="nh"><b>' + esc(n.title) + '</b><span>' + esc(n.date) + (i ? '' : ' · Latest') + '</span></div><ul>' + n.items.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></section>').join('') +
-      '</div><div class="row"><button class="btn" id="n-ok">Back to the Deep</button></div>', md => { md.querySelector('#n-x').onclick = closeModal; md.querySelector('#n-ok').onclick = closeModal; });
+      '<p class="muted" style="text-align:center;margin:10px 0 0">Older updates are on the wiki.</p></div><div class="row"><a class="btn ghost" href="https://lanternhold.born2gamellc.com/wiki/patch-notes/" target="_blank" rel="noopener">Full history on the wiki</a><button class="btn" id="n-ok">Back to the Deep</button></div>', md => { md.querySelector('#n-x').onclick = closeModal; md.querySelector('#n-ok').onclick = closeModal; });
   }
   // Show once after every update, when nothing else is on screen. `notesShown` is set only when the window really
   // opens (v132 fix, John 26 Nov 2026: players got no pop-up). Before, a hero who never finished or skipped the
@@ -7927,6 +7495,8 @@
   const tradeSub = it => (L.normItem(it), 0) || L.RARITY.find(r => r.id === it.rar).name + ' ' + L.CLASSES[it.cls].name.toLowerCase() + ' ' + L.SLOT_NAME[it.slot].toLowerCase() + ' &middot; ' + itemEffect(it);
   const tradeErr = (e, what) => {
     const c = e && e.code;
+    // v140: the server checks payments against the gold it trusts this hero to have (the last save it accepted)
+    if (c === 'gold' || (e && e.status === 402)) return 'The server could not confirm that much gold yet. Let your game sync for a minute, then try again.';
     // NP+ (v122): the 24 h trade lock after a new playthrough, and mail only between heroes of the same tier
     if (c === 'lock') return 'Trading opens 24 hours after you start a New Playthrough' + (S.npAt ? ' (at ' + new Date(S.npAt + L.NP_LOCK).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) + ')' : '') + '.';
     if (what === 'send' && e && e.status === 409) return 'Mail only goes between heroes on the same New Playthrough tier, and not in the first 24 hours after either of you starts one.';
@@ -8050,7 +7620,7 @@
       h += '<div class="whoseg tradecls">' + L.HERO_CLASSES.map(c => '<button class="whochip c-' + c + (!trade.mine && trade.cls === c ? ' on' : '') + '" data-tc="' + c + '"><img src="' + SP.spriteURL(c, 2) + '" alt=""><span>' + L.CLASSES[c].name + '</span></button>').join('') +
         '<button class="whochip' + (trade.mine ? ' on' : '') + '" data-tc="mine"><span>My listings</span></button></div>';
       const sel = (id, opts, v) => '<select id="' + id + '">' + opts.map(([k, t]) => '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
-      h += '<div class="mkfilters">' + sel('tf-slot', SLOT_FILTER, trade.slot) + sel('tf-rar', RAR_FILTER, trade.rar) + sel('tf-sort', [['cheap', 'Cheapest first'], ['new', 'Newest first'], ['power', 'Strongest first'], ['level', 'Lowest level first']], trade.sort) + '</div>';
+      h += '<div class="mkfilters">' + sel('tf-slot', SLOT_FILTER, trade.slot) + sel('tf-rar', RAR_FILTER, trade.rar) + sel('tf-sort', [['cheap', 'Cheapest first'], ['new', 'Newest first'], ['power', 'Strongest first'], ['level', 'Lowest power level first']], trade.sort) + '</div>';
       if (trade.msg) h += '<p class="note">' + esc(trade.msg) + '</p>';
       if (trade.list) {
         const list = shownListings();
@@ -8485,7 +8055,7 @@
       DW.done = 'Gulp gobbled ' + n + (n === 1 ? ' morsel' : ' morsels') + ' (' + fmt(f.cost) + ' gold). ' + (f.burps.length ? 'Burp! Out came ' + f.burps.map(esc).join(', ') + '.' : 'Om nom nom.');
       if (f.burps.length) toast('star', 'Gulp coughed something up', f.burps.join(', ') + '.', 'feat');
       if (r.gob) loadGulp();
-    } catch (x) { toast('lock', 'Gulp didn’t eat that', (x && /409/.test(x.message || '') ? 'Gulp is full for today. ' : 'The server could not take the morsels. ') + 'Your gold is untouched.', 'warn'); loadGulp(); }
+    } catch (x) { toast('lock', 'Gulp didn’t eat that', (x && /409/.test(x.message || '') ? 'Gulp is full for today. ' : x && /402/.test(x.message || '') ? 'The server could not confirm that much gold yet; let your game sync first. ' : 'The server could not take the morsels. ') + 'Your gold is untouched.', 'warn'); loadGulp(); }
     gp.busy = false; paintEnchPanel(true); paintCamp();
   });
   // The goblin bar above the fight, the assault and the claim.
@@ -8636,7 +8206,7 @@
   function ringStatLine(s) { return fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack' + (s.E ? ' &middot; Edge ' + s.E : '') + (s.R ? ' &middot; Resolve ' + s.R : ''); }
   function paintRing() {
     const box = $('ringbox'); if (!box || typeof tab === 'undefined' || tab !== 'ring') return;
-    const intro = '<p class="note">Duel other players’ heroes one on one. Only your own hero steps into the Ring: no companions, tonics or Sigils. Win Laurels and climb the standings.</p>';
+    const intro = '<p class="note">Duel other players’ heroes one on one, or bring two of your companions for a team battle. Tonics and Sigils never count. Win Laurels and climb the standings.</p>';
     if (!CL) { box.innerHTML = '<div class="ringempty"><h3>The Ember Ring</h3>' + intro + '<p class="note">The Ring needs the online server.</p></div>'; return; }
     if (!signedIn() || !S.hero) { box.innerHTML = '<div class="ringempty"><h3>The Ember Ring</h3>' + intro + '<button class="btn" id="ring-in">Sign in to enter the Ring</button></div>'; $('ring-in').onclick = () => authForm('in'); return; }
     const st = rg.st;
@@ -9276,7 +8846,7 @@
   if (window.ResizeObserver) { let aw = 0, ah = 0; new ResizeObserver(es => { const r = es[0].contentRect, w = Math.round(r.width), h = Math.round(r.height); if (w && h && (w !== aw || h !== ah)) { aw = w; ah = h; resize(); } }).observe(arena); }
   syncBuySeg();
   if (!S.hero) setup(S.migratedFromV1 ? 'Lanternhold has grown. You now lead a party of five, the story has begun, and monsters fight back. Your Embers and relics carried over.' : '');
-  else grantOffline((Date.now() - (S.lastSeen || Date.now())) / 1000, true);
+  else { const away = Math.max(0, (Date.now() - (LOADED_SEEN || Date.now())) / 1000); if (clockSafe()) { S.awayQ = (S.awayQ || 0) + away; S.awayLoad = 1; } else grantOffline(away, true); }
   updateStage(); updatePanel(true); updateAbilities(true);
   setInterval(logic, 100);
   requestAnimationFrame(render);

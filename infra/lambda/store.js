@@ -56,9 +56,9 @@ exports.handler = async (e) => {
     try {
       await db.send(new D.TransactWriteItemsCommand({ TransactItems: [
         { Put: { TableName: T, Item: { pk: S('wixord#' + o.id), sk: S('-'), u: S(cl.sub), m: S(mid), n: N(n), at: N(Date.now()) }, ConditionExpression: 'attribute_not_exists(pk)' } },
-        st ? { Update: { TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :n, stp = :t ADD own :k', ConditionExpression: 'attribute_not_exists(stp)',
+        st ? { Update: { TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :n, stp = :t ADD own :k, pb :n', ConditionExpression: 'attribute_not_exists(stp)',
           ExpressionAttributeValues: { ':g': N(100), ':n': N(n), ':t': N(Date.now()), ':k': { SS: ['f.plain', 'k.scout'] } } } }
-        : { Update: { TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :n, own = if_not_exists(own, :o)',
+        : { Update: { TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :n, own = if_not_exists(own, :o) ADD pb :n',
           ExpressionAttributeValues: { ':g': N(100), ':n': N(n), ':o': { SS: ['f.plain'] } } } }] }));
       if (st) { const w0 = (await db.send(new D.GetItemCommand({ TableName: W, Key: { userId: S(cl.sub) } }))).Item, was = w0 && w0.pass ? +w0.pass.N : 0;
         await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET pass = :p', ExpressionAttributeValues: { ':p': N(Math.max(Date.now(), was) + ST_PASS) } })); }

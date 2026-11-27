@@ -1,6 +1,6 @@
 // Shared perks: Mercy's Blessing (public clock fed by real Mercy Corps donations) and the Lantern Pass (bought with Sigils).
 const D = require('@aws-sdk/client-dynamodb');
-const db = new D.DynamoDBClient({}), { WALLETS: W, HEROES: H } = process.env, crypto = require('crypto');
+const db = new D.DynamoDBClient({}), { WALLETS: W, HEROES: H, SAVES: SV } = process.env, crypto = require('crypto');
 const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) });
 const S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
@@ -35,22 +35,26 @@ exports.handler = async (e) => {
   if (e.routeKey === 'POST /sigils/earn') {
     const K = { userId: S(cl.sub) }, w = (await db.send(new D.GetItemCommand({ TableName: W, Key: K, ConsistentRead: true }))).Item, day = new Date().toISOString().slice(0, 10);
     const same = !!(w && w.ed && w.ed.S === day), mask = same ? +w.eq.N : 0, dn = same ? +w.en.N : 0, bal = w && w.bal ? +w.bal.N : 100;
-    let add = 0, nm = mask, nd = dn;
+    let add = 0, nm = mask, nd = dn, drop = 0;
     if (b.kind === 'quest') {
       const i = b.i | 0;
       if (i < 0 || i > 3 || (i === 3 && (mask & 7) !== 7)) return res(400, { error: 1 });
       if (mask & (1 << i)) return res(409, { error: 'claimed', bal, mask });
       add = i === 3 ? 2 : 1; nm = mask | (1 << i);
     } else if (b.kind === 'drop') {
-      add = Math.max(0, Math.min(b.n | 0, 15 - dn)); nd = dn + add;
-      if (!add) return res(200, { ok: true, add: 0, bal, mask });
+      // v140 (John 27 Nov): finds bank only during real play (a cloud save in the last 10 minutes) and at most one per
+      // 5 minutes since the last banked find, so a script cannot just claim the daily 15.
+      const now = Date.now(), et = w && w.et ? +w.et.N : 0;
+      if (SV) { const sv = (await db.send(new D.GetItemCommand({ TableName: SV, Key: K, ProjectionExpression: 'updated' }))).Item; if (!sv || now - +sv.updated.N > 6e5) return res(200, { ok: true, add: 0, bal, mask, wait: 1 }); }
+      add = Math.max(0, Math.min(b.n | 0, 15 - dn, Math.floor((now - et) / 3e5))); nd = dn + add; drop = 1;
+      if (!add) return res(200, { ok: true, add: 0, bal, mask, wait: dn < 15 ? 1 : 0 });
     } else return res(400, { error: 1 });
     try {
-      await db.send(new D.UpdateItemCommand({ TableName: W, Key: K, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :a, ed = :d, eq = :m, en = :n, own = if_not_exists(own, :o)',
+      await db.send(new D.UpdateItemCommand({ TableName: W, Key: K, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :a, ed = :d, eq = :m, en = :n, own = if_not_exists(own, :o)' + (drop ? ', et = :t' : ''),
         ConditionExpression: same ? 'ed = :d AND eq = :om AND en = :on' : 'attribute_not_exists(ed) OR ed <> :d',
-        ExpressionAttributeValues: Object.assign({ ':g': N(100), ':a': N(add), ':d': S(day), ':m': N(nm), ':n': N(nd), ':o': { SS: ['f.plain'] } }, same ? { ':om': N(mask), ':on': N(dn) } : {}) }));
+        ExpressionAttributeValues: Object.assign({ ':g': N(100), ':a': N(add), ':d': S(day), ':m': N(nm), ':n': N(nd), ':o': { SS: ['f.plain'] } }, drop ? { ':t': N(Date.now()) } : {}, same ? { ':om': N(mask), ':on': N(dn) } : {}) }));
     } catch (x) { if (x.name === 'ConditionalCheckFailedException') return res(409, { error: 'state' }); throw x; }
-    return res(200, { ok: true, add, bal: bal + add, mask: nm });
+    return res(200, { ok: true, add, bal: bal + add, mask: nm, wait: drop && add < Math.min(b.n | 0, 15 - dn) ? 1 : 0 });
   }
   // Lantern Pass: 500 Sigils for 30 days of convenience perks, stacking onto any time left.
   // Speed-ups for Sigils ({ what: 'item', id, n }): gold, loot and XP tonics and the Campfire Draught. Combat tonics are gold only.
@@ -68,10 +72,14 @@ exports.handler = async (e) => {
     const [w, rw] = await Promise.all([K, RK].map(k => db.send(new D.GetItemCommand({ TableName: W, Key: k })).then(r => r.Item)));
     const bal = w && w.bal ? +w.bal.N : 100, was = rw && rw.pass ? +rw.pass.N : 0, until = Math.max(now, was) + 2592e6;
     if (bal < 500) return res(400, { error: 'funds' });
+    // v140 (John 27 Nov): gifts are paid only from bought Sigils (pb, counted by store.js) less what was gifted (gs),
+    // so free Sigils from several accounts cannot be pooled into a pass.
+    const pb = w && w.pb ? +w.pb.N : 0, gs = w && w.gs ? +w.gs.N : 0;
+    if (pb - gs < 500) return res(400, { error: 'bought', left: Math.max(0, pb - gs) });
     try {
       await db.send(new D.TransactWriteItemsCommand({ TransactItems: [
-        { Update: { TableName: W, Key: K, UpdateExpression: 'SET bal = if_not_exists(bal, :g) - :c, own = if_not_exists(own, :o)', ConditionExpression: 'attribute_not_exists(bal) OR bal >= :c',
-          ExpressionAttributeValues: { ':g': N(100), ':c': N(500), ':o': { SS: ['f.plain'] } } } },
+        { Update: { TableName: W, Key: K, UpdateExpression: 'SET bal = if_not_exists(bal, :g) - :c, own = if_not_exists(own, :o) ADD gs :c', ConditionExpression: '(attribute_not_exists(bal) OR bal >= :c) AND pb >= :need',
+          ExpressionAttributeValues: { ':g': N(100), ':c': N(500), ':need': N(gs + 500), ':o': { SS: ['f.plain'] } } } },
         { Update: { TableName: W, Key: RK, UpdateExpression: 'SET pass = :p, gift = :f, bal = if_not_exists(bal, :g), own = if_not_exists(own, :o)', ConditionExpression: was ? 'pass = :w' : 'attribute_not_exists(pass)',
           ExpressionAttributeValues: Object.assign({ ':p': N(until), ':f': S(JSON.stringify([mine.name.S.slice(0, 20), now])), ':g': N(100), ':o': { SS: ['f.plain'] } }, was ? { ':w': N(was) } : {}) } }] }));
     } catch (x) { if (x.name === 'TransactionCanceledException') return res(409, { error: 'state' }); throw x; }

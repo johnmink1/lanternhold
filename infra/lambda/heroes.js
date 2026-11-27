@@ -1,7 +1,7 @@
 const { DynamoDBClient, UpdateItemCommand, ScanCommand, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
 const crypto = require('crypto');
 const db = new DynamoDBClient({});
-const T = process.env.TABLE, CH = process.env.CHAT;
+const T = process.env.TABLE, CH = process.env.CHAT, W = process.env.WALLETS;
 const SIDE_NAME = { covenant: 'the Iron Covenant', radiant: 'the Radiant Ascendancy', tide: 'the Devouring Tide', mercy: 'the Mercy Corps', unsworn: 'the Unsworn' };
 const CLS_NAME = { tank: 'tank', healer: 'healer', rogue: 'rogue', mage: 'mage', necro: 'necromancer', paladin: 'paladin' };
 const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'];
@@ -15,7 +15,7 @@ const res = (c, b) => ({ statusCode: c, headers: { 'content-type': 'application/
 // a card at 2x its own hero (GUEST_CAP in core.js), so a faked card can't carry anyone.
 const num = v => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(v, 1e300) : 0);
 const cardOf = b => { if (!b || typeof b !== 'object') return null; const c = { d: num(b.d), h: num(b.h), hl: num(b.hl), pc: Math.min(1, num(b.pc)), t: Math.min(10, num(b.t) | 0) }; return c.h > 0 ? JSON.stringify(c) : null; };
-const heroOut = i => ({ id: i.pid.S, name: i.name.S, cls: i.cls.S, level: Number(i.lv.N), floor: Number(i.fl.N), side: i.sd ? i.sd.S : 'unsworn', on: Date.now() - Number(i.seen.N) < 18e4, pf: i.pf ? JSON.parse(i.pf.S) : null, wd: i.wd ? JSON.parse(i.wd.S) : null, w: i.wv && i.wv.N === '1' ? i.wl.S : '', np: i.np ? +i.np.N : 0, bp: i.bp ? JSON.parse(i.bp.S) : null });
+const heroOut = i => ({ id: i.pid.S, name: i.name.S, cls: i.cls.S, level: Number(i.lv.N), floor: Number(i.fl.N), side: i.sd ? i.sd.S : 'unsworn', on: Date.now() - Number(i.seen.N) < 18e4, pf: i.pf ? JSON.parse(i.pf.S) : null, wd: i.wd ? JSON.parse(i.wd.S) : null, w: i.wv && i.wv.N === '1' ? i.wl.S : '', np: i.np ? +i.np.N : 0, bp: i.bp ? JSON.parse(i.bp.S) : null, ni: i.noinv ? 1 : 0 });
 // Unique names (John, 26 Nov 2026): one hero per name, ignoring case, spaces, hyphens and apostrophes
 // ("Pak-Tusjet" = "paktusjet"). Banned players keep their name reserved. Checked only when a player takes a new name,
 // so a name already held by two players (from before this rule) keeps syncing until an admin renames one.
@@ -64,6 +64,8 @@ exports.handler = async (e) => {
     const name = String(b.name || '').trim();
     if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name) || BAD.test(name.replace(/[^a-z]/gi, '')) || BADW.test(name)) return res(400, { error: 'name' });
     if (!CLS.includes(b.cls)) return res(400, { error: 'class' });
+    // v140 (John 27 Nov): the Paladin is bought once per account with Sigils; a hero shows as one only if the wallet owns it.
+    if (b.cls === 'paladin' && W) { const w = (await db.send(new GetItemCommand({ TableName: W, Key: { userId: { S: cl.sub } }, ProjectionExpression: '#o', ExpressionAttributeNames: { '#o': 'own' } }))).Item; if (!(w && w.own && w.own.SS.includes('c.paladin'))) return res(403, { error: 'paladin' }); }
     const cur = (await db.send(new GetItemCommand({ TableName: T, Key: { pid: { S: me } }, ProjectionExpression: '#n', ExpressionAttributeNames: { '#n': 'name' } }))).Item;
     if (!(cur && cur.name && nkey(cur.name.S) === nkey(name)) && await nameTaken(name, me)) return res(409, { error: 'taken' });
     const floor = Math.max(1, Math.min(100000, Math.floor(Number(b.floor) || 1)));

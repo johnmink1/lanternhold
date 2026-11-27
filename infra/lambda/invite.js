@@ -22,7 +22,7 @@ exports.handler = async (e) => {
   if (!cl || !cl.sub) return res(401, { error: 1 });
   const me = pidOf(cl.sub);
   if (e.routeKey === 'GET /invites') {
-    const r = (await db.send(new D.GetItemCommand({ TableName: T, Key: K(me), ProjectionExpression: 'req, sent, acc, #d', ExpressionAttributeNames: { '#d': 'dec' } }))).Item || {};
+    const r = (await db.send(new D.GetItemCommand({ TableName: T, Key: K(me), ProjectionExpression: 'req, sent, acc, #d, noinv', ExpressionAttributeNames: { '#d': 'dec' } }))).Item || {};
     const req = set(r.req), acc = set(r.acc), dec = set(r.dec), h = await heroes([...new Set([...req, ...acc, ...dec])]);
     // Answers are read once: take away exactly what we are about to report.
     if (acc.length || dec.length) {
@@ -31,15 +31,26 @@ exports.handler = async (e) => {
       if (dec.length) { x.push('#d :d'); v[':d'] = SS(dec); }
       await up(me, 'DELETE ' + x.join(', '), v);
     }
-    return res(200, { asks: req.map(p => h[p]).filter(Boolean), acc: acc.map(p => h[p]).filter(Boolean), dec: dec.map(p => (h[p] || { id: p, name: 'A player' })), sent: set(r.sent) });
+    return res(200, { asks: req.map(p => h[p]).filter(Boolean), acc: acc.map(p => h[p]).filter(Boolean), dec: dec.map(p => (h[p] || { id: p, name: 'A player' })), sent: set(r.sent), solo: r.noinv ? 1 : 0 });
   }
   if (e.routeKey !== 'POST /invite') return res(404, { error: 1 });
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400, { error: 1 }); }
+  // v140 (John 27 Nov): players can turn party invites off to play solo with NPCs. noinv on the hero row blocks new
+  // invites; turning it on declines the ones waiting.
+  if (b.act === 'solo') {
+    if (!b.on) { await db.send(new D.UpdateItemCommand({ TableName: T, Key: K(me), UpdateExpression: 'REMOVE noinv' })); return res(200, { ok: true, solo: 0 }); }
+    const r = (await db.send(new D.GetItemCommand({ TableName: T, Key: K(me), ProjectionExpression: 'req' }))).Item || {}, req = set(r.req);
+    await up(me, 'SET noinv = :t' + (req.length ? ' DELETE req :r' : ''), Object.assign({ ':t': { N: String(Date.now()) } }, req.length ? { ':r': SS(req) } : {}), 'attribute_exists(cls)');
+    for (const p of req) { try { await up(p, 'DELETE sent :m ADD #d :m', { ':m': SS([me]) }); } catch (x) {} }
+    return res(200, { ok: true, solo: 1 });
+  }
   const id = String(b.id || ''), a = b.act, mine = SS([me]), them = SS([id]);
   if (!/^[0-9a-f]{16}$/.test(id) || id === me) return res(400, { error: 'hero' });
   try {
     if (a === 'ask') {
-      await up(id, 'ADD req :m', { ':m': mine }, 'attribute_exists(cls) AND attribute_not_exists(ban)');
+      const t = (await db.send(new D.GetItemCommand({ TableName: T, Key: K(id), ProjectionExpression: 'noinv' }))).Item;
+      if (t && t.noinv) return res(409, { error: 'solo' });
+      await up(id, 'ADD req :m', { ':m': mine }, 'attribute_exists(cls) AND attribute_not_exists(ban) AND attribute_not_exists(noinv)');
       await up(me, 'ADD sent :i', { ':i': them });
     } else if (a === 'cancel') {
       await up(id, 'DELETE req :m', { ':m': mine });

@@ -87,7 +87,7 @@ Resources:
         - AttributeName: userId
           KeyType: HASH
       PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: false
+        PointInTimeRecoveryEnabled: true
       Tags:
         - Key: app
           Value: lanternhold
