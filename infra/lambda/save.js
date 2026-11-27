@@ -57,9 +57,6 @@ exports.handler = async (event) => {
     let cond = '(attribute_not_exists(rst) OR rst <= :c)', vals = { ':d': { S: b.data }, ':u': { N: String(now) }, ':f': { N: String(Number(b.floor) || 0) }, ':c': { N: String(Number(b.created) || 0) } };
     let upd = 'SET #d = :d, updated = :u, floor = :f';
     if (dv) { upd += ', dv = :v'; vals[':v'] = { S: dv }; if (!claim) cond += ' AND (attribute_not_exists(dv) OR dv = :v)'; }
-    // A game with no device id is an old build (from before one-device saves, e.g. a tab left open for days). Once an
-    // account has a device it may not save: on 27 Nov 2026 such a tab overwrote Chipplin's 35 h save with a 6 h copy.
-    else cond += ' AND attribute_not_exists(dv)';
     try {
       await db.send(new D.UpdateItemCommand({ TableName: TABLE, Key, UpdateExpression: upd,
         ConditionExpression: cond, ExpressionAttributeNames: { '#d': 'data' }, ExpressionAttributeValues: vals }));
