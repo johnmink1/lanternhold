@@ -1,4 +1,4 @@
-/* lh-build 202611270013 */
+/* lh-build 202611270017 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4110,15 +4110,21 @@
     if (!r.ok) { const e = new Error(j.error || 'http ' + r.status); e.code = j.error || r.status; throw e; }
     return j;
   }
+  let dcFail = '';
   async function dcStart() {
-    let j;
+    let j, step = 'ready';
     try {
       await DC.ready;
+      step = 'authorize';
       const a = await DC.sdk.commands.authorize({ client_id: DC.clientId, response_type: 'code', state: '', prompt: 'none', scope: ['identify'] });
+      step = 'login';
       j = await dcPost('/discord/login', { code: a.code });
     } catch (e) {
+      // The step and Discord's own message show in the pop-up so a failed sign-in can be traced from a screenshot.
+      dcFail = step + ': ' + String((e && (e.message || e.code)) || e).slice(0, 120);
+      try { console.warn('[LH discord]', dcFail, e); } catch (x) {}
       if (signedIn()) reconcile();
-      toast('lock', 'Discord sign-in did not finish', signedIn() ? 'You are still signed in to your hero.' : 'You can still play. Your progress saves on this device until you sign in.', 'warn');
+      toast('lock', 'Discord sign-in did not finish', (signedIn() ? 'You are still signed in to your hero.' : 'You can still play. Your progress saves on this device until you sign in.') + ' (' + esc(dcFail) + ')', 'warn');
       return;
     }
     dcTok = j.access_token || '';
@@ -4156,7 +4162,7 @@
   // Reached from the Discord welcome screen and from Continue with Born 2 Game on the sign-in form inside Discord.
   async function dcCodeStart(b, err) {
     b.disabled = true;
-    if (!dcTok) { b.disabled = false; err.textContent = 'Discord sign-in did not finish. Close and reopen Lanternhold, then try again.'; return; }
+    if (!dcTok) { b.disabled = false; err.textContent = 'Discord sign-in did not finish. Close and reopen Lanternhold, then try again.' + (dcFail ? ' (' + dcFail + ')' : ''); return; }
     try { const j = await dcPost('/discord/code', { token: dcTok }); if (j.linked) { delete $('modal').dataset.lock; closeModal(); dcStart(); return; } dcPair(j.pair); }
     catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
   }
