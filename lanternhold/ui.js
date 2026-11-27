@@ -3052,24 +3052,29 @@
   const regFloors = rn => (rn * 10 + 1) + '–' + (rn * 10 + 10);
   function creaturesHtml() {
     const bx = S.bx || {}, all = L.CREATURES, found = all.filter(c => bx[c.id]).length;
-    let h = '<h3 class="sub">Bestiary: creatures by region <small class="bcount">' + found + '/' + all.length + ' found</small></h3><div class="lore beasts">';
+    let h = '<h3 class="sub">Bestiary <small class="bcount">' + found + '/' + all.length + ' found</small></h3><div class="lore beasts">';
     L.ROSTERS.forEach((list, rn) => {
       const b = L.BIOMES[rn];
       if ((S.maxFloorEver || 1) < rn * 10 + 1) { h += '<div class="lorelock">' + icon('lock') + ' A region you have not reached</div>'; return; }
       const cs = all.filter(c => c.r === rn), nf = cs.filter(c => bx[c.id]).length;
       h += '<details data-breg="' + rn + '"><summary>' + esc(b.name) + ' <span class="bsub">floors ' + regFloors(rn) + ' · ' + nf + '/' + cs.length + '</span></summary><div class="blist">' + cs.map(c => {
         const got = bx[c.id], wand = L.creatureRegions(c).map(r => L.BIOMES[r].name);
-        return '<div class="bst' + (got ? '' : ' unk') + '"><img alt="" data-bpic="' + c.id + '" width="56" height="56"><div><b>' + (got ? esc(c.name) : '???') + '</b> <span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span>' + (got ? ' <button class="btn ghost bdet" data-bdet="' + c.id + '">Details</button>' : '') +
-          (got ? '<p>' + esc(c.text) + '</p>' + (got >= L.LORE_AT[c.rar] ? '<p class="bnote"><b>Field notes.</b> ' + esc(c.lore) + '</p>' : '<small class="bnext">Defeat ' + fmt(L.LORE_AT[c.rar] - got) + ' more to unlock its field notes.</small><br>') : '') +
+        return '<div class="bst' + (got ? '' : ' unk') + '"><img alt="" data-bpic="' + c.id + '" width="56" height="56"><div><b>' + (got ? esc(c.name) : '???') + '</b> <span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span>' + (got ? beastTag('foe_' + c.fam) : '') + (got ? ' <button class="btn ghost bdet" data-bdet="' + c.id + '">Details</button>' : '') +
+          (got ? '<p>' + esc(c.text) + '</p>' : '') +
           '<small>Found in: ' + esc(b.name) + ' (home)' + (wand.length ? ' · wanders into ' + esc(wand.join(' and ')) : '') + (got ? ' · ' + fmt(got) + ' defeated' : '') + '</small></div></div>';
       }).join('') + '</div></details>';
     });
+    // Chests and guardians keep their own pages at the end (one Bestiary, John 27 Nov 2026).
+    const other = L.LORE.filter(lo => lo.group === 'Bestiary' && !L.FAMILY[lo.id.replace(/^foe_/, '')]);
+    if (other.length) h += '<details><summary>Chests and guardians <span class="bsub">' + other.filter(lo => S.lore[lo.id]).length + '/' + other.length + '</span></summary><div class="lore">' + other.map(lo => S.lore[lo.id]
+      ? '<details><summary>' + esc(lo.title) + beastTag(lo.id) + '</summary><p>' + esc(lo.text) + '</p>' + beastBar(lo.id) + '</details>'
+      : '<div class="lorelock">' + icon('lock') + ' Not yet discovered</div>').join('') + '</div></details>';
     return h + '</div>';
   }
   // Creature details pop-out (John, 27 Nov 2026): more is revealed the more of a kind you defeat.
   function creatureModal(id) {
     const c = L.creatureById(id), got = (S.bx || {})[id] || 0; if (!c || !got) return;
-    const b = L.BIOMES[c.r], [r1, r2] = L.REVEAL[c.rar], la = L.LORE_AT[c.rar], mt = L.beastTier(S, 'foe_' + c.fam);
+    const b = L.BIOMES[c.r], [r1, r2] = L.REVEAL[c.rar], la = L.LORE_AT[c.rar], fl = L.LORE.find(lo => lo.id === 'foe_' + c.fam);
     const f = Math.max(c.r * 10 + 1, Math.min(c.r * 10 + 9, S.maxFloorEver || 1)), sp = L.FOE_SPECIAL[c.fam] && L.SPECIALS[L.FOE_SPECIAL[c.fam]], mod = b.mod && L.MODS[b.mod];
     const wand = L.creatureRegions(c).map(r => L.BIOMES[r].name), size = { s: 'Small', m: 'Normal', l: 'Large' }[c.size];
     const lock = (n, what) => '<div class="bdlock">' + icon('lock') + ' Defeat ' + fmt(n - got) + ' more to learn ' + what + '.</div>';
@@ -3078,8 +3083,9 @@
     modal('<div class="maphead"><div><h2>' + esc(c.name) + '</h2><small><span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span> ' + esc(L.FAMILY[c.fam]) + ' family</small></div><button class="iconbtn" id="bd-x" aria-label="Close">&times;</button></div>' +
       '<div class="bdtop"><img class="bdpic" alt="" src="' + beastPic(c) + '"><div class="bdfacts">' +
         row('Home', esc(b.name) + ' (floors ' + regFloors(c.r) + ')') + row('Spawns', 'about ' + Math.round(L.creatureOdds(c, c.r) * 1000) / 10 + '% of fights there') +
-        (wand.length ? row('Wanders into', esc(wand.join(', '))) : '') + row('Size', size) + row('Defeated', fmt(got)) + row('Mastery', mt + '/' + L.BEAST_MAX + (mt ? ' (+' + mt + '% damage and hero XP)' : '')) +
+        (wand.length ? row('Wanders into', esc(wand.join(', '))) : '') + row('Size', size) + row('Defeated', fmt(got)) +
       '</div></div><p class="bdtext">' + esc(c.text) + '</p>' +
+      '<h3 class="sub">' + esc(L.FAMILY[c.fam]) + ' family</h3>' + (fl && S.lore[fl.id] ? '<p class="bdtext">' + esc(fl.text) + '</p>' : '') + beastBar('foe_' + c.fam) +
       '<h3 class="sub">Strength</h3>' + (got >= r1 ? '<div class="bdfacts">' + row('Health', fmt(L.foeHp(f, false))) + row('Attack', fmt(L.foeDps(f, false)) + ' damage per second') + '<small>On floor ' + f + ', before NP+, packs and elites.</small></div>' : lock(r1, 'its strength')) +
       '<h3 class="sub">Special attack</h3>' + (got >= r2 ? '<div class="bdfacts">' + (sp ? row(esc(sp.name), esc(sp.desc)) + '<small>About ' + Math.round((L.SPECIAL_CHANCE || 0.3) * 100) + '% of them use it, from floor ' + (L.SPECIAL_FLOOR || 8) + '.</small>' : '<small>None known.</small>') + (mod ? row('In ' + esc(b.name), 'may be ' + esc(mod.name) + ': ' + esc(mod.desc)) : '') + '</div>' : lock(r2, 'its special attack')) +
       '<h3 class="sub">Field notes</h3>' + (got >= la ? '<p class="bdtext bnote">' + esc(c.lore) + '</p>' : lock(la, 'its field notes')) +
@@ -3100,10 +3106,10 @@
     const groups = {};
     for (const lo of L.LORE) (groups[lo.group] = groups[lo.group] || []).push(lo);
     for (const g in groups) {
+      if (g === 'Bestiary') { h += creaturesHtml(); continue; }
       h += '<h3 class="sub">' + g + '</h3><div class="lore">' + groups[g].map(lo => S.lore[lo.id]
         ? '<details><summary>' + esc(lo.title) + (g === 'Bestiary' ? beastTag(lo.id) : '') + '</summary><p>' + esc(lo.text) + '</p>' + (g === 'Bestiary' ? beastBar(lo.id) : '') + '</details>'
         : '<div class="lorelock">' + icon('lock') + ' Not yet discovered</div>').join('') + '</div>';
-      if (g === 'Bestiary') h += creaturesHtml();
     }
     $('journal').innerHTML = h;
     $('lorecount').textContent = Object.keys(S.lore).filter(k => L.LORE.find(l => l.id === k)).length + '/' + L.LORE.length;
@@ -6782,6 +6788,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 136, date: 'November 2026', title: 'One Bestiary', items: [
+      'The Bestiary is now one list by region. Each creature\u2019s Details shows its family story and mastery; chests and guardians sit at the end.',
+    ] },
     { v: 135, date: 'November 2026', title: 'Creature details', items: [
       'Bestiary: tap Details on any creature you have met to see its picture, strength, special attack and field notes. More is revealed the more of them you defeat.',
     ] },
