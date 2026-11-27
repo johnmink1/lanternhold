@@ -97,6 +97,7 @@
   // ---------- tooltips ----------
   // One styled tooltip for the whole game. Anything with data-tip (or an old-style title, which gets converted)
   // shows it on hover with a mouse, or on a tap of a small (i) badge on touch screens. It stays inside the window.
+  // v141 (John, 27 Nov 2026): on phones a tap on gold, damage, Embers or Dust in the top bar shows its numbers too.
   const tipEl = document.getElementById('tip');
   let tipFor = null, tipHide = 0;
   function tipText(el) {
@@ -123,7 +124,7 @@
   });
   document.addEventListener('pointerout', e => { if (tipFor && !tipFor.contains(e.relatedTarget)) { clearTimeout(tipHide); tipHide = setTimeout(hideTip, 60); } });
   document.addEventListener('click', e => {
-    const i = e.target.closest('.tipi,.klant') || (!fine.matches && e.target.closest('.trait[data-tip],.cxp[data-tip],#foetag[data-tip]'));
+    const i = e.target.closest('.tipi,.klant') || (!fine.matches && e.target.closest('.trait[data-tip],.cxp[data-tip],#foetag[data-tip],.purse div.stat[data-tip]'));
     if (i) { e.preventDefault(); e.stopPropagation(); if (tipFor === i) hideTip(); else { showTip(i); clearTimeout(tipHide); tipHide = setTimeout(hideTip, 5000); } return; }
     if (!fine.matches) hideTip();
   }, true);
@@ -3585,7 +3586,7 @@
     const hires = Object.keys(S.hires || {}), signed = hires.filter(id => !L.shortHire(S, id)).length, wph = L.wagesPerHour(S);
     const inc = S.hero ? L.offlineEarnPerSec(S) * 3600 : 0, owed = S.owed || 0, awayW = wph * L.NPC_AWAY_WAGE, net = inc - awayW;
     const row = (k, v, c) => '<tr><td>' + k + '</td><td class="' + (c || '') + '">' + v + '</td></tr>';
-    const sg = (v, cls) => '<b class="' + cls + '">' + (v >= 0 ? '+' : '−') + fmt(Math.abs(v)) + '</b>';
+    const sg = (v, cls) => '<b class="' + cls + '">' + (v >= 1 ? '+' : v <= -1 ? '−' : '') + fmt(Math.abs(v)) + '</b>';
     if (g) {
       let h = '<div class="mtip"><b>Gold</b><table>';
       if (S.hero) h += row('Away income', sg(inc, 'pos') + ' /h');
@@ -3600,6 +3601,17 @@
       if ((S.npcDust || 0) > 0) h += row('Spent on hires', sg(-S.npcDust, 'neg'));
       h += '</table><small>From scrapping gear. Pays for enchants, Rare and better hires, and new faces at the Guild Hall.</small></div>';
       if (d.dataset.tiph !== h) { d.dataset.tiph = h; d.dataset.tip = 'Dust'; if (tipFor === d) showTip(d); }
+    }
+    // v141 (John, 27 Nov 2026): the damage figure shows who makes it, steady hits per party member.
+    const dp = document.querySelector('.stat.dps');
+    if (dp && S.hero) {
+      const now = Date.now(), tot = L.totalDps(S, now);
+      let h = '<div class="mtip"><b>Party damage</b><table>', sum = 0;
+      for (const id of S.party) { const m = L.memberById(id), v = L.memberDps(S, id, now) || 0; sum += v; if (m) h += row(esc(m.name), '<b>' + fmt(v) + '</b> /s'); }
+      const sk = tot - sum; // skeletons: totalDps adds them on top of the party's steady hits
+      if (sk >= 1) h += row('Skeletons', '<b>' + fmt(sk) + '</b> /s');
+      h += row('Total', '<b>' + fmt(tot) + '</b> /s', 'tot') + '</table><small>Steady hits with every bonus counted. Abilities and taps come on top: see the Damage meter under the fight log.</small></div>';
+      if (dp.dataset.tiph !== h) { dp.dataset.tiph = h; dp.dataset.tip = 'Party damage'; if (tipFor === dp) showTip(dp); }
     }
   }
 
