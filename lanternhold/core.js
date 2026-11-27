@@ -1,4 +1,4 @@
-/* lh-build 202611271948 */
+/* lh-build 202611271955 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -4046,12 +4046,15 @@
     }
     return d;
   }
+  const AWAY_KPS = 1;
   function offlineGoldPerSec(s) {
     const d = steadyPartyDps(s);
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    const killsPerSec = Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f)));
+    // Real fights run about 0.5-0.7 kills a second at the deepest floors (walking, bosses, chests), so away and steady
+    // income assume at most 1 a second: away can never pay more than playing (27 Nov 2026: 4 a second paid ~2x play).
+    const killsPerSec = Math.min(AWAY_KPS, d / (foeHp(f, false) * npFoeHp(s, f)));
     return killsPerSec * foeGold(f, false) * goldMult(s) * npGold(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
 
@@ -4109,12 +4112,12 @@
   // Now: a slow running average (3 h time constant) of offline income sampled every 10 s while fighting in the dive,
   // per playthrough, locked once a UTC day after 30 min of samples. A quick swap barely moves it; parking a weak party
   // for hours to lower it costs those hours of income. Before 30 min of samples: the average so far, or (no samples
-  // yet) the floor's income at the 4 kills/s cap with account-wide gold bonuses only (no gear or camp jobs).
+  // yet) the floor's income at the away kill cap (AWAY_KPS) with account-wide gold bonuses only (no gear or camp jobs).
   const pipDay = now => new Date(now || Date.now()).toISOString().slice(0, 10);
   const PIP_TAU = 3 * 3600e3, PIP_STEP = 10e3, PIP_GAP = 60e3, PIP_READY = 1800e3;
   function acctGoldPerSec(s) {
     const f0 = Math.max(1, (s.maxFloor || 1) - 1), f = isBossFloor(f0) ? Math.max(1, f0 - 1) : f0;
-    return 4 * foeGold(f, false) * goldMult(s) * npGold(s) / ((1 + gearGold(s)) * (1 + campBonus(s, 'gold'))) * 0.5 * (1 + relicVal(s, 'bell'));
+    return AWAY_KPS * foeGold(f, false) * goldMult(s) * npGold(s) / ((1 + gearGold(s)) * (1 + campBonus(s, 'gold'))) * 0.5 * (1 + relicVal(s, 'bell'));
   }
   function pipOf(s) { const p = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }); if (p.pk || p.lk) { delete p.pk; delete p.lk; delete p.pkAt; } return p; }
   function samplePipIncome(s, now) {
