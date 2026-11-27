@@ -44,7 +44,7 @@ exports.handler = async (e) => {
   catch (x) { if (x.name === CF) return res(409, { error: 'claimed' }); throw x; }
   const killed = n(ev, 'total') >= n(ev, 'hp');
   if (!killed) return res(200, { ok: true, killed: false, sh: n(my, 'a'), rank, n: ps.length });
-  const fed = await get('gulpc#' + n(ev, 'cy'), me), p = .2 + mn(.3, .02 * n(fed, 'w')), top = rank <= 3;
+  const fed = await get('gulpc#' + n(ev, 'cy'), me), p = .2 + mn(.3, .02 * n(fed, 'wt')), top = rank <= 3;
   const sig = 2 + (top ? 3 : 0), sh = 3 + M(0, Math.floor(Math.log10(n(my, 'score'))) - 2);
   const r = await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal=if_not_exists(bal,:g)+:a', ExpressionAttributeValues: { ':g': N(100), ':a': N(sig) }, ReturnValues: 'UPDATED_NEW' }));
   return res(200, { ok: true, killed: true, ring: top || rnd(id + '#' + me) < p, p, sh, sig, rank, n: ps.length, bal: n(r.Attributes, 'bal') });
