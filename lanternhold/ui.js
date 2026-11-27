@@ -1,4 +1,4 @@
-/* lh-build 202611271630 */
+/* lh-build 202611271636 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -3576,6 +3576,19 @@
     updatePanel(true);
   }
   const phone = () => matchMedia('(max-width:720px)').matches;
+  // v141 hotfix (John: "the bar here is cramped", Codex cut off): on desktop the tab bar steps through fit1..fit4
+  // (no icons, icon-only Dashboard, smaller text, icon-only town tabs, then all icons) until nothing overflows.
+  // Re-checked when the bar resizes and when a count like Gear 70 changes. Icon-only tabs get a title.
+  function fitTabs() {
+    const t = document.querySelector('.tabs'); if (!t) return;
+    const lv = ['fit0', 'fit1', 'fit2', 'fit3', 'fit4']; t.classList.remove(...lv);
+    if (!phone()) for (let i = 0; i < lv.length && t.scrollWidth > t.clientWidth + 1; i++) t.classList.add(lv[i]);
+    t.querySelectorAll('button[data-tab]').forEach(b => { const s = b.querySelector('span'); if (!s) return; const off = getComputedStyle(s).display === 'none' && !phone(); if (off) b.title = s.textContent.trim(); else b.removeAttribute('title'); });
+    fitTabs.k = t.textContent + innerWidth;
+  }
+  { const t = document.querySelector('.tabs'); if (t && window.ResizeObserver) new ResizeObserver(() => fitTabs()).observe(t);
+    setInterval(() => { const tt = document.querySelector('.tabs'); if (tt && tt.textContent + innerWidth !== fitTabs.k) fitTabs(); }, 1500);
+    setTimeout(fitTabs, 300); }
   // v138 phone bar: Market, Guild, PvP and Codex sit under one Town button (9 tabs were too tight on phones).
   function townOpen() {
     let m = $('townmenu');
