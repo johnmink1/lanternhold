@@ -1,4 +1,4 @@
-/* lh-build 202611272016 */
+/* lh-build 202611272037 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -50,8 +50,17 @@
   }
   window.addEventListener('storage', e => { if (e.key === 'lh_tab' && e.newValue && e.newValue.split(':')[0] !== TAB_ID) goDormant(); });
   try { localStorage.setItem('lh_tab', TAB_ID + ':' + Date.now()); } catch (e) {}
+  // v142 hotfix (John, 27 Nov 2026): a phone suspends background tabs, so they miss the "another tab opened" message and
+  // wake up still playing an old copy. Two tabs then took turns writing the same save and the screen flipped between
+  // them. Every tab now checks it still owns the game when it wakes, before it saves, and once a second.
+  function ownsTab() { try { const v = localStorage.getItem('lh_tab'); return !v || v.split(':')[0] === TAB_ID; } catch (e) { return true; } }
+  const tabCheck = () => { if (!dormant && !ownsTab()) goDormant(); };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tabCheck(); });
+  window.addEventListener('pageshow', tabCheck); window.addEventListener('focus', tabCheck);
+  setInterval(tabCheck, 1000);
   function save() {
     if (dormant) return;
+    if (!ownsTab()) { goDormant(); return; }
     if (HCS && S.hero && !S.hc) return; // v142 hotfix: never write a non-Hardcore hero into the Hardcore slot
     S.lastSeen = Date.now();
     const o = Object.assign({}, S); delete o.foe; delete o.enchAt; delete o.shopK;
@@ -4609,6 +4618,7 @@
   }
   async function pushCloud1(quiet, claim) {
     if (!CL || !signedIn() || !S.hero || dormant) return;
+    if (!ownsTab()) { goDormant(); return; }
     if (!claim && !cloudReady) return; // not before this device has checked the account save and claimed it
     try {
       const o = saveObj(), sent = acts.slice();
@@ -7815,6 +7825,7 @@
       'A game tab in the background or paused no longer reloads itself for an update and takes over the tab you are playing.',
       'Your Hardcore hero loads on every device you sign in on, and Switch save shows it. Normal saves get a Normal badge at the top to switch saves.',
       'Hardcore healers save their Hymn for a raise when a companion is dying, instead of spending it on a heal.',
+      'On phones, a game tab woken from the background no longer plays an old copy of your save. It pauses so only one tab plays.',
     ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
