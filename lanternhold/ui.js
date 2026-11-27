@@ -1,4 +1,4 @@
-/* lh-build 202611271955 */
+/* lh-build 202611272009 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4050,6 +4050,16 @@
       (CL && signedIn() ? '' : '<p class="note">Hardcore needs a free account, so the server can keep every run honest.</p>') +
       '<div class="row"><button class="btn ghost" id="sl-x">Close</button></div>', md => {
         md.querySelector('#sl-x').onclick = closeModal;
+        // v142 hotfix: a Hardcore hero saved from another device shows here too, and loads without the new-run warning.
+        if (!HCS && !h && CL && signedIn()) (async () => { try {
+          const tok = await idToken(); if (!tok) return;
+          const r = await fetch(CL.api.replace(/\/$/, '') + '/save?hc=1&peek=1', { headers: { Authorization: tok } });
+          if (r.status !== 200) return;
+          hcok = true; try { localStorage.setItem('lh_hcok', '1'); } catch (e) {}
+          const b = md.querySelector('#sl-h'); if (!b) return;
+          const nm = b.querySelector('b'); if (nm) nm.firstChild.textContent = 'Hardcore \u00b7 your hero ';
+          const sm = b.querySelector('small'); if (sm) sm.textContent = 'Saved with your account. Tap to load it on this device.';
+        } catch (e) {} })();
         md.querySelector('#sl-n').onclick = () => switchSlot('');
         md.querySelector('#sl-h').onclick = () => {
           if (HCS) { closeModal(); return; }
@@ -4078,6 +4088,20 @@
         md.querySelector('#hc-no').onclick = closeModal;
         go.onclick = () => { if (!go.disabled) onGo(); };
       });
+  }
+  // v142 hotfix (John, 27 Nov 2026): on a device without this Hardcore save, wait for the account's copy instead of
+  // offering a new hero straight away (his phone showed the new-hero screen, so the hero looked lost).
+  function hcLoading() {
+    $('modal').dataset.lock = '1'; $('modal').dataset.hcload = '1';
+    modal('<div class="center"><h2 class="hch">' + icon('flame') + 'Loading your Hardcore hero</h2><p>Fetching your Hardcore save from your account.</p></div>');
+    setTimeout(() => {
+      if (S.hero || $('modal').dataset.hcload !== '1') return;
+      modal('<div class="center"><h2 class="hch">' + icon('flame') + 'Could not reach your account</h2><p>Your Hardcore hero is safe with your account. Check your connection and try again.</p></div>' +
+        '<div class="row" style="justify-content:center"><button class="btn ghost" id="hl-n">Play my Normal hero</button><button class="btn" id="hl-r">Try again</button></div>', md => {
+          md.querySelector('#hl-r').onclick = () => location.reload();
+          md.querySelector('#hl-n').onclick = () => { dormant = true; try { localStorage.setItem('lh_slot', ''); } catch (e) {} location.reload(); };
+        });
+    }, 15000);
   }
   // A Hardcore hero plays only signed in; signed out, the slot waits.
   function hcSignedOut() {
@@ -4657,6 +4681,7 @@
     if (HCS) { const ok = await hcServerOk(); if (ok === false) { hcNotReady(); return; } if (ok === null) return; }
     if (HCS && S.hero && !S.hc) { heldSave('hcslot'); return; } // v142 hotfix: never push a non-Hardcore save from the Hardcore slot
     let rec; try { rec = await api('GET'); } catch (e) { if (!S.hero && $('modal').hidden) setup(); return; }
+    delete $('modal').dataset.hcload;
     const local = saveObj();
     let take = false; try { take = sessionStorage.getItem('lh_take') === '1'; sessionStorage.removeItem('lh_take'); } catch (e) {}
     if (!rec && !S.hero) { setup('You are signed in, but this account has no hero yet. Create one below and it will be saved to your account.'); return; }
@@ -7788,6 +7813,7 @@
       'Starting a Hardcore hero no longer loops back to a refused save, even with the game open in another tab.',
       'Bounty progress shows whole numbers. Hardcore quests no longer offer Sigil claims, since daily Sigils are for your Normal hero.',
       'A game tab in the background or paused no longer reloads itself for an update and takes over the tab you are playing.',
+      'Your Hardcore hero loads on every device you sign in on, and Switch save shows it. Normal saves get a Normal badge at the top to switch saves.',
     ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
@@ -9368,7 +9394,8 @@
   // Only a real size change re-renders, so this can never loop.
   if (window.ResizeObserver) { let aw = 0, ah = 0; new ResizeObserver(es => { const r = es[0].contentRect, w = Math.round(r.width), h = Math.round(r.height); if (w && h && (w !== aw || h !== ah)) { aw = w; ah = h; resize(); } }).observe(arena); }
   syncBuySeg();
-  if (!S.hero) setup(S.migratedFromV1 ? 'Lanternhold has grown. You now lead a party of five, the story has begun, and monsters fight back. Your Embers and relics carried over.' : '');
+  if (!S.hero && HCS && CL && signedIn()) hcLoading();
+  else if (!S.hero) setup(S.migratedFromV1 ? 'Lanternhold has grown. You now lead a party of five, the story has begun, and monsters fight back. Your Embers and relics carried over.' : '');
   else { const away = Math.max(0, (Date.now() - (LOADED_SEEN || Date.now())) / 1000); if (clockSafe()) { S.awayQ = (S.awayQ || 0) + away; S.awayLoad = 1; } else grantOffline(away, true); }
   updateStage(); updatePanel(true); updateAbilities(true);
   setInterval(logic, 100);
