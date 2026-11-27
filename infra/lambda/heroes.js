@@ -29,6 +29,8 @@ async function nameTaken(name, me) {
   } while (x);
   return false;
 }
+// Hardcore record shown on the Hardcore board: deaths, hero falls, wipes, best floor of the current run, best ever.
+const hxOf = x => { x = x && typeof x === 'object' ? x : {}; const k = v => Math.min(1e7, num(v) | 0); return JSON.stringify({ n: k(x.n), hf: k(x.hf), w: k(x.w), run: k(x.run), best: k(x.best) }); };
 const pidOf = sub => crypto.createHash('sha256').update('lh:' + sub).digest('hex').slice(0, 16);
 // Public profile (v132, John 26 Nov 2026): ps is the showcase the game sends (combat stats, worn gear, records, party).
 // Owners hide parts of their profile with pf.h (set through PUT /profile); hidden parts never leave the server.
@@ -56,7 +58,10 @@ function pub(i, o, party) {
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, { error: 'not signed in' });
-  const me = pidOf(cl.sub), rk = e.routeKey;
+  // v142 Hardcore: ?hc=1 is the account's Hardcore slot, its own hero (pid of '<sub>#hc', row flag hc). Hardcore and
+  // Normal heroes never see each other on the Guild board, so nobody borrows across the wall.
+  const hc = (e.queryStringParameters || {}).hc === '1', me = pidOf(hc ? cl.sub + '#hc' : cl.sub), rk = e.routeKey;
+  const sameMode = i => !!(i.hc && i.hc.N === '1') === hc;
   let b = {};
   if (e.body) { try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body, 'base64').toString() : e.body); } catch (x) { return res(400, { error: 'bad json' }); } }
   if (rk === 'PUT /hero') {
@@ -74,17 +79,17 @@ exports.handler = async (e) => {
     let r;
     try {
       r = await db.send(new UpdateItemCommand({ TableName: T, Key: { pid: { S: me } },
-        UpdateExpression: 'SET #n = :n, cls = :c, lv = :l, fl = :f, sd = :s, seen = :t, recruits = :z, u = :u, rf = if_not_exists(rf, :r)' + (card ? ', bp = :bp' : '') + (show ? ', ps = :ps' : ''),
+        UpdateExpression: 'SET #n = :n, cls = :c, lv = :l, fl = :f, sd = :s, seen = :t, recruits = :z, u = :u, rf = if_not_exists(rf, :r)' + (card ? ', bp = :bp' : '') + (show ? ', ps = :ps' : '') + (hc ? ', hc = :hc, hx = :hx' : ''),
         ConditionExpression: 'attribute_not_exists(ban)',
         ExpressionAttributeNames: { '#n': 'name' },
-        ExpressionAttributeValues: Object.assign(card ? { ':bp': { S: card } } : {}, show ? { ':ps': { S: show } } : {}, { ':n': { S: name }, ':c': { S: b.cls }, ':l': { N: String(level) }, ':f': { N: String(floor) }, ':s': { S: side }, ':t': { N: String(Date.now()) }, ':z': { N: '0' }, ':u': { S: cl.sub }, ':r': { S: /^[a-z0-9_-]{1,24}$/.test(b.ref || '') ? b.ref : '-' } }),
+        ExpressionAttributeValues: Object.assign(card ? { ':bp': { S: card } } : {}, show ? { ':ps': { S: show } } : {}, hc ? { ':hc': { N: '1' }, ':hx': { S: hxOf(b.hx) } } : {}, { ':n': { S: name }, ':c': { S: b.cls }, ':l': { N: String(level) }, ':f': { N: String(floor) }, ':s': { S: side }, ':t': { N: String(Date.now()) }, ':z': { N: '0' }, ':u': { S: cl.sub }, ':r': { S: /^[a-z0-9_-]{1,24}$/.test(b.ref || '') ? b.ref : '-' } }),
         ReturnValues: 'UPDATED_OLD' }));
     } catch (x) { if (x.name === 'ConditionalCheckFailedException') return res(403, { error: 'banned' }); throw x; }
     // A brand-new hero is announced in Global chat with their alliance.
     if (CH && !(r.Attributes && r.Attributes.name)) {
       const now = Date.now();
       try { await db.send(new PutItemCommand({ TableName: CH, Item: { pk: { S: 'global' }, sk: { S: now.toString(36).padStart(9, '0') + crypto.randomBytes(3).toString('hex') }, from: { S: 'sys' }, name: { S: 'Lanternhold' }, cls: { S: 'sys-' + side },
-        text: { S: name + ' took up the lantern for ' + SIDE_NAME[side] + ' as a ' + CLS_NAME[b.cls] + '. Welcome to the deep!' }, ttl: { N: String(Math.floor(now / 1000) + 7 * 86400) } } })); } catch (x) {}
+        text: { S: name + ' took up the lantern for ' + SIDE_NAME[side] + ' as a ' + (hc ? 'Hardcore ' : '') + CLS_NAME[b.cls] + '. Welcome to the deep!' }, ttl: { N: String(Math.floor(now / 1000) + 7 * 86400) } } })); } catch (x) {}
     }
     const old = r.Attributes && r.Attributes.recruits;
     return res(200, { ok: true, id: me, recruits: old ? Number(old.N) : 0 });
@@ -94,19 +99,21 @@ exports.handler = async (e) => {
     // ?p=1: only the party's own rows, for the game's timed card refresh (v132), so it never scans the board.
     const r = qs.p === '1' ? { Items: [] } : await db.send(new ScanCommand({ TableName: T, Limit: 300 }));
     const cut = Date.now() - 30 * 864e5;
-    let list = (r.Items || []).filter(i => i.pid.S !== me && i.name && i.seen && Number(i.seen.N) > cut)
+    let list = (r.Items || []).filter(i => i.pid.S !== me && i.name && i.seen && Number(i.seen.N) > cut && sameMode(i))
       .map(i => pub(i, heroOut(i)));
     for (let k = list.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [list[k], list[j]] = [list[j], list[k]]; }
     list.sort((a, c) => c.on - a.on);
     // ?ids=a,b: fresh cards for heroes already in the asker's party, even if the scan missed them.
     const ids = String(qs.ids || '').split(',').filter(x => /^[0-9a-f]{16}$/.test(x) && x !== me).slice(0, 4);
     const party = [];
-    for (const id of ids) { try { const g = await db.send(new GetItemCommand({ TableName: T, Key: { pid: { S: id } } })); if (g.Item && g.Item.name) party.push(pub(g.Item, heroOut(g.Item), true)); } catch (x) {} }
+    for (const id of ids) { try { const g = await db.send(new GetItemCommand({ TableName: T, Key: { pid: { S: id } } })); if (g.Item && g.Item.name && sameMode(g.Item)) party.push(pub(g.Item, heroOut(g.Item), true)); } catch (x) {} }
     return res(200, { heroes: list.slice(0, 10), party });
   }
   if (rk === 'POST /recruit') {
     const id = String(b.heroId || '');
     if (!/^[0-9a-f]{16}$/.test(id) || id === me) return res(400, { error: 'hero' });
+    const t = (await db.send(new GetItemCommand({ TableName: T, Key: { pid: { S: id } }, ProjectionExpression: 'hc' }))).Item;
+    if (t && !sameMode(t)) return res(403, { error: 'hc' });
     try {
       await db.send(new UpdateItemCommand({ TableName: T, Key: { pid: { S: id } }, UpdateExpression: 'ADD recruits :one',
         ConditionExpression: 'attribute_exists(pid)', ExpressionAttributeValues: { ':one': { N: '1' } } }));

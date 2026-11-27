@@ -20,7 +20,8 @@ async function heroes(ids) {
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, { error: 1 });
-  const me = pidOf(cl.sub);
+  // v142 Hardcore (?hc=1): the Hardcore hero is its own row, and invites only go to heroes of the same mode.
+  const hc = (e.queryStringParameters || {}).hc === '1', me = pidOf(hc ? cl.sub + '#hc' : cl.sub);
   if (e.routeKey === 'GET /invites') {
     const r = (await db.send(new D.GetItemCommand({ TableName: T, Key: K(me), ProjectionExpression: 'req, sent, acc, #d, noinv', ExpressionAttributeNames: { '#d': 'dec' } }))).Item || {};
     const req = set(r.req), acc = set(r.acc), dec = set(r.dec), h = await heroes([...new Set([...req, ...acc, ...dec])]);
@@ -48,8 +49,9 @@ exports.handler = async (e) => {
   if (!/^[0-9a-f]{16}$/.test(id) || id === me) return res(400, { error: 'hero' });
   try {
     if (a === 'ask') {
-      const t = (await db.send(new D.GetItemCommand({ TableName: T, Key: K(id), ProjectionExpression: 'noinv' }))).Item;
+      const t = (await db.send(new D.GetItemCommand({ TableName: T, Key: K(id), ProjectionExpression: 'noinv, hc' }))).Item;
       if (t && t.noinv) return res(409, { error: 'solo' });
+      if (!!(t && t.hc) !== hc) return res(403, { error: 'hc' });
       await up(id, 'ADD req :m', { ':m': mine }, 'attribute_exists(cls) AND attribute_not_exists(ban) AND attribute_not_exists(noinv)');
       await up(me, 'ADD sent :i', { ':i': them });
     } else if (a === 'cancel') {

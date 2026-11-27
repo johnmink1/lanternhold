@@ -1,6 +1,6 @@
 # Lanternhold handoff (started 24 Nov 2026, kept current)
 
-This handoff stands on its own for the new Lanternhold project. v141 is live (27 Nov 2026); next release is v142. Live at https://lanternhold.born2gamellc.com.
+This handoff stands on its own for the new Lanternhold project. v141 is live (27 Nov 2026); v142 (Hardcore mode) is being built. Live at https://lanternhold.born2gamellc.com.
 
 ## Where Lanternhold work happens
 
@@ -220,6 +220,17 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
   Party rows (same release, John): `seatLooks(id)` gives your own `prof.pf.g` / `S.wd.b` or a borrowed guest's `pf.g` / `wd.b` (refreshed in `applyGuestCards`); the profile banner tints the row (`.seat.sbn bn-*`), the war banner shows as a small pennant by the name (`seatBanner` caches the SVG so the seat list doesn't repaint each tick).
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
+
+## v142 Hardcore mode (27 Nov 2026)
+John asked for it 27 Nov (thread "Add a Hardcore mode"); plan doc https://claude.ai/artifact/E2gymdd5aYZM4GnkvEXWmU, mockups in project files `hardcore/`.
+- Save slots (client): `lh_slot` in localStorage picks the slot ('' Normal, 'hc' Hardcore); `SAVE_KEY`, `ACT_KEY`, `SYNC_KEY` are per slot. `switchSlot` saves, pushes to the cloud and reloads. `openSlots` (top-bar badge, Settings > Save slots) and `hcWarning` (type HARDCORE to begin). Hardcore needs sign-in and a v142 server (`hcServerOk` reads `/save?hc=1&peek=1` and wants `hc: 1`, otherwise it sends the player back to Normal).
+- Server identity: every Hardcore call adds `?hc=1` (`hcq` in api/papi/chatCall, never adminApi). The Lambdas use `sub + '#hc'` as the user id, so Hardcore gets its own save row, snapshots, activity log, pid, hero row (`hc: 1`, `hx` stats, `u` stays the real sub for bans), mailbox and markets (`mkt#<cls>#hc`). The wallet (bought Sigils) stays account-wide. No new tables or routes.
+- Walls: chat room `hc` is readable by all, posting needs a Hardcore hero row; Mail 409 `hc` across modes; Guild recruit and party invites 403 across modes; hero lists filtered by mode; `/leaderboard?hc=1` is the Hardcore board, the plain board and Hall of Fame leave Hardcore out.
+- Death checks: `infra/lambda/hccheck.js` (always on, unlike savecheck's watch mode) refuses a Hardcore save whose death/wipe/lost counters went down or whose bag holds a lost item uid (409 `hcback`), and a Normal save sent to the Hardcore slot or the other way (409 `hcslot`). Start over (Settings) is a DELETE that leaves an `rst` stamp so old copies stay refused.
+- Rules (core.js, block before `wipe()`): `HC_DYING` 30 s dying window (fits the 28 s Hymn cooldown), Hymn raise costs `HC_RAISE` 3x mana, `hcDie` removes a companion for good (their gear rides in `s.hc.carry` until camp), `hcHeroFall` (hero gear lost, all home), `hcWipe` (seated companions die, all carried gear lost), Lost Pack 25% for 7 days (`hcRecover` on clearing that floor). Cautious descent on by default (`hcTick` steps back one floor on the first fall). NP+, Ember Ring, world boss and Sigil finds are closed in Hardcore (`HC_OFF`, npReady, startAssault, sigilChance). Backups can't move between slots.
+- Baseline (6 h bot, live rules): falls/hour rogue 93-194, tank 63-136, healer 15-79. Hardcore sim with cautious descent: about 0.5-0.67 companion deaths/hour (55-78 without it).
+- Server deploy: `infra/deploy/v142/hardcore.sh` (code only for save, heroes, profile, invite, market, mail, chat, admin, hof; bundles in `infra/deploy/v142/dist/` built by `build.py`, md5-checked, backups to ~/lhbak). It must run BEFORE the v142 client merges. Tests: `NODE_PATH=infra/test/mock node infra/test/hardcore.test.js`.
+- Not at launch: NP+ in Hardcore, a Hardcore Hall of Fame list, Ring and world boss for Hardcore.
 
 ## v141 bundle (27 Nov 2026)
 Shipped as PR #89 (includes #90 PvP Ring Mastery + seasons and #91 layout modules + Dashboard). Ring server `infra/deploy/v141-ring.sh` ran 27 Nov 16:19 UTC on John's go (backup ~/lhbak/lanternhold-arena-202611271619.zip), 0 errors.

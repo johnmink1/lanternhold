@@ -10,9 +10,11 @@ async function canParty(me, leader) {
   const r = await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(leader) }, ProjectionExpression: 'inv' }));
   return !!(r.Item && r.Item.inv && r.Item.inv.SS.includes(me));
 }
-async function room(me, q) {
+async function room(me, q, post) {
   const ch = q.ch;
   if (ch === 'global' || ch === 'trade' || ch === 'help') return ch;
+  // v142 Hardcore chat: anyone can read it; only a Hardcore hero (hero row flag hc) can post.
+  if (ch === 'hc') { if (!post) return 'hc'; const r = await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(me) }, ProjectionExpression: 'hc' })); return r.Item && r.Item.hc ? 'hc' : null; }
   if (ch === 'banner') { const r = await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(me) }, ProjectionExpression: 'sd' })); return r.Item && r.Item.sd ? 'banner#' + r.Item.sd.S : null; }
   // Whispers: each player reads only their own inbox, which holds what they sent and what they got.
   if (ch === 'dm') return 'dm#' + me;
@@ -22,7 +24,7 @@ async function room(me, q) {
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, { error: 'auth' });
-  const me = pidOf(cl.sub), rk = e.routeKey, q = e.queryStringParameters || {};
+  const q = e.queryStringParameters || {}, me = pidOf(q.hc === '1' ? cl.sub + '#hc' : cl.sub), rk = e.routeKey;
   let b = {}; if (e.body) { try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body, 'base64').toString() : e.body); } catch (x) { return res(400, { error: 'json' }); } }
   if (rk === 'GET /chat') {
     const pk = await room(me, q); if (!pk) return res(403, { error: 'room' });
@@ -30,7 +32,7 @@ exports.handler = async (e) => {
     return res(200, { me, msgs: (r.Items || []).filter(i => !i.hid).reverse().map(i => Object.assign({ id: i.sk.S, from: i.from.S, name: i.name.S, cls: i.cls.S, text: i.text.S }, i.np ? { np: +i.np.N } : {}, i.to ? { to: i.to.S, toName: i.toName ? i.toName.S : '' } : {})) });
   }
   if (rk === 'POST /chat') {
-    const pk = await room(me, b); if (!pk) return res(403, { error: 'room' });
+    const pk = await room(me, b, true); if (!pk) return res(403, { error: 'room' });
     let to = null;
     if (b.ch === 'dm') {
       if (!/^[0-9a-f]{16}$/.test(b.to || '') || b.to === me) return res(400, { error: 'to' });

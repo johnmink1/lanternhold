@@ -1,4 +1,4 @@
-/* lh-build 202611271630 */
+/* lh-build 202611271654 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -86,7 +86,7 @@
   const warWinOn = s => !!(s && s.warWin && s.warWin.side && sideOf(s) === s.warWin.side);
   const reviveMs = s => (warWinOn(s) ? WARWIN_REVIVE : REVIVE_TIME) * 1000 * (postOn(s, 'alder') ? 1 - UNIQ_ALDER : 1);
   // v125 Two-Headed Coin (Pip's Curio): a fallen hero has a 25% chance to be back up in 3 seconds.
-  const downAt = (s, now) => now + (fxOnW(s, 'coin') && Math.random() < 0.25 ? 3000 : reviveMs(s));
+  const downAt = (s, now) => now + (s && s.hc ? HC_DYING * 1000 : fxOnW(s, 'coin') && Math.random() < 0.25 ? 3000 : reviveMs(s));
   // Banner lantern (John, 2026-11-24): the more Grand War territories your banner holds right now, the bigger its buff:
   // +1% damage, health, healing and gold per territory, up to +15%. s.warLive = { held: { side: n }, total, week } comes
   // from the war site's /api/nexus.json and refreshes every 15 minutes.
@@ -1163,9 +1163,11 @@
   const ROSTER_ITEMS = ['r.a', 'r.b', 'r.c'];  // one-time Sigil purchases on the wardrobe route
   const heroLv = s => s.hero ? heroLevel(s).lv : 1;
   const unlockOf = id => UNLOCKS.find(u => u.id === id);
-  function canUse(s, id) { const u = unlockOf(id); return !u || !!(s.grand && s.grand[id]) || heroLv(s) >= u.lv; }
-  const nextUnlock = s => UNLOCKS.find(u => !canUse(s, u.id)) || null;
-  function newUnlocks(s, before, after) { return UNLOCKS.filter(u => u.lv > before && u.lv <= after && !(s.grand && s.grand[u.id])); }
+  // Hardcore heroes skip the Ember Ring and the world boss at launch (John 27 Nov 2026, plan question 5).
+  const HC_OFF = ['ring', 'boss'];
+  function canUse(s, id) { if (s && s.hc && HC_OFF.includes(id)) return false; const u = unlockOf(id); return !u || !!(s.grand && s.grand[id]) || heroLv(s) >= u.lv; }
+  const nextUnlock = s => UNLOCKS.find(u => !canUse(s, u.id) && !(s.hc && HC_OFF.includes(u.id))) || null;
+  function newUnlocks(s, before, after) { return UNLOCKS.filter(u => u.lv > before && u.lv <= after && !(s.grand && s.grand[u.id]) && !(s.hc && HC_OFF.includes(u.id))); }
   function jobSlots(s) { const lv = heroLv(s); return Math.max((s.grand && s.grand.jslots) || 0, JOB_SLOT_LV.filter(x => lv >= x).length); }
   const regionNo = f => Math.min(REGIONS - 1, Math.floor((Math.max(1, f) - 1) / 10));
   function trialOf(s, r) { const g = !!(((s.mast || {})[r] || 0) & 1), e = Math.min(TRIAL_ELITES, (s.mastE || {})[r] || 0); return { guardian: g, elites: e, done: g && e >= TRIAL_ELITES }; }
@@ -3098,6 +3100,7 @@
   // Which phase the server's total has reached, and how far into it (id: the event, for its phase size).
   function wbPhase(total, id) { let k = 0, need = id && !wbOld(id) ? WB_HP1R : WB_HP1, t = total; while (t >= need && k < 30) { t -= need; need *= 2; k++; } return { broken: k, into: t, need }; }
   function startAssault(s, now, name) {
+    if (s.hc) return false; // Hardcore heroes skip the world boss at launch
     if (resting(s, now) || !alive(s).length || (s.wb && s.wb.until > now)) return false;
     const id = wbWindow(now).id, old = wbOld(id), unit = foeHp(Math.max(1, s.maxFloorEver), false);
     s.wb = old ? { until: now + WB_TIME * 1000, score: 0, unit, name, old: true } : { until: now + WB_TIME * 1000, score: 0, name, id, k: wbBoss(id), cap: WB_CEIL * unit };
@@ -3157,7 +3160,7 @@
   // The server caps how many found Sigils a player can bank per day (perks.js), so this stays a slow trickle.
   const SIGIL_CHEST = 0.0005, SIGIL_BOSS = 0.001, SIGIL_DEPTH = 0.0001, SIGIL_DROP_DAY = 15;
   const sigilLuck = s => kup(s, 'sense') + SIGIL_DEPTH * Math.min(5, Math.floor((s.maxFloorEver || 0) / 30));
-  const sigilChance = (s, kind) => (kind === 'boss' ? SIGIL_BOSS : SIGIL_CHEST) + sigilLuck(s) + sk(s, 'sig');
+  const sigilChance = (s, kind) => s && s.hc ? 0 : (kind === 'boss' ? SIGIL_BOSS : SIGIL_CHEST) + sigilLuck(s) + sk(s, 'sig');
   function dropSigils(s, foe, rng, events) {
     if (!foe.chest && !foe.boss) return;
     const r = rng || Math.random;
@@ -3248,6 +3251,7 @@
   }
 
   function clearFloor(s, events, boss) {
+    if (s.hc && s.hc.pack && s.hc.pack.f === s.floor) hcRecover(s, Date.now(), events);
     qEv(s, 'floor', { f: s.floor, clean: !s.qdown }); s.qdown = 0;
     if (s.wipeRun && s.wipeRun.f <= s.floor) s.wipeRun = null;
     // Past the end of Act One the way is sealed until Season 2.
@@ -3448,9 +3452,122 @@
     }
   }
 
+
+  // ---------- Hardcore (John, 27 Nov 2026) ----------
+  // A Hardcore hero lives in its own save slot (s.hc). Fallen companions lie dying for HC_DYING seconds: a healer's
+  // Lantern Hymn raises them at HC_RAISE x the mana, otherwise they die for good. A dead companion's gear is carried
+  // (s.hc.carry) until the party reaches the main camp. The hero falling sends everyone home and loses the hero's worn
+  // gear; a wipe kills every seated companion and loses everything worn or carried. Either loss leaves a Lost Pack on
+  // that floor with HC_PACK of the pieces (rounded up), given back when the party clears that floor within HC_PACK_DAYS.
+  // Companions resting or working at the Campfire are never at risk. Hero level, power level, skills and gold are kept.
+  const HC_DYING = 30, HC_RAISE = 3, HC_PACK = 0.25, HC_PACK_DAYS = 7, HC_LOST_KEEP = 400;
+  const hcOn = s => !!(s && s.hc);
+  function hcNorm(h) {
+    h = h && typeof h === 'object' ? h : {};
+    const n = v => (typeof v === 'number' && isFinite(v) && v > 0 ? v : 0);
+    return { at: n(h.at) || Date.now(), n: n(h.n), hf: n(h.hf), w: n(h.w), lostN: n(h.lostN), lost: Array.isArray(h.lost) ? h.lost.filter(x => typeof x === 'string').slice(-HC_LOST_KEEP) : [],
+      dead: Array.isArray(h.dead) ? h.dead.slice(-40) : [], carry: h.carry && typeof h.carry === 'object' ? h.carry : {}, pack: h.pack && Array.isArray(h.pack.items) ? h.pack : null,
+      run: n(h.run), best: n(h.best), caution: h.caution === 0 ? 0 : 1, flee: h.flee ? 1 : 0, back: n(h.back), dyingLoad: Array.isArray(h.dyingLoad) ? h.dyingLoad : null };
+  }
+  function startHardcore(s) { s.hc = hcNorm(null); s.autoAdvance = true; return s; }
+  const hcName = id => { const m = memberById(id); return m ? m.name : 'A companion'; };
+  // Takes items out of the save for good and leaves a Lost Pack with a quarter of them on this floor.
+  function hcLose(s, uids, now, floor) {
+    const set = new Set(uids.filter(Boolean)), gone = s.bag.filter(x => set.has(x.uid));
+    if (!gone.length) return 0;
+    s.bag = s.bag.filter(x => !set.has(x.uid));
+    for (const id in s.gear) for (const p in s.gear[id]) if (set.has(s.gear[id][p])) delete s.gear[id][p];
+    s.hc.lostN += gone.length; s.hc.lost = s.hc.lost.concat(gone.map(x => x.uid)).slice(-HC_LOST_KEEP);
+    const pick = gone.slice(); for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
+    s.hc.pack = { f: floor, at: now, n: gone.length, items: pick.slice(0, Math.ceil(gone.length * HC_PACK)).map(x => JSON.parse(JSON.stringify(x))) };
+    return gone.length;
+  }
+  const hcPackLive = (s, now) => !!(s.hc && s.hc.pack && (now || Date.now()) - s.hc.pack.at < HC_PACK_DAYS * 864e5);
+  function hcRecover(s, now, events) {
+    if (!hcPackLive(s, now)) { if (s.hc && s.hc.pack) s.hc.pack = null; return 0; }
+    const p = s.hc.pack; s.hc.pack = null;
+    for (const it of p.items) { const x = normItem(Object.assign({}, it, { uid: Date.now().toString(36) + (uidSeq++) })); delete x.lk; s.bag.push(x); }
+    events && events.push({ type: 'hcpack', n: p.items.length, of: p.n, f: p.f });
+    return p.items.length;
+  }
+  // Everyone heads for the main camp (as Return to camp does).
+  function hcHome(s) {
+    s.campReturn = Math.max(s.campReturn || 0, s.floor);
+    gotoFloor(s, CAMP_FLOOR); s.autoAdvance = false; s.retryAt = 0; s.wipeRun = null;
+  }
+  function hcDie(s, id, now, events) {
+    if (!s.hc || !id) return;
+    if (id === 'you') return hcHeroFall(s, now, events);
+    if (isGuest(s, id)) { delete s.down[id]; dismissGuest(s, id); events && events.push({ type: 'hcguest', id }); return; }
+    const name = hcName(id), cls = (memberById(id) || {}).cls;
+    if (s.gear[id] && Object.keys(s.gear[id]).length) s.hc.carry[id] = Object.assign({}, s.gear[id]);
+    s.unlocked = s.unlocked.filter(x => x !== id);
+    s.party = s.party.map(x => x === id ? null : x);
+    if (s.jobs) for (const k in s.jobs) if (s.jobs[k] === id) delete s.jobs[k];
+    if (s.autoTrain) delete s.autoTrain[id];
+    delete s.gear[id]; delete s.hp[id]; delete s.down[id]; delete s.levels[id];
+    if (s.traits) delete s.traits[id]; if (s.hires) delete s.hires[id]; if (s.res) delete s.res[id]; if (s.poison) delete s.poison[id]; if (s.dots) delete s.dots[id];
+    s.gone = s.gone || {}; s.gone[id] = now;
+    s.hc.n++; s.hc.dead = s.hc.dead.concat([{ id, name, cls, f: s.floor, at: now }]).slice(-40);
+    s.stats.hcDeaths = (s.stats.hcDeaths || 0) + 1;
+    events && events.push({ type: 'hcdie', id, name });
+    if (s.hc.caution) s.autoAdvance = false;
+    if (s.hc.flee && alive(s).length) { hcHome(s); events && events.push({ type: 'hcflee' }); }
+  }
+  // Dying members who were never raised die; the carried gear of the dead is safe once the party is at the main camp.
+  function hcAtCamp(s, now, events) {
+    for (const id of s.party.slice()) if (id && s.down[id]) hcDie(s, id, now, events);
+    if (s.floor <= CAMP_FLOOR && Object.keys(s.hc.carry).length) { const n = Object.keys(s.hc.carry).length; s.hc.carry = {}; events && events.push({ type: 'hccarry', n }); }
+  }
+  function hcHeroFall(s, now, events) {
+    const f = s.hc.ff || s.floor, lost = Object.values(s.gear.you || {});
+    for (const id of s.party.slice()) if (id && id !== 'you' && s.down[id]) hcDie(s, id, now, events);
+    const n = hcLose(s, lost, now, f);
+    s.gear.you = {}; delete s.down.you; s.hc.hf++; s.hc.n++; s.stats.hcFalls = (s.stats.hcFalls || 0) + 1;
+    for (const id of s.party) if (id) { delete s.down[id]; s.hp[id] = maxHpOf(s, id); }
+    s.minions = []; s.dots = {}; s.poison = {}; s.cc = {};
+    hcHome(s);
+    events && events.push({ type: 'hcherofall', n, f });
+  }
+  function hcWipe(s, now, events) {
+    const f = s.hc.ff || s.floor;
+    s.stats.wipes++; s.dots = {}; s.poison = {}; s.cc = {}; s.minions = [];
+    for (const id of s.party.slice()) if (id && id !== 'you') { s.down[id] = s.down[id] || now; hcDie(s, id, now, null); }
+    const lost = Object.values(s.gear.you || {});
+    for (const id in s.hc.carry) lost.push(...Object.values(s.hc.carry[id]));
+    s.hc.carry = {};
+    const n = hcLose(s, lost, now, f);
+    s.gear.you = {}; delete s.down.you; s.hp.you = maxHpOf(s, 'you');
+    s.hc.w++; s.hc.run = 0;
+    hcHome(s);
+    events && events.push({ type: 'hcwipe', n, f, name: s.foe ? s.foe.name : '' });
+  }
+  // Raising costs HC_RAISE x the Hymn's mana; the extra is paid only when someone is raised.
+  function hcRaiseCost(s, id, fallen, events) {
+    if (!s.hc || !fallen.length) return fallen;
+    const extra = AB_COST * (HC_RAISE - 1);
+    if (resOf(s, id) >= extra) { s.res[id] = resOf(s, id) - extra; return fallen; }
+    events && events.push({ type: 'hcnomana', id });
+    return [];
+  }
+  function hcTick(s, now, events) {
+    const h = s.hc;
+    if (h.dyingLoad) { const dl = h.dyingLoad; h.dyingLoad = null; for (const id of dl) if (s.party.includes(id) || id === 'you') { s.down[id] = s.down[id] || now; hcDie(s, id, now, events); } }
+    if (s.floor > (h.run || 0)) { h.run = s.floor; if (h.run > h.best) h.best = h.run; }
+    // Cautious descent (on by default): the moment anyone falls, stop going deeper and step back one floor.
+    const dn = s.party.some(id => id && s.down[id]);
+    if (dn && h.caution && !h.held && s.floor > CAMP_FLOOR) {
+      h.held = 1; h.ff = s.floor; s.autoAdvance = false;
+      if (s.floor > CAMP_FLOOR + 1) { const f = s.floor - 1; const keep = Object.assign({}, s.down); gotoFloor(s, f); s.down = keep; }
+      events && events.push({ type: 'hccaution', f: s.floor });
+    }
+    if (!dn) { h.held = 0; h.ff = 0; }
+  }
+
   function wipe(s, now, events) {
     // Falling to the world boss just ends the assault; the damage dealt still counts.
     if (s.foe && s.foe.world) { for (const id of s.party) if (id) { delete s.down[id]; s.hp[id] = maxHpOf(s, id) * 0.6; } s.minions = []; endAssault(s, events, true); return; }
+    if (s.hc) return hcWipe(s, now, events);
     s.stats.wipes++; s.dots = {};
     events && events.push({ type: 'wipe', name: s.foe ? s.foe.name : '' });
     for (const id of s.party) if (id) { delete s.down[id]; s.hp[id] = maxHpOf(s, id) * 0.6; }
@@ -3483,7 +3600,7 @@
       healParty(s, 0.45 * pw, true);
       if (s.foe && s.foe.wounded) s.foe.hp = Math.min(s.foe.max, s.foe.hp + s.foe.max * AID_HYMN * pw);
       s.dots = {};
-      const fallen = s.party.filter(x => x && s.down[x]).slice(0, (sb >= 3 ? 5 : 1) + (me ? sk(s, 'revive') : 0));
+      const fallen = hcRaiseCost(s, id, s.party.filter(x => x && s.down[x]).slice(0, (sb >= 3 ? 5 : 1) + (me ? sk(s, 'revive') : 0)), events);
       for (const f of fallen) { delete s.down[f]; s.hp[f] = maxHpOf(s, f) * 0.5; s.stats.revives++; qEv(s, 'revive'); events && events.push({ type: 'revive', id: f }); }
     } else if (m.cls === 'rogue') {
       const d = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 12 * pw * wbMult(s, id);
@@ -3640,14 +3757,17 @@
     if (s.wb && (now >= s.wb.until || resting(s, now))) endAssault(s, events);
     if (s.unlocked.length && !(s.traits && s.unlocked.every(id => s.traits[id]))) for (const id of s.unlocked) traitsOf(s, id);
     if (visiting(s)) return;
+    if (s.hc) hcTick(s, now, events);
     if (resting(s, now)) {
+      if (s.hc) hcAtCamp(s, now, events);
       for (const id of s.party) if (id) { delete s.down[id]; const mx = maxHpOf(s, id); s.hp[id] = Math.min(mx, (s.hp[id] || 0) + mx * 0.25 * (1 + campTrait(s, 'rest')) * dt); }
       s.minions = []; s.lantern = 0; s.dots = {}; s.res = {}; s.oom = {}; s.cc = {};
       return;
     }
     if (s.foe && !atCamp(s, now)) samplePipIncome(s, now);
     // story recruits and revivals
-    for (const id of s.party) if (id && s.down[id] && s.down[id] <= now) { delete s.down[id]; s.hp[id] = maxHpOf(s, id) * 0.4; }
+    if (s.hc) { for (const id of s.party.slice()) if (id && s.down[id] && s.down[id] <= now) { hcDie(s, id, now, events); if (!s.party.includes('you') || s.floor <= CAMP_FLOOR) return; } }
+    else for (const id of s.party) if (id && s.down[id] && s.down[id] <= now) { delete s.down[id]; s.hp[id] = maxHpOf(s, id) * 0.4; }
     // mana and stamina come back over time; an out-of-mana healer wakes up again at RES_WAKE
     s.res = s.res || {}; s.oom = s.oom || {};
     for (const id of s.party) { if (!id || !resKind(id)) continue; s.res[id] = Math.min(RES_MAX, resOf(s, id) + resRegen(s, id) * dt); if (s.oom[id] && s.res[id] >= RES_WAKE) { delete s.oom[id]; events && events.push({ type: 'resback', id }); } }
@@ -3816,7 +3936,7 @@
   }
 
   // NP+ opens once the floor 150 guardian is beaten (the 'act1' story beat or a deeper floor).
-  function npReady(s) { return !!(s && s.hero) && npTier(s) < NP_MAX && ((s.story && s.story.seen && s.story.seen.act1) || (s.maxFloorEver || 1) > ACT_ONE_END); }
+  function npReady(s) { return !!(s && s.hero) && !s.hc && npTier(s) < NP_MAX && ((s.story && s.story.seen && s.story.seen.act1) || (s.maxFloorEver || 1) > ACT_ONE_END); }
   // What a new playthrough keeps: the hero (name, class, alliance), Sigil buys (Bag of Holding, campfire spots, pass,
   // subscription, tonics and draughts), journal lore, feats, Rift tokens, settings, lifetime stats and account flags.
   // Everything else (gold, Dust, floors, levels, XP, stat points, skills, Kindling, gear, Embers, relics, companions,
@@ -3945,6 +4065,8 @@
     if (!o.formation) { registerHero(s); try { autoFormation(s); } catch (e) {} }
     s.formation = 1;
     s.foe = null; s.lantern = 0; s.minions = []; s.abil = {}; s.down = {};
+    // Hardcore: closing the game while someone lies dying does not save them.
+    if (o.hc) { s.hc = hcNorm(o.hc); const dy = Object.keys(o.down || {}).filter(id => id === 'you' || (o.party || []).includes(id)); if (dy.length) s.hc.dyingLoad = dy; }
     s.guests = o.guests || [];
     // Home zones (27 Nov 2026): kills from before count toward the original creature of each family.
     if (!o.bx) { s.bx = {}; for (const c of CREATURES) if (c.id === c.fam && (s.bk || {})['foe_' + c.fam]) s.bx[c.id] = s.bk['foe_' + c.fam]; }
@@ -4545,6 +4667,7 @@
     VERSION, CLASSES, CLASS_ORDER, HERO_CLASSES, PAID_CLASS, freeClassChange, OATH_HEAL, OATH_SHIELD, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
     CREATURES, ROSTERS, FAMILY, LORE_AT, REVEAL, SPECIAL_CHANCE, SPECIAL_FLOOR, RAR_W, RAR_NAME, SIZE_X, ROSTER_HOME, creatureById, creatureHue, creatureRegions, creatureOdds, pickCreature, famsIn, newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, GUEST_REFRESH, GUEST_DROP_HOLD, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec, steadyHeal, steadyClick,
     questCtx, qEv, QDEFS, pickQuests, bountyGo, bountyCat, clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
+    HC_DYING, HC_RAISE, HC_PACK, HC_PACK_DAYS, HC_OFF, hcOn, hcNorm, startHardcore, hcPackLive, hcHome, hcDie, hcRecover, wipe,
     WIPE_HOLD, LOADOUT_FREE, LOADOUT_PASS, loadoutSlots, saveLoadout, wearLoadout, offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_BEST, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive, gearRating,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

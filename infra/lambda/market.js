@@ -28,11 +28,13 @@ const row = i => ({ id: i.sk.S, cls: i.cls.S, seller: i.seller.S, name: i.name.S
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, E);
-  const me = pidOf(cl.sub), op = e.routeKey.split('/').pop(), q = e.queryStringParameters || {}, now = Date.now(), NM = { error: 'name' };
+  // v142 Hardcore (?hc=1): its own seller id and its own markets (mkt#<cls>#hc), so nothing trades across the wall.
+  const q = e.queryStringParameters || {}, hc = q.hc === '1', sub = hc ? cl.sub + '#hc' : cl.sub;
+  const me = pidOf(sub), op = e.routeKey.split('/').pop(), now = Date.now(), NM = { error: 'name' };
   let b = {}; if (e.body) { try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body, 'base64').toString() : e.body); } catch (x) { return res(400, E); } }
   // NP+ (docs/NP-PLUS.md): each tier has its own market (mkt#<cls>#<tier>), and trading locks for 24 h after a new playthrough.
   const h = (await db.send(new GetItemCommand({ TableName: H, Key: { pid: S(me) } }))).Item || {}, np = h.np ? +h.np.N : 0, lock = h.npAt && +h.npAt.N > now - LOCK;
-  const mk = c => 'mkt#' + c + (np ? '#' + np : '');
+  const mk = c => 'mkt#' + c + (hc ? '#hc' : np ? '#' + np : '');
   if (lock && (op === 'list' || op === 'buy')) return res(403, { error: 'lock' });
   if (op === 'market') {
     if (q.mine) {
@@ -64,7 +66,7 @@ exports.handler = async (e) => {
     const L = row(g.Item), buy = op === 'buy';
     if (buy ? L.seller === me || L.at < now - WEEK : L.seller !== me) return res(403, E);
     if (buy && !okName(String(b.name || ''))) return res(400, NM);
-    if (buy && !(await trust.canPay(db, SAVES, cl.sub, L.price, 'market'))) return res(402, { error: 'gold' });
+    if (buy && !(await trust.canPay(db, SAVES, sub, L.price, 'market'))) return res(402, { error: 'gold' });
     const ops = [
       { Delete: { TableName: T, Key: { pk: S(mk(cls)), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } },
       { Delete: { TableName: T, Key: { pk: S('sell#' + L.seller), sk: S(id) } } }];

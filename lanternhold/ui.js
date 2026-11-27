@@ -1,10 +1,17 @@
-/* lh-build 202611271630 */
+/* lh-build 202611271654 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
   const L = window.LH, SP = window.LHSprites;
   const $ = id => document.getElementById(id);
-  const SAVE_KEY = 'lanternhold.save.v1';
+  // Hardcore (v142, John 27 Nov 2026): every account has two save slots, Normal and Hardcore. lh_slot picks the one this
+  // device loads; a hero never moves between them. Server calls from the Hardcore slot carry ?hc=1, so the server keeps
+  // a separate save, hero, Market, Mail and chat identity for it.
+  const SLOT = (() => { try { return localStorage.getItem('lh_slot') === 'hc' ? 'hc' : ''; } catch (e) { return ''; } })();
+  const HCS = SLOT === 'hc';
+  const SLOT_KEYS = { '': 'lanternhold.save.v1', hc: 'lanternhold.save.hc' };
+  const SAVE_KEY = SLOT_KEYS[SLOT];
+  const hcq = p => HCS ? p + (p.indexOf('?') < 0 ? '?' : '&') + 'hc=1' : p;
   const OFFLINE_CAP = 12 * 3600;
 
   // ---------- state ----------
@@ -1199,6 +1206,14 @@
       case 'shieldup': flog('fight', '<b class="bad">' + (e.again ? 'The guardian raises its shield again' : 'The foe hides behind a shield') + '</b>: the party deals ' + Math.round(L.SHIELD_CUT * 100) + '% less damage until it breaks'); break;
       case 'shieldbreak': flog('fight', '<b class="good">Shield broken</b>' + (e.tap ? ' by your strikes' : ' (it wore away)') + ': full damage again'); break;
       case 'wipe': flog('party', '<b class="bad">The party is beaten</b>' + (e.name ? ' by ' + esc(e.name) : '')); break;
+      case 'hcdie': flog('party', '<b class="bad">' + esc(e.name) + ' died</b>. Their gear is carried until you reach the main camp'); break;
+      case 'hcwipe': flog('party', '<b class="bad">The whole party fell</b>' + (e.name ? ' to ' + esc(e.name) : '') + '. ' + e.n + ' pieces of gear lost on floor ' + e.f); break;
+      case 'hcherofall': flog('party', '<b class="bad">You fell</b> on floor ' + e.f + '. ' + e.n + ' pieces of your gear lost'); break;
+      case 'hcnomana': flog('fight', nm(e.id) + ' lacks the mana to raise the fallen (' + L.HC_RAISE * L.AB_COST + ' needed)', 'hcnm', 4000); break;
+      case 'hccaution': flog('party', '<b class="bad">Someone fell</b>: holding on floor ' + e.f + ' (cautious descent)'); break;
+      case 'hccarry': flog('party', 'The gear of the fallen is safe at camp'); break;
+      case 'hcflee': flog('party', 'Retreating to the main camp'); break;
+      case 'hcguest': flog('party', 'A borrowed hero fell and went home'); break;
       case 'wipehold': flog('party', '<b class="bad">Holding one floor up</b> after ' + L.WIPE_HOLD + ' defeats in a row on floor ' + e.f); toast('shield', 'Holding on floor ' + Math.max(1, e.f - 1), 'Your party was beaten ' + L.WIPE_HOLD + ' times in a row on floor ' + e.f + ', so it stays here and keeps earning. Train, change gear or try other companions, then switch Descend back on.', 'warn'); break;
       case 'bossfail': flog('fight', '<b class="bad">The lantern ran out</b> before the guardian fell'); break;
       case 'newfloor': flog('fight', 'Reached a new depth: <b>floor ' + e.floor + '</b>'); break;
@@ -1437,6 +1452,14 @@
         toast('relic', e.level > 1 ? e.relic.name + ' grows stronger' : 'Relic found: ' + e.relic.name, e.relic.desc + (e.level > 1 ? ' (level ' + e.level + ')' : ''), 'relic');
       } else if (e.type === 'retry') {
         toast('sword', 'Back to the stair', 'Your party has rested and heads back down.', 'feat');
+      } else if (e.type === 'hcdie') {
+        sfx.fail(); toast('skull', esc(e.name) + ' died', 'Hardcore: they are gone for good. Return to camp while anyone stands and their gear comes home.', 'warn');
+      } else if (e.type === 'hcherofall' || e.type === 'hcwipe') {
+        sfx.fail(); $('auto').checked = false;
+        toast('skull', e.type === 'hcwipe' ? 'Your whole party fell' : 'You fell', (e.type === 'hcwipe' ? 'Every companion in the party died. ' : 'Your companions carried you back to camp. ') + (e.n ? e.n + ' pieces of gear were lost. Clear floor ' + e.f + ' within ' + L.HC_PACK_DAYS + ' days to recover ' + Math.ceil(e.n * L.HC_PACK) + ' of them.' : 'No gear was lost.') + ' You keep your hero level, power level and skills.', 'warn');
+        updateSeats(true); updatePanel(true);
+      } else if (e.type === 'hcpack') {
+        sfx.relic(); toast('bag', 'Lost Pack recovered', e.n + ' of the ' + e.of + ' lost pieces are back in your bag.', 'loot'); updatePanel(true);
       } else if (e.type === 'wipe') {
         sfx.fail();
         toast('lock', 'Your party fell', 'They retreated a floor to rest and train, and will try again in a little while. Train your companions or check their gear.', 'warn');
@@ -1503,7 +1526,7 @@
   }
   // Activity for the admin audit log (v125): every bell entry, plus "while you were away" gold, rides along with the
   // next cloud sync (pushCloud) and is stored with it on the server for 30 days. Only admins can read it.
-  var ACT_KEY = 'lh_acts', acts = [];
+  var ACT_KEY = HCS ? 'lh_acts_hc' : 'lh_acts', acts = [];
   try { acts = JSON.parse(localStorage.getItem(ACT_KEY) || '[]'); if (!Array.isArray(acts)) acts = []; } catch (e) {}
   // Backup codes (hotfix, 27 Nov 2026): a plain base64 save could be edited by hand (gold set to 999T) and loaded back.
   // Codes now carry a check value over the save text; codes without a matching one are refused.
@@ -1738,7 +1761,7 @@
   let campWas = null;
   function paintCamp() {
     paintEnchOv();
-    const h = campBarHtml();
+    const h = campBarHtml() + (S.hc ? hcBarHtml() : '');
     for (const id of ['campbar', 'campbar2', 'gearcamp']) { const el = $(id); if (el && el.dataset.h !== h) { el.innerHTML = h; el.dataset.h = h; } }
     const c = camp(), cw = c + '|' + mainCamp(); if (campWas !== null && cw !== campWas) { campWas = cw; updateSeats(true); paintBoard(); updateGear(true); } campWas = cw;
     document.body.classList.toggle('incamp', mainCamp()); document.body.classList.toggle('gearok', c);
@@ -3572,7 +3595,7 @@
     document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
     if (typeof paintTown === 'function') paintTown();
     document.querySelectorAll('.tabbody').forEach(b => b.hidden = b.id !== (shut ? 'tab-locked' : 'tab-' + t));
-    if (shut) $('lockbox').innerHTML = roadHtml(f);
+    if (shut) $('lockbox').innerHTML = S.hc && L.HC_OFF.includes(f) ? '<div class="center hclock">' + icon('flame') + '<h2>Not open to Hardcore heroes yet</h2><p>The Ember Ring and the world boss are for Normal heroes for now. Switch save in Settings to play them.</p></div>' : roadHtml(f);
     updatePanel(true);
   }
   const phone = () => matchMedia('(max-width:720px)').matches;
@@ -3951,6 +3974,8 @@
     paladin: 'Plate, a steady party heal and a shield of light. A Sigil class.',
   };
   function setup(note) {
+    if (HCS && !(CL && signedIn())) { hcSignedOut(); return; }
+    if (HCS && !note) note = '<b class="hcred">Hardcore hero.</b> Companions can die for good and gear can be lost. Pick a class, a banner and a new name.';
     let cls = 'rogue', side = 'covenant';
     $('modal').dataset.lock = '1';
     const draw = () => modal((CL && !signedIn() ? '<div class="haveacct"><span>Already have a hero?</span><button type="button" class="btn ghost small" id="h-signin">Sign in</button></div>' : '') + '<div class="center"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-lantern"/></svg><h2>Lanternhold</h2></div>' +
@@ -3971,6 +3996,7 @@
           if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name)) { md.querySelector('#h-err').textContent = 'Use 2 to 16 letters. Spaces, hyphens and apostrophes are fine.'; return; }
           if (!clsOwned(cls)) cls = 'rogue';
           L.startGame(S, 'multi', cls, name, side);
+          if (HCS) { L.startHardcore(S); actPush([Date.now(), 'hc', 'Started a Hardcore hero']); }
           delete $('modal').dataset.lock; closeModal(); audio(); save();
           updateSeats(true); updateAbilities(true); updatePanel(true);
           setTimeout(checkStory, 400);
@@ -3979,6 +4005,79 @@
     draw();
   }
 
+
+  // ---------- Hardcore save slots (v142, John 27 Nov 2026) ----------
+  function slotPeek(k) { try { const raw = localStorage.getItem(SLOT_KEYS[k]); if (!raw) return null; const o = JSON.parse(raw); return o && o.hero ? o : null; } catch (e) { return null; } }
+  function slotLine(o) {
+    const c = L.CLASSES[o.hero.cls];
+    return esc(o.hero.name) + ' &middot; ' + (c ? c.name : '') + ' &middot; hero level ' + fmt(L.heroLv(o)) + ' &middot; power level ' + fmt((o.levels && o.levels.you) || 1) + ' &middot; deepest floor ' + fmt(o.maxFloorEver || 1);
+  }
+  function switchSlot(k) {
+    if (k === SLOT) { closeModal(); return; }
+    const go = () => { try { localStorage.setItem('lh_slot', k); } catch (e) {} location.reload(); };
+    save();
+    if (CL && signedIn() && S.hero && cloudReady) { Promise.resolve(pushCloud(true)).then(go, go); setTimeout(go, 4000); } else go();
+  }
+  function openSlots() {
+    const n = HCS ? slotPeek('') : S.hero ? S : null, h = HCS ? (S.hero ? S : null) : slotPeek('hc');
+    let hcok = false; try { hcok = localStorage.getItem('lh_hcok') === '1'; } catch (e) {}
+    modal('<h2>Choose your save</h2><p>Your account has two save slots. A hero stays in the mode it started in for good. Switch which slot you load any time from here.</p>' +
+      '<div class="choice hcslots"><button class="pick' + (HCS ? '' : ' on') + '" id="sl-n"><b>Normal' + (n ? ' &middot; ' + esc(n.hero.name) : '') + (HCS ? '' : ' <span class="hctag cur">playing</span>') + '</b><small>' + (n ? slotLine(n) + '. ' : signedIn() ? 'Saved with your account. ' : '') + 'Fallen companions get back up, and your gear is always safe.</small></button>' +
+      '<button class="pick hc' + (HCS ? ' on' : '') + '" id="sl-h"><b>Hardcore' + (h ? ' &middot; ' + esc(h.hero.name) : HCS ? '' : ' &middot; ' + (hcok ? 'your slot' : 'empty slot')) + ' <span class="hctag">' + (HCS ? 'playing' : 'for brave delvers') + '</span></b><small>' + (h ? slotLine(h) + '. ' : 'Start a new Hardcore hero. ') + 'Companions can die for good. Lose the party and you lose the gear. Own leaderboard and chat. Nothing trades with Normal.</small></button></div>' +
+      (CL && signedIn() ? '' : '<p class="note">Hardcore needs a free account, so the server can keep every run honest.</p>') +
+      '<div class="row"><button class="btn ghost" id="sl-x">Close</button></div>', md => {
+        md.querySelector('#sl-x').onclick = closeModal;
+        md.querySelector('#sl-n').onclick = () => switchSlot('');
+        md.querySelector('#sl-h').onclick = () => {
+          if (HCS) { closeModal(); return; }
+          if (!CL) return;
+          if (!signedIn()) { closeModal(); authForm('in'); return; }
+          if (h || hcok) switchSlot('hc'); else hcWarning(() => { try { localStorage.setItem('lh_hcok', '1'); } catch (e) {} switchSlot('hc'); });
+        };
+      });
+  }
+  // Everything a Hardcore player can lose, said up front (John: "explain all of this up front").
+  function hcWarning(onGo) {
+    modal('<div class="hcw"><h2>' + icon('flame') + 'Hardcore: read this first</h2><p class="lead">This mode is for players who are ready to lose their gear and their companions. There is no undo.</p><ul>' +
+      '<li>' + icon('skull') + '<span>Companions who fall <b>stay down</b>. A healer can raise them within ' + L.HC_DYING + ' seconds for <b>' + L.HC_RAISE + 'x the mana</b>. If your healer dies, no one can be raised.</span></li>' +
+      '<li>' + icon('user') + '<span>If <b>your hero</b> falls, you wake at camp. You keep your hero level, power level and skills, but your hero\'s <b>gear is gone</b>. Rekindle matters more than ever.</span></li>' +
+      '<li>' + icon('flame') + '<span>Tap <b>Return to camp</b> while <b>at least one</b> member stands and everyone\'s gear comes home, even the gear of the fallen.</span></li>' +
+      '<li>' + icon('sword') + '<span>If the <b>whole party falls</b>, everything they wore is <b>lost</b>. Clear that floor again within ' + L.HC_PACK_DAYS + ' days to recover <b>' + Math.round(L.HC_PACK * 100) + '%</b> of it.</span></li>' +
+      '<li>' + icon('users') + '<span>Companions working or resting at the <b>Campfire</b> are safe. Only a monster can kill a companion.</span></li>' +
+      '<li>' + icon('lock') + '<span>Hardcore gold, gear and items <b>never leave Hardcore</b>: no Market, Mail, gifts or borrowed heroes with Normal.</span></li>' +
+      '<li>' + icon('crown') + '<span>You get your own <b>Hardcore leaderboard</b> and a <b>Hardcore chat</b> tab.</span></li></ul>' +
+      '<details><summary>Full rules</summary><p>Your bag is safe: only what the party wears is at risk. Gold is kept. While you are away, your party earns at its floor but never goes deeper, so nobody dies while you sleep. Cautious descent (on by default) stops going deeper the moment anyone falls. Your Normal hero is never touched. Sigils stay on your account: you can spend them in Hardcore, but daily Sigils and found Sigils are for your Normal hero. The Ember Ring, the world boss and New Playthrough are not open to Hardcore heroes yet. Backups can\'t be loaded into or out of Hardcore, and the server checks every Hardcore save.</p></details>' +
+      '<div class="ty"><span>Type <b>HARDCORE</b> to begin</span><input id="hc-ty" spellcheck="false" autocomplete="off"></div>' +
+      '<div class="row"><button class="btn ghost" id="hc-no">Back to Normal</button><button class="btn hcgo" id="hc-go" disabled>Begin Hardcore</button></div></div>', md => {
+        md.className = 'sheet hcsheet';
+        const ty = md.querySelector('#hc-ty'), go = md.querySelector('#hc-go');
+        ty.oninput = () => { go.disabled = ty.value.trim().toUpperCase() !== 'HARDCORE'; };
+        md.querySelector('#hc-no').onclick = closeModal;
+        go.onclick = () => { if (!go.disabled) onGo(); };
+      });
+  }
+  // A Hardcore hero plays only signed in; signed out, the slot waits.
+  function hcSignedOut() {
+    $('modal').dataset.lock = '1';
+    modal('<div class="center"><h2 class="hch">' + icon('flame') + 'Hardcore needs your account</h2><p>Sign in to play your Hardcore hero. The server keeps every Hardcore run honest, so it never plays signed out.</p></div>' +
+      '<div class="row" style="justify-content:center"><button class="btn ghost" id="hso-n">Play my Normal hero</button>' + (CL ? '<button class="btn" id="hso-in">Sign in</button>' : '') + '</div>', md => {
+        md.querySelector('#hso-n').onclick = () => { delete $('modal').dataset.lock; try { localStorage.setItem('lh_slot', ''); } catch (e) {} location.reload(); };
+        const si = md.querySelector('#hso-in'); if (si) si.onclick = () => { delete $('modal').dataset.lock; authForm('in'); };
+      });
+  }
+  if (HCS) {
+    document.body.classList.add('hcmode');
+    const br = document.querySelector('.brand > div');
+    if (br) { const b = document.createElement('button'); b.className = 'hcbadge'; b.id = 'hcbadge'; b.type = 'button'; b.title = 'Hardcore hero. Tap to switch save.'; b.innerHTML = icon('flame') + 'Hardcore'; b.onclick = openSlots; br.appendChild(b); }
+    setTimeout(() => { if (!(CL && signedIn()) && S.hero) hcSignedOut(); }, 600); // CL is defined further down
+  }
+  // Under the camp bar: what a Hardcore party is carrying and the Lost Pack waiting below.
+  function hcBarHtml() {
+    if (!S.hc) return '';
+    const dead = Object.keys(S.hc.carry || {}).length, p = L.hcPackLive(S) ? S.hc.pack : null;
+    return '<div class="hcbar">' + icon('flame') + '<span><b>Hardcore</b>' + (dead ? ' &middot; carrying the gear of ' + dead + ' fallen: Return to camp brings it home' : '') +
+      (p ? ' &middot; Lost Pack on floor ' + p.f + ' (' + p.items.length + ' pieces, ' + fmtTime(Math.max(0, (p.at + L.HC_PACK_DAYS * 864e5 - Date.now()) / 1000)) + ' left)' : '') + '</span></div>';
+  }
 
   // ---------- Loot Goblin ----------
   function goblinArrives(f) {
@@ -4232,6 +4331,9 @@
       '<h3 class="sethead">Playing with others</h3><label class="setrow setnotif"><span>Party invites from players<small>Off: nobody can invite your hero to their party, and waiting invites are declined. Play solo with your companions and NPC hires.</small></span><input type="checkbox" id="s-inv"' + (S.settings.noInv ? '' : ' checked') + '></label>' +
       '<label class="setrow setnotif"><span>Auto-claim (Lanternholder)<small>Finished bounties and daily quests claim themselves while Lanternholder is on</small></span><input type="checkbox" id="s-aclaim"' + (S.settings.autoClaim === false ? '' : ' checked') + '></label>' +
       (CL ? '<label class="setrow setnotif"><span>Lanternholder tips<small>A short note when a limit Lanternholder lifts gets in your way, at most once a day</small></span><input type="checkbox" id="s-nudge"' + (S.nudgeOff ? '' : ' checked') + '></label>' : '') +
+      (CL ? '<h3 class="sethead">Save slots</h3><p class="setnote">You are playing your <b>' + (HCS ? 'Hardcore' : 'Normal') + '</b> hero. Each account has a Normal and a Hardcore slot.</p><div class="row"><button class="btn ghost" id="s-slots">' + icon('flame') + 'Switch save</button></div>' : '') +
+      (HCS && S.hc ? '<h3 class="sethead">Hardcore</h3><label class="setrow setnotif"><span>Cautious descent<small>The moment anyone falls, stop going deeper and step back one floor</small></span><input type="checkbox" id="s-hccau"' + (S.hc.caution ? ' checked' : '') + '></label>' +
+        '<label class="setrow setnotif"><span>Retreat when a companion dies<small>Head for the main camp by yourself, so everyone else\'s gear comes home</small></span><input type="checkbox" id="s-hcflee"' + (S.hc.flee ? ' checked' : '') + '></label>' : '') +
       '<p style="margin-top:16px">Your progress saves automatically in this browser. Copy a backup to move it to another device.</p>' +
       '<div class="row"><button class="btn ghost" id="s-export">Copy backup</button><button class="btn ghost" id="s-import">Load backup</button><button class="btn danger" id="s-reset">Erase progress</button></div>' +
       '<h3 class="sethead">Screen layout</h3><p class="setnote">' + (layReady() ? 'Move or hide parts of the screen to suit how you play.' : 'Opens once the tutorial is done.') + '</p><div class="row"><button class="btn ghost" id="s-lay"' + (layReady() ? '' : ' disabled') + '>Edit layout</button></div>' +
@@ -4242,6 +4344,9 @@
       '<p class="setver">' + esc(($('ver') && $('ver').textContent) || '') + '</p>' +
       '<div class="row"><button class="btn" id="s-close">Done</button></div>', m => {
         m.querySelector('#s-sound').onchange = e => { S.settings.sound = e.target.checked; };
+        const sl = m.querySelector('#s-slots'); if (sl) sl.onclick = openSlots;
+        const hca = m.querySelector('#s-hccau'); if (hca) hca.onchange = () => { S.hc.caution = hca.checked ? 1 : 0; save(); };
+        const hcf = m.querySelector('#s-hcflee'); if (hcf) hcf.onchange = () => { S.hc.flee = hcf.checked ? 1 : 0; save(); };
         m.querySelector('#s-aclaim').onchange = e => { S.settings.autoClaim = e.target.checked; save(); };
         m.querySelector('#s-inv').onchange = async e => {
           const on = e.target.checked; S.settings.noInv = on ? 0 : 1; if (!on) { inv.asks = []; paintBoard(); } save();
@@ -4270,6 +4375,7 @@
           m.querySelector('#s-extra').innerHTML = '<p>Paste a backup code:</p><textarea></textarea><div class="row"><button class="btn" id="s-doimport">Load it</button></div>';
           m.querySelector('#s-doimport').onclick = () => {
             const o = readBackup(m.querySelector('textarea').value);
+            if (o && (HCS || o.hc)) { toast('flame', 'Not for Hardcore', 'Backups can\'t be loaded into or out of a Hardcore hero.', 'warn'); return; }
             if (!o) { toast('lock', 'That code did not work', 'Check that you copied all of it. Codes from before this update, or changed by hand, no longer load.', 'warn'); return; }
             actPush([Date.now(), 'import', 'Loaded a backup code (' + Math.round(((o.stats && o.stats.playTime) || 0) / 60) + ' min played, ' + Math.round(o.gold || 0) + ' gold).']);
             S = L.migrate(o); save(); closeModal(); location.reload();
@@ -4353,6 +4459,7 @@
   let lastLogic = Date.now(), lastSave = Date.now(), lastSlow = 0;
   function logic() {
     const now = Date.now();
+    if (HCS && !(CL && signedIn())) { lastLogic = now; return; } // a Hardcore hero only plays signed in
     let dt = (now - lastLogic) / 1000; lastLogic = now;
     if (S.hero) {
       if (dt > 5) { if (clockSafe()) { S.awayQ = (S.awayQ || 0) + dt; if (dt > 60) pushCloud(true); } else grantOffline(dt, false); }
@@ -4412,9 +4519,9 @@
   }
   async function api(method, body, path) {
     const tok = await idToken(); if (!tok) throw new Error('signed out');
-    const r = await fetch(CL.api.replace(/\/$/, '') + (path || '/save'), { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(CL.api.replace(/\/$/, '') + hcq(path || '/save'), { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     if (r.status === 404) return null;
-    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); if (j.error === 'moved') elsewhere(); if (j.error === 'held') heldSave(); }
+    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); if (j.error === 'moved') elsewhere(); if (j.error === 'held') heldSave(); if (j.error === 'hcback' || j.error === 'hcslot') heldSave(j.error); }
     if (!r.ok) throw new Error('cloud ' + r.status);
     return r.json();
   }
@@ -4465,7 +4572,7 @@
   async function publishHero() {
     try {
       let ref = ''; try { ref = localStorage.getItem('lh_ref') || ''; } catch (e) {}
-      const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S), ps: myShowcase() }, '/hero');
+      const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S), ps: myShowcase(), hx: S.hc ? { n: S.hc.n, hf: S.hc.hf, w: S.hc.w, run: S.hc.run, best: S.hc.best } : undefined }, '/hero');
       nameAsk = false; if (!prof) loadProfile(); if (isAdmin() && !L.keeperOn(S)) loadOnline();
       const n = r && r.recruits;
       if (n > 0) {
@@ -4500,10 +4607,26 @@
   // time: opening the game picks the newer save by itself (asking only when both copies changed since the last sync)
   // and claims the account; any other open device pauses on its next save with "Play here".
   let cloudReady = false;
-  const SYNC_KEY = 'lh_sync';
+  const SYNC_KEY = HCS ? 'lh_sync_hc' : 'lh_sync';
   function syncMark(pt, up) { try { localStorage.setItem(SYNC_KEY, JSON.stringify({ u: sess && sess.id ? claims(sess.id).sub : '', pt: pt || 0, up: up || 0 })); } catch (e) {} }
   function syncRead() { try { const x = JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); return x && sess && sess.id && x.u === claims(sess.id).sub ? x : null; } catch (e) { return null; } }
+  // v142: a Hardcore game only syncs with a server that keeps the Hardcore slot apart (it answers hc: 1).
+  async function hcServerOk() {
+    try {
+      const tok = await idToken(); if (!tok) return null;
+      const r = await fetch(CL.api.replace(/\/$/, '') + '/save?hc=1&peek=1', { headers: { Authorization: tok } });
+      const j = await r.json().catch(() => ({}));
+      return (r.ok || r.status === 404) ? j.hc === 1 : null;
+    } catch (e) { return null; }
+  }
+  function hcNotReady() {
+    $('modal').dataset.lock = '1';
+    modal('<div class="center"><h2 class="hch">' + icon('flame') + 'Hardcore opens very soon</h2><p>The server side of Hardcore is still being switched on. Your Normal hero is waiting.</p></div><div class="row" style="justify-content:center"><button class="btn" id="hnr-n">Play my Normal hero</button></div>', md => {
+      md.querySelector('#hnr-n').onclick = () => { delete $('modal').dataset.lock; try { localStorage.setItem('lh_slot', ''); } catch (e) {} location.reload(); };
+    });
+  }
   async function reconcile() {
+    if (HCS) { const ok = await hcServerOk(); if (ok === false) { hcNotReady(); return; } if (ok === null) return; }
     let rec; try { rec = await api('GET'); } catch (e) { if (!S.hero && $('modal').hidden) setup(); return; }
     const local = saveObj();
     let take = false; try { take = sessionStorage.getItem('lh_take') === '1'; sessionStorage.removeItem('lh_take'); } catch (e) {}
@@ -4535,8 +4658,15 @@
   // that gained more than real time allows (an edited save or backup, or a cheat tool). The account keeps the last
   // good save; this game stops syncing and offers to load it. An admin can review the held copy and approve it.
   let heldShown = false;
-  function heldSave() {
+  function heldSave(why) {
     if (heldShown || dormant) return; heldShown = true;
+    if (why) { // v142 Hardcore: a death or lost gear came undone, or a save crossed between the Normal and Hardcore slots
+      modal('<div class="center"><h2 class="hch">' + icon('flame') + 'Your save was not accepted</h2><p>' + (why === 'hcslot' ? 'A hero can\'t move between the Normal and Hardcore slots, so the server refused this save.' : 'In Hardcore, deaths and lost gear never come undone. This save is older than one the server already has.') + ' Your account keeps its last good save.</p></div>' +
+        '<div class="row" style="justify-content:center"><button class="btn" id="hs-load">Load my last good save</button></div>', md => {
+          md.querySelector('#hs-load').onclick = () => { try { sessionStorage.setItem('lh_take', '1'); } catch (e) {} location.reload(); };
+        });
+      return;
+    }
     modal('<div class="center"><h2>Your save was not accepted</h2><p>The server checks every save against the last one it accepted. This one gained more gold or progress than the time played allows, so it was held for the team to review. Your account still has your last good save.</p>' +
       '<p class="note">If you think this is a mistake, tell us on Discord. The held save is kept, and the team can approve it.</p>' +
       '<div class="row" style="justify-content:center"><button class="btn ghost" id="hs-stay">Keep playing here</button><button class="btn" id="hs-load">Load my last good save</button></div>', md => {
@@ -4839,7 +4969,7 @@
   let prof = null, warList = null, warAt = 0;
   async function papi(method, path, body) {
     const tok = await idToken(); if (!tok) throw Object.assign(new Error('Sign in first.'), { code: 'auth' });
-    const r = await fetch(CL.api.replace(/\/$/, '') + path, { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(CL.api.replace(/\/$/, '') + hcq(path), { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(j.error || ('server ' + r.status)), { code: j.error || r.status });
     return j;
@@ -5384,7 +5514,7 @@
     return sigCap === sigUtcDay();
   }
   async function claimFound() {
-    if (claiming || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped() || Date.now() < sigWait) return;
+    if (claiming || HCS || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped() || Date.now() < sigWait) return;
     claiming = true;
     try {
       const n = S.sigPend, r = await papi('POST', '/sigils/earn', { kind: 'drop', n });
@@ -5449,6 +5579,7 @@
         md.querySelectorAll('[data-qgo]').forEach(btn => btn.onclick = () => { const g = QGO[btn.dataset.qgo]; closeModal(); if (g) g[1](); });
         md.querySelectorAll('[data-q]').forEach(btn => btn.onclick = async () => {
           if (!signedIn()) { toast('user', 'Sign in first', 'Quest rewards go to your account wallet.', 'warn'); return; }
+          if (HCS) { toast('flame', 'Not in Hardcore', 'Nothing earned in Hardcore leaves it, so daily Sigils are for your Normal hero.', 'warn'); return; }
           const i = +btn.dataset.q; btn.disabled = true;
           try { const r = await papi('POST', '/sigils/earn', { kind: 'quest', i }); S.daily.got = r.mask; if (prof) prof.bal = r.bal; save(); sfx.buy(); toast('star', '+' + r.add + (r.add === 1 ? ' Sigil' : ' Sigils'), i === 3 ? 'All three quests done. See you tomorrow!' : 'Quest complete.', 'feat'); }
           catch (e) { if (e.code === 'claimed') { S.daily.got |= 1 << i; save(); } else toast('lock', 'Could not claim', 'Try again in a moment.', 'warn'); }
@@ -5464,7 +5595,7 @@
     try {
       const st = L.bountyState(S, Date.now());
       (st.list || []).forEach((b, i) => { if (b && !b.got && b.have >= b.n) { const r = L.claimBountyAt(S, i, Date.now()); if (r) { save(); toast('star', 'Bounty paid (auto)', '+' + fmt(r.gold) + ' gold and +' + fmt(r.dust) + ' Dust' + (r.tonic ? ', plus a ' + r.tonic : '') + '.', 'loot'); } } });
-      if (CL && signedIn() && S.daily && Array.isArray(S.daily.q)) {
+      if (CL && signedIn() && !HCS && S.daily && Array.isArray(S.daily.q)) {
         const q = L.questState(S), want = q.filter(x => x.done && !x.got).map(x => x.i);
         if (q.length === 3 && q.every(x => x.done) && !(S.daily.got & 8)) want.push(3);
         for (const i of want) {
@@ -5908,15 +6039,16 @@
     if (!force && Date.now() - lbAt < 60000) return; lbAt = Date.now();
     if (!box.innerHTML) box.innerHTML = '<p class="note">Loading the deepest delvers…</p>';
     try {
-      const r = await fetch(CL.api.replace(/\/$/, '') + '/leaderboard'); if (!r.ok) throw 0;
+      const hcv = lbView === 'hc';
+      const r = await fetch(CL.api.replace(/\/$/, '') + '/leaderboard' + (hcv ? '?hc=1' : '')); if (!r.ok) throw 0;
       const top = (await r.json()).top || [], me = S.hero && S.hero.name;
-      box.innerHTML = '<p class="note">The deepest delvers across the Reach. Sign in to put your hero on the board. Updates every minute.</p>' +
-        (top.length ? '<ol class="lboard">' + top.map((p, i) => '<li class="' + (i < 3 ? 'top' + (i + 1) : '') + (p.name === me ? ' me' : '') + '"><span class="lbr">' + (i + 1) + '</span><span class="lbn"><b>' + esc(p.name) + '</b> ' + classTag(p.cls) + (L.SIDES[p.side] ? '<small>' + esc(L.SIDES[p.side].name) + '</small>' : '') + '</span><span class="lbf"><b>Floor ' + p.floor + '</b><small>power level ' + p.level + '</small></span></li>').join('') + '</ol>' : '<p class="note">Nobody is on the board yet. Be the first.</p>');
+      box.innerHTML = (hcv ? '<p class="note hcnote">' + icon('flame') + 'Hardcore heroes only, by deepest floor. Updates every minute.</p>' : '<p class="note">The deepest delvers across the Reach. Sign in to put your hero on the board. Updates every minute.</p>') +
+        (top.length ? '<ol class="lboard">' + top.map((p, i) => '<li class="' + (i < 3 ? 'top' + (i + 1) : '') + (p.name === me ? ' me' : '') + '"><span class="lbr">' + (i + 1) + '</span><span class="lbn"><b>' + esc(p.name) + '</b> ' + classTag(p.cls) + (hcv && p.hx ? '<small>' + fmt(p.hx.n || 0) + ' lost &middot; ' + fmt(p.hx.w || 0) + ' wipes &middot; this run: floor ' + fmt(p.hx.run || 0) + '</small>' : L.SIDES[p.side] ? '<small>' + esc(L.SIDES[p.side].name) + '</small>' : '') + '</span><span class="lbf"><b>Floor ' + p.floor + '</b><small>power level ' + p.level + '</small></span></li>').join('') + '</ol>' : '<p class="note">' + (hcv ? 'No Hardcore heroes yet. Brave enough to be first?' : 'Nobody is on the board yet. Be the first.') + '</p>');
     } catch (e) { box.innerHTML = '<p class="note">The leaderboard could not load right now. Try again in a minute.</p>'; lbAt = 0; }
   }
   // v131 Hall of Fame (John, 26 Nov 2026): records across the Reach from GET /hof (infra/lambda/hof.js). Hidden feats
   // never count, and nothing here says who was first to NP+1.
-  let lbView = 'deep', hofAt = 0;
+  let lbView = HCS ? 'hc' : 'deep', hofAt = 0;
   const HOF = [
     ['fast', 'map', 'Fastest to NP+1', 'From a new game to New Playthrough 1', v => hofDur(v)],
     ['rich', 'coin', 'Net worth', 'Most gold on hand', v => fmt(v) + ' gold'],
@@ -5955,11 +6087,12 @@
       box.innerHTML = '<p class="note small">Tap a record for the top 3. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(rec).join('') + best + HOF.slice(2).map(rec).join('') + '</div>';
     } catch (e) { box.innerHTML = '<p class="note">' + (e === 404 ? 'The Hall of Fame opens soon.' : 'The Hall of Fame could not load right now. Try again in a minute.') + '</p>'; hofAt = 0; }
   }
+  if (HCS) document.querySelectorAll('#lbseg button').forEach(x => x.classList.toggle('on', x.dataset.lb === 'hc'));
   $('lbseg').addEventListener('click', e => {
     const b = e.target.closest('[data-lb]'); if (!b) return; lbView = b.dataset.lb;
     document.querySelectorAll('#lbseg button').forEach(x => x.classList.toggle('on', x === b));
-    $('boardtop').hidden = lbView !== 'deep'; $('hoftop').hidden = lbView !== 'hof';
-    if (lbView === 'hof') loadHof(); else loadBoard();
+    $('boardtop').hidden = lbView === 'hof'; $('hoftop').hidden = lbView !== 'hof';
+    if (lbView === 'hof') loadHof(); else loadBoard(true);
   });
   $('codexseg').addEventListener('click', e => { if (e.target.closest('[data-cx="board"]')) { if (lbView === 'hof') loadHof(); else loadBoard(); } });
   // ---------- the Grand War: season strip and war room ----------
@@ -6027,7 +6160,7 @@
     return out;
   }
   // @mentions (John, 24 Nov 2026): Banner and Trade are checked in the background too, only to catch pings.
-  const BG_ROOMS = ['dm', 'global', 'banner', 'trade', 'help'];
+  const BG_ROOMS = ['dm', 'global', 'banner', 'trade', 'help', 'hc'];
   const CH_NAME = { global: 'Global', banner: 'Banner', trade: 'Trade', help: 'Help', party: 'Party', dm: 'Whispers' };
   const mentionsMe = m => { if (!S.hero || !m || m.from === chat.me || m.from === 'sys' || chat.muted.has(m.from)) return false;
     const t = String(m.text || '').toLowerCase(), n = '@' + S.hero.name.toLowerCase(); let i = t.indexOf(n);
@@ -6051,7 +6184,7 @@
   const roomKey = () => chat.ch + (chat.ch === 'party' ? ':' + (chat.leader || 'mine') : '');
   async function chatCall(method, path, body) {
     const tok = await idToken(); if (!tok) throw Object.assign(new Error('signed out'), { status: 401 });
-    const r = await fetch(CL.api.replace(/\/$/, '') + path, { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(CL.api.replace(/\/$/, '') + hcq(path), { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(j.error || 'chat'), { status: r.status, code: j.error });
     return j;
@@ -6175,7 +6308,7 @@
     if (dm) return paintWhispers(log, list, atBottom);
     $('dmto').hidden = true;
     log.innerHTML = list.length ? list.map(msgLine).join('')
-      : '<div class="chatempty"><p>' + (chat.ch === 'trade' ? 'Nobody is trading yet. Post what you have or what you need.' : chat.ch === 'help' ? 'Help chat. Stuck on something? Ask here and other delvers and the Lantern Keepers can answer. The wiki at lanternhold.born2gamellc.com/wiki has guides too.' : chat.ch === 'banner' ? 'Banner chat. Only heroes who march under ' + ((L.SIDES[S.hero.side] || {}).name || 'your banner') + ' can read this.' : chat.ch === 'party' ? 'Your party chat. Players whose heroes you recruit, or who recruit yours, can talk here.' : chat.ch === 'dm' ? 'No whispers yet. Tap a player’s name in any channel and choose Whisper to message them privately.' : 'Quiet down here. Say hello.') + '</p></div>';
+      : '<div class="chatempty"><p>' + (chat.ch === 'hc' ? 'Hardcore chat. Only Hardcore heroes can post; anyone can read.' : chat.ch === 'trade' ? 'Nobody is trading yet. Post what you have or what you need.' : chat.ch === 'help' ? 'Help chat. Stuck on something? Ask here and other delvers and the Lantern Keepers can answer. The wiki at lanternhold.born2gamellc.com/wiki has guides too.' : chat.ch === 'banner' ? 'Banner chat. Only heroes who march under ' + ((L.SIDES[S.hero.side] || {}).name || 'your banner') + ' can read this.' : chat.ch === 'party' ? 'Your party chat. Players whose heroes you recruit, or who recruit yours, can talk here.' : chat.ch === 'dm' ? 'No whispers yet. Tap a player’s name in any channel and choose Whisper to message them privately.' : 'Quiet down here. Say hello.') + '</p></div>';
     if (atBottom || list.length < 25) log.scrollTop = log.scrollHeight;
   }
   function mergeMsgs(k, r) {
@@ -6186,8 +6319,8 @@
   }
   // v117 chat windows: each conversation can pop out into its own small window above the dock (desktop).
   const POPS = []; // { ch, pid, name, min }
-  const DOCK_CH = [['global', 'chat'], ['banner', 'shield'], ['trade', 'coin'], ['help', 'help'], ['party', 'users']];
-  const POP_TIP = { global: 'Everyone in the Deep', banner: 'Your banner only', trade: 'Buying and selling', help: 'Questions and answers', party: 'Your party' };
+  const DOCK_CH = [['global', 'chat'], ['banner', 'shield'], ['trade', 'coin'], ['help', 'help'], ['hc', 'flame'], ['party', 'users']];
+  const POP_TIP = { global: 'Everyone in the Deep', banner: 'Your banner only', trade: 'Buying and selling', help: 'Questions and answers', hc: 'Hardcore heroes (anyone can read)', party: 'Your party' };
   const popRoom = p => p.ch === 'dm' ? 'dm' : p.ch === 'party' ? 'party:mine' : p.ch;
   const popViewing = k => POPS.some(p => !p.min && popRoom(p) === k);
   const viewing = k => !document.hidden && ((chat.open && roomKey() === k) || popViewing(k));
@@ -6383,7 +6516,7 @@
         await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: (!pubOff('np') && L.npTier(S)) || undefined });
         inp.value = ''; chat.links = []; chatNote(); pollChat();
       } catch (err) {
-        chatNote({ slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
+        chatNote({ slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: chat.ch === 'hc' ? 'Only Hardcore heroes can post here. Anyone can read along.' : 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
       }
       inp.disabled = false; inp.focus();
     });
@@ -6506,7 +6639,7 @@
       for (const l of chat.links) text = text.replace(l.label, l.token); text = text.replace(/\[\[(?!i:)/g, '[');
       inp.disabled = true;
       try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: (!pubOff('np') && L.npTier(S)) || undefined }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
-      catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
+      catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat.', room: p.ch === 'hc' ? 'Only Hardcore heroes can post here. Anyone can read along.' : 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
       inp.disabled = false; inp.focus();
     });
     addEventListener('resize', () => paintDock()); dockPaint = paintDock;
@@ -7157,6 +7290,14 @@
         'Lanternhold is free. Once the game’s costs are covered, the proceeds go to the Mercy Corps giving: children’s hospitals, food pantries and local schools.',
         'The <b>music button</b> in the top bar opens the player: eight original tracks, skip, shuffle, volume and mute.',
         '<b>Settings</b> (the gear button) holds sound, which pop-ups show in the corner, and your backup. The Guide has <b>Replay the tutorial</b>.']],
+      ['Hardcore mode', 'i:flame', 'A second save for players who are ready to lose companions and gear. Pick it from Switch save in the top bar or Settings.', [
+        'Hardcore is its own run with its own hero. Heroes, gold and gear never move between your Normal and Hardcore saves, and you need to be signed in.',
+        'A companion who falls is <b>dying for ' + L.HC_DYING + ' seconds</b>. A healer can raise them for <b>' + L.HC_RAISE + 'x the mana</b>. If nobody does, they die for good. With the healer dead, nobody is raised.',
+        'If <b>your hero</b> falls, everyone goes back to camp. You keep power level, hero level and skills, but the gear you wore is lost. Rekindle matters more here.',
+        'If the <b>whole party</b> falls, all gear the party wore is lost (your bag is safe). Clear the floor you fell on within ' + L.HC_PACK_DAYS + ' days to win back ' + Math.round(L.HC_PACK * 100) + '% of it.',
+        '<b>Return to camp</b> with anyone still standing and all gear comes home safe, even a dead companion\'s. Campfire workers are never at risk.',
+        '<b>Cautious descent</b> (on by default) steps back a floor when someone falls and stops descending. Settings can also send the party home whenever a companion dies.',
+        'Hardcore has its own leaderboard and chat tab, and its Market and Mail only trade with other Hardcore heroes. NP+, the Ember Ring and the world boss are not open to Hardcore yet.']],
       ['Controls', 'i:help', 'Everything works with taps; keys are shortcuts.', [
         '<b>Tap, Space or Enter</b>: strike',
         '<b>1 to 5</b>: party abilities. <b>6 to 8</b>: your hero’s specializations.',
@@ -7569,6 +7710,15 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 142, date: 'November 2026', title: 'Hardcore mode', items: [
+      'New Hardcore save: a second slot for a separate run. Switch saves from the top bar or Settings. Heroes, gold and gear never move between saves.',
+      'In Hardcore, companions who fall and are not raised within 30 seconds die for good. Healers can still raise them for 3x the mana.',
+      'If your hero falls in Hardcore you go back to camp and keep power level and skills, but lose the gear you wore.',
+      'A party wipe loses all gear the party wore (your bag is safe). Clear the floor you fell on within 7 days to win back a quarter of it.',
+      'Return to camp with anyone still standing and all gear comes home safe. Campfire workers are never at risk.',
+      'Hardcore has its own leaderboard and chat tab. Its Market and Mail only trade with other Hardcore heroes.',
+      'Hardcore needs sign-in. NP+, the Ember Ring and the world boss are not open to Hardcore heroes yet.',
+    ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
       'Edit layout (Settings): move or hide parts of the screen, pin the damage meter or fight log under the fight, and pick your phone\'s bottom bar tabs.',
