@@ -4093,6 +4093,10 @@
     const br = document.querySelector('.brand > div');
     if (br) { const b = document.createElement('button'); b.className = 'hcbadge'; b.id = 'hcbadge'; b.type = 'button'; b.title = 'Hardcore hero. Tap to switch save.'; b.innerHTML = icon('flame') + 'Hardcore'; b.onclick = openSlots; br.appendChild(b); }
     setTimeout(() => { if (!(CL && signedIn()) && S.hero) hcSignedOut(); }, 600); // CL is defined further down
+  } else {
+    // John 27 Nov 2026: the Normal slot gets a matching badge, so switching saves is one tap from the top bar.
+    const br = document.querySelector('.brand > div');
+    if (br) { const b = document.createElement('button'); b.className = 'hcbadge nmbadge'; b.id = 'nmbadge'; b.type = 'button'; b.title = 'Normal hero. Tap to switch save.'; b.innerHTML = icon('sword') + 'Normal'; b.onclick = openSlots; br.appendChild(b); }
   }
   // Under the camp bar: what a Hardcore party is carrying and the Lost Pack waiting below.
   function hcBarHtml() {
