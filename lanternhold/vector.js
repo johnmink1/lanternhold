@@ -1,4 +1,4 @@
-/* lh-build 202611270447 */
+/* lh-build 202611270449 */
 /* Lanternhold illustrated sprites. Each sprite is drawn as layered SVG (outline, shading, rim light, detail),
    tinted per companion or biome, rendered once to an image and then drawn on the arena canvas. */
 (function (root) {
@@ -98,6 +98,54 @@
         L_('M6 6 Q12 5 16 6', '#ffffff', 1.2, ' opacity=".5"'), 'translate(74 70) rotate(4)'),
       // shield hand
       Eo(80, 92, 5, 4.5, steelD),
+    ].join('');
+  } };
+
+  // v139 Paladin (Sigil class): white-and-gold plate, raised warhammer, round sunburst shield, open helm with a sun crest.
+  ART.paladin = { w: 120, h: 160, draw(c) {
+    const plate = c.lg(['#ffffff', '#e9e4d6', '#b9b09a', '#7d735e'], 0.1, 0, 0.9, 1), plateD = c.lg(['#e2dccb', '#a69d86', '#615845'], 0, 0, 1, 1);
+    const gold = c.lg(['#fff4c4', '#f5c242', '#a87418'], 0, 0, 1, 1), cloth = c.mat('#f2ead2'), clothD = c.t('#b8a878'), cape = c.lg([lit(c.t('#c8a040'), 0.08), c.t('#7a5a1c')], 0, 0, 1, 1);
+    const leather = c.lg(['#7a5536', '#4a3020'], 0, 0, 0, 1), skin = c.lg([SK.light, SK.mid], 0, 0, 1, 1);
+    return [
+      // warhammer raised behind the shoulder, with a soft glow on its head
+      G(P('M-2.4 -6 H2.4 V62 H-2.4Z', c.lg(['#b78a52', '#6a4a2a'], 0, 0, 1, 0)) + P('M-3.4 40 H3.4 V46 H-3.4Z', gold) +
+        C(0, -14, 15, c.rg([['#fff6cf', 0.75], ['#f5c242', 0.25], ['#f5c242', 0]]), '') +
+        P('M-13 -22 H13 Q15 -14 13 -6 H-13 Q-15 -14 -13 -22Z', plate) + L_('M-11 -14 H11', gold, 2) + P('M-3 -26 H3 V-22 H-3Z', gold), 'translate(28 66) rotate(-18)'),
+      // cape
+      P('M36 64 Q24 102 28 142 Q44 148 54 138 L58 70Z', cape), L_('M33 90 Q31 112 32 136', '#ffe7a0', 1, ' opacity=".45"'),
+      // legs: gilded greaves and sabatons
+      P('M44 112 L56 112 L55 140 L43 140Z', plateD), P('M60 112 L72 112 L73 140 L61 140Z', plate),
+      L_('M44 124 H56 M60 124 H72', gold, 1.4),
+      P('M40 138 H57 Q58 150 56 155 H38 Q37 146 40 138Z', plateD), P('M59 138 H76 Q80 146 80 155 H60 Q59 148 59 138Z', plate),
+      L_('M40 146 H56 M60 146 H78', gold, 1.2),
+      // tabard with the sun
+      P('M46 72 H72 L74 124 L59 130 L44 124Z', cloth), L_('M46 74 L44 122 M72 74 L74 122', gold, 1.6),
+      C(59, 108, 6, gold, ' stroke="' + OUT + '" stroke-width="1.4"'), L_('M59 98 V96 M59 118 V120 M49 108 H47 M69 108 H71 M52 101 L50.5 99.5 M66 101 L67.5 99.5 M52 115 L50.5 116.5 M66 115 L67.5 116.5', '#f5c242', 1.6),
+      // breastplate
+      P('M38 64 Q58 54 80 64 L78 96 Q58 104 40 96Z', plate), L_('M59 60 V100', '#ffffff', 1, ' opacity=".6"'),
+      L_('M42 68 Q58 60 76 68', '#ffffff', 1.4, ' opacity=".6"'), L_('M40 94 Q58 102 78 94', gold, 1.8),
+      P('M55 70 H63 V76 H69 V83 H63 V92 H55 V83 H49 V76 H55Z', gold),
+      // belt
+      P('M40 96 H78 V102 H40Z', leather), P('M55 95 H63 V103 H55Z', gold),
+      // hammer arm
+      P('M34 68 Q26 80 28 92 L36 92 Q36 82 40 72Z', plateD), Eo(31, 92, 5, 5, plateD),
+      // pauldrons, gold-rimmed
+      P('M30 58 Q36 48 48 54 Q50 64 42 70 Q32 72 30 58Z', plate), L_('M32 60 Q40 52 48 57', gold, 1.8),
+      P('M70 54 Q84 48 90 58 Q90 72 78 70 Q70 64 70 54Z', plate), L_('M72 57 Q82 51 89 59', gold, 1.8),
+      // face under an open helm
+      P('M48 30 Q48 20 59 20 Q70 20 70 30 L70 42 Q59 50 48 42Z', skin),
+      E(54.5, 33, 1.6, 2, '#2a1a10'), E(63.5, 33, 1.6, 2, '#2a1a10'), L_('M56 41 Q59 43 62 41', '#8a4a3a', 1.2),
+      // helm: cheek guards and a sun crest
+      P('M42 34 Q42 12 59 10 Q76 12 76 34 L76 48 Q72 50 70 44 L70 26 Q59 20 48 26 L48 44 Q46 50 42 48Z', plate),
+      L_('M42 34 Q59 18 76 34', gold, 1.8), L_('M46 22 Q52 15 58 13', '#ffffff', 1.6, ' opacity=".7"'),
+      C(59, 8, 6.5, gold, ' stroke="' + OUT + '" stroke-width="1.6"'), L_('M59 -2 V-4 M51 2 L49.6 0.6 M67 2 L68.4 0.6 M49 8 H47 M69 8 H71', '#f5c242', 1.8),
+      // round sunburst shield in front
+      G(C(0, 0, 20, c.lg([lit(c.t('#f2ead2'), 0.04), c.t('#cbbf98')], 0, 0, 1, 1), ' stroke="' + OUT + '" stroke-width="2.4"') +
+        C(0, 0, 17, 'none', ' stroke="#f5c242" stroke-width="2.4"') + C(0, 0, 6.5, gold, ' stroke="' + OUT + '" stroke-width="1.4"') +
+        L_('M0 -9 V-14 M0 9 V14 M-9 0 H-14 M9 0 H14 M-6.4 -6.4 L-10 -10 M6.4 -6.4 L10 -10 M-6.4 6.4 L-10 10 M6.4 6.4 L10 10', '#d9a441', 2) +
+        L_('M-12 -10 Q-6 -15 0 -16', '#ffffff', 1.2, ' opacity=".6"'), 'translate(86 94)'),
+      // shield hand
+      Eo(80, 92, 5, 4.5, plateD),
     ].join('');
   } };
 
@@ -1076,6 +1124,10 @@
     gilded:   { m: [44, 0.75, 1, 0.02], g: [0, 0, 1.12, 0.1], p: [44, 0.2, 1.3, 0.12], a: [200, 0.55, 1, 0.02], aura: 'gold' },
     rift:     { m: [268, 0.3, 0.75, 0], g: [178, 0.8, 1, 0.06], p: [272, 0.62, 0.85, 0], a: [180, 0.7, 0.95, 0.04], aura: 'rift' },
     sworn:    { m: [40, 0.28, 1.1, 0.1], g: [46, 1, 1.05, 0.06], p: [28, 0.82, 1, 0.04], a: [10, 0.8, 1, 0.02], aura: 'lantern' },
+    // v139 cosmetics
+    verdant:  { m: [120, 0.12, 1.02, 0.04], g: [40, 0.7, 1, 0.04], p: [140, 0.5, 1.05, 0.04], a: [340, 0.6, 1.05, 0.06] },
+    scout:    { m: [150, 0.2, 0.75, 0], g: [24, 0.75, 0.95, 0], p: [140, 0.45, 0.7, 0], a: [26, 0.7, 0.95, 0] },
+    dawn:     { m: [42, 0.12, 1.15, 0.12], g: [44, 0.9, 1.08, 0.06], p: [200, 0.45, 1.2, 0.1], a: [32, 0.85, 1.05, 0.04], aura: 'gold' },
   };
   function recolor(svg, o) {
     const memo = {};
@@ -1117,6 +1169,8 @@
     sun:   { flame: ['#ffffff', '#fff1a0', '#f5c242'], glow: [255, 236, 160], metal: '#c99a3a', name: 'Sunforged' },
     soul:  { flame: ['#eafffb', '#7affe0', '#2aa89a'], glow: [120, 255, 225], metal: '#3a5a5a', name: 'Soulflame' },
     void:  { flame: ['#ffffff', '#9aa6ff', '#2a2266'], glow: [140, 150, 255], metal: '#2a2a3a', name: 'Starless' },
+    hearth: { flame: ['#fffbe8', '#ffd47a', '#d98a2a'], glow: [255, 210, 130], metal: '#6a4a2a', name: 'Hearthstar' },
+    aurora: { flame: ['#ffffff', '#9affe6', '#ff7ac8'], glow: [200, 170, 255], metal: '#5a6a8a', name: 'Aurora' },
   };
   ART.lantern = { w: 40, h: 60, draw(c) {
     const L0 = LANTERNS[c.lant] || LANTERNS.ember, mt = c.lg([lit(L0.metal, 0.25), L0.metal, lit(L0.metal, -0.2)], 0, 0, 1, 1);
@@ -1255,7 +1309,7 @@
     leggings: g => P('M19 8 H45 V18 L42 56 H34 L32 24 L30 56 H22 L19 18Z', cloth(g)) + P('M19 8 H45 V13 H19Z', gold(g), 1.4) + L('M22 50 H30 M34 50 H42', gold(g), 2) + C(32, 10.5, 1.8, gem(g), 1),
     slippers: g => P('M10 40 Q10 30 22 30 H34 Q40 30 46 36 Q56 40 56 48 Q56 54 48 54 H16 Q10 54 10 48Z', cloth(g)) + P('M10 48 H56 V54 Q56 56 52 56 H14 Q10 56 10 52Z', '#2a1a0c', 1.4) + L('M24 32 Q30 40 40 34', gold(g), 1.8) + C(52, 40, 3, gem(g), 1.3),
   };
-  const CLOTHS = { plate: ['#3a5fa8', '#22396b'], leather: ['#6b4a2a', '#3a2414'], cloth: ['#5aa04e', '#2e5a2c'], arcane: ['#c2552a', '#6a2414'], grave: ['#6c4aa8', '#2e1e52'] };
+  const CLOTHS = { dawn: ['#e8d8a0', '#a8873a'], plate: ['#3a5fa8', '#22396b'], leather: ['#6b4a2a', '#3a2414'], cloth: ['#5aa04e', '#2e5a2c'], arcane: ['#c2552a', '#6a2414'], grave: ['#6c4aa8', '#2e1e52'] };
   function icon(type, rar, cl, size) {
     const g = defs(rar); const cc = CLOTHS[cl] || CLOTHS.plate;
     const inner = g.d.replace('CLOTHL', cc[0]).replace('CLOTHD', cc[1]) + ART[type](g.id);
@@ -1263,9 +1317,9 @@
   }
 
   const RAR2 = { common: '#9aa4ae', fine: '#4ade80', rare: '#60a5fa', epic: '#c084fc', set: '#34d399', goblin: '#f5c242', legend: '#f97316' };
-  const CL2 = { tank: 'plate', rogue: 'leather', healer: 'cloth', mage: 'arcane', necro: 'grave' };
-  const MAIN0 = { tank: 'mace', healer: 'staff', rogue: 'dagger', mage: 'wand', necro: 'scepter' }, OFF0 = { tank: 'shield', healer: 'tome', rogue: 'parry', mage: 'orb', necro: 'tome' };
-  const WEIGHT0 = { tank: 'plate', rogue: 'leather' };
+  const CL2 = { tank: 'plate', rogue: 'leather', healer: 'cloth', mage: 'arcane', necro: 'grave', paladin: 'dawn' };
+  const MAIN0 = { tank: 'mace', healer: 'staff', rogue: 'dagger', mage: 'wand', necro: 'scepter', paladin: 'mace' }, OFF0 = { tank: 'shield', healer: 'tome', rogue: 'parry', mage: 'orb', necro: 'tome', paladin: 'shield' };
+  const WEIGHT0 = { tank: 'plate', rogue: 'leather', paladin: 'plate' };
   const ARMOR = { plate: { head: 'helm', chest: 'chest', robe: 'chest', legs: 'greaves', feet: 'sabaton' }, leather: { head: 'hood', chest: 'jerkin', robe: 'jerkin', legs: 'breeches', feet: 'boots' }, cloth: { head: 'circlet', chest: 'robe', robe: 'robe', legs: 'leggings', feet: 'slippers' } };
   function artOf(cls, slot, ty) {
     if (slot === 'ring') return 'ring'; if (slot === 'neck') return 'trinket';

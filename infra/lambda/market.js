@@ -4,8 +4,8 @@
 // sales pay the seller 95%; the 5% leaves the game.
 const { DynamoDBClient, GetItemCommand, QueryCommand, TransactWriteItemsCommand } = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
 const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES;
-const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'], SLOT = 'main off head neck chest robe legs feet ring'.split(' '), RAR = ['common', 'fine', 'rare', 'epic', 'set'], JOB = 'forage smith herb armor prospect lamp'.split(' ');
-const SET = { vigil: 'tank', grace: 'healer', night: 'rogue', regalia: 'mage', crown: 'necro' };
+const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'], SLOT = 'main off head neck chest robe legs feet ring'.split(' '), RAR = ['common', 'fine', 'rare', 'epic', 'set'], JOB = 'forage smith herb armor prospect lamp'.split(' ');
+const SET = { vigil: 'tank', grace: 'healer', night: 'rogue', regalia: 'mage', crown: 'necro', dawn: 'paladin' };
 const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard)/i;
 const WEEK = 7 * 864e5, LOCK = 864e5;
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) }), E = { error: 1 };

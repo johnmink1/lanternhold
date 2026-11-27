@@ -36,14 +36,18 @@ const EMAX = 10, EINT = 30 * 6e4, START = 1000;
 // ---- classes ----
 // Each class beats two classes and is beaten by the other two (a five-way rock-paper-scissors circle):
 // with the edge a hero deals 4% more damage, against a counter 4% less.
-const BEATS = { tank: ['rogue', 'healer'], healer: ['necro', 'mage'], rogue: ['mage', 'healer'], mage: ['tank', 'necro'], necro: ['tank', 'rogue'] };
+const BEATS = { tank: ['rogue', 'healer'], healer: ['necro', 'mage'], rogue: ['mage', 'healer'], mage: ['tank', 'necro'], necro: ['tank', 'rogue'], paladin: [] };
+// v139 Paladin (a Sigil class): no edge and no counter (sim 27 Nov 2026, equal builds: 50% average win rate, 45-60% per matchup), so it changes no live matchup and buys no advantage.
+// Its duels and team battles also move no rating until PAL_RATED (two weeks after it opened); Laurels are paid as usual.
+const PAL_RATED = Date.UTC(2026, 11, 14);
+const palQuiet = (now, ...c) => now < PAL_RATED && c.includes('paladin');
 const ADV = 0.04;
 const WHY = {
   'tank>rogue': 'Plate turns daggers aside', 'tank>healer': 'Outlasts every prayer', 'healer>necro': 'Holy light burns the dead', 'healer>mage': 'Mends faster than spells can burn',
   'rogue>mage': 'Gets inside the spell', 'rogue>healer': 'Strikes before the healing lands', 'mage>tank': 'Fire melts through plate', 'mage>necro': 'Flame scours bone',
   'necro>tank': 'Curses ignore armor', 'necro>rogue': 'Drains what it cannot catch' };
 // Each class's nature, always on. Same keys as the passives below.
-const NATURE = { tank: { armor: .1 }, healer: { regen: .01, armor: .06 }, rogue: { crit: .08 }, mage: { power: .1 }, necro: { leech: .12 } };
+const NATURE = { tank: { armor: .1 }, healer: { regen: .01, armor: .06 }, rogue: { crit: .08 }, mage: { power: .1 }, necro: { leech: .12 }, paladin: { armor: .05, regen: .005 } };
 
 // ---- Ring skills, bought with Laurels ----
 // k: 'a' ability (takes the hero's turn, has a cooldown in own turns) or 'p' passive. v: value at ranks 1-3.
@@ -87,9 +91,15 @@ const SK = [
   ['siphon', 'necro', 'p', 'Soul Siphon', 'leech', [.08, .12, .16]],
   ['bonearmor', 'necro', 'p', 'Bone Armor', 'armor', [.06, .09, .12]],
   ['unholy', 'necro', 'p', 'Unholy Will', 'undying', [.08, .12, .16]],
+  ['judgment', 'paladin', 'a', 'Judgment', 'stun', [.8, 1, 1.2], 6],
+  ['oath', 'paladin', 'a', 'Oath of Dawn', 'heal', [.18, .2, .22], 5],
+  ['aegis', 'paladin', 'a', 'Aegis', 'ward', [.3, .4, .5], 7],
+  ['devotion', 'paladin', 'p', 'Devotion', 'regen', [.005, .008, .011]],
+  ['blessedplate', 'paladin', 'p', 'Blessed Plate', 'armor', [.05, .08, .11]],
+  ['vow', 'paladin', 'p', 'Unbroken Vow', 'undying', [.08, .12, .16]],
 ].map(([id, c, k, n, fx, v, cd]) => ({ id, c, k, n, fx, v, cd }));
 const SKB = Object.fromEntries(SK.map(s => [s.id, s]));
-const FREE = { tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain' };
+const FREE = { tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain', paladin: 'judgment' };
 const SKCOST = [150, 300, 600]; // Laurels for rank 1, 2, 3
 const LO_A = 2, LO_P = 2;
 
@@ -99,7 +109,7 @@ const LO_A = 2, LO_P = 2;
 const CKIT = [[0, 6, 0, .02], [6, 0, .02, 0], [3, 3, .01, .01]];
 const CMAX = 10, cgate = r => r >= 5 ? 1300 : 0, ccost = r => 40 + 20 * r;
 const TPOS = [.6, .25, .15];          // share of blows aimed at Front, Middle, Back
-const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'];
+const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'];
 // A companion id: a story/unique companion (letters) or a hired NPC ('n' + base 36). Never a player id (16 hex).
 const CID = /^(?:[a-z]{2,12}|n[0-9a-z]{1,8})$/;
 const cname = x => String(x || '').replace(/[^A-Za-z .'-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24);
@@ -427,7 +437,8 @@ exports.handler = async (e) => {
       const d = teamFight(null, null, my, fo, rnd), w = d.win ? 1 : 0, ex = 1 / (1 + Math.pow(10, (fo.tr - my.tr) / 400));
       const rp = reps(my, now, 'trp'), seen = (rp[id] || []).length, q = REP[Math.min(seen, REP.length - 1)];
       rp[id] = (rp[id] || []).concat(now); const ks = Object.keys(rp).sort((x, y) => Math.max(...rp[y]) - Math.max(...rp[x])).slice(0, 40), rp2 = {}; ks.forEach(k => rp2[k] = rp[k]);
-      const dr = Math.round(32 * (w - ex) * q), fr = Math.round(16 * (w - ex) * q), day = new Date(now).toISOString().slice(0, 10), fw = w && q > 0 && my.tfd !== day;
+      const pq = palQuiet(now, my.c, fo.c) ? 0 : 1;
+      const dr = Math.round(32 * (w - ex) * q * pq), fr = Math.round(16 * (w - ex) * q * pq), day = new Date(now).toISOString().slice(0, 10), fw = w && q > 0 && my.tfd !== day;
       // Team battles pay a little more than duels (John OK'd 27 Nov 2026): a win 10, up to 14 against a stronger team, a loss 4, the day's first team win +10.
       const ll = Math.round((w ? 10 + Math.min(4, Math.max(0, Math.round((fo.tr - my.tr) / 50))) : 4) * q) + (fw ? 10 : 0), dl = Math.round(2 * q);
       const a = await up(me, 'SET tr = :r, tp = :pk, et = :et, tfd = :fd, trp = :rp ADD ' + (w ? 'tw' : 'tx') + ' :one, ll :ll',
@@ -445,7 +456,8 @@ exports.handler = async (e) => {
       // Repeat duels against the same hero within a day: full, half, a quarter, then nothing (rating and Laurels, both sides).
       const rp = reps(my, now), seen = (rp[id] || []).length, q = REP[Math.min(seen, REP.length - 1)];
       rp[id] = (rp[id] || []).concat(now); const ks = Object.keys(rp).sort((x, y) => Math.max(...rp[y]) - Math.max(...rp[x])).slice(0, 40), rp2 = {}; ks.forEach(k => rp2[k] = rp[k]);
-      const dr = Math.round(32 * (w - ex) * q), fr = Math.round(16 * (w - ex) * q), day = new Date(now).toISOString().slice(0, 10), fw = w && q > 0 && my.fd !== day;
+      const pq = palQuiet(now, my.c, fo.c) ? 0 : 1;
+      const dr = Math.round(32 * (w - ex) * q * pq), fr = Math.round(16 * (w - ex) * q * pq), day = new Date(now).toISOString().slice(0, 10), fw = w && q > 0 && my.fd !== day;
       // Laurels are a grind on purpose (John): a win is 8, up to 12 against a stronger hero, a loss 3, the day's first win +10.
       const ll = Math.round((w ? 8 + Math.min(4, Math.max(0, Math.round((fo.r - my.r) / 50))) : 3) * q) + (fw ? 10 : 0), dl = Math.round(2 * q);
       const a = await up(me, 'SET r = :r, pk = :pk, et = :et, fd = :fd, rp = :rp ADD ' + (w ? 'w' : 'l') + ' :one, ll :ll',

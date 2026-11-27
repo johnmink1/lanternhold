@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- lh-build 202611270447 -->
+<!-- lh-build 202611270449 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -60,11 +60,11 @@ for(var i=0;i<M.length&&!r;i++)if(M[i][0].test(h))r=M[i][1];
 if(!r)r=("web-"+h.replace(/[^a-z0-9]+/g,"-")).slice(0,24).replace(/-+$/,"")}
 ls.setItem("lh_ref",r.toLowerCase())})()}catch(e){}</script>
 <script>/* Inside Discord (Activity frame), or localhost with ?discord=mock: load the Discord SDK and the Activity glue (discord/boot.js). */
-if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)&&/[?&]discord=mock\b/.test(location.search)))document.write('<script src="discord/sdk.js?v=202611270447"><\/script><script src="discord/boot.js?v=202611270447"><\/script>');</script>
+if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)&&/[?&]discord=mock\b/.test(location.search)))document.write('<script src="discord/sdk.js?v=202611270449"><\/script><script src="discord/boot.js?v=202611270449"><\/script>');</script>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611270447">
+<link rel="stylesheet" href="style.css?v=202611270449">
 </head>
 <body>
 <div id="app">
@@ -79,7 +79,7 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
       <div class="stat dps" data-tip="Party damage per second, with every bonus counted."><svg viewBox="0 0 24 24"><use href="#i-sword"/></svg><span id="dps">0</span><small>/s</small></div>
       <div class="stat ember" data-tip="Embers. Each one adds 4% damage and gold for good. Earned by rekindling."><svg viewBox="0 0 24 24"><use href="#i-flame"/></svg><span id="embers">0</span></div>
       <div class="stat dust" data-tip="Dust. Scrap gear to get it, more from rarer and deeper pieces. Enchanting and disenchanting cost Dust."><svg viewBox="0 0 24 24"><use href="#i-dust"/></svg><span id="dust">0</span></div>
-      <button class="stat sigils" id="sigils" data-tip="Sigils. Spend them on speed-ups and looks in the Store." hidden><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l3 5 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1z"/></svg><span id="sigilct">0</span></button>
+      <button class="stat sigils" id="sigils" data-tip="Sigils. Tap to open the Sigil shop: Lanternholder, looks, Bag of Holding and packs." hidden><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l3 5 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1z"/></svg><span id="sigilct">0</span></button>
     </div>
       <button class="stat hudchip quests" id="quests" data-tip="Daily quests. Three small goals a day for gold and Sigils."><svg viewBox="0 0 24 24"><use href="#i-flare"/></svg><span id="questct">0/3</span></button>
       <button class="stat hudchip mercy" id="mercy" data-tip="Mercy's Blessing is active. Tap for details." hidden><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-7-4.4-9.3-9C1 8.6 3 5 6.5 5c2 0 3.6 1.1 4.5 2.6h2C13.9 6.1 15.5 5 17.5 5 21 5 23 8.6 21.3 12 19 16.6 12 21 12 21zM11 9v2.5H8.5v2H11V16h2v-2.5h2.5v-2H13V9z"/></svg><span id="mercyct"></span></button>
@@ -116,6 +116,7 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
         <button class="nav" id="next" aria-label="Next floor">&#8250;</button>
       </div>
       <div class="stagebar"><button class="mapbtn" id="btn-map"><svg viewBox="0 0 24 24"><use href="#i-map"/></svg>Map of the Deep</button><div class="goal" id="goal"><span id="goalch">Chapter 1</span><b id="goaltext"></b></div></div>
+      <div class="nextrow"><button class="nextstep" id="nextstep" hidden></button></div>
       </div>
       </div>
 
@@ -150,10 +151,11 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
         <button data-tab="camp"><svg><use href="#i-flame"/></svg><span>Camp</span></button>
         <button data-tab="gear"><svg><use href="#i-bag"/></svg><span>Gear</span><em id="gearcount"></em></button>
         <button data-tab="rekindle"><svg><use href="#i-star"/></svg><span>Skills</span><em id="kindcount"></em></button>
-        <button data-tab="market"><svg><use href="#i-coin"/></svg><span>Market</span><i id="tradedot" class="tdot" hidden></i></button>
-        <button data-tab="guild"><svg><use href="#i-crown"/></svg><span>Guild</span></button>
-        <button data-tab="ring"><svg><use href="#i-duel"/></svg><span>PvP</span></button>
-        <button data-tab="codex"><svg><use href="#i-book"/></svg><span>Codex</span></button>
+        <button class="townitem" data-tab="market"><svg><use href="#i-coin"/></svg><span>Market</span><i id="tradedot" class="tdot" hidden></i></button>
+        <button class="townitem" data-tab="guild"><svg><use href="#i-crown"/></svg><span>Guild</span></button>
+        <button class="townitem" data-tab="ring"><svg><use href="#i-duel"/></svg><span>PvP</span></button>
+        <button class="townitem" data-tab="codex"><svg><use href="#i-book"/></svg><span>Codex</span></button>
+        <button class="onlyphone townbtn" data-town="1" aria-haspopup="true"><svg><use href="#i-lamp"/></svg><span>Town</span><i id="towndot" class="tdot" hidden></i></button>
         <button data-tab="admin" id="tabadmin" hidden><svg><use href="#i-lock"/></svg><span>Admin</span></button>
       </nav>
       <div class="tabbody" id="tab-party">
@@ -182,6 +184,7 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
         <div id="gearcamp"></div>
         <div class="seg subseg"><button data-v="kit" class="on">Equipped</button><button data-v="pack">Pack <em id="packn"></em></button></div>
         <div class="whoseg" id="gearwho"></div>
+        <div class="loadouts" id="loadouts"></div>
         <div class="slots" id="gearslots"></div>
         <div class="packbar">
           <div class="packcap" id="packcap">
@@ -231,7 +234,7 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
         <div id="journal"></div>
       </div>
         <div class="cx" id="cx-war"><div id="warroom"></div></div>
-        <div class="cx" id="cx-board" hidden><div id="boardtop"></div></div>
+        <div class="cx" id="cx-board" hidden><div class="seg lbseg" id="lbseg"><button data-lb="deep" class="on">Deepest</button><button data-lb="hof">Hall of Fame</button></div><div id="boardtop"></div><div id="hoftop" hidden></div></div>
         <div class="cx" id="cx-road" hidden><div id="roadbox"></div></div>
         <div class="cx" id="cx-relics" hidden>
         <p class="note">Guardians on floor 10 and below sometimes drop a relic. Relics stay with you forever, and a duplicate raises its level.</p>
@@ -310,13 +313,13 @@ if(/\.discordsays\.com$/.test(location.hostname)||(/^(localhost|127\.0\.0\.1)$/.
   window.LH_CLOUD = { region: "us-east-1", clientId: "191dppk0cud8d3bdgh3lbmgjr2", api: "https://nyu3u8gc73.execute-api.us-east-1.amazonaws.com" };
 </script>
 <div class="tip" id="tip" role="tooltip" hidden></div>
-<script>window.LH_BUILD = "202611270447";</script>
+<script>window.LH_BUILD = "202611270449";</script>
 <script>window.LH_SUPPORT_URL = "https://buymeacoffee.com/born2gamellc"; /* Buy Me a Coffee page; the button stays hidden while this is empty */</script>
-<script src="music.js?v=202611270447"></script>
-<script src="core.js?v=202611270447"></script>
-<script src="sprites.js?v=202611270447"></script>
-<script src="vector.js?v=202611270447"></script>
-<script src="ui.js?v=202611270447"></script>
-<script src="intro.js?v=202611270447"></script>
+<script src="music.js?v=202611270449"></script>
+<script src="core.js?v=202611270449"></script>
+<script src="sprites.js?v=202611270449"></script>
+<script src="vector.js?v=202611270449"></script>
+<script src="ui.js?v=202611270449"></script>
+<script src="intro.js?v=202611270449"></script>
 </body>
 </html>

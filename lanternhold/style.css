@@ -1,4 +1,4 @@
-/* lh-build 202611270447 */
+/* lh-build 202611270449 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -241,7 +241,7 @@ svg{display:block}
 }
 
 /* ---------- v0.2: party, story, gear ---------- */
-.c-tank{--cc:#9fb6c8}.c-healer{--cc:#8fcf6a}.c-rogue{--cc:#e2c36a}.c-mage{--cc:#ff8a5a}.c-necro{--cc:#b58cff}
+.c-tank{--cc:#9fb6c8}.c-healer{--cc:#8fcf6a}.c-rogue{--cc:#e2c36a}.c-mage{--cc:#ff8a5a}.c-necro{--cc:#b58cff}.c-paladin{--cc:#f3ead0}
 .goal{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;text-align:center;font-size:14px;color:var(--muted)}
 .goal span{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:999px;padding:1px 9px}
 .goal b{color:var(--text);font-weight:700}
@@ -269,7 +269,7 @@ svg{display:block}
 .mini{position:absolute;top:4px;right:6px;background:none;border:0;color:var(--dim);font-size:16px;line-height:1;padding:2px 4px}
 .mini:hover{color:var(--text)}
 .seat .buy{min-width:96px}
-.skill.c-tank svg,.skill.c-healer svg,.skill.c-rogue svg,.skill.c-mage svg,.skill.c-necro svg{color:var(--cc)}
+.skill.c-tank svg,.skill.c-healer svg,.skill.c-rogue svg,.skill.c-mage svg,.skill.c-necro svg,.skill.c-paladin svg{color:var(--cc)}
 .skills{grid-template-columns:repeat(5,minmax(0,1fr))}
 .skill{padding:9px 10px;gap:8px}
 .skill small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -323,7 +323,7 @@ button.scene:hover{border-color:var(--accent)}
 .joined{display:flex;gap:10px;align-items:center;background:#111a29;border:1px solid #263b5e;border-radius:10px;padding:10px 12px;color:#f6dca0;margin-bottom:6px}
 .joined svg{width:22px;height:22px;color:var(--gold);flex:none}
 .modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.classes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.classes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
 .pick.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:color-mix(in srgb,var(--accent) 10%,var(--bg2))}
 .pick.cls{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:12px 8px}
 .pick.cls .ic{width:40px;height:40px}
@@ -974,6 +974,33 @@ body.resting .arena{cursor:default}
 .lboard .lbn{flex:1;min-width:0}
 .lboard .lbn small,.lboard .lbf small{display:block;color:var(--muted);font-size:12px}
 .lboard .lbf{text-align:right}
+.lbseg{margin:0 0 10px;width:max-content;max-width:100%}
+.hof{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.hofd{background:var(--bg2);border:1px solid var(--line);border-radius:10px}
+.hofd.me{border-color:var(--accent)}
+.hofd summary{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;list-style:none;min-width:0}
+.hofd summary::-webkit-details-marker{display:none}
+.hofd summary svg{width:16px;height:16px;flex:none;color:var(--accent)}
+.hofd summary::after{content:'\25B8';color:var(--muted);font-size:11px;flex:none;transition:transform .15s}
+.hofd[open] summary::after{transform:rotate(90deg)}
+.hofn{flex:none;font-weight:800;font-size:13px}
+.hofl1{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;font-size:13px}
+.hofv{flex:none;font-weight:800;font-size:13px;white-space:nowrap;color:var(--text)}
+.hofd>small{display:block;color:var(--muted);font-size:12px;padding:0 10px 4px}
+.hofd ol{list-style:none;margin:0;padding:0 10px 8px;display:flex;flex-direction:column;gap:4px}
+.hofd li{display:flex;align-items:center;gap:6px;font-size:13px;min-width:0}
+.hofd .hofr{color:var(--muted);width:16px;flex:none}
+.hofd li .ctag{flex:none}
+.hofd li>.ctag:first-child{width:118px;text-align:center}
+.hofb{min-width:0;display:flex;flex-direction:column}
+.hofb small{color:var(--muted);font-size:12px}
+@media (max-width:600px){.hofd li>.ctag:first-child{width:auto;min-width:112px}}
+.hofd li b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hofd li em{margin-left:auto;font-style:normal;font-weight:700;white-space:nowrap;padding-left:6px}
+.hofd li.me b{color:var(--accent)}
+.hofd>small:last-child{padding-bottom:8px}
+@media (max-width:600px){.hofl1{font-size:12px}}
+.hofnone{color:var(--muted)}
 /* specialization abilities */
 .knode.t3{border-color:#8a6524;background:linear-gradient(180deg,#111a29,#0e121a)}
 .knode.t3 .kic{color:#f2c14e}
@@ -1166,7 +1193,7 @@ body.resting .arena{cursor:default}
 .renewnote{margin:10px 0 0}.renewnote b{color:var(--text)}
 @media (max-width:560px){.packs{grid-template-columns:repeat(2,1fr);row-gap:16px}}
 .storelink+.note{margin-top:10px}
-.mercygive .row{margin:10px 0 6px}.mercygive .note{margin:0}
+.mercygive .row{margin:10px 0 12px}.mercygive .note{margin:0}
 /* Mercy's Blessing pill */
 .stat.mercy{color:#8fcf6a;cursor:pointer;font:inherit;font-weight:800;font-size:15px;animation:mercyglow 3s ease-in-out infinite}
 .stat.mercy:hover{border-color:#8fcf6a}
@@ -2750,3 +2777,59 @@ details.tmfold[open]>summary{border-bottom:1px solid var(--line);margin-bottom:8
 .bdlock svg{width:16px;height:16px}
 .bdprog{margin-top:12px}
 @media (max-width:520px){.bdtop{flex-direction:column;align-items:center}.bdfacts{width:100%}}
+/* v138 buying steps + the pack the player tapped before signing in to the store */
+.buysteps{list-style:none;counter-reset:bs;margin:10px 0 14px;padding:0;display:flex;flex-direction:column;gap:10px}
+.buysteps li{counter-increment:bs;display:grid;grid-template-columns:30px 1fr;gap:2px 10px;align-items:start}
+.buysteps li::before{content:counter(bs);grid-row:span 2;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--panel2);border:1px solid var(--gold);color:var(--gold);font-weight:800;font-size:14px}
+.buysteps b{font-size:15px}.buysteps span{color:var(--muted);font-size:14px;line-height:1.45}
+.pack.want{border-color:var(--gold);box-shadow:0 0 0 2px rgba(245,194,66,.35),0 0 18px rgba(245,194,66,.25)}
+.passnudge{display:flex;gap:8px;align-items:flex-start;text-align:left;margin:10px auto 4px;max-width:420px;padding:9px 12px;border:1px solid rgba(232,121,249,.35);border-radius:10px;background:rgba(232,121,249,.06);color:var(--muted);font-size:14px;line-height:1.45}
+.passnudge svg{width:18px;height:18px;flex:none;color:var(--violet);margin-top:1px}
+.passnudge .linkbtn{color:var(--violet);font-size:14px;font-weight:700}
+.toast.nudge{cursor:pointer;border-color:rgba(232,121,249,.45)}
+.namerow{display:flex;gap:8px;align-items:stretch}.namerow input{flex:1;min-width:0}
+.pick.side .newtag{position:absolute;top:8px;right:8px;font-size:11px;font-weight:800;letter-spacing:.02em;padding:2px 7px;border-radius:999px;background:var(--gold);color:#1a1205;z-index:2}
+.pick.side{position:relative}
+/* v138 Next step chip under the floor name */
+.nextstep{display:inline-flex;align-items:center;gap:8px;padding:5px 8px 5px 10px;border-radius:999px;border:1px solid rgba(245,194,66,.5);background:rgba(245,194,66,.1);color:var(--text);font:inherit;font-size:13px;cursor:pointer;animation:nsglow 2.4s ease-in-out infinite;white-space:nowrap}
+.nextstep .ns-l{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)}
+.nextstep .ns-x{font-style:normal;color:var(--dim);padding:0 2px 0 4px;font-size:16px;line-height:1}
+@keyframes nsglow{0%,100%{box-shadow:0 0 0 rgba(245,194,66,0)}50%{box-shadow:0 0 12px rgba(245,194,66,.35)}}
+@media (prefers-reduced-motion:reduce){.nextstep{animation:none}}
+.dmgplus{color:var(--gold);font-weight:800;margin-left:1px}
+/* v138 phone Town menu */
+.townmenu{display:none}
+@media (max-width:720px){
+  .tabs .townitem{display:none}
+  .townmenu{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;position:fixed;right:8px;left:8px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:45;padding:10px;border-radius:14px;border:1px solid var(--line2);background:var(--panel);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .townmenu button{display:flex;align-items:center;gap:8px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--text);font:inherit;font-weight:700;font-size:15px;position:relative}
+  .townmenu button svg{width:20px;height:20px}
+  .townmenu button.on{border-color:var(--accent)}
+  .townmenu button.locked{opacity:.55}
+  .townmenu .tdot{position:static;margin-left:auto}
+  .tabs .townbtn .tdot{position:absolute;top:2px;left:calc(50% + 8px)}
+}
+/* v138 gear loadouts */
+.loadouts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 8px}
+.loadouts .lo-h{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin-right:2px}
+.loadouts .lo{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);font-size:13px}
+.loadouts .lo.has{border-color:var(--line2)}
+.loadouts .lo .btn.small{padding:4px 9px;font-size:12px}
+.loadouts .lo-lock{color:var(--dim);cursor:pointer;font:inherit;font-size:13px;padding:6px 10px}
+.loadouts .lo-lock svg{width:13px;height:13px}
+.nextrow{display:flex;justify-content:center;width:100%}.nextrow .nextstep{margin:6px 0 2px;max-width:calc(100% - 24px);white-space:normal;flex:0 0 auto}
+
+/* v139 Sigil classes */
+.pick.cls{position:relative}
+.paytag{display:inline-flex;align-items:center;gap:3px;font-style:normal;font-size:11px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--gold);color:#1a1205}
+.paytag .sigil{width:11px;height:11px;fill:currentColor}
+.pick.cls .paytag{position:absolute;top:6px;right:6px}
+.pick.cls.paid{border-style:dashed}
+.respecs .paytag{margin-left:6px}
+.clsbuy .clsart{width:96px;height:128px;object-fit:contain;image-rendering:auto;margin:0 auto 4px;display:block}
+@media (max-width:560px){.classes{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.fpnote{display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px 12px;border-radius:12px;background:rgba(245,194,66,.12);border:1px solid rgba(245,194,66,.35);font-size:13px}
+.fpnote .sigil{width:16px;height:16px;fill:var(--gold);flex:none}
+.shoutchk{margin:8px 0 0;font-size:13px}
+.pack.starter{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:'i b p' 'i s p' 'i e p';align-items:center;gap:2px 10px;width:100%;margin:8px 0;text-align:left;border-color:rgba(245,194,66,.55)}
+.pack.starter>.sigil{grid-area:i}.pack.starter>b{grid-area:b}.pack.starter>small{grid-area:s}.pack.starter>em{grid-area:e;justify-self:start}.pack.starter>span{grid-area:p;font-weight:800}

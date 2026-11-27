@@ -3,8 +3,8 @@
 // 'return' letter). Senders can recall an unanswered offer. Letters (sale, payment, return) are claimed.
 const { DynamoDBClient, GetItemCommand, QueryCommand, TransactWriteItemsCommand } = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
 const db = new DynamoDBClient({}), T = process.env.TABLE, H = process.env.HEROES;
-const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'], SLOT = 'main off head neck chest robe legs feet ring'.split(' '), RAR = ['common', 'fine', 'rare', 'epic', 'set'], JOB = 'forage smith herb armor prospect lamp'.split(' ');
-const SET = { vigil: 'tank', grace: 'healer', night: 'rogue', regalia: 'mage', crown: 'necro' };
+const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'], SLOT = 'main off head neck chest robe legs feet ring'.split(' '), RAR = ['common', 'fine', 'rare', 'epic', 'set'], JOB = 'forage smith herb armor prospect lamp'.split(' ');
+const SET = { vigil: 'tank', grace: 'healer', night: 'rogue', regalia: 'mage', crown: 'necro', dawn: 'paladin' };
 const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard)/gi;
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) });
 const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);

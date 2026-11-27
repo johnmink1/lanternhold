@@ -1,5 +1,7 @@
 // Lanternhold war desk: the public Grand War commander list, and admin tools for commander links and Sigils.
 // GET /war reads the Grand War site's public ranks and honors.
+// GET /warlinks (John, 27 Nov 2026): the Grand War bot's weekly Lantern Deep scoring. Verified commander links only, with the
+// stats the game already shows publicly (hero name, class, power level, deepest floor, NP+ tier, verified commander name).
 const D = require('@aws-sdk/client-dynamodb');
 const db = new D.DynamoDBClient({});
 const { HEROES: H, WALLETS: W } = process.env;
@@ -23,6 +25,15 @@ async function getWar() {
 exports.handler = async (e) => {
   const rk = e.routeKey;
   if (rk === 'GET /war') { try { return res(200, { c: await getWar() }, { 'cache-control': 'public, max-age=300' }); } catch (x) { return res(502, { error: 'war' }); } }
+  if (rk === 'GET /warlinks') {
+    const out = []; let k;
+    do {
+      const r = await db.send(new D.ScanCommand({ TableName: H, ExclusiveStartKey: k, FilterExpression: 'wv = :one AND attribute_not_exists(ban)', ExpressionAttributeValues: { ':one': { N: '1' } } }));
+      for (const i of r.Items || []) if (i.name && i.wl) out.push({ id: i.pid.S, c: i.wl.S, n: i.name.S, cls: i.cls ? i.cls.S : '', lv: i.lv ? +i.lv.N : 0, fl: i.fl ? +i.fl.N : 0, np: i.np ? +i.np.N : 0, seen: i.seen ? +i.seen.N : 0 });
+      k = r.LastEvaluatedKey;
+    } while (k);
+    return res(200, { links: out, at: Date.now() }, { 'cache-control': 'public, max-age=300' });
+  }
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !String(cl['cognito:groups'] || '').includes('admins')) return res(403, { error: 'admin only' });
   let b = {};

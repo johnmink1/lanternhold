@@ -1,6 +1,7 @@
 // Shared perks: Mercy's Blessing (public clock fed by real Mercy Corps donations) and the Lantern Pass (bought with Sigils).
 const D = require('@aws-sdk/client-dynamodb');
-const db = new D.DynamoDBClient({}), { WALLETS: W } = process.env;
+const db = new D.DynamoDBClient({}), { WALLETS: W, HEROES: H } = process.env, crypto = require('crypto');
+const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) });
 const S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
 const IP = { draught: 10, t_gold: 20, t_loot: 20, t_xp: 15 };
@@ -54,6 +55,28 @@ exports.handler = async (e) => {
   // Lantern Pass: 500 Sigils for 30 days of convenience perks, stacking onto any time left.
   // Speed-ups for Sigils ({ what: 'item', id, n }): gold, loot and XP tonics and the Campfire Draught. Combat tonics are gold only.
   // The same route sells a stat reset ({ what: 'respec' }) for 50 Sigils and the Bag of Holding ({ what: 'boh' }), once, for 6,500.
+  // v139 gifting: { what: 'gift', to: pid } spends 500 of your Sigils on 30 days of Lanternholder for another player's hero.
+  // The gift lands on their wallet with your hero's name (gift: [name, at]); the game shows it to them once.
+  if (e.routeKey === 'POST /store/pass' && b.what === 'gift') {
+    const to = String(b.to || ''), me = pidOf(cl.sub);
+    if (!H || !/^[0-9a-f]{16}$/.test(to) || to === me) return res(400, { error: 'to' });
+    const get = id => db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(id) } })).then(r => r.Item);
+    const [h, mine] = await Promise.all([get(to), get(me)]);
+    if (!h || !h.u || !h.name || h.ban) return res(404, { error: 'to' });
+    if (!mine || !mine.name || mine.ban) return res(403, { error: 'hero' });
+    const K = { userId: S(cl.sub) }, RK = { userId: h.u }, now = Date.now();
+    const [w, rw] = await Promise.all([K, RK].map(k => db.send(new D.GetItemCommand({ TableName: W, Key: k })).then(r => r.Item)));
+    const bal = w && w.bal ? +w.bal.N : 100, was = rw && rw.pass ? +rw.pass.N : 0, until = Math.max(now, was) + 2592e6;
+    if (bal < 500) return res(400, { error: 'funds' });
+    try {
+      await db.send(new D.TransactWriteItemsCommand({ TransactItems: [
+        { Update: { TableName: W, Key: K, UpdateExpression: 'SET bal = if_not_exists(bal, :g) - :c, own = if_not_exists(own, :o)', ConditionExpression: 'attribute_not_exists(bal) OR bal >= :c',
+          ExpressionAttributeValues: { ':g': N(100), ':c': N(500), ':o': { SS: ['f.plain'] } } } },
+        { Update: { TableName: W, Key: RK, UpdateExpression: 'SET pass = :p, gift = :f, bal = if_not_exists(bal, :g), own = if_not_exists(own, :o)', ConditionExpression: was ? 'pass = :w' : 'attribute_not_exists(pass)',
+          ExpressionAttributeValues: Object.assign({ ':p': N(until), ':f': S(JSON.stringify([mine.name.S.slice(0, 20), now])), ':g': N(100), ':o': { SS: ['f.plain'] } }, was ? { ':w': N(was) } : {}) } }] }));
+    } catch (x) { if (x.name === 'TransactionCanceledException') return res(409, { error: 'state' }); throw x; }
+    return res(200, { ok: true, bal: bal - 500, name: h.name.S });
+  }
   if (e.routeKey === 'POST /store/pass') {
     const K = { userId: S(cl.sub) }, w = (await db.send(new D.GetItemCommand({ TableName: W, Key: K }))).Item, bh = b.what === 'boh', it = b.what === 'item' && Object.hasOwn(IP, b.id) && IP[b.id], n = Math.max(1, Math.min(10, b.n | 0)), rs = bh || it || b.what === 'respec', c = bh ? 6500 : it ? it * n : rs ? 50 : 500;
     if (b.what === 'item' && !it) return res(400, { error: 1 });

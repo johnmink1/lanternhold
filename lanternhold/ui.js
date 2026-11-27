@@ -1,4 +1,4 @@
-/* lh-build 202611270447 */
+/* lh-build 202611270449 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -265,12 +265,12 @@
   let tAnim = 0, lastFrame = performance.now(), slashTimer = 0;
   // ---------- party in the arena ----------
   const FOE_X = 0.72;
-  const CLASS_ICON = { tank: 'shield', healer: 'cross', rogue: 'dagger', mage: 'flare', necro: 'skull' };
+  const CLASS_ICON = { tank: 'shield', healer: 'cross', rogue: 'dagger', mage: 'flare', necro: 'skull', paladin: 'hammer' };
   const memberAnim = {}, minionSwing = [], leavers = [];
   // a companion sent back to camp walks off toward the stair and fades
   function leaveArena(id) { const a = memberAnim[id], m = L.memberById(id); if (a && m) leavers.push({ cls: m.cls, hue: lookHue(m), x: a.x - 12, y: a.y - 8, t: tAnim }); }
   const mAnim = id => (memberAnim[id] = memberAnim[id] || { hit: 0, lunge: 0, x: 0, y: 0 });
-  const FRONT = { tank: 0, rogue: 1, mage: 2, necro: 3, healer: 4 };
+  const FRONT = { tank: 0, paladin: 0.5, rogue: 1, mage: 2, necro: 3, healer: 4 };
   // who a marked-position special will land on (the same spot in the line the core picked)
   function spTarget() { const w = S.foe && S.foe.spWind; if (!w || w.pos < 0) return null; const live = S.party.filter(id => id && !S.down[id]); return live[Math.min(w.pos, live.length - 1)] || null; }
   // the wind-up warning across the top of the arena
@@ -1193,13 +1193,14 @@
       case 'shieldup': flog('fight', '<b class="bad">' + (e.again ? 'The guardian raises its shield again' : 'The foe hides behind a shield') + '</b>: the party deals ' + Math.round(L.SHIELD_CUT * 100) + '% less damage until it breaks'); break;
       case 'shieldbreak': flog('fight', '<b class="good">Shield broken</b>' + (e.tap ? ' by your strikes' : ' (it wore away)') + ': full damage again'); break;
       case 'wipe': flog('party', '<b class="bad">The party is beaten</b>' + (e.name ? ' by ' + esc(e.name) : '')); break;
+      case 'wipehold': flog('party', '<b class="bad">Holding one floor up</b> after ' + L.WIPE_HOLD + ' defeats in a row on floor ' + e.f); toast('shield', 'Holding on floor ' + Math.max(1, e.f - 1), 'Your party was beaten ' + L.WIPE_HOLD + ' times in a row on floor ' + e.f + ', so it stays here and keeps earning. Train, change gear or try other companions, then switch Descend back on.', 'warn'); break;
       case 'bossfail': flog('fight', '<b class="bad">The lantern ran out</b> before the guardian fell'); break;
       case 'newfloor': flog('fight', 'Reached a new depth: <b>floor ' + e.floor + '</b>'); break;
       case 'rset': flog('loot', 'Region set piece: <b class="r-set" style="color:var(--rc)">' + esc(L.gearName(e.item)) + '</b>'); break;
       case 'goblinsack': flog('loot', '<b class="r-goblin" style="color:var(--rc)">The Loot Goblin dropped his Sack!</b>'); break;
       case 'loot': flog('loot', 'Found <b class="r-' + e.item.rar + '" style="color:var(--rc)">' + esc(L.gearName(e.item)) + '</b>'); break;
       case 'autoscrap': flog('loot', 'Auto-scrapped <b class="r-' + e.item.rar + '" style="color:var(--rc)">' + esc(L.gearName(e.item)) + '</b> for ' + fmt(e.gold) + ' gold, ' + e.dust + ' Dust'); break;
-      case 'autosell': flog('loot', 'Pack full: sold ' + esc(L.gearName(e.item))); break;
+      case 'autosell': flog('loot', 'Pack full: sold ' + esc(L.gearName(e.item))); if (!S.boh && nudgeOk('bag')) nudgeToast('bag', 'Your pack is full', 'New finds are being sold. Lanternholder adds ' + L.PASS_BAG + ' slots; the Bag of Holding removes the limit. Tap to see.', 'bag'); break;
       case 'sigil': flog('loot', 'Found <b>' + e.n + ' Sigils</b>'); break;
       case 'relic': flog('loot', 'Relic: <b>' + esc(e.relic.name) + '</b>' + (e.level > 1 ? ' (level ' + e.level + ')' : '')); break;
       case 'goblinflee': flog('loot', '<b class="bad">The Loot Goblin escaped</b>' + (e.item ? ' with ' + esc(L.gearName(e.item)) : '')); break;
@@ -1512,6 +1513,12 @@
     if (acts.length > 30) acts = acts.slice(-30);
     try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
   }
+  // v138 shop funnel: shop opened, checkout started, purchase credited. Rides to the admin log like bell entries,
+  // so we can see where buyers drop off (before v138 only finished store orders were visible).
+  function shopTrack(step, what) {
+    try { S.stats.shop = S.stats.shop || {}; S.stats.shop[step] = (S.stats.shop[step] || 0) + 1; } catch (e) {}
+    actPush([Date.now(), 'shop', step + (what ? ':' + what : '')]);
+  }
   function devId() { let d = ''; try { d = localStorage.getItem('lh_dev') || ''; if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem('lh_dev', d); } } catch (e) {} return d; }
   function paintNoteDot() {
     const d = $('notedot'); if (!d) return;
@@ -1819,7 +1826,8 @@
     const m = L.memberById(id), L_ = L.lvl(S, id);
     const parts = ['Power level <b>' + L_ + '</b>'];
     if (m.cls === 'healer') parts.push(fmt(L.healPerSec(S, id)) + ' heal/s');
-    parts.push(fmt(L.memberDps(S, id, now) || 0) + ' dmg/s');
+    // v138: these are steady hits only; a necro's skeletons and burst abilities show in the Damage meter (Kyvia, 26 Nov).
+    parts.push('<span data-tip="Steady hits only. Skeletons, Backstab, Ember Storm and other bursts are not included: see the Damage meter under the fight log.">' + fmt(L.memberDps(S, id, now) || 0) + ' dmg/s' + (m.cls === 'necro' || m.cls === 'rogue' || m.cls === 'mage' ? '<sup class="dmgplus">+</sup>' : '') + '</span>');
     parts.push(fmt(L.maxHpOf(S, id)) + ' hp');
     // A borrowed hero stronger than GUEST_CAP x your hero fights at that cap; say so, or it looks out of date.
     if (L.isGuest(S, id) && L.guestK(S, id) < 0.999) parts.push('<span class="muted" title="Borrowed heroes fight at up to ' + L.GUEST_CAP + 'x your hero’s damage and ' + L.GUEST_CAP + 'x its health, each on its own. Grow your hero to raise the cap.">capped at ' + L.GUEST_CAP + 'x you</span>');
@@ -2302,7 +2310,7 @@
       (o.noSort ? '' : '<label><span>Sort</span><select data-sfs="sort">' + [['best', 'Suggested']].concat(INV_SORTS.slice(1), o.ench ? [['ench', 'Enchant name']] : []).map(([k, n]) => opt('sort', k, n)).join('') + '</select></label>') +
       (o.noRar ? '' : '<label><span>Rarity</span><select data-sfs="rar">' + opt('rar', 'all', 'Any') + L.RARITY.filter(r => items.some(it => it.rar === r.id) || SF.rar === r.id).map(r => opt('rar', r.id, r.name)).join('') + '</select></label>') +
       '<label title="Show only the gear this hero is wearing"><span>Who</span><select data-sfs="who">' + opt('who', 'all', 'Anyone') + whoOpts(SF.who) + '</select></label>' +
-      '<label title="Show gear this class can use"><span>Class</span><select data-sfs="cls">' + opt('cls', 'all', 'Any') + L.CLASS_ORDER.map(c => opt('cls', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
+      '<label title="Show gear this class can use"><span>Class</span><select data-sfs="cls">' + opt('cls', 'all', 'Any') + L.HERO_CLASSES.map(c => opt('cls', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
   }
   const sfList = (items, rows, empty, o) => sfBar(items, o) + ewList(rows, items.length && !rows.length ? 'Nothing here matches these filters. Try All or Anyone.' : empty);
   document.addEventListener('click', e => { const k = e.target.closest('[data-sfk]'); if (k) { e.stopPropagation(); SF.kind = k.dataset.sfk; sfSave(); paintEnchPanel(true); } }, true);
@@ -2310,7 +2318,7 @@
   $('bag').addEventListener('click', e => { const k = e.target.closest('[data-invk]'); if (k) { e.stopPropagation(); INV.kind = k.dataset.invk; invSave(); updateGear(true); } });
   $('bag').addEventListener('change', e => { const c = e.target.closest('[data-invs]'); if (c) { INV[c.dataset.invs] = c.value; invSave(); c.blur(); updateGear(true); } });
   // Item type and who can use it, shown on every item (v117).
-  const CLS_SHORT = { tank: 'Tank', healer: 'Healer', rogue: 'Rogue', mage: 'Mage', necro: 'Necro' };
+  const CLS_SHORT = { tank: 'Tank', healer: 'Healer', rogue: 'Rogue', mage: 'Mage', necro: 'Necro', paladin: 'Paladin' };
   function usersText(it) { const u = L.usersOf(it); return u ? u.map(c => CLS_SHORT[c]).join(', ') : 'Any class'; }
   function typeLine(it) { const t = L.ITYPES[L.tyOf(it)], kind = it.slot === 'main' || it.slot === 'off' ? t.name : it.slot === 'ring' || it.slot === 'neck' ? L.SLOT_NAME[it.slot] : t.name + ' ' + L.SLOT_NAME[it.slot].toLowerCase(); return kind + ' · ' + usersText(it); }
   const clsDots = it => { const u = L.usersOf(it); return '<i class="clsd" title="' + esc(usersText(it)) + '">' + (u ? u.map(c => '<b style="background:' + L.CLASSES[c].color + '"></b>').join('') : '<b class="any"></b>') + '</i>'; };
@@ -2338,6 +2346,22 @@
   // Away from camp you only see the party you brought down; the campfire roster stays hidden.
   const gearOwners = () => { const inCamp = mainCamp(); return S.unlocked.filter(id => { const m = L.memberById(id); return m && !m.guest && (inCamp || S.party.includes(id)); }); };
   let whoRestOpen = false;
+  // v138 loadouts row: Wear / Save per set. Sets past the first need Lanternholder (they stay saved if it lapses).
+  function paintLoadouts() {
+    const el = $('loadouts'); if (!el) return;
+    const have = L.loadoutSlots(S), los = S.loadouts || [];
+    el.innerHTML = '<span class="lo-h">Loadouts</span>' + Array.from({ length: L.LOADOUT_PASS }, (_, i) => {
+      const lo = los[i], open = i < have;
+      if (!open) return '<button class="lo lo-lock" data-lolock="' + i + '" data-tip="More loadouts come with Lanternholder.">' + icon('lock') + '<b>Set ' + (i + 1) + '</b></button>';
+      return '<span class="lo' + (lo ? ' has' : '') + '"><b>' + esc(lo ? lo.n : 'Set ' + (i + 1)) + '</b>' + (lo ? '<button class="btn small" data-lowear="' + i + '">Wear</button>' : '') + '<button class="btn small ghost" data-losave="' + i + '">' + (lo ? 'Save' : 'Save current') + '</button></span>';
+    }).join('');
+  }
+  document.addEventListener('click', e => {
+    const w = e.target.closest('[data-lowear]'), sv = e.target.closest('[data-losave]'), lk = e.target.closest('[data-lolock]');
+    if (lk) { shopTrack('nudge', 'loadout'); openPass(); return; }
+    if (sv) { const i = +sv.dataset.losave; if (L.saveLoadout(S, i, (S.loadouts && S.loadouts[i] && S.loadouts[i].n) || 'Set ' + (i + 1))) { save(); sfx.buy(); toast('bag', 'Loadout saved', 'Set ' + (i + 1) + ' remembers what everyone wears right now.', ''); updateGear(true); } return; }
+    if (w) { if (!campGate()) return; const n = L.wearLoadout(S, +w.dataset.lowear); if (n < 0) return; save(); sfx.buy(); toast('bag', n ? 'Loadout on' : 'Already wearing it', n ? n + ' item' + (n === 1 ? '' : 's') + ' changed. Gear that was sold or scrapped is skipped.' : 'Everyone already wears this set.', ''); updateGear(true); updateSeats(true); updatePanel(true); }
+  });
   function updateGear(force) {
     const who = gearOwners();
     if (!who.includes(gearWho)) gearWho = who[0];
@@ -2350,6 +2374,7 @@
     // option blurs it and repaints.
     if (document.activeElement && document.activeElement.tagName === 'SELECT' && document.activeElement.closest('#tab-gear')) return;
     gearKey = key;
+    paintLoadouts();
     { const chip = id => {
         const m = L.memberById(id), n = Object.keys(L.betterFor(S, id)).length;
         return '<button class="whochip c-' + m.cls + (id === gearWho ? ' on' : '') + '" data-who="' + id + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""><span>' + esc(m.name) + '</span>' + (n ? '<em title="Better gear in your pack">' + n + '</em>' : '') + '</button>';
@@ -2404,7 +2429,7 @@
     let bh = '<div class="invbar"><div class="invkinds" role="tablist">' + INV_KINDS.map(([k, n]) => { const c = k === 'all' ? pack.length : pack.filter(it => invKind(it) === k).length; return '<button class="' + (INV.kind === k ? 'on' : '') + '" data-invk="' + k + '">' + n + ' <em>' + c + '</em></button>'; }).join('') + '</div>' +
       '<div class="invsel"><label><span>Sort</span><select data-invs="sort">' + INV_SORTS.map(([k, n]) => '<option value="' + k + '"' + (INV.sort === k ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>' +
       '<label><span>Rarity</span><select data-invs="rar"><option value="all">Any</option>' + L.RARITY.filter(r => pack.some(it => it.rar === r.id)).map(r => '<option value="' + r.id + '"' + (INV.rar === r.id ? ' selected' : '') + '>' + r.name + '</option>').join('') + '</select></label>' +
-      '<label><span>Who</span><select data-invs="who"><option value="all">Anyone</option><option value="me"' + (INV.who === 'me' ? ' selected' : '') + '>' + esc(m.name) + ' can use</option>' + L.CLASS_ORDER.map(c => '<option value="' + c + '"' + (INV.who === c ? ' selected' : '') + '>' + L.CLASSES[c].name + '</option>').join('') + '</select></label></div></div>';
+      '<label><span>Who</span><select data-invs="who"><option value="all">Anyone</option><option value="me"' + (INV.who === 'me' ? ' selected' : '') + '>' + esc(m.name) + ' can use</option>' + L.HERO_CLASSES.map(c => '<option value="' + c + '"' + (INV.who === c ? ' selected' : '') + '>' + L.CLASSES[c].name + '</option>').join('') + '</select></label></div></div>';
     bh += list.length ? '<div class="grid">' + list.map(it => tile(it, !L.usable(m.cls, it))).join('') + '</div>' : '<p class="note">Nothing in your pack matches. Try another filter.</p>';
     if (!pack.length) bh = '<p class="note">Your pack is empty. Gear your party wears shows on each character above. New gear drops from foes, chests and guardians.</p>';
     $('bag').innerHTML = bh;
@@ -3470,7 +3495,7 @@
       L.KINDLE_UPS.map(u => { const r = (S.kup || {})[u.id] || 0, c = L.kupCost(S, u.id);
         return '<div class="kitem"><div class="kic">' + icon(u.icon) + '</div><div><b>' + u.name + ' <span class="kp">' + Array.from({ length: u.max }, (_, i) => '<i class="' + (i < r ? 'on' : '') + '"></i>').join('') + '</span></b><small>' + u.desc + '.' + (r ? ' Rank ' + r + ' of ' + u.max + '.' : '') + '</small></div>' +
           (c ? '<button class="btn small" data-kup="' + u.id + '"' + (k >= c ? '' : ' disabled') + '>' + c + ' Kindling</button>' : '<em class="kmax">Maxed</em>') + '</div>'; }).join('') +
-      '</div><h3 class="sub">Change class</h3><div class="kshop"><div class="kitem respec"><div class="kic">' + icon('refresh') + '</div><div><b>Take up a new class</b><small>Your hero becomes another class. Every Kindling spent on the skill tree comes back, then the change costs ' + L.CLASS_CHANGE_COST + '. Pack size, gear slots and upgrades stay as they are. Done at camp.</small></div><button class="btn small ghost" id="k-respec"' + (k + L.skillSpent(S) >= L.CLASS_CHANGE_COST ? '' : ' disabled title="Needs ' + L.CLASS_CHANGE_COST + ' Kindling, counting what your tree would refund"') + '>' + L.CLASS_CHANGE_COST + ' Kindling</button></div></div>';
+      '</div><h3 class="sub">Change class</h3><div class="kshop"><div class="kitem respec"><div class="kic">' + icon('refresh') + '</div><div><b>Take up a new class</b><small>Your hero becomes another class. Every Kindling spent on the skill tree comes back, then the change costs ' + L.CLASS_CHANGE_COST + '. Pack size, gear slots and upgrades stay as they are. Done at camp.</small></div><button class="btn small ghost" id="k-respec"' + (k + L.skillSpent(S) >= L.CLASS_CHANGE_COST || L.HERO_CLASSES.some(c => c !== cls && clsOwned(c) && L.freeClassChange(S, c)) ? '' : ' disabled title="Needs ' + L.CLASS_CHANGE_COST + ' Kindling, counting what your tree would refund"') + '>' + L.CLASS_CHANGE_COST + ' Kindling</button></div></div>';
   }
   $('skills') && $('skills').addEventListener('click', e => {
     const b = e.target.closest('[data-learn]');
@@ -3482,12 +3507,13 @@
       if (!campGate(true)) return;
       const cur = L.heroCls(S), back = L.skillSpent(S), left = (S.kindling || 0) + back - L.CLASS_CHANGE_COST;
       modal('<div class="center"><h2>Change your class</h2><p>Pick a new class for ' + esc(L.memberById('you').name) + '. Your ' + back + ' tree Kindling comes back, the change costs ' + L.CLASS_CHANGE_COST + ', and you keep ' + left + ' to spend on the new tree. Gear your hero is wearing goes back to the pack. Pack size, gear slots and Kindling upgrades stay.</p>' +
-        '<div class="respecs">' + L.CLASS_ORDER.filter(c => c !== cur).map(c => '<button class="btn ghost" data-newcls="' + c + '">' + icon(CLASS_ICON[c]) + '<span>' + L.CLASSES[c].name + '</span></button>').join('') + '</div><div class="row"><button class="btn ghost" id="r-no">Cancel</button></div></div>', md => {
+        '<div class="respecs">' + L.HERO_CLASSES.filter(c => c !== cur).map(c => '<button class="btn ghost' + (clsOwned(c) ? '' : ' paid') + '" data-newcls="' + c + '">' + icon(clsOwned(c) ? CLASS_ICON[c] : 'lock') + '<span>' + L.CLASSES[c].name + '</span>' + (clsOwned(c) ? (L.freeClassChange(S, c) ? '<em class="paytag">Free</em>' : '') : '<em class="paytag">' + sigil + fmt(L.PAID_CLASS[c]) + '</em>') + '</button>').join('') + '</div><div class="row"><button class="btn ghost" id="r-no">Cancel</button></div></div>', md => {
         md.querySelector('#r-no').onclick = closeModal;
         md.querySelectorAll('[data-newcls]').forEach(btn => btn.onclick = () => {
           const c = btn.dataset.newcls;
+          if (!clsOwned(c)) return openClassUnlock(c, becomeClass);
           if (!btn.classList.contains('confirm')) { md.querySelectorAll('[data-newcls]').forEach(x => { x.classList.remove('confirm'); x.querySelector('span').textContent = L.CLASSES[x.dataset.newcls].name; }); btn.classList.add('confirm'); btn.querySelector('span').textContent = 'Tap again: become a ' + L.CLASSES[c].name; return; }
-          if (L.changeClass(S, c)) { sfx.relic(); save(); closeModal(); toast('refresh', 'A new path', L.memberById('you').name + ' is now a ' + L.CLASSES[c].name + '. ' + S.kindling + ' Kindling is ready for the new tree.', 'feat'); updatePanel(true); updateAbilities(true); updateSkills(); try { if (typeof publishHero === 'function' && signedIn()) publishHero(); } catch (x) {} }
+          becomeClass(c);
         });
       });
       return;
@@ -3514,12 +3540,30 @@
     tab = t;
     const f = TAB_FEATURE[t], shut = !!(f && S.hero && !L.canUse(S, f));
     document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    if (typeof paintTown === 'function') paintTown();
     document.querySelectorAll('.tabbody').forEach(b => b.hidden = b.id !== (shut ? 'tab-locked' : 'tab-' + t));
     if (shut) $('lockbox').innerHTML = roadHtml(f);
     updatePanel(true);
   }
   const phone = () => matchMedia('(max-width:720px)').matches;
+  // v138 phone bar: Market, Guild, PvP and Codex sit under one Town button (9 tabs were too tight on phones).
+  function townOpen() {
+    let m = $('townmenu');
+    if (m) { m.remove(); return; }
+    m = document.createElement('div'); m.id = 'townmenu'; m.className = 'townmenu';
+    m.innerHTML = [...document.querySelectorAll('.tabs .townitem')].filter(b => !b.hidden).map(b => '<button data-totab="' + b.dataset.tab + '" class="' + (b.classList.contains('locked') ? 'locked' : '') + (tab === b.dataset.tab ? ' on' : '') + '">' + b.innerHTML + '</button>').join('');
+    document.body.appendChild(m);
+    m.querySelectorAll('[data-totab]').forEach(x => x.onclick = () => { m.remove(); const b = document.querySelector('.tabs [data-tab="' + x.dataset.totab + '"]'); if (b) b.click(); });
+    setTimeout(() => document.addEventListener('click', function off(e) { if (!e.target.closest('#townmenu') && !e.target.closest('[data-town]')) { const mm = $('townmenu'); if (mm) mm.remove(); document.removeEventListener('click', off); } }), 0);
+  }
+  function paintTown() {
+    const tb = document.querySelector('.tabs [data-town]'); if (!tb) return;
+    tb.classList.toggle('on', ['market', 'guild', 'ring', 'codex'].includes(tab));
+    const td = $('tradedot'), d = $('towndot'); if (td && d) { d.hidden = td.hidden; d.textContent = td.textContent; }
+  }
+  setInterval(paintTown, 1500);
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.town) { townOpen(); return; }
     if (b.dataset.go === 'arena') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     switchTab(b.dataset.tab);
     if (phone()) { const p = document.querySelector('.panel'); p && window.scrollTo({ top: p.getBoundingClientRect().top + window.scrollY - 8, behavior: 'smooth' }); }
@@ -3570,7 +3614,7 @@
     if (force) paintTabLocks();
     $('gold').textContent = fmt(S.gold);
     if (now - (updatePanel.tipAt || 0) > 2000) { updatePanel.tipAt = now; paintMoneyTips(); }
-    { const sg = $('sigils'); if (sg) { let bal = typeof prof !== 'undefined' && prof ? prof.bal : null; if (!(bal >= 0)) { bal = null; try { const c = localStorage.getItem('lh_bal'); if (c != null && +c >= 0) bal = +c; } catch (e) {} } const on = bal != null && signedIn(); if (sg.hidden === on) sg.hidden = !on; if (on) { const t = bal.toLocaleString(); if ($('sigilct').textContent !== t) { $('sigilct').textContent = t; try { localStorage.setItem('lh_bal', String(bal)); } catch (e) {} } } } }
+    { const sg = $('sigils'); if (sg) { let bal = typeof prof !== 'undefined' && prof ? prof.bal : null; if (!(bal >= 0)) { bal = null; try { const c = localStorage.getItem('lh_bal'); if (c != null && +c >= 0) bal = +c; } catch (e) {} } const on = bal != null && signedIn(), show = on || (!!CL && !signedIn()); if (sg.hidden === show) sg.hidden = !show; if (!on && show && $('sigilct').textContent !== 'Get') $('sigilct').textContent = 'Get'; if (on) { const t = bal.toLocaleString(); if ($('sigilct').textContent !== t) { $('sigilct').textContent = t; try { localStorage.setItem('lh_bal', String(bal)); } catch (e) {} } } } }
     $('dps').textContent = fmt(L.totalDps(S, now));
     { const tt = $('taptip'); if (tt) { const now = Date.now(), d = L.clickDamage(S, now), w = L.relicVal ? L.relicVal(S, 'whet') : 0, c = L.critChance(S);
       const t = 'Tap damage: ' + fmt(d) + ' per tap (' + fmt(d * 5) + ' on a critical hit). Each tap hits for 1 + 5% of your party damage per second' + (w ? ', plus ' + Math.round(w * 100) + '% from the Grim Whetstone' : '') + '. ' + Math.round(c * 1000) / 10 + '% of taps are critical hits for 5x damage.';
@@ -3819,7 +3863,7 @@
   });
 
   // ---------- story scenes ----------
-  const SPEAKER_ICON = { tank: 'shield', healer: 'cross', rogue: 'dagger', mage: 'flare', necro: 'skull', lamp: 'lamp', boss: 'crown' };
+  const SPEAKER_ICON = { tank: 'shield', healer: 'cross', rogue: 'dagger', mage: 'flare', necro: 'skull', paladin: 'hammer', lamp: 'lamp', boss: 'crown' };
   let sceneOpen = false;
   function playScene(b, replay) {
     sceneOpen = true; let i = 0;
@@ -3843,36 +3887,45 @@
   function checkStory() {
     if (sceneOpen || recruitOpen || !$('modal').hidden || !S.hero) return;
     if (S.pendingJoin) { openRecruit(); return; }
+    // v138: a brand-new hero gets to tap the first monster before the opening story cards (5 taps or 25 s).
+    if (!Object.keys((S.story && S.story.seen) || {}).length && (S.stats.clicks || 0) < 5 && (S.stats.playTime || 0) < 25) return;
     const b = L.nextStory(S);
     if (b) playScene(b, false);
   }
 
   // ---------- new game setup ----------
+  // v138: a name idea for players who don't want to type one (two halves, always family-friendly).
+  const NAME_A = ['Bram', 'Wren', 'Ash', 'Tam', 'Ivo', 'Lark', 'Rook', 'Sable', 'Fen', 'Corin', 'Mira', 'Oren', 'Pell', 'Rhea', 'Tova', 'Vale', 'Ember', 'Quill', 'Hollis', 'Juno'];
+  const NAME_B = ['wick', 'ford', 'mere', 'hart', 'vale', 'brook', 'thorn', 'well', 'gard', 'lyn', 'ric', 'den', 'mont', 'ley', 'stone'];
+  const heroNameIdea = () => { const a = NAME_A[Math.floor(Math.random() * NAME_A.length)], b = Math.random() < 0.5 ? NAME_B[Math.floor(Math.random() * NAME_B.length)] : ''; return (a + b).slice(0, 16); };
   const CLASS_BLURB = {
     tank: 'Stands in front and takes the blows so nobody else has to.',
     healer: 'Keeps everyone standing. Without one, long fights go badly.',
     rogue: 'Hits hardest and dodges a quarter of all attacks.',
     mage: 'Calls down fire for huge bursts against guardians.',
     necro: 'Raises skeletons that fight and soak up hits.',
+    paladin: 'Plate, a steady party heal and a shield of light. A Sigil class.',
   };
   function setup(note) {
     let cls = 'rogue', side = 'covenant';
     $('modal').dataset.lock = '1';
     const draw = () => modal((CL && !signedIn() ? '<div class="haveacct"><span>Already have a hero?</span><button type="button" class="btn ghost small" id="h-signin">Sign in</button></div>' : '') + '<div class="center"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-lantern"/></svg><h2>Lanternhold</h2></div>' +
       (note ? '<p class="center">' + note + '</p>' : '<p class="center">The Grand War burns across the Shattered Reach. Beneath a forgotten Hold, a single lantern keeps a tear in the Nyx Rift shut, and every alliance wants what lies under it. Take the lantern down.</p>') +
-      '<h3 class="sub">Choose your class</h3><div class="classes">' + L.CLASS_ORDER.map(c => '<button class="pick cls' + (cls === c ? ' on' : '') + '" data-cls="' + c + '"><span class="ic c-' + c + '">' + icon(CLASS_ICON[c]) + '</span><b>' + L.CLASSES[c].name + '</b><small>' + CLASS_BLURB[c] + '</small></button>').join('') + '</div>' +
-      '<h3 class="sub">Pledge your banner</h3><div class="sides">' + L.SIDE_ORDER.map(k => { const d = L.SIDES[k]; return '<button class="pick side' + (side === k ? ' on' : '') + (WAR_ART[k] ? ' art' : '') + '" data-side="' + k + '" style="--side:' + d.color + (WAR_ART[k] ? ';--art:url(' + WAR_ART[k] + ')' : '') + '"><b>' + d.name + '</b><i>\u201c' + d.motto + '\u201d</i><small>' + d.desc + '</small><em>' + d.perk + '</em></button>'; }).join('') + '</div>' +
-      '<h3 class="sub">Name your hero</h3><input id="h-name" maxlength="16" placeholder="2 to 16 letters" autocomplete="off"><div class="err" id="h-err"></div>' +
+      '<h3 class="sub">Choose your class</h3><div class="classes">' + L.HERO_CLASSES.map(c => '<button class="pick cls' + (cls === c ? ' on' : '') + (clsOwned(c) ? '' : ' paid') + '" data-cls="' + c + '">' + (clsOwned(c) ? '' : '<em class="paytag">' + sigil + fmt(L.PAID_CLASS[c]) + '</em>') + '<span class="ic c-' + c + '">' + icon(CLASS_ICON[c]) + '</span><b>' + L.CLASSES[c].name + '</b><small>' + CLASS_BLURB[c] + '</small></button>').join('') + '</div>' +
+      '<h3 class="sub">Pledge your banner</h3><div class="sides">' + L.SIDE_ORDER.map(k => { const d = L.SIDES[k]; return '<button class="pick side' + (side === k ? ' on' : '') + (WAR_ART[k] ? ' art' : '') + '" data-side="' + k + '" style="--side:' + d.color + (WAR_ART[k] ? ';--art:url(' + WAR_ART[k] + ')' : '') + '">' + (k === 'covenant' ? '<span class="newtag">Good for new players</span>' : '') + '<b>' + d.name + '</b><i>\u201c' + d.motto + '\u201d</i><small>' + d.desc + '</small><em>' + d.perk + '</em></button>'; }).join('') + '</div>' +
+      '<h3 class="sub">Name your hero</h3><div class="namerow"><input id="h-name" maxlength="16" placeholder="2 to 16 letters" autocomplete="off"><button type="button" class="btn ghost small" id="h-suggest">Suggest</button></div><div class="err" id="h-err"></div>' +
       '<div class="row" style="justify-content:center"><button class="btn big" id="h-go">Begin the descent</button></div>', md => {
         md.className = 'sheet wide setupsheet';
         const si = md.querySelector('#h-signin'); if (si) si.onclick = () => { delete $('modal').dataset.lock; authForm('in'); };
         const nm = md.querySelector('#h-name'); nm.value = setup.heroName || '';
         nm.oninput = () => { setup.heroName = nm.value; };
-        md.querySelectorAll('[data-cls]').forEach(b => b.onclick = () => { cls = b.dataset.cls; draw(); });
+        md.querySelector('#h-suggest').onclick = () => { nm.value = setup.heroName = heroNameIdea(); nm.focus(); };
+        md.querySelectorAll('[data-cls]').forEach(b => b.onclick = () => { const c = b.dataset.cls; if (!clsOwned(c)) return openClassUnlock(c, c2 => { cls = c2; draw(); }, draw); cls = c; draw(); });
         md.querySelectorAll('[data-side]').forEach(b => b.onclick = () => { side = b.dataset.side; draw(); });
         md.querySelector('#h-go').onclick = () => {
           const name = nm.value.trim().replace(/\s+/g, ' ');
           if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name)) { md.querySelector('#h-err').textContent = 'Use 2 to 16 letters. Spaces, hyphens and apostrophes are fine.'; return; }
+          if (!clsOwned(cls)) cls = 'rogue';
           L.startGame(S, 'multi', cls, name, side);
           delete $('modal').dataset.lock; closeModal(); audio(); save();
           updateSeats(true); updateAbilities(true); updatePanel(true);
@@ -3922,6 +3975,8 @@
         '<p class="setnote">Pick tracks, set the volume or mute from the <button class="linkbtn" id="s-musicpanel">music player</button> (the note button at the top).</p>' : '') +
       '<h3 class="sethead">Notifications</h3><p class="setnote">Choose which pop-ups show in the corner. Switched-off ones still go to the bell.</p>' +
       TOAST_KINDS.map(([k, n, d]) => '<label class="setrow setnotif"><span>' + n + '<small>' + d + '</small></span><input type="checkbox" data-notif="' + k + '"' + (toastOff(k) ? '' : ' checked') + '></label>').join('') +
+      '<label class="setrow setnotif"><span>Auto-claim (Lanternholder)<small>Finished bounties and daily quests claim themselves while Lanternholder is on</small></span><input type="checkbox" id="s-aclaim"' + (S.settings.autoClaim === false ? '' : ' checked') + '></label>' +
+      (CL ? '<label class="setrow setnotif"><span>Lanternholder tips<small>A short note when a limit Lanternholder lifts gets in your way, at most once a day</small></span><input type="checkbox" id="s-nudge"' + (S.nudgeOff ? '' : ' checked') + '></label>' : '') +
       '<p style="margin-top:16px">Your progress saves automatically in this browser. Copy a backup to move it to another device.</p>' +
       '<div class="row"><button class="btn ghost" id="s-export">Copy backup</button><button class="btn ghost" id="s-import">Load backup</button><button class="btn danger" id="s-reset">Erase progress</button></div>' +
       '<div class="row"><button class="btn ghost" id="s-intro">Watch the intro</button>' + (fsOk() ? '<button class="btn ghost" id="s-full">' + (fsEl() ? 'Leave full screen' : 'Play full screen') + '</button>' : '') + '</div>' +
@@ -3930,6 +3985,8 @@
       '<p class="credits">Lanternhold &middot; A Grand War game by Born 2 Game, LLC. &copy; 2026 Born 2 Game, LLC. Made with care, no ads, no tracking.</p>' +
       '<div class="row"><button class="btn" id="s-close">Done</button></div>', m => {
         m.querySelector('#s-sound').onchange = e => { S.settings.sound = e.target.checked; };
+        m.querySelector('#s-aclaim').onchange = e => { S.settings.autoClaim = e.target.checked; save(); };
+        const nd = m.querySelector('#s-nudge'); if (nd) nd.onchange = () => { S.nudgeOff = nd.checked ? 0 : 1; save(); };
         m.querySelectorAll('[data-notif]').forEach(c => c.onchange = () => { const off = Object.assign({}, S.settings.toastOff); if (c.checked) delete off[c.dataset.notif]; else off[c.dataset.notif] = 1; S.settings.toastOff = off; save(); });
         if (window.LHMusic) {
           m.querySelector('#s-music').onchange = e => LHMusic.setOn(e.target.checked);
@@ -3960,6 +4017,39 @@
       });
   }
 
+  // v138 Lanternholder notes: shown only where a limit really bit, at most once a day each, and never when
+  // Lanternholder is on. Settings > Lanternholder tips turns them all off (S.nudgeOff).
+  function nudgeOk(key) {
+    if (S.nudgeOff || L.passOn(S) || !CL) return false;
+    const day = new Date().toISOString().slice(0, 10); S.nudge = S.nudge || {};
+    if (S.nudge[key] === day) return false;
+    S.nudge[key] = day; return true;
+  }
+  // A toast that opens Lanternholder when tapped (toasts are plain text, so the whole toast is the button).
+  function nudgeToast(ic, title, sub, why, act) {
+    const box = $('toasts'), before = box.lastChild; toast(ic, title, sub, '');
+    const t = box.lastChild; if (t && t !== before && t.classList) { t.classList.add('nudge'); t.onclick = () => { t.remove(); if (act) act(); else { shopTrack('nudge', why); openPass(); } }; }
+  }
+  // Free trial: a note the day before it ends, and one after it ends saying what turned off.
+  function trialCheck() {
+    if (!CL || S.sub > Date.now() || S.pass > Date.now() || !S.passTrial || S.nudgeOff) return;
+    const left = S.passTrial - Date.now();
+    if (left > 0 && left < 864e5 && !S.trialWarn) { S.trialWarn = 1; save(); nudgeToast('star', 'Your Lanternholder trial ends in ' + passLeft(), 'Auto-train, 10 extra bag slots and 4 more hours away switch off then. Tap to keep them.', 'trial'); }
+    else if (left <= 0 && left > -7 * 864e5 && !S.trialEnd) { S.trialEnd = 1; save(); nudgeToast('star', 'Your Lanternholder trial ended', 'Auto-train and auto-claim are off, your pack is back to its own size, away time is 4 hours shorter and extra loadouts are locked (they stay saved). Tap to get it back.', 'trialend'); }
+  }
+  setTimeout(trialCheck, 8000); setInterval(trialCheck, 6e5);
+  // v138: Hold works were easy to miss (Kyvia, 26 Nov). Once a day, when an NP+ hero can afford a renovation they
+  // have not built, say so; tapping the note opens the works.
+  function worksCheck() {
+    if (!S.hero || !L.npPlus(S) || !L.RENOS) return;
+    const ready = L.RENOS.find(x => !(S.reno && S.reno[x.id]) && S.gold >= L.renoCost(S, x.id));
+    if (!ready) return;
+    const day = new Date().toISOString().slice(0, 10); if (S.worksNote === day) return; S.worksNote = day;
+    nudgeToast('star', 'A Hold renovation is ready', ready.name + ' can be built now. Tap to open the Hold works.', 'works', openWorks);
+  }
+  setTimeout(worksCheck, 20000); setInterval(worksCheck, 6e5);
+  const passLink = '<button class="linkbtn" data-openpass>Lanternholder</button>';
+  document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-openpass]'); if (b) { e.preventDefault(); shopTrack('nudge', b.dataset.openpass || 'link'); openPass(); } });
   // ---------- offline ----------
   function grantOffline(sec, fromLoad) {
     const away = sec, win = L.offlineWindow(S);
@@ -3973,8 +4063,11 @@
     if (drilled) setTimeout(() => toast('shield', 'Marshal Greaves drilled the camp', drilled + ' power level' + (drilled === 1 ? '' : 's') + ' for idle companions while you were away.', 'feat'), 1200);
     const wpaid = (S.wagesPaid || 0) - wagesBefore;
     if (wev.length) setTimeout(() => { toastKind = 'hires'; for (const e of wev) toast('user', esc(e.name || 'A hire') + (e.why === 'short' ? '’s contract ended' : ' walked off unpaid'), 'While you were away. Their gear is back in your bag.' + (e.why === 'short' ? '' : ' They wait on the Guild Hall bench for 3 days.'), 'warn'); toastKind = null; updateSeats(true); paintBoard(); }, 1500);
+    // The away clock ran out: say what Lanternholder's +4 hours would have brought home (only if it would have helped).
+    const more = away > win && !L.passOn(S) ? Math.min(L.PASS_OFFLINE, L.OFFLINE_MAX - win, away - win) : 0;
+    const passMore = fromLoad && more >= 600 && g > 0 && nudgeOk('away') ? '<p class="passnudge">' + icon('star') + '<span>' + passLink.replace('data-openpass', 'data-openpass="away"') + ' keeps your party going ' + fmtTime(more) + ' longer: about <b>' + fmt(L.offlineEarnPerSec(S) * more) + ' gold</b> more this time.</span></p>' : '';
     if (fromLoad && sec >= 60 && g > 0) {
-      modal('<div class="center"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-lantern"/></svg><h2>Welcome back</h2><p>Your party kept delving for ' + fmtTime(sec) + ' while you were away and brought home</p><div class="big">' + fmt(g) + ' gold</div><p class="muted">Away from the game your party earns a quarter of its usual gold.' + (wpaid >= 1 ? ' Your hires were paid ' + fmt(wpaid) + ' gold in wages.' : '') + (away > win ? ' They stopped after ' + fmtTime(win) + ' and waited for you at the stair.' + (win < L.OFFLINE_MAX ? ' Night Watch in the Skills tab keeps them going longer, up to 3 days.' : '') : '') + '</p><div class="row" style="justify-content:center"><button class="btn" id="m-ok">Collect</button></div></div>', m => { m.querySelector('#m-ok').onclick = () => { sfx.coin(); closeModal(); }; });
+      modal('<div class="center"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-lantern"/></svg><h2>Welcome back</h2><p>Your party kept delving for ' + fmtTime(sec) + ' while you were away and brought home</p><div class="big">' + fmt(g) + ' gold</div><p class="muted">Away from the game your party earns a quarter of its usual gold.' + (wpaid >= 1 ? ' Your hires were paid ' + fmt(wpaid) + ' gold in wages.' : '') + (away > win ? ' They stopped after ' + fmtTime(win) + ' and waited for you at the stair.' + (win < L.OFFLINE_MAX ? ' Night Watch in the Skills tab keeps them going longer, up to 3 days.' : '') : '') + '</p>' + passMore + '<div class="row" style="justify-content:center"><button class="btn" id="m-ok">Collect</button></div></div>', m => { m.querySelector('#m-ok').onclick = () => { sfx.coin(); closeModal(); }; });
     }
   }
 
@@ -4066,7 +4159,18 @@
     const bin = atob(d.slice(4)), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
     return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
   }
+  // v138: never two saves in flight. Two PUTs sent in the same second could land out of order, so the server kept
+  // the older copy (about 15 s lost, Promiethius and Paktusjet 26 Nov). A push asked for mid-flight runs right after.
+  let pushBusy = null, pushNext = null;
   async function pushCloud(quiet, claim) {
+    if (pushBusy) { pushNext = { quiet: !!(pushNext ? pushNext.quiet && quiet : quiet), claim: !!(claim || (pushNext && pushNext.claim)) }; return pushBusy; }
+    pushBusy = pushCloud1(quiet, claim);
+    try { await pushBusy; } finally {
+      pushBusy = null;
+      if (pushNext) { const n = pushNext; pushNext = null; await pushCloud(n.quiet, n.claim); }
+    }
+  }
+  async function pushCloud1(quiet, claim) {
     if (!CL || !signedIn() || !S.hero || dormant) return;
     if (!claim && !cloudReady) return; // not before this device has checked the account save and claimed it
     try {
@@ -4457,6 +4561,8 @@
     if ((prof.pass || 0) !== (S.pass || 0) || (prof.sub || 0) !== (S.sub || 0)) { S.pass = prof.pass || 0; S.sub = prof.sub || 0; save(); updatePanel(true); updateSeats(true); }
     if (!!prof.boh !== !!S.boh) { S.boh = !!prof.boh; save(); updateGear(true); }
     if (prof.own) syncRoster(prof.own);
+    // v139: a Lanternholder gift from another player, shown once.
+    if (prof.gift && prof.gift[1] > (S.giftSeen || 0)) { S.giftSeen = prof.gift[1]; save(); setTimeout(() => toast('star', 'A gift for you', esc(prof.gift[0]) + ' gave you 30 days of Lanternholder. Say thanks in chat!', 'feat'), 1500); }
     // The First Dawn: the server gives the title to the one player who started NP+1 first. Grant the hidden feat once.
     if (prof.own && prof.own.includes('t.dawn') && !S.feats.dawn) {
       S.feats.dawn = Date.now(); save();
@@ -4505,8 +4611,31 @@
   }
   function boardProfile(g) {
     loadWar().then(() => {
-      modal('<div class="prof v2 pubview">' + publicProfile(g) + '<div class="row"><button class="btn ghost" id="bp-x">Close</button></div></div>', md => { md.classList.add('profsheet'); md.querySelector('#bp-x').onclick = closeModal; });
+      const can = CL && signedIn() && /^[0-9a-f]{16}$/.test(String(g.id || ''));
+      modal('<div class="prof v2 pubview">' + publicProfile(g) + '<div class="row">' + (can ? '<button class="btn ghost" id="bp-gift">' + icon('star') + 'Gift Lanternholder</button>' : '') + '<button class="btn ghost" id="bp-x">Close</button></div></div>', md => {
+        md.classList.add('profsheet'); md.querySelector('#bp-x').onclick = closeModal;
+        const gb = md.querySelector('#bp-gift'); if (gb) gb.onclick = () => giftPass(g, () => boardProfile(g));
+      });
     });
+  }
+  // v139 gifting: spend 500 of your Sigils on 30 days of Lanternholder for another player's hero.
+  function giftPass(g, back) {
+    const bal = prof ? prof.bal : null, short = bal != null && bal < L.PASS_COST;
+    shopTrack('open', 'gift');
+    modal('<div class="center"><div class="cosbuy">' + sigil + '</div><h2>Gift Lanternholder</h2><p>Give <b>' + esc(g.name) + '</b> 30 days of Lanternholder (auto-train, more bag room, more time away, auto-claim and gear loadouts) for <b>' + L.PASS_COST + ' ' + TOKEN + '</b> from your wallet. It adds to any time they already have, and they see your hero’s name.</p>' +
+      (short ? '<p class="note">You have ' + fmt(bal) + ' ' + TOKEN + '.</p>' : '') +
+      '<div class="row" style="justify-content:center"><button class="btn ghost" id="gf-no">Back</button>' + (short ? '<button class="btn" id="gf-get">Get ' + TOKEN + '</button>' : '<button class="btn" id="gf-go">Gift for ' + L.PASS_COST + ' ' + TOKEN + '</button>') + '</div></div>', md => {
+        md.querySelector('#gf-no').onclick = () => back();
+        const gt = md.querySelector('#gf-get'); if (gt) gt.onclick = () => getSigils(() => giftPass(g, back));
+        const go = md.querySelector('#gf-go'); if (go) go.onclick = async () => {
+          go.disabled = true;
+          try {
+            const r = await papi('POST', '/store/pass', { what: 'gift', to: g.id });
+            if (prof) prof.bal = r.bal; actPush([Date.now(), 'shop', 'gift']); sfx.buy(); updatePanel(true); closeModal();
+            toast('star', 'Gift sent', esc(r.name || g.name) + ' has 30 more days of Lanternholder. That was kind of you!', 'feat');
+          } catch (e) { go.disabled = false; toast('lock', 'The gift did not go through', e.code === 'funds' ? 'Not enough ' + TOKEN + '.' : e.code === 'to' ? 'That hero cannot get gifts right now.' : e.code === 'hero' ? 'Your hero needs a name on the server first. Try again after the next sync.' : 'Try again in a moment.', 'warn'); }
+        };
+      });
   }
   // ---- the editor ----
   let edTab = 'f', draft = null;
@@ -4541,7 +4670,7 @@
       body = '<p class="note">Play in the Grand War? Link your commander and your war rank and honors appear on your card and in the Players Guild. The Born 2 Game team checks each link before it shows, so nobody can borrow your name.</p>' +
         (prof.wl ? '<div class="wlink"><div>' + (c ? warBadge(prof.wl, true) : '<b>' + esc(prof.wl) + '</b>') + '</div><small>' + (prof.wv ? 'Verified. Your badges are showing and your hero carries a Grand War aura.' : 'Waiting for the team to confirm it is you. Mention it in the Grand War Discord to speed it up.') + '</small><button class="btn small ghost" id="pe-unlink">Remove link</button></div>' :
           '<div class="wform"><input id="pe-cmd" list="pe-cmds" placeholder="Your commander name in the Grand War" autocomplete="off"><datalist id="pe-cmds">' + (warList || []).map(c => '<option value="' + esc(c.n) + '">').join('') + '</datalist><button class="btn small" id="pe-link">Request link</button></div>' +
-          '<p class="note">Once the link is verified, your hero carries a Grand War aura for their class. It grows with your war rank, and honors such as Grand Marshal add to it.</p><p class="note">Commanders on the Grand War ladder right now: ' + (warList || []).length + '. Not listed yet? Play a game in the war first.</p>');
+          '<p class="note">Once the link is verified, your weeks in the Deep also count for your alliance in the Grand War, in weeks you play at the store too.</p><p class="note">Once the link is verified, your hero carries a Grand War aura for their class. It grows with your war rank, and honors such as Grand Marshal add to it.</p><p class="note">Commanders on the Grand War ladder right now: ' + (warList || []).length + '. Not listed yet? Play a game in the war first.</p>');
     }
     modal('<div class="maphead"><div><h2>Your profile</h2><small>Looks only. Nothing here changes your party’s power.</small></div><button class="iconbtn" id="pe-x" aria-label="Close">&times;</button></div>' +
       '<div class="pfwrap">' + looksCard(me) + '</div>' +
@@ -4590,6 +4719,9 @@
   const WIX = 'https://www.wixapis.com', WIX_APP = 'd9d54315-ca58-47e4-9e15-b661ae7e141d', WIX_KEY = 'lh_wix';
   const PACKS = [['7c5854d4-49f8-4244-8ec3-6c27caaa6e59', 500, '$4.99', ''], ['57d4ee44-c741-4616-96ff-9350734b19da', 1100, '$9.99', '10% bonus'],
     ['c19c183a-a27a-4918-8d3c-f94e684fb2d8', 2400, '$19.99', '20% bonus'], ['27c5a9e9-b7fb-48d9-90c8-a450b85e083a', 6500, '$49.99', 'Best value']];
+  // v139 Starter pack: one per account, $2.99 for 300 Sigils, the Lantern Scout outfit and 7 days of Lanternholder.
+  // Wix plan "Lanternhold: Starter pack" ($2.99, one per member); the store Lambda has the same id as STARTER.
+  const STARTER_PLAN = 'd1873d91-0d6c-4311-89af-1125d21a3cf6', STARTER_PRICE = '$2.99';
   // Lanternholder: the one recurring plan. $4.99 a month until the player cancels in their store account.
   const SUB_PLAN = '36118cbb-d4f6-48ce-be59-65a2b9b82a13', SUB_PRICE = '$4.99', SUB_MANAGE = 'https://www.born2gamellc.com/account/my-subscriptions';
   // Mercy Corps donations (John, 26 Nov 2026): the buttons open John's Extra Life page, so the money goes straight to
@@ -4637,9 +4769,22 @@
     try { sessionStorage.setItem('lh_pkce', JSON.stringify({ v, st })); } catch (e) {}
     await wixGo({ auth: { authRequest: { redirectUri: homeUrl(), clientId: WIX_APP, codeChallenge: ch, codeChallengeMethod: 'S256', responseMode: 'fragment', responseType: 'code', scope: 'offline_access', state: st } } });
   }
+  // v138: say what the store sign-in is before leaving the game, so the redirect is no surprise.
+  function storeIntro(want) {
+    try { if (want) sessionStorage.setItem('lh_wantpack', want); } catch (e) {}
+    modal('<div class="maphead"><div><h2>One quick step</h2><small>Only the first time</small></div><button class="iconbtn" id="si-x" aria-label="Close">&times;</button></div>' +
+      '<ol class="buysteps"><li><b>Sign in to the Born 2 Game store</b><span>Our store at born2gamellc.com takes the payment. Use any email; it can be the same as your game account.</span></li>' +
+      '<li><b>Pay on the store page</b><span>Card or wallet, handled by the store. Nothing renews unless you pick the membership.</span></li>' +
+      '<li><b>Come straight back</b><span>The game opens again by itself and your ' + TOKEN + ' land on <b>' + esc(S.hero ? S.hero.name : 'this hero') + '</b>. After this, buying is one tap.</span></li></ol>' +
+      '<div class="row"><button class="btn" id="si-go">Continue to the store</button><button class="btn ghost" id="si-no">Not now</button></div>', md => {
+        md.querySelector('#si-x').onclick = closeModal; md.querySelector('#si-no').onclick = () => getSigils();
+        const g = md.querySelector('#si-go'); g.onclick = async () => { g.disabled = true; shopTrack('signin'); try { await storeSignIn(); } catch (e) { g.disabled = false; toast('lock', 'Could not reach the store', 'Check your connection and try again.', 'warn'); } };
+      });
+  }
   async function buyPack(id) {
+    shopTrack('checkout', (PACKS.find(p => p[0] === id) || [0, id === SUB_PLAN ? 'member' : id === STARTER_PLAN ? 'starter' : id.slice(0, 8)])[1]);
     const tok = await wixToken();
-    if (!tok) return storeSignIn();
+    if (!tok) return storeIntro(id);
     await wixGo({ paidPlansCheckout: { planId: id }, callbacks: { postFlowUrl: homeUrl() + '?store=back', thankYouPageUrl: homeUrl() + '?store=paid' } }, tok);
   }
   let storeBusy = false;
@@ -4648,15 +4793,16 @@
     const tok = await wixToken(); if (!tok) return;
     storeBusy = true;
     try {
-      const r = await papi('POST', '/store/sync', { token: tok });
+      const r = await papi('POST', '/store/sync', { token: tok, shout: !!S.settings.shout });
       const w = wixGet(); if (w) { w.n = r.name; wixPut(w); }
       if (prof) prof.bal = r.bal;
       if (r.sub !== undefined && (r.sub || 0) !== (S.sub || 0)) {
         const fresh = r.sub > Date.now() && !(S.sub > Date.now());
         S.sub = r.sub || 0; if (prof) prof.sub = S.sub; save(); updatePanel(true); updateSeats(true);
-        if (fresh) { sfx.buy(); toast('star', 'Welcome, Lanternholder', 'Auto-train, 10 extra bag slots and 4 more hours away are on for as long as your membership is active. Thank you!', 'feat'); }
+        if (fresh) { sfx.buy(); toast('star', 'Welcome, Lanternholder', 'Auto-train, 10 extra bag slots, 4 more hours away, auto-claim and 4 gear loadouts are on for as long as your membership is active. Thank you!', 'feat'); }
       }
-      if (r.added) { sfx.buy(); toast('star', '+' + r.added.toLocaleString() + ' ' + TOKEN, 'Your store purchase is in your wallet, and it lit a Lantern Surge for every player. Thank you for supporting Lanternhold!', 'feat'); loadSurge(true); }
+      if (r.bonus && prof) prof.fp = true;
+      if (r.added) { shopTrack('credit', r.added); sfx.buy(); toast('star', '+' + r.added.toLocaleString() + ' ' + TOKEN, (r.bonus ? 'That includes your first-purchase bonus of +' + r.bonus.toLocaleString() + '. ' : '') + 'Your store purchase is in your wallet, and it lit a Lantern Surge for every player. Thank you for supporting Lanternhold!', 'feat'); loadSurge(true); }
       else if (loud) toast('star', 'All caught up', 'No new store purchases on ' + r.name + '. A new purchase can take a minute to show.', '');
     } catch (e) {
       if (e.code === 'taken') { wixPut(null); toast('lock', 'Store account already linked', 'That Born 2 Game account is linked to another hero. Sign in to the game as that hero to use it.', 'warn'); }
@@ -4687,7 +4833,11 @@
       }
       await storeSync(false);
       const w = wixGet(); if (w && w.n) toast('user', 'Store account linked', w.n + ' is linked to this hero. Packs you buy land in your wallet.', 'feat');
+      // Pick up where they left off: reopen the shop with the pack they tapped marked.
+      let want = ''; try { want = sessionStorage.getItem('lh_wantpack') || ''; sessionStorage.removeItem('lh_wantpack'); } catch (e) {}
+      if (want && w && w.n) setTimeout(() => { getSigils(); const b = document.querySelector('[data-pack="' + want + '"]'); if (b) b.classList.add('want'); }, 600);
     } else if (back) {
+      if (back === 'paid') toast('star', 'Checking your purchase', 'Thank you! Your ' + TOKEN + ' usually land within a minute. We check again by ourselves.', '');
       await storeSync(back === 'paid');
       if (back === 'paid') setTimeout(() => storeSync(false), 20000);
     }
@@ -4703,6 +4853,7 @@
       // 1. what Sigils are for
       '<div class="shopsec"><h3>Spend ' + TOKEN + '</h3></div><div class="shopuses">' +
         use('gs-pass', 'star', 'Lanternholder', member ? 'Member, renews ' + subDate() : left ? left + ' left' : L.PASS_COST + ' ' + TOKEN + ' for 30 days', member ? 'Perks' : left ? 'Extend' : 'Get') +
+        use('gs-cls', 'hammer', 'Paladin class', clsOwned('paladin') ? (L.heroCls(S) === 'paladin' ? 'Your hero is a Paladin' : 'Unlocked. Switch at camp') : fmt(L.PAID_CLASS.paladin) + ' ' + TOKEN + ', once for your account', clsOwned('paladin') ? 'See' : 'New') +
         use('gs-boh', 'bag', 'Bag of Holding', S.boh ? 'Owned' : fmt(L.BOH_COST) + ' ' + TOKEN + ', once', S.boh ? 'Details' : 'See') +
         (wardOn() ? use('gs-ward', 'user', 'Wardrobe', 'Outfits and lantern styles', 'Open') : '') +
         use('gs-look', 'crown', 'Profile looks', 'Frames, titles, banners, emblems', 'Open') +
@@ -4714,7 +4865,9 @@
       '<p class="shopsub">Convenience, never power.</p>' +
       '<ul class="passfx tight"><li><b>Auto-train</b><span>Characters train themselves whenever you have the gold.</span></li>' +
       '<li><b>+' + L.PASS_BAG + ' bag slots</b><span>More room for loot.</span></li>' +
-      '<li><b>+' + L.PASS_OFFLINE / 3600 + ' hours away</b><span>Your party earns offline for longer.</span></li></ul>' +
+      '<li><b>+' + L.PASS_OFFLINE / 3600 + ' hours away</b><span>Your party earns offline for longer.</span></li>' +
+      '<li><b>Auto-claim</b><span>Finished bounties and daily quests claim themselves.</span></li>' +
+      '<li><b>' + L.LOADOUT_PASS + ' gear loadouts</b><span>Save and swap whole-party gear sets in one tap (1 without).</span></li></ul>' +
       (member ? '<p class="passstate">You are a Lanternholder member. It renews on <b>' + subDate() + '</b>.</p>' : left ? '<p class="passstate">Lanternholder is on for <b>' + left + '</b>.</p>' : '') +
       '<div class="lhways"><div class="lhway"><small>With ' + TOKEN + '</small><b>' + sigil + L.PASS_COST + '</b><span>30 days. Nothing renews. Buy again to add 30 more.</span><button class="btn" id="gs-pass2"' + (member ? ' disabled' : '') + '>' + (left && !member ? 'Add 30 days' : 'Use ' + L.PASS_COST + ' ' + TOKEN) + '</button></div>' + (DC ? '</div></div>' :
         '<div class="lhway"><small>Monthly membership</small><b>' + SUB_PRICE + '<i>/month</i></b><span>Renews every month until you cancel in your Born 2 Game account.</span>' +
@@ -4722,7 +4875,10 @@
       // 3. buying Sigils (not inside Discord for now: Discord's rules want paid items sold through Discord too, at the same price)
       (DC ? '<p class="note small">Packs of ' + TOKEN + ' and the monthly membership are not sold in the Discord version yet.</p>' :
       '<div class="shopsec"><h3>Buy ' + TOKEN + ' <span class="tag once">One-time</span></h3><p class="shopsub">Pay once. Nothing renews. Every pack also lights a <b>Lantern Surge</b> for everyone: +25% gold and XP, 30 minutes per 500 ' + TOKEN + '.</p></div>' +
+      (prof && !prof.fp ? '<p class="fpnote">' + sigil + '<span><b>First pack bonus:</b> your first pack ever comes with 50% more ' + TOKEN + ', once.</span></p>' : '') +
+      (STARTER_PLAN && signedIn() && prof && !(prof.own || []).includes('k.scout') ? '<button class="pack starter" data-pack="' + STARTER_PLAN + '">' + sigil + '<b>Starter pack</b><small>300 ' + TOKEN + ' + Lantern Scout outfit + 7 days of Lanternholder</small><em>Once per account</em><span>' + STARTER_PRICE + '</span></button>' : '') +
       '<div class="packs">' + tiles + '</div>' +
+      (signedIn() ? '<label class="chk shoutchk"><input type="checkbox" id="gs-shout"' + (S.settings.shout ? ' checked' : '') + '><span>Show my hero’s name with the Lantern Surge my pack lights</span></label>' : '') +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' :
         linked ? '<div class="storelink"><span>Store account: <b>' + esc(w.n || 'linked') + '</b></span><button class="btn small ghost" id="gs-sync">Check for purchases</button><button class="btn small ghost" id="gs-out">Unlink</button></div>' :
         '<div class="storelink"><span>Packs and memberships are sold in the Born 2 Game store. Sign in there once and every purchase lands on this hero.</span><button class="btn small" id="gs-in">Sign in with Born 2 Game</button></div>')) +
@@ -4742,11 +4898,13 @@
         md.querySelector('#gs-pass').onclick = () => openPass(reopen);
         const p2 = md.querySelector('#gs-pass2'); if (p2) p2.onclick = () => openPass(reopen);
         md.querySelector('#gs-boh').onclick = () => openBoh(reopen);
+        const sh = md.querySelector('#gs-shout'); if (sh) sh.onchange = () => { S.settings.shout = sh.checked; save(); };
+        md.querySelector('#gs-cls').onclick = () => openClassUnlock('paladin', L.heroCls(S) === 'paladin' ? null : becomeClass, reopen);
         const wd = md.querySelector('#gs-ward'); if (wd) wd.onclick = () => openWardrobe('k');
         md.querySelector('#gs-look').onclick = () => openProfileEditor();
         const mk = md.querySelector('#gs-mkt'); if (mk) mk.onclick = () => { closeModal(); openTrade('sigils'); };
         const su = md.querySelector('#gs-sup'); if (su) su.onclick = () => openSupport(reopen);
-        const i = md.querySelector('#gs-in'); if (i) i.onclick = () => go(i, storeSignIn);
+        const i = md.querySelector('#gs-in'); if (i) i.onclick = () => storeIntro('');
         const sy = md.querySelector('#gs-sync'); if (sy) sy.onclick = async () => { sy.disabled = true; await storeSync(true); getSigils(back); };
         md.querySelector('#gs-give1').onclick = () => giveMercy(1);
         md.querySelector('#gs-giveo').onclick = () => giveMercy(0);
@@ -4767,7 +4925,64 @@
     try { const r = await papi('PUT', '/profile', draft); prof.pf = r.pf; closeModal(); sfx.buy(); toast('star', 'Profile saved', 'Other players see your new look in the Players Guild.', 'feat'); }
     catch (e) { toast('lock', 'Could not save', e.code === 'bio' ? 'Keep the bio friendly, without links, under 140 characters.' : e.code === 'state' ? 'Play a little first so your hero is registered, then try again.' : 'Try again in a moment.', 'warn'); }
   }
-  $('sigils').addEventListener('click', () => openProfileEditor());
+  // v138: the Sigil counter opens the shop itself (it used to open the profile editor, two taps from a pack).
+  $('sigils').addEventListener('click', () => { shopTrack('open'); if (CL && !signedIn()) return sigilsSignUp(); getSigils(); });
+  // Signed-out players see a Get chip; Sigils live on an account, so make one first.
+  function sigilsSignUp() {
+    modal('<div class="center"><div class="cosbuy">' + sigil + '</div><h2>' + TOKEN + ' need an account</h2><p>' + TOKEN + ' are kept on your free game account, so they are safe on every device and after a server reset. New accounts start with <b>100</b>.</p>' +
+      '<div class="row" style="justify-content:center"><button class="btn" id="su-up">Make a free account</button><button class="btn ghost" id="su-in">Sign in</button><button class="btn ghost" id="su-no">Not now</button></div></div>', md => {
+        md.querySelector('#su-up').onclick = () => authForm('up'); md.querySelector('#su-in').onclick = () => authForm('in'); md.querySelector('#su-no').onclick = closeModal; });
+  }
+  // ---------- v139 Sigil classes (John, 27 Nov 2026) ----------
+  // A class unlocked once for the whole account with Sigils (wallet item 'c.<id>' on POST /wardrobe, like campfire spots).
+  // Sidegrades only: tuned in the sim to the other classes' pace, no edge or counter in the Ember Ring.
+  const clsOwned = c => !L.PAID_CLASS[c] || !!(prof && prof.own && prof.own.includes('c.' + c)) || (!!S.hero && S.hero.cls === c);
+  const CLASS_PITCH = { paladin: ['A holy knight in white and gold plate.', [
+    'Plate armour, a solid hammer and a small steady heal for the whole party.',
+    'Oath of Dawn: heals the party for 25% and the party takes 30% less damage for 6s.',
+    'Its own skill tree (Dawn, Aegis, Crusade), class gear set and Grand War aura.',
+    'Ember Ring: no class edge and no counter, and for its first two weeks its duels and team battles move no rating.']] };
+  // after(c): what to do once the class is yours (pick it at setup, or change class). back: where Back goes.
+  function openClassUnlock(c, after, back) {
+    const d = L.CLASSES[c], price = L.PAID_CLASS[c], own = clsOwned(c), bal = prof ? prof.bal : null, pitch = CLASS_PITCH[c] || ['', []];
+    back = back || closeModal; shopTrack('open', 'cls:' + c);
+    modal('<div class="center clsbuy"><img class="clsart" src="' + SP.spriteURL(c, 3) + '" alt=""><h2>' + d.name + ' <span class="tag">' + TOKEN + ' class</span></h2><p>' + pitch[0] + '</p></div>' +
+      '<ul class="passfx tight">' + pitch[1].map(t => '<li><span>' + t + '</span></li>').join('') + '</ul>' +
+      '<p class="note small">A different way to play, not a stronger one: in our tests it keeps pace with the Tank and the Healer. Unlocked once for every hero on your account. The first change into it is free.</p>' +
+      (own ? '<p class="passstate">Unlocked on your account.</p>' : !CL || !signedIn() ? '<p class="note">Classes are kept on your free game account. ' + (S.hero ? 'Sign in or make an account first.' : 'Start with any class now: once you have an account, unlock the ' + d.name + ' from the ' + TOKEN + ' shop and switch with Change class on the Skills tab.') + '</p>'
+        : bal != null && bal < price ? '<p class="note">You have ' + fmt(bal) + ' ' + TOKEN + '. The 1,100 pack covers it with 100 to spare.</p>' : '') +
+      '<div class="row"><button class="btn ghost" id="cu-no">Back</button>' +
+      (own ? (after ? '<button class="btn" id="cu-go">Play as ' + d.name + '</button>' : '') :
+        !CL || !signedIn() ? (S.hero ? '<button class="btn" id="cu-acct">Make a free account</button>' : '') :
+        bal != null && bal < price ? '<button class="btn" id="cu-get">Get ' + TOKEN + '</button>' :
+        '<button class="btn" id="cu-buy">Unlock for ' + fmt(price) + ' ' + TOKEN + '</button>') + '</div>', md => {
+        md.className = 'sheet';
+        md.querySelector('#cu-no').onclick = () => back();
+        const go = md.querySelector('#cu-go'); if (go) go.onclick = () => after(c);
+        const ac = md.querySelector('#cu-acct'); if (ac) ac.onclick = () => authForm('up');
+        const gt = md.querySelector('#cu-get'); if (gt) gt.onclick = () => { shopTrack('nudge', 'cls'); getSigils(() => openClassUnlock(c, after, back)); };
+        const by = md.querySelector('#cu-buy'); if (by) by.onclick = async () => {
+          by.disabled = true;
+          try {
+            const r = await papi('POST', '/wardrobe', { buy: 'c.' + c });
+            if (prof) { prof.bal = r.bal; prof.own = r.own; } try { localStorage.setItem('lh_bal', String(r.bal)); } catch (x) {}
+            actPush([Date.now(), 'shop', 'class:' + c]); sfx.relic(); updatePanel(true); updateSkills();
+            toast(CLASS_ICON[c] || 'star', d.name + ' unlocked', 'Every hero on your account can now be a ' + d.name + '.', 'feat');
+            if (after) after(c); else openClassUnlock(c, after, back);
+          } catch (e) { by.disabled = false; if (e.code === 'funds') getSigils(() => openClassUnlock(c, after, back)); else toast('lock', 'That did not go through', e.code === 'owned' ? 'It is already yours. Try again in a moment.' : 'Try again in a moment.', 'warn'); }
+        };
+      });
+  }
+  // Switch your hero into a class (from Skills > Change class or the shop). Done at camp.
+  function becomeClass(c) {
+    if (!campGate(true)) return;
+    const free = L.freeClassChange(S, c);
+    if (L.changeClass(S, c)) {
+      sfx.relic(); save(); closeModal();
+      toast('refresh', 'A new path', L.memberById('you').name + ' is now a ' + L.CLASSES[c].name + (free ? ' (free first change)' : '') + '. ' + S.kindling + ' Kindling is ready for the new tree.', 'feat');
+      updatePanel(true); updateAbilities(true); updateSkills(); try { if (typeof publishHero === 'function' && signedIn()) publishHero(); } catch (x) {}
+    } else toast('flame', 'Not enough Kindling', 'Changing class costs ' + L.CLASS_CHANGE_COST + ' Kindling, counting what your tree gives back.', 'warn');
+  }
   // ---------- Mercy's Blessing: real donations to the Grand War's Mercy Corps buff every player ----------
   const mercyLeft = () => { const ms = (S.mercy || 0) - Date.now(); if (ms <= 0) return ''; const h = Math.floor(ms / 36e5); return h >= 48 ? Math.floor(h / 24) + 'd' : h >= 1 ? h + 'h' : Math.max(1, Math.ceil(ms / 6e4)) + 'm'; };
   function paintMercy() { const b = $('mercy'), t = mercyLeft(); if (b.hidden === !!t) b.hidden = !t; if (t) $('mercyct').textContent = t; }
@@ -4797,15 +5012,15 @@
     try {
       const r = await fetch(CL.api.replace(/\/$/, '') + '/surge', { cache: 'no-store' }); if (!r.ok) return;
       const m = await r.json(), fresh = m.at && m.at !== S.surgeAt && m.until > Date.now();
-      S.surge = m.until; S.surgeAt = m.at; save();
-      if (fresh && !mine) { sfx.relic(); toast('star', 'Lantern Surge!', 'A fellow lantern-bearer just bought Sigils, and every hero gets +25% gold and +25% XP for ' + surgeLeft() + '. Thank them in chat!', 'feat'); }
+      S.surge = m.until; S.surgeAt = m.at; S.surgeBy = m.by || ''; save();
+      if (fresh && !mine) { sfx.relic(); toast('star', 'Lantern Surge!', (m.by ? esc(m.by) + ' just bought Sigils' : 'A fellow lantern-bearer just bought Sigils') + ', and every hero gets +25% gold and +25% XP for ' + surgeLeft() + '. Thank them in chat!', 'feat'); }
       paintSurge(); updatePanel(true);
     } catch (e) {}
   }
   if ($('surge')) $('surge').addEventListener('click', () => {
     const fx = L.SURGE_FX;
     modal('<div class="maphead"><div><h2>Lantern Surge</h2><small>Lit by players who support the game. Shared by every hero.</small></div><button class="iconbtn" id="su-x" aria-label="Close">&times;</button></div>' +
-      '<p>Whenever someone buys a Sigil pack, the Hold’s great lantern flares and every hero shares the light. The surge has <b>' + (surgeLeft() || 'no time') + '</b> left.</p>' +
+      '<p>Whenever someone buys a Sigil pack, the Hold’s great lantern flares and every hero shares the light. The surge has <b>' + (surgeLeft() || 'no time') + '</b> left.' + (S.surgeBy && surgeLeft() ? ' Last lit by <b>' + esc(S.surgeBy) + '</b>.' : '') + '</p>' +
       '<ul class="mercyfx surgefx"><li>+' + fx.gold * 100 + '% gold</li><li>+' + fx.xp * 100 + '% hero XP</li></ul>' +
       '<p class="note">Each pack adds time for everyone: 30 minutes for 500 Sigils, about an hour for 1,100, over two hours for 2,400 and six and a half hours for 6,500, up to a day ahead. It never changes combat power.</p>' +
       '<div class="row"><button class="btn" id="su-get">Get ' + TOKEN + '</button><button class="btn ghost" id="su-ok">Close</button></div>', md => { md.querySelector('#su-x').onclick = closeModal; md.querySelector('#su-ok').onclick = closeModal; md.querySelector('#su-get').onclick = () => getSigils(); });
@@ -4826,7 +5041,9 @@
     modal('<div class="maphead"><div><h2>Lanternholder</h2><small>Premium convenience. Never power.</small></div><button class="iconbtn" id="lp-x" aria-label="Close">&times;</button></div>' +
       '<ul class="passfx"><li><b>Auto-train</b><span>The Auto button under each Train button: characters train themselves whenever you have the gold.</span></li>' +
       '<li><b>+' + L.PASS_BAG + ' bag slots</b><span>More room for loot between trips to the forge.</span></li>' +
-      '<li><b>+' + L.PASS_OFFLINE / 3600 + ' hours away</b><span>Your party keeps earning offline for longer.</span></li></ul>' +
+      '<li><b>+' + L.PASS_OFFLINE / 3600 + ' hours away</b><span>Your party keeps earning offline for longer.</span></li>' +
+      '<li><b>Auto-claim</b><span>Finished bounties and daily quests claim themselves.</span></li>' +
+      '<li><b>' + L.LOADOUT_PASS + ' gear loadouts</b><span>Save what the whole party wears and swap it back in one tap. Everyone gets 1.</span></li></ul>' +
       (subOn() ? '<p class="passstate">You are a Lanternholder <b>member</b>: the perks are on while your membership is active (renews ' + subDate() + ').</p>' :
         '<p class="passstate">' + (left ? (trial ? 'Your free trial has <b>' + left + '</b> left.' : 'Lanternholder is on for <b>' + left + '</b>. Buying again adds 30 days.') : 'Lanternholder is not active right now.') + '</p>') +
       (!signedIn() ? '<p class="note">Sign in to the game to get Lanternholder with ' + TOKEN + '.</p>' : '') +
@@ -4836,7 +5053,7 @@
         const g = md.querySelector('#lp-get'); if (g) g.onclick = () => getSigils(openPass);
         const y = md.querySelector('#lp-buy'); if (y) y.onclick = async () => {
           y.disabled = true;
-          try { const r = await papi('POST', '/store/pass'); S.pass = r.pass; prof.bal = r.bal; prof.pass = r.pass; save(); sfx.buy(); updatePanel(true); updateSeats(true); toast('star', 'Lanternholder active', 'Auto-train, extra bag slots and longer offline time for ' + passLeft() + '.', 'feat'); back ? back() : closeModal(); }
+          try { const r = await papi('POST', '/store/pass'); S.pass = r.pass; prof.bal = r.bal; prof.pass = r.pass; save(); sfx.buy(); updatePanel(true); updateSeats(true); toast('star', 'Lanternholder active', 'Auto-train, extra bag slots, longer offline time, auto-claim and 4 gear loadouts for ' + passLeft() + '.', 'feat'); back ? back() : closeModal(); }
           catch (e) { y.disabled = false; toast('lock', 'That did not go through', e.code === 'funds' ? 'Not enough ' + TOKEN + '.' : 'Try again in a moment.', 'warn'); }
         };
       });
@@ -4944,6 +5161,27 @@
         });
       });
   }
+  // v138 Lanternholder perk: finished bounties and daily quests claim themselves (Settings can switch it off).
+  let autoClaimBusy = false;
+  async function autoClaim() {
+    if (autoClaimBusy || !S.hero || !L.passOn(S) || S.settings.autoClaim === false) return;
+    autoClaimBusy = true;
+    try {
+      const st = L.bountyState(S, Date.now());
+      (st.list || []).forEach((b, i) => { if (b && !b.got && b.have >= b.n) { const r = L.claimBountyAt(S, i, Date.now()); if (r) { save(); toast('star', 'Bounty paid (auto)', '+' + fmt(r.gold) + ' gold and +' + fmt(r.dust) + ' Dust' + (r.tonic ? ', plus a ' + r.tonic : '') + '.', 'loot'); } } });
+      if (CL && signedIn() && S.daily && Array.isArray(S.daily.q)) {
+        const q = L.questState(S), want = q.filter(x => x.done && !x.got).map(x => x.i);
+        if (q.length === 3 && q.every(x => x.done) && !(S.daily.got & 8)) want.push(3);
+        for (const i of want) {
+          try { const r = await papi('POST', '/sigils/earn', { kind: 'quest', i }); S.daily.got = r.mask; if (prof) prof.bal = r.bal; save(); toast('star', '+' + r.add + (r.add === 1 ? ' Sigil' : ' Sigils') + ' (auto)', i === 3 ? 'All three daily quests done.' : 'Daily quest claimed.', 'feat'); }
+          catch (e) { if (e.code === 'claimed') { S.daily.got |= 1 << i; save(); } else break; }
+        }
+      }
+      paintQuests();
+    } catch (e) {}
+    autoClaimBusy = false;
+  }
+  setInterval(autoClaim, 20000);
   $('quests').addEventListener('click', openQuests);
   setInterval(() => { paintQuests(); claimFound(); }, 5000); setTimeout(paintQuests, 500);
   // ---------- Banner kin: party members under your banner amplify its perk ----------
@@ -5352,7 +5590,54 @@
         (top.length ? '<ol class="lboard">' + top.map((p, i) => '<li class="' + (i < 3 ? 'top' + (i + 1) : '') + (p.name === me ? ' me' : '') + '"><span class="lbr">' + (i + 1) + '</span><span class="lbn"><b>' + esc(p.name) + '</b> ' + classTag(p.cls) + (L.SIDES[p.side] ? '<small>' + esc(L.SIDES[p.side].name) + '</small>' : '') + '</span><span class="lbf"><b>Floor ' + p.floor + '</b><small>power level ' + p.level + '</small></span></li>').join('') + '</ol>' : '<p class="note">Nobody is on the board yet. Be the first.</p>');
     } catch (e) { box.innerHTML = '<p class="note">The leaderboard could not load right now. Try again in a minute.</p>'; lbAt = 0; }
   }
-  $('codexseg').addEventListener('click', e => { if (e.target.closest('[data-cx="board"]')) loadBoard(); });
+  // v131 Hall of Fame (John, 26 Nov 2026): records across the Reach from GET /hof (infra/lambda/hof.js). Hidden feats
+  // never count, and nothing here says who was first to NP+1.
+  let lbView = 'deep', hofAt = 0;
+  const HOF = [
+    ['fast', 'map', 'Fastest to NP+1', 'From a new game to New Playthrough 1', v => hofDur(v)],
+    ['rich', 'coin', 'Net worth', 'Most gold on hand', v => fmt(v) + ' gold'],
+    ['boss', 'crown', 'Guardian slayers', 'Most guardians defeated', v => fmt(v)],
+    ['np', 'lantern', 'New Playthrough', 'Highest NP+ reached', v => 'NP+' + v],
+    ['kills', 'sword', 'Monster hunters', 'Most monsters defeated', v => fmt(v)],
+    ['earned', 'bag', 'Fortune makers', 'Most gold earned, all time', v => fmt(v) + ' gold'],
+    ['feats', 'star', 'Feat collectors', 'Most feats earned', v => fmt(v)],
+    ['time', 'torch', 'Lantern keepers', 'Most time in the Deep', v => hofDur(v * 1000)],
+  ];
+  function hofDur(ms) {
+    const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60);
+    return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + (m % 60) + 'm' : Math.max(1, m) + 'm';
+  }
+  async function loadHof(force) {
+    const box = $('hoftop'); if (!box) return;
+    if (!CL) { box.innerHTML = '<p class="note">The Hall of Fame needs the online server.</p>'; return; }
+    if (!force && Date.now() - hofAt < 120000) return; hofAt = Date.now();
+    if (!box.innerHTML) box.innerHTML = '<p class="note">Opening the Hall of Fame…</p>';
+    try {
+      const r = await fetch(CL.api.replace(/\/$/, '') + '/hof'); if (!r.ok) throw r.status;
+      const j = await r.json(), me = S.hero && S.hero.name, medal = ['top1', 'top2', 'top3'];
+      // v131: compact. Each record is one line showing its leader; tap to open the top 3 (John: "collapse things").
+      const who = p => '<b>' + esc(p.name) + '</b>' + (L.CLASSES[p.cls] ? ' ' + classTag(p.cls) : '');
+      const line = (ic, name, lead, val, body, mine) => '<details class="hofd' + (mine ? ' me' : '') + '"><summary>' + icon(ic) + '<span class="hofn">' + name + '</span><span class="hofl1">' + lead + '</span><span class="hofv">' + val + '</span></summary>' + body + '</details>';
+      const rec = ([k, ic, name, sub, f]) => {
+        const t = j[k] || [];
+        return line(ic, name, t[0] ? '<b>' + esc(t[0].name) + '</b>' : '<i class="hofnone">No one yet</i>', t[0] ? f(t[0].v) : '',
+          '<small>' + sub + '</small>' + (t.length ? '<ol>' + t.map((p, i) => '<li' + (p.name === me ? ' class="me"' : '') + '><span class="hofr">' + (i + 1) + '.</span>' + who(p) + '<em>' + f(p.v) + '</em></li>').join('') + '</ol>' : ''),
+          t.some(p => p.name === me));
+      };
+      const cls = L.HERO_CLASSES, cb = j.cls || {};
+      const best = line('shield', 'Best in class', '', cls.filter(c => cb[c]).length + ' of 5',
+        '<small>Highest power level, then gear rating</small><ol>' + cls.map(c => { const b = cb[c]; return '<li' + (b && b.name === me ? ' class="me"' : '') + '>' + classTag(c) + (b ? '<span class="hofb"><b>' + esc(b.name) + '</b><small>power level ' + b.lv + ' · gear rating ' + fmt(b.gr) + '</small></span>' : '<i class="hofnone">No one yet</i>') + '</li>'; }).join('') + '</ol>' +
+        (S.hero ? '<small>You: power level ' + L.lvl(S, 'you') + ' · gear rating ' + fmt(L.gearRating(S, 'you')) + '</small>' : ''), cls.some(c => cb[c] && cb[c].name === me));
+      box.innerHTML = '<p class="note small">Tap a record for the top 3. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(rec).join('') + best + HOF.slice(2).map(rec).join('') + '</div>';
+    } catch (e) { box.innerHTML = '<p class="note">' + (e === 404 ? 'The Hall of Fame opens soon.' : 'The Hall of Fame could not load right now. Try again in a minute.') + '</p>'; hofAt = 0; }
+  }
+  $('lbseg').addEventListener('click', e => {
+    const b = e.target.closest('[data-lb]'); if (!b) return; lbView = b.dataset.lb;
+    document.querySelectorAll('#lbseg button').forEach(x => x.classList.toggle('on', x === b));
+    $('boardtop').hidden = lbView !== 'deep'; $('hoftop').hidden = lbView !== 'hof';
+    if (lbView === 'hof') loadHof(); else loadBoard();
+  });
+  $('codexseg').addEventListener('click', e => { if (e.target.closest('[data-cx="board"]')) { if (lbView === 'hof') loadHof(); else loadBoard(); } });
   // ---------- the Grand War: season strip and war room ----------
   const WAR_URL = 'https://war.born2gamellc.com/';
   const WAR_IMG = DC && !DC.mock ? location.origin + '/lh-war/' : WAR_URL; // inside Discord the art comes through the /lh-war URL mapping
@@ -5384,7 +5669,7 @@
     const mine = L.sideOf(S);
     const left = SEASON.surge - Date.now(), d = Math.max(0, Math.floor(left / 864e5));
     box.innerHTML =
-      '<section class="wroom-hero"><small>Born 2 Game · The Shattered Reach</small><h3>The Grand War</h3><p>Three alliances fight across thirteen sectors for the Nexus. Lanternhold is the war’s hidden front: the Lantern Deep, a tear of the Nyx Rift sealed under a Covenant hold.</p>' +
+      '<section class="wroom-hero"><small>Born 2 Game · The Shattered Reach</small><h3>The Grand War</h3><p>Three alliances fight for the Nexus, sector by sector, at the Born 2 Game store’s tables. Lanternhold is the war’s only online front: the Lantern Deep, a tear of the Nyx Rift sealed under a Covenant hold.</p>' +
       '<div class="wstats"><div><b>Season ' + SEASON.n + '</b><small>' + SEASON.name + '</small></div><div><b>' + (left > 0 ? d + ' days' : 'Now') + '</b><small>until the Rift surges</small></div><div><b>Act One</b><small>ends with the season</small></div></div>' +
       '<a class="btn small" href="' + WAR_URL + '" target="_blank" rel="noopener">Open the war room ↗</a></section>' +
       '<h3 class="sub">The alliances</h3><div class="wcards">' + ['covenant', 'radiant', 'tide'].map(k => warCard(k, k === mine)).join('') + '</div>' +
@@ -5392,7 +5677,7 @@
       '<h3 class="sub">How the war began</h3><div class="wlore">' +
       '<p><b>The Rift.</b> It began as a wound in a dead-star sector: the Nyx Rift, a tear in the sky bleeding light that should not exist. Then it kept tearing. It cut sideways through the walls between realities and dragged whole worlds into one broken space, the Shattered Reach. Thirteen sectors that were never meant to share a sky now share one.</p>' +
       '<p><b>The Nexus.</b> At the centre of the Reach, where every swallowed reality is knotted to every other, burns the Nexus. When the Rift surges at the end of each season, the alliance holding the most sectors seizes it and decides the Rift’s fate: sealed, ruled, or torn wider.</p>' +
-      '<p><b>The Lantern Deep.</b> One thin tear of the Rift runs under the Hold, and a lantern that has never gone out sits on top of it like a cork. Every alliance believes the Deep is a back door to the Nexus. Nobody up top believes in this front. The warbands down here know better.</p>' +
+      '<p><b>The Lantern Deep.</b> One thin tear of the Rift runs under the Hold, and a lantern that has never gone out sits on top of it like a cork. Every alliance believes the Deep is a back door to the Nexus, and the commanders up top have started to listen: they hold it from home between store nights.</p>' +
       '<p><b>The Mercy Corps.</b> In the middle of it all, medics who answer to no banner carry the wounded out of every battle. In the real world the Corps raises food, toys and funds for local charities, and every supply run reinforces an alliance.</p></div>' +
       '<h3 class="sub">Seasons and acts</h3><ol class="wtime">' +
       '<li class="now"><b>Season 1 · The First Incursion</b><small>Nov 1, 2026 to Jan 24, 2027. Lanternhold Act One: fifteen regions down to the Lampmother.</small></li>' +
@@ -5455,7 +5740,7 @@
   }
   function chatNote(t, warn) { const n = $('chatnote'); n.textContent = t || 'Be kind. No web links. Ctrl+click an item to link it. Tap a name to whisper, mute or report.'; n.classList.toggle('warn', !!warn); }
   // Item links: Ctrl/Cmd+click an item (or use Link in chat) to drop it into the message.
-  const ITEM_TOKEN = /\[\[i:(tank|healer|rogue|mage|necro),(weapon|armor|trinket|main|off|head|neck|chest|robe|legs|feet|ring),(common|fine|rare|epic|set|goblin),([a-z]{0,8}),(\d{1,6}),(\d{1,2})\]\]/g;
+  const ITEM_TOKEN = /\[\[i:(tank|healer|rogue|mage|necro|paladin),(weapon|armor|trinket|main|off|head|neck|chest|robe|legs|feet|ring),(common|fine|rare|epic|set|goblin),([a-z]{0,8}),(\d{1,6}),(\d{1,2})\]\]/g;
   // Region set pieces ride in the set field as r plus a letter (ra = the first region).
   const tokenOf = it => '[[i:' + it.cls + ',' + it.slot + ',' + it.rar + ',' + (it.set || (it.rset != null ? 'r' + String.fromCharCode(97 + it.rset) : '')) + ',' + it.ilvl + ',' + (it.up || 0) + ']]';
   const itemLabel = it => L.gearName(it) + (it.up ? ' +' + it.up : '');
@@ -6390,6 +6675,25 @@
     if (step.done && step.done(coachCtx)) { coachAdvance(); return; }
     coachShow(step, st.i);
   }
+  // v138 Next step chip: after the tutorial, one short hint at a time for new heroes (until hero level 12),
+  // pointing at the most useful thing to do now. Tap it to go there; the x hides it for good.
+  function nextStep() {
+    if (L.heroPoints(S) > 0) return { t: 'Spend your stat point', go: () => switchTab('rekindle') };
+    if (L.canUse(S, 'gear') && (S.bag || []).some(it => L.isUpgrade(S, it))) return { t: 'Equip an upgrade', go: () => switchTab('gear') };
+    try { if (L.questState(S).some(q => q.done && !q.got)) return { t: 'Claim a daily quest', go: () => openQuests() }; } catch (e) {}
+    const ids = (S.party || []).filter(Boolean);
+    if (ids.some(id => L.trainCost(S, id, 1) <= S.gold)) return { t: 'Train your party', go: () => switchTab('party') };
+    return null;
+  }
+  let nextKey = '';
+  function paintNextStep() {
+    const el = $('nextstep'); if (!el) return;
+    const on = S.hero && S.tut && S.tut.done && !S.nextOff && L.heroLv(S) < 12, n = on ? nextStep() : null, k = n ? n.t : '';
+    if (k === nextKey) return; nextKey = k; el.hidden = !n; if (!n) return;
+    el.innerHTML = '<span class="ns-l">Next</span><b>' + n.t + '</b><i class="ns-x" title="Hide these hints" aria-label="Hide these hints">&times;</i>';
+    el.onclick = e => { if (e.target.closest('.ns-x')) { S.nextOff = 1; save(); nextKey = ''; paintNextStep(); return; } const m = nextStep(); if (m) m.go(); };
+  }
+  setInterval(paintNextStep, 2500);
   function coachAdvance() { const st = tutState(); st.i++; coachCtx = null; coachHide(); if (st.i >= TUT.length) { st.done = true; save(); } setTimeout(coachTick, 400); }
   $('coachnext').addEventListener('click', coachAdvance);
   $('coachskip').addEventListener('click', () => { const st = tutState(); st.done = true; coachHide(); save(); toast('book', 'Tutorial skipped', 'Open the Guide (the ? at the top) whenever you want a refresher.', ''); });
@@ -6520,12 +6824,13 @@
         '<b>Arrows by the floor number</b>: move between floors you have reached']],
     ] },
     { id: 'party', name: 'Your party', icon: 'users', topics: [
-      ['The five classes', 's:tank,healer,rogue,mage,necro', 'Five seats, five roles. Every class has its own ability.', [
+      ['The classes', 's:tank,healer,rogue,mage,necro,paladin', 'Five seats, five roles, and a sixth class for your hero. Every class has its own ability.', [
         '<b>Tank</b>: takes the hits. Shield Wall cuts damage by 70%.',
         '<b>Healer</b>: keeps everyone up. Lantern Hymn heals and lifts a fallen ally.',
         '<b>Rogue</b>: most damage, dodges a quarter of attacks. Backstab hits hard.',
         '<b>Mage</b>: Ember Storm quadruples damage for a few seconds.',
-        '<b>Necromancer</b>: raises skeletons that fight and soak blows.']],
+        '<b>Necromancer</b>: raises skeletons that fight and soak blows.',
+        '<b>Paladin</b> (a Sigil class, your hero only): plate and a small steady party heal. Oath of Dawn heals the party and shields it for a few seconds. A sidegrade, never stronger.']],
       ['Marching order', 's:tank,rogue,healer,mage,necro', 'The top of the Party list stands in front, nearest the monster.', [
         'A <b>tank</b> in the front two draws attacks.',
         'Heals get <b>15% weaker per step</b> of distance, so healers go in the middle.',
@@ -6562,7 +6867,7 @@
       ['Monsters', 's:slime,rat,skeleton', 'Monsters hit back. If the whole party falls, it retreats a floor and tries again.', [
         'Retreats last about a minute. Use it to train and check gear.',
         '<b>Grand War soldiers</b> (with a banner) are tougher and drop more.']],
-      ['Mana and stamina', 'i:flare', 'Healers, mages and necromancers use mana. Rogues and tanks use stamina.', [
+      ['Mana and stamina', 'i:flare', 'Healers, mages and necromancers use mana. Rogues, tanks and paladins use stamina.', [
         'The blue bar under a hero is <b>mana</b>, the gold bar is <b>stamina</b>. Both hold ' + L.RES_MAX + ' and refill on their own: mana at ' + L.RES_REGEN.mana + ' a second, stamina at ' + L.RES_REGEN.stamina + ' a second.',
         'Abilities cost ' + L.AB_COST + ' and class specials cost ' + L.SPEC_COST + '. If a hero is short, the ability waits until the bar refills.',
         'Healing costs mana. A healer that runs <b>out of mana</b> stops healing and only swings basic attacks until its mana is back to ' + L.RES_WAKE + '. Its bar blinks while it is empty.',
@@ -6756,7 +7061,7 @@
         'Chests and guardians sometimes hold 1 to 3.',
         'Trade gold for Sigils with other players on the exchange.']],
       ['What Sigils buy', 'i:crown', 'Looks, convenience and speed-ups. Never combat power.', [
-        '<b>Lanternholder</b> (premium): Auto-train, +10 bag slots, +4 h away. Get it for 500 Sigils (30 days, nothing renews) or as a $4.99 monthly membership. New heroes get a free 3-day trial.',
+        '<b>Lanternholder</b> (premium): Auto-train, +10 bag slots, +4 h away, auto-claim for bounties and daily quests, 4 gear loadouts. Get it for 500 Sigils (30 days, nothing renews) or as a $4.99 monthly membership. New heroes get a free 3-day trial.',
         '<b>Bag of Holding</b> (6,500, once): an endless pack.',
         '<b>Speed-up tonics</b> and Campfire Draughts. <b>Wardrobe</b> outfits and lanterns. Profile frames, titles and colors.',
         'Buy packs with <b>Get Sigils</b> after signing in with your Born 2 Game store account. Packs are one-time purchases and never renew.',
@@ -6771,6 +7076,11 @@
       ['Grand War aura', 'i:shield', 'Verified Grand War commanders carry a class aura.', [
         '2% to 10% by war rank. Honors add more.',
         'Set your commander name on your profile’s Grand War tab. Auras are earned, never bought.']],
+      ['The Lantern Deep front', 'i:lantern', 'Your week in the Deep can hold ground for your alliance in the Grand War.', [
+        'Link your hero to your Grand War commander on your profile’s Grand War tab. Once it is verified, your progress counts.',
+        'Each war week, new floors, New Playthrough tiers and power levels add up to <b>up to 3 war points</b>, the same as one store win.',
+        'It counts only in weeks you also play or show up at a Born 2 Game store event. Lanternhold adds to the war, it never replaces the tables.',
+        'Points land on the stratum of your deepest floor. Hold the most strata and your alliance holds the Lantern Deep, a sector toward the Nexus.']],
     ] },
     { id: 'social', name: 'Playing together', icon: 'chat', topics: [
       ['Accounts', 'i:user', 'A free account saves your progress online, on any device.', [
@@ -6895,6 +7205,32 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 139, date: 'November 2026', title: 'The Paladin', items: [
+      'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
+      'The Paladin is a Sigil class: unlock it once for 1,000 Sigils and every hero on your account can be one. The first change into it is free. It keeps pace with the other classes and never outclasses them.',
+      'Paladins have their own skill tree, class gear set (Oath of the First Dawn), Grand War aura and Ember Ring skills. In the Ring it has no class edge or counter, and its first two weeks move no rating.',
+      'Your first Sigil pack ever comes with 50% more Sigils, once.',
+      'Lantern Surge shout-out: tick the box in the Sigil shop and your hero’s name shows with the Surge your pack lights.',
+      'Gift Lanternholder: open another player’s profile in the Players Guild and give them 30 days for 500 Sigils.',
+      'New looks in the Wardrobe: Verdant Spring and First Dawn outfits, Hearthstar and Aurora lanterns, Hollow Grove and Oath of Dawn banners.',
+    ] },
+    { v: 138, date: 'November 2026', title: 'Easier shop, loadouts and a smoother start', items: [
+      'Sigil shop: Give $1 or any amount to our Extra Life team for children’s hospitals. Add your #WarName to credit your alliance.',
+      'The Sigil counter at the top now opens the Sigil shop. Signed-out players see a Get button that helps them make an account.',
+      'Buying Sigils for the first time explains the one-time store sign-in, and the pack you picked is waiting when you come back.',
+      'Gear loadouts: save what the whole party wears and put it back on in one tap at camp. Everyone gets 1; Lanternholder gets 4.',
+      'Lanternholder now also claims finished bounties and daily quests for you (switch it off in Settings).',
+      'Phones: Market, Guild, PvP and Codex now sit under one Town button at the bottom.',
+      'The Ember Ring opens at hero level 6 (was 10) and the world boss at hero level 12 (was 18).',
+      'After 3 defeats in a row on the same floor, your party holds one floor up instead of retrying forever. Switch Descend back on when ready.',
+      'New heroes: tap the first monster before the story starts, get a name idea with Suggest, and follow a Next step hint until hero level 12.',
+      'NP+ heroes get a note when a Hold renovation is ready to build.',
+      'A short Lanternholder tip can show when a limit gets in your way, at most once a day each. Switch tips off in Settings.',
+      'Party damage numbers say when skeletons and burst abilities are left out (see the Damage meter).',
+      'Fixed: two cloud saves sent at once could land out of order and lose a few seconds of progress.',
+      'Lanternhold now counts in the Grand War: link your commander and your weeks in the Deep hold ground for your alliance.',
+      'Codex > Leaderboard has a new Hall of Fame: fastest to NP+1, net worth, best in each class (power level and gear rating), guardian slayers and more.',
+    ] },
     { v: 137, date: 'November 2026', title: 'Fast floors and world boss', items: [
       'Foes no longer vanish before you see them on easy floors: each one stays up a moment before it falls.',
       'Far above a floor, foes come in swarms of 3 to 5 that fall together. Gold, loot and kills are the same as before.',
@@ -7711,7 +8047,7 @@
     else if (trade.view === 'sigils') h += sigilsView();
     else if (trade.view === 'shards') h += shardsView();
     else if (trade.view === 'market') {
-      h += '<div class="whoseg tradecls">' + L.CLASS_ORDER.map(c => '<button class="whochip c-' + c + (!trade.mine && trade.cls === c ? ' on' : '') + '" data-tc="' + c + '"><img src="' + SP.spriteURL(c, 2) + '" alt=""><span>' + L.CLASSES[c].name + '</span></button>').join('') +
+      h += '<div class="whoseg tradecls">' + L.HERO_CLASSES.map(c => '<button class="whochip c-' + c + (!trade.mine && trade.cls === c ? ' on' : '') + '" data-tc="' + c + '"><img src="' + SP.spriteURL(c, 2) + '" alt=""><span>' + L.CLASSES[c].name + '</span></button>').join('') +
         '<button class="whochip' + (trade.mine ? ' on' : '') + '" data-tc="mine"><span>My listings</span></button></div>';
       const sel = (id, opts, v) => '<select id="' + id + '">' + opts.map(([k, t]) => '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
       h += '<div class="mkfilters">' + sel('tf-slot', SLOT_FILTER, trade.slot) + sel('tf-rar', RAR_FILTER, trade.rar) + sel('tf-sort', [['cheap', 'Cheapest first'], ['new', 'Newest first'], ['power', 'Strongest first'], ['level', 'Lowest level first']], trade.sort) + '</div>';
@@ -8226,7 +8562,7 @@
     { id: 'greaves', name: 'Greaves', slot: 'legs', R: 3, E: 3, hp: .01, at: .01 },
     { id: 'arms', name: 'Arms', slot: 'main', R: 0, E: 7, hp: 0, at: .02 },
   ];
-  const RING_ARMS = { tank: 'Warhammer', healer: 'Censer', rogue: 'Twin Fangs', mage: 'Focus Rod', necro: 'Grave Scythe' };
+  const RING_ARMS = { tank: 'Warhammer', healer: 'Censer', rogue: 'Twin Fangs', mage: 'Focus Rod', necro: 'Grave Scythe', paladin: 'Dawn Maul' };
   const RING_MAX = 15, RING_EMAX = 10, RING_EINT = 30 * 6e4;
   const ringGate = r => r >= 10 ? 1600 : r >= 5 ? 1300 : 0, ringCost = r => 60 + 30 * r;
   const RING_TIER = r => r <= 0 ? ['Plain', 'common'] : r <= 5 ? ['Ironbound', 'rare'] : r <= 10 ? ['Emberforged', 'epic'] : ['Starwrought', 'set'];
@@ -8252,7 +8588,7 @@
       leech: 'Heal ' + ringPc(v) + ' of the damage you deal.', undying: 'Once per duel, survive a killing blow with ' + ringPc(v) + ' health.', execute: '+' + ringPc(v) + ' damage to foes under 30% health.',
     })[s.fx] + (s.cd ? ' Every ' + s.cd + ' turns.' : '');
   }
-  const NATURE_TEXT = { tank: 'Sturdy: takes 10% less damage.', healer: 'Blessed: heals 1% each turn and takes 6% less damage.', rogue: 'Deadly: +8% critical chance, and crits hit harder.', mage: 'Arcane: abilities hit 10% harder.', necro: 'Hungry: heals 12% of the damage it deals.' };
+  const NATURE_TEXT = { tank: 'Sturdy: takes 10% less damage.', healer: 'Blessed: heals 1% each turn and takes 6% less damage.', rogue: 'Deadly: +8% critical chance, and crits hit harder.', mage: 'Arcane: abilities hit 10% harder.', necro: 'Hungry: heals 12% of the damage it deals.', paladin: 'Devoted: heals 0.5% each turn and takes 5% less damage. No class edge or counter.' };
   // 1 if a has the edge on b, -1 if b counters a, 0 otherwise.
   const ringEdge = (a, b) => { const m = rg.st && rg.st.match; if (!m) return 0; return m.beats[a].includes(b) ? 1 : m.beats[b].includes(a) ? -1 : 0; };
   const ringWhy = (a, b) => (rg.st && rg.st.match.why[a + '>' + b]) || '';
@@ -8432,7 +8768,7 @@
   const TEAM_MAX = 10, teamGate = r => r >= 5 ? 1300 : 0, teamCost = r => 40 + 20 * r;
   const TEAM_TIER = r => r <= 0 ? ['Plain', 'common'] : r <= 5 ? ['Ironbound', 'rare'] : ['Emberforged', 'epic'];
   const TEAM_POS = ['Front', 'Middle', 'Back'];
-  const ringFree = c => ({ tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain' })[c];
+  const ringFree = c => ({ tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain', paladin: 'judgment' })[c];
   // Companions that can fight: your own, not borrowed players and not two-hour contracts.
   function teamPool() {
     return (S.unlocked || []).filter(id => id !== 'you' && L.memberById(id) && !L.isGuest(S, id) && L.lvl(S, id) > 0 && !(S.hires && S.hires[id] && S.hires[id].kind === 'short'));
@@ -8709,6 +9045,9 @@
       ['obsidian', 'Obsidian Oath', 400, 'Black steel, blood-red cloth and a drifting cinder haze.'],
       ['gilded', 'Gilded Regalia', 600, 'Gold plate and white silk, trailed by glittering motes.'],
       ['rift', 'Riftborn', 800, 'Violet and teal, with Rift light curling around the wearer.'],
+      ['verdant', 'Verdant Spring', 300, 'Spring green and rose, for the first warm day after a long dark.'],
+      ['dawn', 'First Dawn', 500, 'White and gold with a sky-blue sash, and a soft golden shimmer.'],
+      ['scout', 'Lantern Scout', 99999, 'Forest green and copper. Only in the Starter pack.'],
       ['sworn', 'Lanternsworn', 1200, 'The bearer’s own regalia: white-gold, flame-orange and a halo of embers.']] },
     l: { label: 'Lanterns', items: [
       ['ember', 'Hearth Ember', 0, 'The lantern Old Thessaly handed you. Warm orange light.'],
@@ -8718,7 +9057,9 @@
       ['rift', 'Riftglass', 300, 'Violet light bent through a shard of the Rift.'],
       ['sun', 'Sunforged', 400, 'Gold frame and a flame as bright as noon.'],
       ['soul', 'Soulflame', 500, 'A teal flame that the dead are said to follow.'],
-      ['void', 'Starless', 600, 'Dark glass holding a small, cold star.']] },
+      ['void', 'Starless', 600, 'Dark glass holding a small, cold star.'],
+      ['hearth', 'Hearthstar', 250, 'A cosy kitchen-fire glow in an old iron frame.'],
+      ['aurora', 'Aurora', 300, 'A flame that shifts from teal to pink, like northern lights.']] },
   };
   const wardItem = (k, id) => WARDROBE[k].items.find(x => x[0] === id) || WARDROBE[k].items[0];
   // Other players' looks (name color, title, outfit, lantern), cached by player id for chat and the Ring.
@@ -8758,6 +9099,8 @@
     frost:    ['Wintermark', 350, 'Ice-blue silk with a frozen star, glittering as it moves.', 'point', '#a8dcf0', '#24527e', '#f0fbff', 'star', '#ffffff', 'glint'],
     rift:     ['Riftbreaker', 500, 'Torn from the Rift itself. Its charge glows with teal light.', 'swallow', '#5a30a0', '#120624', '#7affe8', 'rift', '#a8fff0', 'glow'],
     crown:    ['Crown of the Deep', 750, 'Royal crimson, gold fringe and a crown that catches every light.', 'square', '#9a1e30', '#3a0810', '#f5c242', 'crown', '#ffe08a', 'glint'],
+    grove:    ['Hollow Grove', 350, 'Moss-green linen and a rose for the Root Mother.', 'point', '#4a7a3a', '#1e3a18', '#e8d6a0', 'rose', '#ffd0dc', ''],
+    dawn:     ['Oath of Dawn', 400, 'White silk and a rising sun, carried by the first knights down the stair.', 'swallow', '#f2ead2', '#a8936a', '#f5c242', 'sun', '#f5c242', 'glint'],
     lantern:  ['The Last Lantern', 1000, 'Night-black silk around a burning lantern. Embers drift from it.', 'point', '#1e2a42', '#05070d', '#f5c242', 'lantern', '#ffd27a', 'embers'],
   };
   let banN = 0;
@@ -8847,7 +9190,7 @@
     if (wdTab === 'k') {
       const m = L.memberById(wdWho), cur = wdDraft.k[wdWho] || 'none';
       body = '<div class="whoseg wdwho">' + wardMembers().map(id => { const x = L.memberById(id); return '<button class="whochip c-' + x.cls + (id === wdWho ? ' on' : '') + '" data-ww="' + id + '"><img src="' + SP.spriteURL(x.cls, 2, outfitHue(wdDraft.k[id]) || x.hue || 0) + '" alt=""><span>' + esc(x.name) + '</span></button>'; }).join('') + '</div>' +
-        '<div class="cosgrid wdgrid">' + WARDROBE.k.items.map(([id, name, price]) => {
+        '<div class="cosgrid wdgrid">' + WARDROBE.k.items.filter(([id]) => id !== 'scout' || wardOwns('k', 'scout', 1)).map(([id, name, price]) => {
           const have = wardOwns('k', id, price), on = cur === id;
           return '<button class="cos wdcos' + (on ? ' on' : '') + (have ? '' : ' locked') + (price >= 600 ? ' rare' : '') + '" data-wk="' + id + '"><img src="' + SP.spriteURL(m.cls, 2, id === 'none' ? m.hue || 0 : outfitHue(id)) + '" alt=""><b>' + esc(name) + '</b><small>' + (have ? (on ? 'Wearing' : 'Owned') : sigil + price) + '</small></button>';
         }).join('') + '</div>' +
@@ -8889,9 +9232,9 @@
   let wdBuyArgs = null;
   function wardBuy(k, it) {
     wdBuyArgs = [k, it];
-    if (k === 'k') ['tank', 'healer', 'rogue', 'mage', 'necro'].forEach(c => { try { SP.render(c, 1, outfitHue(it[0])); } catch (e) {} });
+    if (k === 'k') L.HERO_CLASSES.forEach(c => { try { SP.render(c, 1, outfitHue(it[0])); } catch (e) {} });
     const [id, name, price, desc] = it, can = wd.bal >= price, m = L.memberById(wdWho);
-    const pic = k === 'k' ? '<div class="wdbuy">' + ['tank', 'healer', 'rogue', 'mage', 'necro'].map(c => '<img src="' + SP.spriteURL(c, 3, outfitHue(id)) + '" alt="">').join('') + '</div>'
+    const pic = k === 'k' ? '<div class="wdbuy">' + L.HERO_CLASSES.map(c => '<img src="' + SP.spriteURL(c, 3, outfitHue(id)) + '" alt="">').join('') + '</div>'
       : k === 'b' ? '<div class="wdbuy banner">' + bannerSVG(id) + '</div>'
       : '<div class="wdbuy lamp"><img src="' + SP.spriteURL('lantern', 4, '0~' + id) + '" alt=""></div>';
     modal('<div class="center">' + pic + '<h2>' + esc(name) + '</h2><p>' + esc(desc) + '</p><p class="note">' + (k === 'k' ? 'An outfit for every hero in your company, owned forever.' : k === 'b' ? 'A war banner for your hero, owned forever.' : 'A lantern for your party, owned forever.') + ' Looks only. ' + sigil + '<b>' + price + '</b> ' + TOKEN + '. You have ' + fmt(wd.bal) + '.</p>' +
