@@ -7127,6 +7127,7 @@
       'A short Lanternholder tip can show when a limit gets in your way, at most once a day each. Switch tips off in Settings.',
       'Party damage numbers say when skeletons and burst abilities are left out (see the Damage meter).',
       'Fixed: two cloud saves sent at once could land out of order and lose a few seconds of progress.',
+      'Lanternhold now counts in the Grand War: link your commander and your weeks in the Deep hold ground for your alliance.',
       'Codex > Leaderboard has a new Hall of Fame: fastest to NP+1, net worth, best in each class (power level and gear rating), guardian slayers and more.',
     ] },
     { v: 137, date: 'November 2026', title: 'Fast floors and world boss', items: [
