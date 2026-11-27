@@ -1,4 +1,4 @@
-/* lh-build 202611270125 */
+/* lh-build 202611270146 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -7883,8 +7883,9 @@
     if (h !== wb.key) { wb.key = h; el.innerHTML = h; el.hidden = !h; el.classList.toggle('on', !!inA); }
   }
   function openBoss() {
-    if (!gateUse('boss')) return;
-    const x = wbState(), st = wb.st, ph = L.wbPhase(x.total, x.w.id), pct = Math.floor(ph.into / ph.need * 100), old = L.wbOld(x.w.id), tr = L.WB_TRAITS[L.wbBoss(x.w.id)];
+    // A reward already earned can always be claimed, even when the hero is below the unlock level again (NP+ resets it).
+    const x = wbState(); if (!x.claim && !gateUse('boss')) return;
+    const st = wb.st, ph = L.wbPhase(x.total, x.w.id), pct = Math.floor(ph.into / ph.need * 100), old = L.wbOld(x.w.id), tr = L.WB_TRAITS[L.wbBoss(x.w.id)];
     const cn = c => L.CLASSES[c].name.toLowerCase() + 's';
     const top = st && st.w.id === x.w.id ? st.top : [];
     const rank = x.me && x.me.score > 0 ? top.findIndex(t => t.score <= x.me.score) + 1 : 0;
