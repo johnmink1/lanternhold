@@ -1,4 +1,4 @@
-/* lh-build 202611271904 */
+/* lh-build 202611271911 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -4643,6 +4643,7 @@
   }
   async function reconcile() {
     if (HCS) { const ok = await hcServerOk(); if (ok === false) { hcNotReady(); return; } if (ok === null) return; }
+    if (HCS && S.hero && !S.hc) { heldSave('hcslot'); return; } // v142 hotfix: never push a non-Hardcore save from the Hardcore slot
     let rec; try { rec = await api('GET'); } catch (e) { if (!S.hero && $('modal').hidden) setup(); return; }
     const local = saveObj();
     let take = false; try { take = sessionStorage.getItem('lh_take') === '1'; sessionStorage.removeItem('lh_take'); } catch (e) {}
@@ -4678,8 +4679,12 @@
     if (heldShown || dormant) return; heldShown = true;
     if (why) { // v142 Hardcore: a death or lost gear came undone, or a save crossed between the Normal and Hardcore slots
       modal('<div class="center"><h2 class="hch">' + icon('flame') + 'Your save was not accepted</h2><p>' + (why === 'hcslot' ? 'A hero can\'t move between the Normal and Hardcore slots, so the server refused this save.' : 'In Hardcore, deaths and lost gear never come undone. This save is older than one the server already has.') + ' Your account keeps its last good save.</p></div>' +
-        '<div class="row" style="justify-content:center"><button class="btn" id="hs-load">Load my last good save</button></div>', md => {
-          md.querySelector('#hs-load').onclick = () => { try { sessionStorage.setItem('lh_take', '1'); } catch (e) {} location.reload(); };
+        // v142 hotfix: a Hardcore slot holding a save that isn't a Hardcore run can't be fixed by reloading (it looped);
+        // offer a way out instead: back to the Normal hero, or a fresh Hardcore hero.
+        '<div class="row" style="justify-content:center">' + (why === 'hcslot' && HCS ? '<button class="btn ghost" id="hs-norm">Play my Normal hero</button><button class="btn" id="hs-new">Start Hardcore over</button>' : '<button class="btn" id="hs-load">Load my last good save</button>') + '</div>', md => {
+          const ld = md.querySelector('#hs-load'); if (ld) ld.onclick = () => { try { sessionStorage.setItem('lh_take', '1'); } catch (e) {} location.reload(); };
+          const nb = md.querySelector('#hs-norm'); if (nb) nb.onclick = () => { dormant = true; try { localStorage.setItem('lh_slot', ''); } catch (e) {} location.reload(); };
+          const nw = md.querySelector('#hs-new'); if (nw) nw.onclick = () => { dormant = true; try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(SYNC_KEY); } catch (e) {} S = L.newState(); location.reload(); };
         });
       return;
     }
