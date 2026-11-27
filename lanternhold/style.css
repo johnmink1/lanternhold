@@ -1,4 +1,4 @@
-/* lh-build 202611271617 */
+/* lh-build 202611271635 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2944,7 +2944,15 @@ body.layedit #tab-party .buybar,body.layedit #tab-party .ftips,body.layedit #tab
 .dpick button{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--text);font:inherit;cursor:pointer}
 .dpick button svg{width:18px;height:18px;color:var(--accent)}.dpick small{display:block;color:var(--muted);font-size:12px}
 .dpick em{font-style:normal;font-weight:700;color:var(--accent);font-size:13px}
-@media (min-width:721px) and (max-width:1240px){.tabs [data-tab="dash"] span{display:none}.tabs button{padding-left:5px;padding-right:5px}}
 @media (max-width:720px){.dash{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.dtile{padding:9px 10px}.dbig{font-size:17px}.dacts .btn{padding:5px 9px;font-size:12.5px}}
-@media (min-width:721px) and (max-width:1040px){.tabs button{font-size:13px;padding-left:4px;padding-right:4px;gap:4px}}
 @media (max-width:720px){.dtile h4{flex-wrap:wrap}.dash.editing .dtile .dtools{width:100%;margin-left:0;order:-1;justify-content:flex-end}}
+/* v141 hotfix: the desktop tab bar tightens one step at a time until every tab fits (fitTabs in ui.js):
+   fit0 drops the icons, fit1 Dashboard becomes an icon, fit2 smaller text, fit3 town tabs become icons, fit4 every tab an icon */
+@media (min-width:721px){
+  .tabs.fit0 button svg{display:none}
+  .tabs.fit1 [data-tab="dash"] span{display:none}
+  .tabs.fit1 button{padding-left:5px;padding-right:5px}
+  .tabs.fit2 button{font-size:13px;padding-left:4px;padding-right:4px;gap:4px}
+  .tabs.fit3 .townitem span,.tabs.fit4 button span{display:none}
+  .tabs.fit1 [data-tab="dash"] svg,.tabs.fit3 .townitem svg,.tabs.fit4 button svg{display:block!important;width:17px;height:17px}
+}
