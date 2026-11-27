@@ -10,11 +10,11 @@
 #   admin      GET /admin/flags (Watch list) and POST /admin/flags/clear (Reviewed, audited); 2 new routes
 # Safe before or after the v144 game: an older game sends no summary and is simply not checked.
 # Off switch: set RHYTHM=off on lanternhold-save (the boss part only writes flags).
-# Code comes from GitHub at commit COMMIT and is checked by md5. Each live function is checked to be the
+# Code comes from GitHub at commit 32dc84e and is checked by md5. Each live function is checked to be the
 # version we expect BEFORE anything changes and backed up to ~/lhbak. Safe to run twice. Prints the undo commands.
 set -e
 TS=$(date -u +%Y%m%d%H%M); mkdir -p ~/lhbak ~/lhv144 && cd ~/lhv144
-RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/COMMIT/infra/deploy/v144/dist/
+RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/32dc84e/infra/deploy/v144/dist/
 echo "1/4 fetching the new code"
 curl -sf -o lanternhold-save.js "${RAW}lanternhold-save.js" && [ "$(md5sum < lanternhold-save.js | cut -c1-32)" = "f86fc06aa5dc48c051e4764426160a7e" ] || { echo "lanternhold-save: download failed or changed. Stopping; nothing changed."; exit 1; }
 curl -sf -o lanternhold-worldboss.js "${RAW}lanternhold-worldboss.js" && [ "$(md5sum < lanternhold-worldboss.js | cut -c1-32)" = "905ddfdaf905820df1781a0d902c7c0d" ] || { echo "lanternhold-worldboss: download failed or changed. Stopping; nothing changed."; exit 1; }
