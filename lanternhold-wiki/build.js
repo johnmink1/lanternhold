@@ -45,6 +45,7 @@ function uiConst(name, close) {
 const GUIDE = uiConst('GUIDE') || [];
 const NOTES = uiConst('PATCH_NOTES') || [];
 const RING_KIT = uiConst('RING_KIT') || [];
+const TEAM_KIT = uiConst('TEAM_KIT') || [];
 const RING_ARMS = uiConst('RING_ARMS', '};') || {};
 const RING_TITLES = uiConst('RING_TITLES', ']];') || [];
 const RING_MAX = +(UI.match(/const RING_MAX = (\d+)/) || [])[1] || 15;
@@ -441,14 +442,19 @@ ref({
 // ---- Ember Ring ----
 ref({
   slug: 'ember-ring', title: 'The Ember Ring (PvP)', nav: 'Ember Ring (PvP)', icon: 'fist',
-  desc: 'Lanternhold PvP: Ember Ring duels, rating titles, Laurels and every piece of the Ringwarden kit with its Edge and Resolve per rank.',
-  lede: 'Duel other players’ heroes for rating and Laurels. Only your own hero fights, and companions, tonics and Sigils never count.',
+  desc: 'Lanternhold PvP: Ember Ring duels and team battles, rating titles, Laurels, the Ringwarden kit and the companion Ring kit with their Edge and Resolve per rank.',
+  lede: 'Duel other players’ heroes, or bring two companions for a team battle, for rating and Laurels. Tonics and Sigils never count.',
   body: () => '<p>You hold up to ' + RING_EMAX + ' challenges, and one comes back every 30 minutes. Wins pay Laurels and rating; losses still pay a few Laurels. Your hero also defends while you are away.</p>' +
     (RING_KIT.length ? '<h2 id="kit">Ringwarden kit</h2><p>PvP gear bought with Laurels, ' + RING_MAX + ' ranks per piece. <b>Edge</b> is more damage to heroes, <b>Resolve</b> is less damage from heroes. It works only in the Ring.</p>' +
       table(['Piece', 'Slot', 'Edge per rank', 'Resolve per rank', 'Health per rank', 'Attack per rank'], RING_KIT.map(k => ['<b>' + esc(k.name) + '</b>', esc(L.SLOT_NAME[k.slot] || k.slot), String(k.E), String(k.R), k.hp ? pct(k.hp, 1) : '–', k.at ? pct(k.at, 1) : '–'])) +
       '<p class="note">Ranks cost 60 Laurels, then 30 more for each rank after. Kit tiers: Plain, Ironbound (ranks 1 to 5), Emberforged (6 to 10) and Starwrought (11 to 15). Higher ranks need a higher rating.</p>' : '') +
+    '<h2 id="teams">Team battles</h2><p>Your hero and two of your own companions fight another player’s team, three against three. Borrowed player heroes can’t join. Place them Front, Middle and Back: the front fighter takes most of the blows, rogues go for the weakest foe and healers mend the weakest teammate. Each companion uses its class ability. Team battles use the same challenges as duels, have their own team rating and standings, and never hurt your dungeon party.</p>' +
+    '<p>A win pays 10 Laurels (up to 14 against a stronger team), a loss 4, and the first team win of each day 10 more. Your team defends while you are away and earns 2 Laurels for each challenger it beats.</p>' +
+    (TEAM_KIT.length ? '<h3 id="companion-kit">Companion Ring kit</h3><p>Ring gear for companions, bought with Laurels. It stays with that companion and counts only in team battles.</p>' +
+      table(['Piece', 'Slot', 'Edge per rank', 'Resolve per rank', 'Health per rank', 'Attack per rank'], TEAM_KIT.map(k => ['<b>' + esc(k.name) + '</b>', esc(L.SLOT_NAME[k.slot] || k.slot), String(k.E), String(k.R), k.hp ? pct(k.hp, 1) : '–', k.at ? pct(k.at, 1) : '–'])) +
+      '<p class="note">10 ranks per piece. Ranks cost 40 Laurels, then 20 more for each rank after. Ironbound (ranks 1 to 5), then Emberforged (6 to 10), which needs a best team rating of 1,300.</p>' : '') +
     (RING_TITLES.length ? '<h2 id="titles">Rating titles</h2>' + table(['Title', 'Rating'], RING_TITLES.map(([r, t]) => ['<b>' + esc(t) + '</b>', r ? num(r) + '+' : 'Starting'])) : '') + related(['playing-together', 'classes']),
-  index: () => { addSearch('ember-ring', 'Ember Ring', '', 'PvP duels, Laurels, rating', 'PvP'); addSearch('ember-ring', 'Ringwarden kit', 'kit', 'PvP gear with Edge and Resolve. ' + RING_KIT.map(k => k.name).join(', '), 'PvP'); addSearch('ember-ring', 'Laurels', 'kit', 'Earned from duels, spent on the Ringwarden kit', 'PvP'); for (const [, t] of RING_TITLES) addSearch('ember-ring', t, 'titles', 'Ember Ring rating title', 'PvP'); },
+  index: () => { addSearch('ember-ring', 'Ember Ring', '', 'PvP duels, Laurels, rating', 'PvP'); addSearch('ember-ring', 'Ringwarden kit', 'kit', 'PvP gear with Edge and Resolve. ' + RING_KIT.map(k => k.name).join(', '), 'PvP'); addSearch('ember-ring', 'Laurels', 'kit', 'Earned from duels and team battles, spent on the Ringwarden kit and companion Ring kits', 'PvP'); addSearch('ember-ring', 'Team battles', 'teams', 'Your hero and two companions against another player’s team', 'PvP'); addSearch('ember-ring', 'Companion Ring kit', 'companion-kit', 'Ring gear for companions: Arms, Mail, Charm', 'PvP'); for (const [, t] of RING_TITLES) addSearch('ember-ring', t, 'titles', 'Ember Ring rating title', 'PvP'); },
 });
 
 // ---- World boss ----
