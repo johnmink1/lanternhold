@@ -1,4 +1,4 @@
-/* lh-build 202611270058 */
+/* lh-build 202611270113 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -6782,6 +6782,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 135, date: 'November 2026', title: 'Creature details', items: [
+      'Bestiary: tap Details on any creature you have met to see its picture, strength, special attack and field notes. More is revealed the more of them you defeat.',
+    ] },
     { v: 134, date: 'November 2026', title: 'Creature homes and team battles', items: [
       'Creatures now have home regions: 120 kinds, 8 per region, each spawning most in its home. Rare and very rare ones glow.',
       'The Bestiary lists every creature by region: where it lives, how many you defeated, and field notes once you have beaten enough. Unmet ones show as silhouettes.',
