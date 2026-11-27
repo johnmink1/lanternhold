@@ -43,7 +43,13 @@ function uiConst(name, close) {
   try { return new Function('L', 'return (' + src + ');')(L); } catch (e) { console.warn('wiki: could not read ' + name + ' from ui.js: ' + e.message); return null; }
 }
 const GUIDE = uiConst('GUIDE') || [];
-const NOTES = uiConst('PATCH_NOTES') || [];
+// The game ships only its newest patch notes; older ones live in old-notes.js for the wiki.
+const OLD_NOTES = (() => {
+  try { const src = fs.readFileSync(path.join(__dirname, 'old-notes.js'), 'utf8').replace(/^\/\/.*$/gm, ''); return new Function('L', 'return (' + src + ');')(L); }
+  catch (e) { console.warn('wiki: could not read old-notes.js: ' + e.message); return []; }
+})();
+const NOTES = (uiConst('PATCH_NOTES') || []);
+for (const n of OLD_NOTES) if (!NOTES.some(m => m.v === n.v)) NOTES.push(n);
 const RING_KIT = uiConst('RING_KIT') || [];
 const TEAM_KIT = uiConst('TEAM_KIT') || [];
 const RING_ARMS = uiConst('RING_ARMS', '};') || {};

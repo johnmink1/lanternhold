@@ -1,4 +1,4 @@
-/* lh-build 202611270548 */
+/* lh-build 202611270608 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2842,3 +2842,12 @@ details.howto summary::-webkit-details-marker{display:none}
 details.howto summary::before{content:'\25B8';display:inline-block;margin-right:6px;transition:transform .15s}
 details.howto[open] summary::before{transform:rotate(90deg)}
 details.howto p{margin:6px 0 0}
+/* v140 phones: the top buttons fit one row. Music and full screen live in Settings on phones, the version in Settings too. */
+@media (max-width:560px){
+  .top #btn-music,.top #btn-full,.brand .ver,.brand>div{display:none}
+  .top .brand{margin-right:auto}
+}
+@media (max-width:380px){.top #support{display:none}}
+.setver{color:var(--muted);font-size:12px;text-align:center;margin:6px 0 0}
+/* v140: the chapter goal wraps to a second line instead of being cut off; hover shows it in full. */
+.stagehead .goal b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2;max-width:260px}
