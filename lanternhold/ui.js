@@ -1,4 +1,4 @@
-/* lh-build 202611270545 */
+/* lh-build 202611270548 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1129,6 +1129,10 @@
   // floating numbers (DOM, crisp text)
   let floaters = 0;
   let recentFloats = [];
+  // v140: status words (Poisoned, Burning) show once per burst instead of over every hero at the same moment, which piled
+  // up on phones. The badge over each hero still counts its fights left.
+  const statusAt = {};
+  function statusFloat(text, cls, xFrac, yFrac) { const t = performance.now(); if (t - (statusAt[text] || 0) < 1500) return; statusAt[text] = t; floatText(text, cls, xFrac, yFrac); }
   function floatText(text, cls, xFrac, yFrac) {
     if (floaters > 26) return;
     const el = document.createElement('div');
@@ -1269,7 +1273,7 @@
       } else if (e.type === 'block') {
         const a = mAnim(e.target); floatText('Block', 'dodge', a.x / W, (a.y - 6) / H);
       } else if (e.type === 'cc') {
-        const a = mAnim(e.id); floatText(e.k === 'stun' ? 'Stunned!' : 'Disarmed!', 'crit', a.x / W, (a.y - 16) / H);
+        const a = mAnim(e.id); statusFloat(e.k === 'stun' ? 'Stunned!' : 'Disarmed!', 'crit', a.x / W, (a.y - 16) / H);
         if (!(S.stats.ccSeen || {})[e.k]) { S.stats.ccSeen = Object.assign({}, S.stats.ccSeen, { [e.k]: 1 }); toast(e.k === 'stun' ? 'flare' : 'sword', L.memberById(e.id).name + (e.k === 'stun' ? ' is stunned' : ' is disarmed'), e.k === 'stun' ? 'A stunned hero cannot attack, heal or use abilities for a few seconds. Tanks shake it off twice as fast, and Shield Wall makes them immune.' : 'A disarmed hero fights barehanded: 35% damage, half healing and no abilities until it grabs its weapon back a few seconds later. Tanks recover twice as fast.', ''); }
       } else if (e.type === 'ccend') {
         const a = mAnim(e.id); if (e.k === 'disarm') floatText('Weapon back', 'heal', a.x / W, (a.y - 16) / H);
@@ -1310,9 +1314,9 @@
         floatText(sp.name || 'Special', 'crit', FOE_X - 0.1, 0.28);
         sfx.thud(); tone(90, 0.3, 'square', 0.04, 60);
       } else if (e.type === 'dot') {
-        const a = mAnim(e.id), mu = L.dotMult(e.id, e.k); floatText((e.k === 'burn' ? 'Burning' : 'Poisoned') + (mu >= 2 ? ' x2' : mu < 0.5 ? ' (resists)' : ''), e.k === 'burn' ? 'crit' : 'heal', a.x / W, (a.y - 14) / H);
+        const a = mAnim(e.id), mu = L.dotMult(e.id, e.k); statusFloat((e.k === 'burn' ? 'Burning' : 'Poisoned') + (mu >= 2 ? ' x2' : mu < 0.5 ? ' (resists)' : ''), e.k === 'burn' ? 'crit' : 'heal', a.x / W, (a.y - 14) / H);
       } else if (e.type === 'poison') {
-        const a = mAnim(e.id); if (Math.random() < 0.5) floatText('Poisoned', 'heal', a.x / W, (a.y - 12) / H);
+        const a = mAnim(e.id); statusFloat('Poisoned', 'heal', a.x / W, (a.y - 12) / H);
       } else if (e.type === 'shieldup') {
         floatText(e.again ? 'Shield up again!' : 'Shielded! Tap to break it', 'skill', FOE_X, 0.22); tone(660, 0.18, 'sine', 0.04, 880);
         if (!S.stats.shieldSeen) { S.stats.shieldSeen = 1; toast('shield', 'A shielded foe', 'While its shield is up your party deals ' + Math.round(L.SHIELD_CUT * 100) + '% less damage. Tap the foe to knock the shield down (about ' + Math.round(1 / L.SHIELD_TAP) + ' taps). Left alone it wears away in about ' + L.SHIELD_DECAY.foe + ' seconds.', ''); }
@@ -7241,6 +7245,7 @@
       'Phones: loadouts sit in two neat columns, the Codex buttons fit on two rows, and the Market class filter is one row again.',
       'The NPC Guild explanation folds away under How hiring works.',
       'Smaller fixes to wording: hero level and power level are named everywhere, and quest names read better.',
+      'Fights: Poisoned, Burning and Stunned show once per burst instead of over every hero at once.',
     ] },
     { v: 139, date: 'November 2026', title: 'The Paladin', items: [
       'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
