@@ -60,7 +60,7 @@ exports.handler = async (e) => {
     if (bf) v[':b'] = S(bf);
     const r = await db.send(new D.QueryCommand({ TableName: TRADE, KeyConditionExpression: 'pk = :p' + (bf ? ' AND sk < :b' : ''), ExpressionAttributeValues: v, ScanIndexForward: false, Limit: 200 }));
     // s and a are JSON strings; the game parses them
-    return res(200, { rows: (r.Items || []).map(i => ({ sk: i.sk.S, at: +i.at.N, s: i.s.S, a: i.a && i.a.S, dv: i.dv && i.dv.S })), more: r.LastEvaluatedKey && r.LastEvaluatedKey.sk.S });
+    return res(200, { rows: (r.Items || []).map(i => ({ sk: i.sk.S, at: +i.at.N, s: i.s.S, a: i.a && i.a.S, dv: i.dv && i.dv.S, rf: i.rf && i.rf.S, bh: i.bh && i.bh.S })), more: r.LastEvaluatedKey && r.LastEvaluatedKey.sk.S });
   }
   if (rk === 'POST /admin/ban' || rk === 'POST /admin/unban') {
     const id = String(b.id || '');
@@ -92,6 +92,20 @@ exports.handler = async (e) => {
       k = q.LastEvaluatedKey;
     } while (k);
     return res(200, { ok: true, listings: n });
+  }
+  // v144 rhythm watch (rhythm.js): GET /admin/flags lists the Watch list (one row per player and source: s = the game's
+  // input summary, b = the server's world boss record). POST /admin/flags/clear { id } marks a player reviewed: their rows
+  // go, and come back only if the pattern shows up again. Nothing here bans anyone.
+  if (rk === 'GET /admin/flags') {
+    const r = await db.send(new D.QueryCommand({ TableName: TRADE, KeyConditionExpression: 'pk = :p', ExpressionAttributeValues: { ':p': S('flagidx') } }));
+    return res(200, { flags: (r.Items || []).map(i => ({ id: i.sk.S.split('#')[0], src: i.sk.S.split('#')[1] || 's', at: +i.at.N, f0: i.f0 ? +i.f0.N : 0, n: i.n ? +i.n.N : 0, hc: !!i.hc, ev: i.ev ? i.ev.S : '', flags: JSON.parse(i.flags.S) })) });
+  }
+  if (rk === 'POST /admin/flags/clear') {
+    const id = String(b.id || ''); if (!/^[0-9a-f]{16}$/.test(id)) return res(400, { error: 'id' });
+    const now = Date.now(), hr = (await db.send(new D.GetItemCommand({ TableName: HEROES, Key: { pid: S(id) }, ProjectionExpression: '#n', ExpressionAttributeNames: { '#n': 'name' } }))).Item;
+    await Promise.all(['s', 'b'].map(x => db.send(new D.DeleteItemCommand({ TableName: TRADE, Key: { pk: S('flagidx'), sk: S(id + '#' + x) } }))));
+    await db.send(new D.PutItemCommand({ TableName: TRADE, Item: { pk: S('audit#'), sk: S(now.toString(36) + crypto.randomBytes(3).toString('hex')), at: { N: String(now) }, by: S(cl.email || cl.sub), act: S('flags-reviewed'), pid: S(id), name: S(hr && hr.name ? hr.name.S : ''), ttl: { N: String(Math.floor(now / 1000) + 365 * 86400) } } }));
+    return res(200, { ok: true });
   }
   // v140 held saves and snapshots (save.js). GET /admin/held: every player whose last save the check held.
   if (rk === 'GET /admin/held') {

@@ -31,7 +31,8 @@
   const med = a => { if (!a.length) return 0; const b = a.slice().sort((p, q) => p - q); return b[b.length >> 1]; };
   function parse(r) {
     const j = v => { if (v && typeof v === 'object') return v; try { return JSON.parse(v); } catch (e) { return null; } };
-    return { sk: r.sk, at: +r.at, s: j(r.s) || {}, a: j(r.a) || [], dv: r.dv || '' };
+    // rf: the server's rhythm-watch flags for this sync (v144, rhythm.js): timers, routines, auto-clickers, script clicks
+    return { sk: r.sk, at: +r.at, s: j(r.s) || {}, a: j(r.a) || [], dv: r.dv || '', rf: j(r.rf) || [] };
   }
   // rows in any order; returns them oldest first with deltas (d), seconds since the previous sync (dt) and flags
   function analyze(rows) {
@@ -40,6 +41,7 @@
     for (const r of L) {
       const s = r.s, f = r.flags = [], add = (lv, t, k) => f.push({ lv, t, k });
       r.lv = heroLv(s.x);
+      for (const x of r.rf) if (x && x.t) add(x.lv === 'bad' || x.lv === 'warn' ? x.lv : 'info', 'Rhythm: ' + x.t, 'rh-' + x.k);
       const skew = s.ls ? (s.ls - r.at) / 1000 : 0;
       if (skew > R.clockWarn) add(skew > R.clockBad ? 'bad' : 'warn', 'Device clock is ' + span(skew) + ' ahead of the server. Pushing the clock forward is how away-gold is faked.', 'clock');
       for (const a of r.a) if (a && a[1] === 'away' && prev && a[2] > (r.at - prev.at) / 1000 + R.awayPad)

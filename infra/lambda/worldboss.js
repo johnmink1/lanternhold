@@ -9,9 +9,15 @@
 // v143 Hardcore (John, 27 Nov 2026: "Hardcore should have all of the abilities as normal, so World Bosses"): ?hc=1 is the
 // account's Hardcore hero (pid of '<sub>#hc'), its own row (flag hc) on the same shared bar. Sigils are account-bound,
 // so an account is paid Sigils once per event: the second hero's claim gets its gold and loot but no Sigils (row 'a#<pid>').
+// v144 rhythm watch (John, 27 Nov 2026: "people setting up scripts... every 15 min to join the boss fight"): each
+// player's row keeps its assault times (ts: [end time, ms after the cooldown ended, Nexus drop, score / ceiling]), and
+// rhythm.js boss() looks for assaults always started the moment the cooldown ends, a fixed beat, no sleep, machine-even
+// strikes and scores over the ceiling the game itself can reach. Flags go to the Admin Watch list (TRADE, pk flagidx).
+// Flag only: the assault still counts as before.
 const D = require('@aws-sdk/client-dynamodb');
 const crypto = require('crypto');
-const db = new D.DynamoDBClient({}), { BOSS: T, HEROES: H, WALLETS: W } = process.env;
+const RH = require('./rhythm');
+const db = new D.DynamoDBClient({}), { BOSS: T, HEROES: H, WALLETS: W, TRADE } = process.env;
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) }), CF = 'ConditionalCheckFailedException';
 const S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
 const pidOf = sub => crypto.createHash('sha256').update('lh:' + sub).digest('hex').slice(0, 16);
@@ -48,18 +54,29 @@ exports.handler = async (e) => {
     const h = (await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(me) } }))).Item;
     if (!h?.name || h.ban || !!h.hc !== hc) return res(403, { error: 'hero' });
     // Only weekend bosses are live now (the preview's monsters'-worth CAP scoring ended 27 Nov 2026).
-    let sc = M(0, mn(CEIL * fh(mn(1500, (+h.fl?.N || 1) + 10)), Math.floor(b.score) || 0));
+    const top = CEIL * fh(mn(1500, (+h.fl?.N || 1) + 10)), ask = Math.floor(b.score) || 0;
+    let sc = M(0, mn(top, ask));
     // The Nexus check, server side: strike gaps (ms) that are too fast or machine-even lose the strikes' share.
     const iv = (b.iv || []).slice(0, 3e3).map(Number).filter(x => x < 1e3), n = iv.length, m = iv.reduce((a, x) => a + x, 0) / n;
-    if (n > 99 && (m < 60 || iv.reduce((a, x) => a + (x - m) ** 2, 0) / n * 625 < m * m)) sc = M(0, sc - (+b.ck || 0));
+    const nd = n > 99 && (m < 60 || iv.reduce((a, x) => a + (x - m) ** 2, 0) / n * 625 < m * m);
+    if (nd) sc = M(0, sc - (+b.ck || 0));
     // Rows from before v137 have no list: their score so far counts as one entry.
     const r0 = (await row(w.id, me)) || {}, bs = [sc].concat(r0.b ? JSON.parse(r0.b.S) : r0.score ? [+r0.score.N] : []).sort((x, y) => y - x).slice(0, BEST);
     let tot = 0; bs.map(v => tot += v);
+    let ts = []; try { ts = r0.ts ? JSON.parse(r0.ts.S) : []; } catch (x) {}
+    const lt = +r0.last?.N || 0;
+    ts = ts.concat([[now, lt && now - lt - COOL < 2 * 36e5 ? now - lt - COOL : -1, nd ? 1 : 0, Math.round(ask / top * 100) / 100]]).slice(-RH.R.WB_KEEP);
     try {
-      await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(w.id), s: S(me) }, UpdateExpression: 'SET #l=:t,nm=:n,c=:c,score=:v,b=:b' + (hc ? ',hc=:h' : ''),
+      await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(w.id), s: S(me) }, UpdateExpression: 'SET #l=:t,nm=:n,c=:c,score=:v,b=:b,ts=:ts' + (hc ? ',hc=:h' : ''),
         ConditionExpression: 'attribute_not_exists(#l) OR #l<:cut', ExpressionAttributeNames: { '#l': 'last' },
-        ExpressionAttributeValues: { ':t': N(now), ':n': h.name, ':c': h.cls, ':v': N(tot), ':b': S(JSON.stringify(bs)), ':cut': N(now - COOL + 5000), ...(hc ? { ':h': N(1) } : {}) } }));
+        ExpressionAttributeValues: { ':t': N(now), ':n': h.name, ':c': h.cls, ':v': N(tot), ':b': S(JSON.stringify(bs)), ':ts': S(JSON.stringify(ts)), ':cut': N(now - COOL + 5000), ...(hc ? { ':h': N(1) } : {}) } }));
     } catch (x) { if (x.name === CF) return res(429, { error: 1 }); throw x; }
+    // Rhythm watch: flag only, best effort.
+    if (TRADE) try {
+      const fl = RH.boss(ts, COOL).filter(f => f.lv !== 'info');
+      if (fl.length) await db.send(new D.PutItemCommand({ TableName: TRADE, Item: { pk: S('flagidx'), sk: S(me + '#b'), at: N(now), n: N(ts.length), ev: S(w.id),
+        flags: S(JSON.stringify(fl).slice(0, 3000)), ttl: N(Math.floor(now / 1000) + 30 * 86400) } }));
+    } catch (x) { console.log('rhythm', x.name || x); }
     const g = await db.send(new D.UpdateItemCommand({ TableName: T, Key: { w: S(w.id), s: S('#') }, UpdateExpression: 'ADD #t :s', ExpressionAttributeNames: { '#t': 'total' }, ExpressionAttributeValues: { ':s': N(sc) }, ReturnValues: 'ALL_NEW' }));
     return res(200, { ok: true, add: sc, score: tot, total: +g.Attributes.total.N });
   }
