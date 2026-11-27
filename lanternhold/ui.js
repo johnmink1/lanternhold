@@ -1,4 +1,4 @@
-/* lh-build 202611270623 */
+/* lh-build 202611270629 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -2090,7 +2090,7 @@
         '<button class="btn small" id="b-find">' + (boardList ? 'Show other heroes' : 'Browse the guild') + '</button>';
       if (boardMsg) h += '<p class="note">' + esc(boardMsg) + '</p>';
       if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + (g.floor ? ' &middot; reached floor ' + g.floor : '') + '</div></div>' +
-        ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
+        ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : g.ni ? '<span class="muted" data-tip="This player has party invites turned off and plays solo.">Solo</span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
       if ((S.guests || []).length) h += '<p class="note">To let a player’s hero go, press Dismiss on their seat.</p>';
     }
     w.innerHTML = h + '</div>';
@@ -2139,7 +2139,7 @@
     const g = (boardList || []).find(x => x.id === gid); if (!g || inv.sent[gid]) return;
     inv.sent[gid] = g; paintBoard();
     try { await api('POST', { id: gid, act: 'ask' }, '/invite'); }
-    catch (e) { delete inv.sent[gid]; paintBoard(); toast('lock', 'Invite not sent', 'That hero could not be reached. Try another.', 'warn'); return; }
+    catch (e) { delete inv.sent[gid]; const solo = /409/.test(e && e.message); if (solo) g.ni = 1; paintBoard(); toast('lock', 'Invite not sent', solo ? g.name + ' has party invites turned off.' : 'That hero could not be reached. Try another.', 'warn'); return; }
     S.sentInv = S.sentInv || {}; S.sentInv[gid] = { name: g.name, cls: g.cls, at: Date.now() };
     sfx.buy(); toast('users', 'Invite sent to ' + g.name, g.on ? 'They are online now. Their hero joins your party once they accept.' : 'They will see it next time they play. Their hero joins your party once they accept.', '');
   }
@@ -2185,7 +2185,8 @@
     inv.busy = 1;
     try {
       const r = await api('GET', null, '/invites');
-      inv.asks = r.asks || [];
+      inv.asks = S.settings.noInv ? [] : r.asks || [];
+      if (typeof r.solo === 'number' && !!r.solo !== !!S.settings.noInv) S.settings.noInv = r.solo ? 1 : 0;
       for (const g of inv.asks) if (!inv.seen[g.id]) { inv.seen[g.id] = 1; toast('users', g.name + ' invited you', 'They want ' + S.hero.name + ' in their party. Answer in the Guild tab.', 'feat'); }
       S.sentInv = S.sentInv || {};
       for (const id of Object.keys(S.sentInv)) if (!(r.sent || []).includes(id)) delete S.sentInv[id];
@@ -3984,6 +3985,7 @@
         '<p class="setnote">Pick tracks, set the volume or mute from the <button class="linkbtn" id="s-musicpanel">music player</button>' + (phone() ? '.' : ' (the note button at the top).') + '</p>' : '') +
       '<h3 class="sethead">Notifications</h3><p class="setnote">Choose which pop-ups show in the corner. Switched-off ones still go to the bell.</p>' +
       TOAST_KINDS.map(([k, n, d]) => '<label class="setrow setnotif"><span>' + n + '<small>' + d + '</small></span><input type="checkbox" data-notif="' + k + '"' + (toastOff(k) ? '' : ' checked') + '></label>').join('') +
+      '<h3 class="sethead">Playing with others</h3><label class="setrow setnotif"><span>Party invites from players<small>Off: nobody can invite your hero to their party, and waiting invites are declined. Play solo with your companions and NPC hires.</small></span><input type="checkbox" id="s-inv"' + (S.settings.noInv ? '' : ' checked') + '></label>' +
       '<label class="setrow setnotif"><span>Auto-claim (Lanternholder)<small>Finished bounties and daily quests claim themselves while Lanternholder is on</small></span><input type="checkbox" id="s-aclaim"' + (S.settings.autoClaim === false ? '' : ' checked') + '></label>' +
       (CL ? '<label class="setrow setnotif"><span>Lanternholder tips<small>A short note when a limit Lanternholder lifts gets in your way, at most once a day</small></span><input type="checkbox" id="s-nudge"' + (S.nudgeOff ? '' : ' checked') + '></label>' : '') +
       '<p style="margin-top:16px">Your progress saves automatically in this browser. Copy a backup to move it to another device.</p>' +
@@ -3996,6 +3998,12 @@
       '<div class="row"><button class="btn" id="s-close">Done</button></div>', m => {
         m.querySelector('#s-sound').onchange = e => { S.settings.sound = e.target.checked; };
         m.querySelector('#s-aclaim').onchange = e => { S.settings.autoClaim = e.target.checked; save(); };
+        m.querySelector('#s-inv').onchange = async e => {
+          const on = e.target.checked; S.settings.noInv = on ? 0 : 1; if (!on) { inv.asks = []; paintBoard(); } save();
+          if (!CL || !signedIn()) return;
+          try { await api('POST', { act: 'solo', on: !on }, '/invite'); toast('users', on ? 'Party invites are on' : 'Party invites are off', on ? 'Other players can invite your hero again.' : 'Nobody can invite your hero now. Waiting invites were declined.', ''); }
+          catch (x) { toast('lock', 'Could not change invites', 'Try again in a moment.', 'warn'); }
+        };
         const nd = m.querySelector('#s-nudge'); if (nd) nd.onchange = () => { S.nudgeOff = nd.checked ? 0 : 1; save(); };
         m.querySelectorAll('[data-notif]').forEach(c => c.onchange = () => { const off = Object.assign({}, S.settings.toastOff); if (c.checked) delete off[c.dataset.notif]; else off[c.dataset.notif] = 1; S.settings.toastOff = off; save(); });
         if (window.LHMusic) {
@@ -7281,6 +7289,7 @@
       'Paladin heroes must be unlocked to show in the Guild and the Ember Ring.',
       'Gift Lanternholder is paid with bought Sigils only.',
       'Found Sigils bank while you play, at most one every 5 minutes.',
+      'Settings: turn off party invites from players to play solo with your companions and NPC hires.',
     ] },
     { v: 139, date: 'November 2026', title: 'The Paladin', items: [
       'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',

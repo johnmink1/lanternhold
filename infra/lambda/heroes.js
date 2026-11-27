@@ -15,7 +15,7 @@ const res = (c, b) => ({ statusCode: c, headers: { 'content-type': 'application/
 // a card at 2x its own hero (GUEST_CAP in core.js), so a faked card can't carry anyone.
 const num = v => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.min(v, 1e300) : 0);
 const cardOf = b => { if (!b || typeof b !== 'object') return null; const c = { d: num(b.d), h: num(b.h), hl: num(b.hl), pc: Math.min(1, num(b.pc)), t: Math.min(10, num(b.t) | 0) }; return c.h > 0 ? JSON.stringify(c) : null; };
-const heroOut = i => ({ id: i.pid.S, name: i.name.S, cls: i.cls.S, level: Number(i.lv.N), floor: Number(i.fl.N), side: i.sd ? i.sd.S : 'unsworn', on: Date.now() - Number(i.seen.N) < 18e4, pf: i.pf ? JSON.parse(i.pf.S) : null, wd: i.wd ? JSON.parse(i.wd.S) : null, w: i.wv && i.wv.N === '1' ? i.wl.S : '', np: i.np ? +i.np.N : 0, bp: i.bp ? JSON.parse(i.bp.S) : null });
+const heroOut = i => ({ id: i.pid.S, name: i.name.S, cls: i.cls.S, level: Number(i.lv.N), floor: Number(i.fl.N), side: i.sd ? i.sd.S : 'unsworn', on: Date.now() - Number(i.seen.N) < 18e4, pf: i.pf ? JSON.parse(i.pf.S) : null, wd: i.wd ? JSON.parse(i.wd.S) : null, w: i.wv && i.wv.N === '1' ? i.wl.S : '', np: i.np ? +i.np.N : 0, bp: i.bp ? JSON.parse(i.bp.S) : null, ni: i.noinv ? 1 : 0 });
 // Unique names (John, 26 Nov 2026): one hero per name, ignoring case, spaces, hyphens and apostrophes
 // ("Pak-Tusjet" = "paktusjet"). Banned players keep their name reserved. Checked only when a player takes a new name,
 // so a name already held by two players (from before this rule) keeps syncing until an admin renames one.
