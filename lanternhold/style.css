@@ -1,4 +1,4 @@
-/* lh-build 202611272049 */
+/* lh-build 202611272254 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -763,6 +763,8 @@ body:not(.incamp) [data-train]:not(.anywhere)::after,body:not(.incamp) [data-sea
 .upips{display:flex;gap:3px}
 .upips i{width:12px;height:5px;border-radius:2px;background:#181f2b;border:1px solid var(--line2)}
 .upips i.on{background:var(--rc);border-color:var(--rc);box-shadow:0 0 5px color-mix(in srgb,var(--rc) 60%,transparent)}
+.upips{align-items:center}
+.upips .upmax{margin-left:6px;font-size:11px;color:var(--muted);white-space:nowrap}
 .istats{display:grid;gap:6px;margin:14px 0 4px}
 .ist{display:flex;align-items:baseline;gap:10px;background:#0a0c0f;border:1px solid var(--line);border-radius:10px;padding:9px 12px}
 .ist span{color:var(--muted);font-size:13px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;flex:1}

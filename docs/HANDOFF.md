@@ -227,6 +227,16 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
 
+## v143 bundle: Hardcore NP+ and Act 1 QoL (27 Nov 2026, in progress)
+From the Act 1 review (John 27 Nov 22:44 UTC: Sigils are account-bound and fine in Hardcore; Hardcore gets the same NP+ as Normal; yes to the QoL list). Branch claude/project-thread-yn2s1l. Not shipped yet.
+- Hardcore NP+ per slot: `np.js` reads `?hc=1` and keeps the Hardcore tier as `hnp`/`hnpAt` on the account wallet (the +25 Sigils go to the account), stamps the Hardcore hero row, clears Hardcore trades, no First Dawn. Every answer carries `hc`; `syncNp` in the Hardcore slot only applies a tier when `hc === 1`, so an old server can never reset a Hardcore hero again (#107). `startNP` keeps a Hardcore run's death/lost counters (hccheck needs them) and drops its carried gear and Lost Pack. `save.js` reads `hnp` for the Hardcore NP check. Hardcore NP+ markets are `mkt#<cls>#hc#<tier>`.
+- Sigils in Hardcore: daily quest claims and found Sigils work in both slots; the daily mask and find cap stay per account (wallet), so the two saves share one daily set. `perks.js` checks "real play" against the slot's own save row.
+- Gulp and the goblin take Hardcore NP+ heroes (`?hc=1` uses the Hardcore pid and save for the trust check). The Sigil exchange and boss shard market stay shut in Hardcore (gold would cross the wall); `exchange.js` refuses `?hc=1` and now checks buys with `trust.canPay` (env SAVES).
+- Market/Mail refuse items above `(deepest floor + 10) x (1 + 0.1 x NP tier)` (`ilvlCap`).
+- QoL: Let go works at any camp (`campGate()`), item window shows "+N of max +10", Armorer hints say max +10, Around the Hold tile has Hold works and Training Grounds.
+- Server: `infra/deploy/v143/server.sh` (built by `build.py`, md5-pinned, backs up to ~/lhbak, also switches on point-in-time recovery for lanternhold-saves). Run it BEFORE the client merges. Tests: `NODE_PATH=infra/test/mock node infra/test/v143.test.js`.
+- The Hardcore thread is adding world boss, Ember Ring and Hall of Fame for Hardcore into the same bundle (their Lambdas join server.sh).
+
 ## v142 Hardcore mode and daily limits (27 Nov 2026)
 Shipped 27 Nov 2026 17:16 UTC as PR #95 (includes #96), squash 9ee66c2, build 202611271701.
 John asked for it 27 Nov (thread "Add a Hardcore mode"); plan doc https://claude.ai/artifact/E2gymdd5aYZM4GnkvEXWmU, mockups in project files `hardcore/`.

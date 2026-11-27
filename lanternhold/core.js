@@ -1,4 +1,4 @@
-/* lh-build 202611272049 */
+/* lh-build 202611272254 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -3170,7 +3170,7 @@
   // The server caps how many found Sigils a player can bank per day (perks.js), so this stays a slow trickle.
   const SIGIL_CHEST = 0.0005, SIGIL_BOSS = 0.001, SIGIL_DEPTH = 0.0001, SIGIL_DROP_DAY = 15;
   const sigilLuck = s => kup(s, 'sense') + SIGIL_DEPTH * Math.min(5, Math.floor((s.maxFloorEver || 0) / 30));
-  const sigilChance = (s, kind) => s && s.hc ? 0 : (kind === 'boss' ? SIGIL_BOSS : SIGIL_CHEST) + sigilLuck(s) + sk(s, 'sig');
+  const sigilChance = (s, kind) => (kind === 'boss' ? SIGIL_BOSS : SIGIL_CHEST) + sigilLuck(s) + sk(s, 'sig');
   function dropSigils(s, foe, rng, events) {
     if (!foe.chest && !foe.boss) return;
     const r = rng || Math.random;
@@ -3951,7 +3951,7 @@
   }
 
   // NP+ opens once the floor 150 guardian is beaten (the 'act1' story beat or a deeper floor).
-  function npReady(s) { return !!(s && s.hero) && !s.hc && npTier(s) < NP_MAX && ((s.story && s.story.seen && s.story.seen.act1) || (s.maxFloorEver || 1) > ACT_ONE_END); }
+  function npReady(s) { return !!(s && s.hero) && npTier(s) < NP_MAX && ((s.story && s.story.seen && s.story.seen.act1) || (s.maxFloorEver || 1) > ACT_ONE_END); }
   // What a new playthrough keeps: the hero (name, class, alliance), Sigil buys (Bag of Holding, campfire spots, pass,
   // subscription, tonics and draughts), journal lore, feats, Rift tokens, settings, lifetime stats and account flags.
   // Everything else (gold, Dust, floors, levels, XP, stat points, skills, Kindling, gear, Embers, relics, companions,
@@ -3962,9 +3962,12 @@
   // force: the server says this account is already on `tier` (another device started it), so reset to it anyway.
   function startNP(s, tier, at, force) {
     tier = Math.min(NP_MAX, tier | 0);
-    if (s && s.hc) return false; // v142 hotfix: New Playthrough never touches a Hardcore hero
     if (force ? !(s && s.hero) || tier <= npTier(s) : !npReady(s) || tier !== npTier(s) + 1) return false;
     const keep = {}; for (const k of NP_KEEP) if (s[k] !== undefined) keep[k] = s[k];
+    // v143 (John, 27 Nov 2026): a Hardcore hero has its own NP+ tier (GET /np?hc=1). The run's death and lost-gear counts
+    // stay (the server refuses a Hardcore save whose counts go down); carried gear and the Lost Pack belong to the old
+    // tier and go with it.
+    const hc = s.hc ? Object.assign(hcNorm(s.hc), { carry: {}, pack: null, dyingLoad: null }) : null;
     for (const k of Object.keys(s)) delete s[k];
     Object.assign(s, newState(), keep);
     s.np = tier; s.npAt = at || Date.now();
@@ -3977,6 +3980,7 @@
     s.levels.you = 1; s.party[0] = 'you'; if (!s.unlocked.includes('you')) s.unlocked.unshift('you');
     npcMigrate(s); registerHero(s);
     s.hp.you = maxHpOf(s, 'you');
+    if (hc) { s.hc = hc; s.autoAdvance = true; }
     return true;
   }
 

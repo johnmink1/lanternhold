@@ -70,10 +70,10 @@ const now0 = 1.8e12;
   const m = L.migrate(o); ev = []; L.tick(m, 0.1, now0, r, ev);
   assert.ok(!m.unlocked.includes(v2) && ev.some(e => e.type === 'hcdie'), 'dying on close = died');
   console.log('ok  closing the game while someone lies dying does not save them');
-  // 7. NP+, world boss, Ring and Sigil finds are off
-  assert.ok(!L.npReady(Object.assign(party(), { maxFloorEver: 999 })) && !L.canUse(s, 'ring') && !L.canUse(s, 'boss') && L.sigilChance(s, 'chest') === 0);
+  // 7. world boss and Ring are off; v143 (John): NP+ (own tier) and Sigil finds are open
+  assert.ok(L.npReady(Object.assign(party(), { maxFloorEver: 999 })) && !L.canUse(s, 'ring') && !L.canUse(s, 'boss') && L.sigilChance(s, 'chest') > 0);
   assert.equal(L.startAssault(s, now0, 'x'), false);
-  console.log('ok  NP+, world boss, Ember Ring and Sigil finds are closed to Hardcore');
+  console.log('ok  world boss and Ember Ring closed to Hardcore; NP+ and Sigil finds open (v143)');
   // 8. Normal play is unchanged: a fallen Normal member stands up on the timer
   const n = L.newState(); L.startGame(n, 'multi', 'tank', 'N', 'mercy'); L.recruit(n, 'ashe'); n.hp.ashe = 0; n.down.ashe = now0; L.gotoFloor(n, 1); n.maxFloor = 5; L.gotoFloor(n, 3);
   L.tick(n, 0.1, now0 + 1, r, []); assert.ok(!n.down.ashe && n.unlocked.includes('ashe'), 'normal revive');
