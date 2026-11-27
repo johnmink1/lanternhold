@@ -136,7 +136,14 @@
   window.addEventListener('lhsprites', () => { for (const k in spriteCache) delete spriteCache[k]; try { updatePanel(true); updateSeats && updateSeats(true); } catch (e) {} });
   const particles = [];
   const slashes = [];
-  let foeAnim = { key: null, born: 0, flash: 0, shake: 0, dying: null };
+  let foeAnim = { key: null, born: 0, flash: 0, shake: 0, dying: [] };
+  // Fast floors (John, 27 Nov 2026): a party far stronger than its floor kills each foe on the tick it arrives, so the
+  // foe was never drawn. Display only, the rules never see any of this, so gold, loot and kills per minute are unchanged:
+  //  - every foe stays on screen at least SHOW_MIN seconds (hit flashes, health draining) before its defeat animation;
+  //  - SWARM_GAP+ floors above the floor, quick kills are shown in swarms of 3 to 5 that fall together in one burst.
+  // Their gold float waits for the burst. The next foe still arrives on the usual FOE_GAP, so a ghost never blocks it.
+  const SHOW_MIN = 0.45, DIE_T = 0.3, SWARM_GAP = 20, SWARM_FAST = 0.3, SWARM_WAIT = 1.6;
+  let ghost = null; const swarm = { pend: [], want: 0, at: 0, show: null };
 
   // The arena keeps a 240-wide logical space, drawn at the screen's real resolution (R) so the art stays sharp.
   let R = 3;
@@ -876,6 +883,88 @@
     ctx.strokeStyle = '#a8742e'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - sw * 0.25, floorY - sh * 0.45); ctx.lineTo(x + sw * 0.25, floorY - sh * 0.4); ctx.moveTo(x - sw * 0.25, floorY - sh * 0.38); ctx.lineTo(x + sw * 0.25, floorY - sh * 0.33); ctx.stroke();
     if (Math.sin(tAnim * 2) > 0.6) { ctx.fillStyle = '#fff'; ctx.font = '600 7px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('Help!', x, floorY - sh - 2); ctx.textAlign = 'left'; }
   }
+  // ---------- fast floors: ghosts and swarms (display only) ----------
+  const swarmFloor = () => !L.isBossFloor(S.floor) && S.floor <= (S.maxFloorEver || 0) - SWARM_GAP;
+  const fastUp = () => !!(ghost || swarm.show);
+  function foeDies(f, cx, cy, w, h, len) {
+    const spr = sprite(f.sprite, f.chest ? 0 : foeHue(f), true);
+    foeAnim.dying.push({ spr, t: tAnim, len, x: cx - w / 2, y: cy - h / 2, w, h }); if (foeAnim.dying.length > 12) foeAnim.dying.shift();
+    burst(cx, cy, f.boss ? 50 : f.chest ? 40 : 14, f.chest || f.boss ? ['#f2c14e', '#fff0a0', '#c8952a'] : ['#f2c14e', '#fff0a0', '#9b8a70'], f.boss ? 70 : 45);
+  }
+  // A foe that died before it was seen stays up for the rest of SHOW_MIN, then falls.
+  function ghostShow(f, g, seen) {
+    if (ghost) ghostFall();
+    ghost = { f, g, t0: tAnim, hold: Math.max(0.15, SHOW_MIN - seen), seen };
+  }
+  function ghostFall() {
+    const gh = ghost; ghost = null; if (!gh) return;
+    foeDies(gh.f, gh.cx || W * FOE_X, gh.cy || H * 0.55, gh.w || 30, gh.h || 30, DIE_T);
+    if (gh.g) pendingGold += gh.g;
+  }
+  function swarmAdd(f, g) {
+    if (!swarm.pend.length) { swarm.want = 3 + Math.floor(Math.random() * 3); swarm.t1 = tAnim; }
+    swarm.pend.push({ f, g }); swarm.at = tAnim;
+    if (swarm.pend.length >= swarm.want) swarmGo();
+  }
+  // The gathered kills take the stage together for about as long as they took to gather, then fall in one burst.
+  function swarmGo() {
+    const list = swarm.pend.splice(0); if (!list.length) return;
+    if (swarm.show) swarmFall();
+    if (list.length === 1) { ghostShow(list[0].f, list[0].g, 0); return; }
+    const dur = Math.max(1.1, Math.min(4, tAnim - swarm.t1 + 0.8));
+    swarm.show = { list, t0: tAnim, dur, slots: swarmSlots(list.length) };
+  }
+  function swarmFall() {
+    const sw = swarm.show; swarm.show = null; if (!sw) return;
+    let g = 0; sw.list.forEach((m, i) => { const p = sw.pos && sw.pos[i]; if (p) foeDies(m.f, p.cx, p.cy, p.w, p.h, DIE_T); g += m.g; });
+    if (g) pendingGold += g;
+    sfx.hit(true);
+  }
+  // Loose cluster around the foe spot: back row first, so the front row overlaps it.
+  function swarmSlots(n) {
+    const xs = { 2: [-0.5, 0.5], 3: [-0.75, 0.75, 0], 4: [-0.55, 0.55, -1.0, 1.0], 5: [-0.55, 0.55, -1.15, 1.15, 0] }[n] || [0];
+    const ys = { 2: [0, 0], 3: [-1, -1, 0], 4: [-1, -1, 0, 0], 5: [-1, -1, 0, 0, 0.35] }[n] || [0];
+    return xs.map((x, i) => ({ x, y: ys[i], ph: Math.random() * 6 }));
+  }
+  function drawFastFoes(fxC, floorY) {
+    if (swarm.pend.length && (!swarmFloor() || tAnim - swarm.at > SWARM_WAIT)) swarmGo();
+    if (ghost) {
+      const gh = ghost, k = (tAnim - gh.t0) / gh.hold, f = gh.f;
+      if (k >= 1) { ghostFall(); return; }
+      const spr = sprite(f.sprite, f.chest ? 0 : foeHue(f), tAnim < foeAnim.flash || Math.sin(tAnim * 40) > 0.6);
+      const sw = Math.round(spr.lw * 3 * (f.sc || 1)), sh = Math.round(spr.lh * 3 * (f.sc || 1));
+      const flier = f.sprite === 'bat' || f.sprite === 'ghost' || f.sprite === 'moth';
+      const drop = gh.seen < 0.25 ? Math.max(0, 1 - (tAnim - gh.t0 + gh.seen) / 0.25) * -12 : 0;
+      const shake = Math.random() < 0.5 ? -1 : 1;
+      const fx = Math.round(fxC - sw / 2 + shake), fy = Math.round(floorY + 4 - sh + drop) - (flier ? 10 : 0);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(fxC, floorY + 4, sw * 0.42, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.globalAlpha = Math.min(1, (tAnim - gh.t0 + gh.seen) / 0.12 + 0.3); ctx.translate(fx + sw, fy); ctx.scale(-1, 1); ctx.drawImage(spr, 0, 0, sw, sh); ctx.restore();
+      gh.cx = fxC; gh.cy = fy + sh / 2; gh.w = sw; gh.h = sh;
+      foeAnim.cx = gh.cx; foeAnim.cy = gh.cy; foeAnim.w = sw; foeAnim.h = sh;
+      return;
+    }
+    const sh0 = swarm.show; if (!sh0) return;
+    const age = tAnim - sh0.t0;
+    if (age >= sh0.dur) { swarmFall(); return; }
+    const n = sh0.list.length, sc = n >= 5 ? 0.68 : n === 4 ? 0.74 : 0.8; sh0.pos = sh0.pos || [];
+    const order = sh0.slots.map((p, i) => i).sort((a, b) => sh0.slots[a].y - sh0.slots[b].y);
+    let minX = Infinity, maxX = -Infinity, top = Infinity;
+    for (const i of order) {
+      const m = sh0.list[i].f, p = sh0.slots[i];
+      const spr = sprite(m.sprite, m.chest ? 0 : foeHue(m), tAnim < foeAnim.flash && i % 2 === Math.floor(tAnim * 10) % 2);
+      const sw = Math.round(spr.lw * 3 * (m.sc || 1) * sc), sh = Math.round(spr.lh * 3 * (m.sc || 1) * sc);
+      const flier = m.sprite === 'bat' || m.sprite === 'ghost' || m.sprite === 'moth';
+      const arrive = Math.min(1, Math.max(0, (age - i * 0.06) / 0.25)), drop = (1 - arrive) * -12;
+      const bob = Math.sin(tAnim * 2.4 + p.ph) * (flier ? 2.2 : 0.6);
+      const cx = Math.round(fxC + p.x * sw * 0.62 * Math.min(1, W / 420)), base = floorY + 4 + p.y * 7;
+      const fx = Math.round(cx - sw / 2 + (tAnim < foeAnim.shake ? (Math.random() < 0.5 ? -1 : 1) : 0)), fy = Math.round(base - sh + bob + drop) - (flier ? 10 : 0);
+      ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(cx, base, sw * 0.4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.globalAlpha = arrive; ctx.translate(fx + sw, fy); ctx.scale(-1, 1); ctx.drawImage(spr, 0, 0, sw, sh); ctx.restore();
+      sh0.pos[i] = { cx, cy: fy + sh / 2, w: sw, h: sh };
+      minX = Math.min(minX, fx); maxX = Math.max(maxX, fx + sw); top = Math.min(top, fy);
+    }
+    foeAnim.cx = fxC; foeAnim.cy = top + (floorY - top) / 2; foeAnim.w = maxX - minX; foeAnim.h = floorY - top;
+  }
   function render(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now; tAnim += dt;
     ctx.setTransform(R, 0, 0, R, 0, 0); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
@@ -913,6 +1002,7 @@
     if (foe && !nxUp) {
       const fk = foe.name + foe.max + S.floor + S.foeIdx;
       if (foeAnim.key !== fk) { foeAnim.key = fk; foeAnim.born = tAnim; }
+      foeAnim.obj = foe; if (ghost) ghostFall(); if (swarm.show) swarmFall();
       const spr = sprite(foe.sprite, foe.chest ? 0 : foeHue(foe), tAnim < foeAnim.flash);
       const sw = Math.round(spr.lw * 3 * (foe.sc || 1)), sh = Math.round(spr.lh * 3 * (foe.sc || 1));
       const age = tAnim - foeAnim.born;
@@ -958,17 +1048,18 @@
         ctx.restore();
       }
     }
-    if (foeAnim.dying) {
-      const d = foeAnim.dying, a = 0.7 * (1 - (tAnim - d.t) / 0.25);
-      if (a <= 0) foeAnim.dying = null;
-      else { ctx.globalAlpha = a; ctx.drawImage(d.spr, d.x - (1 - a) * 4, d.y + (1 - a) * 6, d.w * (1 + (1 - a) * 0.15), d.h * (1 - (1 - a) * 0.3)); ctx.globalAlpha = 1; }
+    if (!foe && !nxUp) drawFastFoes(fxC, floorY);
+    for (let i = foeAnim.dying.length - 1; i >= 0; i--) {
+      const d = foeAnim.dying[i], k = (tAnim - d.t) / (d.len || 0.25), a = 0.7 * (1 - k);
+      if (a <= 0) { foeAnim.dying.splice(i, 1); continue; }
+      ctx.globalAlpha = a; ctx.drawImage(d.spr, d.x - (1 - a) * 4, d.y + (1 - a) * 6, d.w * (1 + (1 - a) * 0.15), d.h * (1 - (1 - a) * 0.3)); ctx.globalAlpha = 1;
     }
 
     if (breach && S.nx.ph) drawGuardian(floorY);
     const lay = drawParty(nowMs);
 
     // party attacks: a member lunges and a slash in their colour lands on the foe
-    if ((foe || nxUp) && lay.length) {
+    if ((foe || nxUp || fastUp()) && lay.length) {
       slashTimer -= dt;
       if (slashTimer <= 0) {
         slashTimer = 0.3 + Math.random() * 0.3;
@@ -1252,10 +1343,11 @@
         if (e.cls === 'healer') burst(a.x, a.y, 16, ['#9be87a', '#d6ffc2'], 30);
         tone(440, 0.12, 'triangle', 0.035, 880);
       } else if (e.type === 'kill') {
-        kills++; gold += e.gold;
-        const f = e.foe, spr = sprite(f.sprite, f.chest ? 0 : foeHue(f), true);
-        foeAnim.dying = { spr, t: tAnim, x: foeAnim.cx - foeAnim.w / 2, y: foeAnim.cy - foeAnim.h / 2, w: foeAnim.w, h: foeAnim.h };
-        burst(foeAnim.cx, foeAnim.cy, f.boss ? 50 : f.chest ? 40 : 14, f.chest || f.boss ? ['#f2c14e', '#fff0a0', '#c8952a'] : ['#f2c14e', '#fff0a0', '#9b8a70'], f.boss ? 70 : 45);
+        kills++;
+        const f = e.foe, seen = foeAnim.obj === f ? tAnim - foeAnim.born : 0;
+        if (!f.boss && !f.world && !f.goblin && seen < SWARM_FAST && swarmFloor()) { swarmAdd(f, e.gold || 0); kills--; }
+        else if (seen < SHOW_MIN) { kills--; ghostShow(f, e.gold || 0, seen); }
+        else { gold += e.gold; foeDies(f, foeAnim.cx, foeAnim.cy, foeAnim.w, foeAnim.h); }
         if (f.boss) { sfx.boss(); if (e.first && !(S.maxFloor % 10 === 0 && L.regionNeed(S, S.maxFloor + 1))) toast('crown', f.name + ' defeated', 'The way down is open.', ''); }
       } else if (e.type === 'loot') {
         const it = e.item;
@@ -3570,6 +3662,17 @@
         $('lanternbar').style.width = (left / lt * 100) + '%';
         $('lanterntext').textContent = 'Lantern oil ' + left.toFixed(1) + 's';
       }
+    } else if (fastUp() && L.alive(S).length && !L.resting(S, Date.now())) {
+      // a foe that fell before it was seen, or a swarm on a fast floor, is still on stage (display only)
+      const sw = swarm.show, gf = ghost ? ghost.f : sw.list[0].f, n = sw ? sw.list.length : 1;
+      const left = ghost ? 1 - Math.min(1, (tAnim - ghost.t0) / ghost.hold) : 1 - Math.min(1, (tAnim - sw.t0) / sw.dur);
+      $('foename').textContent = n > 1 ? gf.name + ' and ' + (n - 1) + ' more' : gf.name;
+      const tag = $('foetag'); tag.textContent = n > 1 ? 'Swarm ×' + n : ''; tag.className = 'tag' + (n > 1 ? ' ambush' : '');
+      if (n > 1) tag.dataset.tip = 'Far above this floor, quick foes come in swarms. Each one still pays its own gold and loot.'; else delete tag.dataset.tip;
+      if (lastModKey !== '') { lastModKey = ''; $('foemods').innerHTML = ''; }
+      $('hpbar').style.width = Math.max(0, left * 100) + '%'; $('wardbar').style.width = '0%'; $('hptext').textContent = '';
+      $('hpbar').parentNode.classList.remove('shielded', 'aid', 'wb');
+      $('lanternwrap').hidden = true; $('b-oil').hidden = true;
     } else {
       // No foe up (between foes, or resting): clear the panel so it never shows a foe from another floor (John, 2026-11-24).
       $('foename').textContent = !L.alive(S).length ? 'Your party is resting' : L.isBossFloor(S.floor) ? 'The guardian steps up\u2026' : 'The next foe steps up\u2026';
@@ -6788,6 +6891,10 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 137, date: 'November 2026', title: 'Fast floors', items: [
+      'Foes no longer vanish before you see them on easy floors: each one stays up a moment before it falls.',
+      'Far above a floor, foes come in swarms of 3 to 5 that fall together. Gold, loot and kills are the same as before.',
+    ] },
     { v: 136, date: 'November 2026', title: 'One Bestiary', items: [
       'The Bestiary is now one list by region. Each creature\u2019s Details shows its family story and mastery; chests and guardians sit at the end.',
     ] },
