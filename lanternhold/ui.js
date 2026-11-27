@@ -1,4 +1,4 @@
-/* lh-build 202611271942 */
+/* lh-build 202611271948 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -7107,11 +7107,17 @@
     modal('<div class="center"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-lantern"/></svg><h2>Updating Lanternhold</h2><p>A new version is out. Your progress is saved, and the game reloads in <b id="up-n">' + n + '</b> seconds.</p><div class="row" style="justify-content:center"><button class="btn" id="up-now">Update now</button></div></div>', md => {
       md.querySelector('#up-now').onclick = () => loadBuild(b);
     });
-    const t = setInterval(() => { n--; const e = $('up-n'); if (e) e.textContent = Math.max(0, n); if (n <= 0) { clearInterval(t); loadBuild(b); } }, 1000);
+    const t = setInterval(() => { n--; const e = $('up-n'); if (e) e.textContent = Math.max(0, n); if (dormant) { clearInterval(t); return; } if (n <= 0) { clearInterval(t); loadBuild(b); } }, 1000);
   }
   async function checkUpdate() {
     if (!window.LH_BUILD || updating || checking) return;
-    clearTimeout(upTimer); checking = true;
+    clearTimeout(upTimer);
+    // v142 hotfix (John, 27 Nov 2026): a paused tab or one in the background never reloads itself for an update. It
+    // reloaded into whichever save slot was picked last and took over the tab being played, so the game seemed to
+    // switch saves and jump ahead. A background tab checks again when it is shown; a paused one waits for "Play here".
+    if (dormant) return;
+    if (document.hidden) { upTimer = setTimeout(checkUpdate, 120000); return; }
+    checking = true;
     let wait = 120000;
     try {
       const j = await (await fetch('version.json?t=' + Date.now(), { cache: 'no-store' })).json();
@@ -7777,6 +7783,7 @@
       'Your Hardcore hero can use the same name as your Normal hero. Hardcore heroes show an HC tag in chat, profiles and the Guild.',
       'Starting a Hardcore hero no longer loops back to a refused save, even with the game open in another tab.',
       'Bounty progress shows whole numbers. Hardcore quests no longer offer Sigil claims, since daily Sigils are for your Normal hero.',
+      'A game tab in the background or paused no longer reloads itself for an update and takes over the tab you are playing.',
     ] },
     { v: 141, date: 'November 2026', title: 'Ring seasons, your layout and faction hires', items: [
       'New Dashboard tab: build your own page from any tile (gold, quests, party, damage meter, shops and more).',
