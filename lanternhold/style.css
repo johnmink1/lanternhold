@@ -2831,3 +2831,5 @@ details.tmfold[open]>summary{border-bottom:1px solid var(--line);margin-bottom:8
 .fpnote{display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px 12px;border-radius:12px;background:rgba(245,194,66,.12);border:1px solid rgba(245,194,66,.35);font-size:13px}
 .fpnote .sigil{width:16px;height:16px;fill:var(--gold);flex:none}
 .shoutchk{margin:8px 0 0;font-size:13px}
+.pack.starter{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:'i b p' 'i s p' 'i e p';align-items:center;gap:2px 10px;width:100%;margin:8px 0;text-align:left;border-color:rgba(245,194,66,.55)}
+.pack.starter>.sigil{grid-area:i}.pack.starter>b{grid-area:b}.pack.starter>small{grid-area:s}.pack.starter>em{grid-area:e;justify-self:start}.pack.starter>span{grid-area:p;font-weight:800}

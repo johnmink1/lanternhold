@@ -4716,6 +4716,9 @@
   const WIX = 'https://www.wixapis.com', WIX_APP = 'd9d54315-ca58-47e4-9e15-b661ae7e141d', WIX_KEY = 'lh_wix';
   const PACKS = [['7c5854d4-49f8-4244-8ec3-6c27caaa6e59', 500, '$4.99', ''], ['57d4ee44-c741-4616-96ff-9350734b19da', 1100, '$9.99', '10% bonus'],
     ['c19c183a-a27a-4918-8d3c-f94e684fb2d8', 2400, '$19.99', '20% bonus'], ['27c5a9e9-b7fb-48d9-90c8-a450b85e083a', 6500, '$49.99', 'Best value']];
+  // v139 Starter pack: one per account, $2.99 for 300 Sigils, the Lantern Scout outfit and 7 days of Lanternholder.
+  // Empty until the plan exists in the Born 2 Game store (then also set STARTER on the store Lambda).
+  const STARTER_PLAN = '', STARTER_PRICE = '$2.99';
   // Lanternholder: the one recurring plan. $4.99 a month until the player cancels in their store account.
   const SUB_PLAN = '36118cbb-d4f6-48ce-be59-65a2b9b82a13', SUB_PRICE = '$4.99', SUB_MANAGE = 'https://www.born2gamellc.com/account/my-subscriptions';
   // Mercy Corps donations (John, 26 Nov 2026): the buttons open John's Extra Life page, so the money goes straight to
@@ -4870,6 +4873,7 @@
       (DC ? '<p class="note small">Packs of ' + TOKEN + ' and the monthly membership are not sold in the Discord version yet.</p>' :
       '<div class="shopsec"><h3>Buy ' + TOKEN + ' <span class="tag once">One-time</span></h3><p class="shopsub">Pay once. Nothing renews. Every pack also lights a <b>Lantern Surge</b> for everyone: +25% gold and XP, 30 minutes per 500 ' + TOKEN + '.</p></div>' +
       (prof && !prof.fp ? '<p class="fpnote">' + sigil + '<span><b>First pack bonus:</b> your first pack ever comes with 50% more ' + TOKEN + ', once.</span></p>' : '') +
+      (STARTER_PLAN && signedIn() && prof && !(prof.own || []).includes('k.scout') ? '<button class="pack starter" data-pack="' + STARTER_PLAN + '">' + sigil + '<b>Starter pack</b><small>300 ' + TOKEN + ' + Lantern Scout outfit + 7 days of Lanternholder</small><em>Once per account</em><span>' + STARTER_PRICE + '</span></button>' : '') +
       '<div class="packs">' + tiles + '</div>' +
       (signedIn() ? '<label class="chk shoutchk"><input type="checkbox" id="gs-shout"' + (S.settings.shout ? ' checked' : '') + '><span>Show my hero’s name with the Lantern Surge my pack lights</span></label>' : '') +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' :
@@ -9040,6 +9044,7 @@
       ['rift', 'Riftborn', 800, 'Violet and teal, with Rift light curling around the wearer.'],
       ['verdant', 'Verdant Spring', 300, 'Spring green and rose, for the first warm day after a long dark.'],
       ['dawn', 'First Dawn', 500, 'White and gold with a sky-blue sash, and a soft golden shimmer.'],
+      ['scout', 'Lantern Scout', 99999, 'Forest green and copper. Only in the Starter pack.'],
       ['sworn', 'Lanternsworn', 1200, 'The bearer’s own regalia: white-gold, flame-orange and a halo of embers.']] },
     l: { label: 'Lanterns', items: [
       ['ember', 'Hearth Ember', 0, 'The lantern Old Thessaly handed you. Warm orange light.'],
@@ -9182,7 +9187,7 @@
     if (wdTab === 'k') {
       const m = L.memberById(wdWho), cur = wdDraft.k[wdWho] || 'none';
       body = '<div class="whoseg wdwho">' + wardMembers().map(id => { const x = L.memberById(id); return '<button class="whochip c-' + x.cls + (id === wdWho ? ' on' : '') + '" data-ww="' + id + '"><img src="' + SP.spriteURL(x.cls, 2, outfitHue(wdDraft.k[id]) || x.hue || 0) + '" alt=""><span>' + esc(x.name) + '</span></button>'; }).join('') + '</div>' +
-        '<div class="cosgrid wdgrid">' + WARDROBE.k.items.map(([id, name, price]) => {
+        '<div class="cosgrid wdgrid">' + WARDROBE.k.items.filter(([id]) => id !== 'scout' || wardOwns('k', 'scout', 1)).map(([id, name, price]) => {
           const have = wardOwns('k', id, price), on = cur === id;
           return '<button class="cos wdcos' + (on ? ' on' : '') + (have ? '' : ' locked') + (price >= 600 ? ' rare' : '') + '" data-wk="' + id + '"><img src="' + SP.spriteURL(m.cls, 2, id === 'none' ? m.hue || 0 : outfitHue(id)) + '" alt=""><b>' + esc(name) + '</b><small>' + (have ? (on ? 'Wearing' : 'Owned') : sigil + price) + '</small></button>';
         }).join('') + '</div>' +

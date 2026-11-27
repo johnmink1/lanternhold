@@ -3,7 +3,9 @@
 // Each store account links to one game account (wix#<member>), and each paid order is credited once
 // (wixord#<order>). No admin key is needed: a member token can read that member's own orders.
 const D = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
-const db = new D.DynamoDBClient({}), { TABLE: T, WALLETS: W, PACKS, SUB, HEROES: H } = process.env;
+const db = new D.DynamoDBClient({}), { TABLE: T, WALLETS: W, PACKS, SUB, HEROES: H, STARTER } = process.env;
+// v139 Starter pack (STARTER = its Wix plan id): 300 Sigils, the Lantern Scout outfit (k.scout) and 7 days of Lanternholder. Once per game account.
+const ST_N = 300, ST_PASS = 7 * 864e5;
 // v139: the account's first pack ever pays 50% more Sigils, once. Players who bought before this went live do not get it.
 const FP_BONUS = 0.5;
 const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
@@ -49,14 +51,18 @@ exports.handler = async (e) => {
   console.log('sync', mid, orders.length, orders.map(o => o.planId.slice(0, 8) + ':' + o.lastPaymentStatus + ':' + (o.buyer && o.buyer.memberId === mid)).join(' '));
   let added = 0, first = 0, old = 0;
   for (const o of orders) {
-    const n = PACK[o.planId];
+    const st = !!STARTER && o.planId === STARTER, n = st ? ST_N : PACK[o.planId];
     if (!n || o.lastPaymentStatus !== 'PAID' || (o.buyer && o.buyer.memberId !== mid)) continue;
     try {
       await db.send(new D.TransactWriteItemsCommand({ TransactItems: [
         { Put: { TableName: T, Item: { pk: S('wixord#' + o.id), sk: S('-'), u: S(cl.sub), m: S(mid), n: N(n), at: N(Date.now()) }, ConditionExpression: 'attribute_not_exists(pk)' } },
-        { Update: { TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :n, own = if_not_exists(own, :o)',
+        st ? { Update: { TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :n, stp = :t ADD own :k', ConditionExpression: 'attribute_not_exists(stp)',
+          ExpressionAttributeValues: { ':g': N(100), ':n': N(n), ':t': N(Date.now()), ':k': { SS: ['f.plain', 'k.scout'] } } } }
+        : { Update: { TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :n, own = if_not_exists(own, :o)',
           ExpressionAttributeValues: { ':g': N(100), ':n': N(n), ':o': { SS: ['f.plain'] } } } }] }));
-      added += n; if (!first) first = n;
+      if (st) { const w0 = (await db.send(new D.GetItemCommand({ TableName: W, Key: { userId: S(cl.sub) } }))).Item, was = w0 && w0.pass ? +w0.pass.N : 0;
+        await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET pass = :p', ExpressionAttributeValues: { ':p': N(Math.max(Date.now(), was) + ST_PASS) } })); }
+      added += n; if (!first && !st) first = n;
     } catch (x) { if (x.name !== 'TransactionCanceledException') throw x; old++; }
   }
   // First purchase bonus: only when no earlier order of this store account was ever credited, and only once per game account.
