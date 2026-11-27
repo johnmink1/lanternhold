@@ -1,4 +1,4 @@
-/* lh-build 202611270058 */
+/* lh-build 202611270113 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -3059,13 +3059,34 @@
       const cs = all.filter(c => c.r === rn), nf = cs.filter(c => bx[c.id]).length;
       h += '<details data-breg="' + rn + '"><summary>' + esc(b.name) + ' <span class="bsub">floors ' + regFloors(rn) + ' · ' + nf + '/' + cs.length + '</span></summary><div class="blist">' + cs.map(c => {
         const got = bx[c.id], wand = L.creatureRegions(c).map(r => L.BIOMES[r].name);
-        return '<div class="bst' + (got ? '' : ' unk') + '"><img alt="" data-bpic="' + c.id + '" width="56" height="56"><div><b>' + (got ? esc(c.name) : '???') + '</b> <span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span>' +
+        return '<div class="bst' + (got ? '' : ' unk') + '"><img alt="" data-bpic="' + c.id + '" width="56" height="56"><div><b>' + (got ? esc(c.name) : '???') + '</b> <span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span>' + (got ? ' <button class="btn ghost bdet" data-bdet="' + c.id + '">Details</button>' : '') +
           (got ? '<p>' + esc(c.text) + '</p>' + (got >= L.LORE_AT[c.rar] ? '<p class="bnote"><b>Field notes.</b> ' + esc(c.lore) + '</p>' : '<small class="bnext">Defeat ' + fmt(L.LORE_AT[c.rar] - got) + ' more to unlock its field notes.</small><br>') : '') +
           '<small>Found in: ' + esc(b.name) + ' (home)' + (wand.length ? ' · wanders into ' + esc(wand.join(' and ')) : '') + (got ? ' · ' + fmt(got) + ' defeated' : '') + '</small></div></div>';
       }).join('') + '</div></details>';
     });
     return h + '</div>';
   }
+  // Creature details pop-out (John, 27 Nov 2026): more is revealed the more of a kind you defeat.
+  function creatureModal(id) {
+    const c = L.creatureById(id), got = (S.bx || {})[id] || 0; if (!c || !got) return;
+    const b = L.BIOMES[c.r], [r1, r2] = L.REVEAL[c.rar], la = L.LORE_AT[c.rar], mt = L.beastTier(S, 'foe_' + c.fam);
+    const f = Math.max(c.r * 10 + 1, Math.min(c.r * 10 + 9, S.maxFloorEver || 1)), sp = L.FOE_SPECIAL[c.fam] && L.SPECIALS[L.FOE_SPECIAL[c.fam]], mod = b.mod && L.MODS[b.mod];
+    const wand = L.creatureRegions(c).map(r => L.BIOMES[r].name), size = { s: 'Small', m: 'Normal', l: 'Large' }[c.size];
+    const lock = (n, what) => '<div class="bdlock">' + icon('lock') + ' Defeat ' + fmt(n - got) + ' more to learn ' + what + '.</div>';
+    const steps = [r1, r2, la].filter(n => n > got), next = steps.length ? Math.min(...steps) : 0, prev = [0, r1, r2, la].filter(n => n <= got).pop();
+    const row = (k, v) => '<div class="bdrow"><span>' + k + '</span><b>' + v + '</b></div>';
+    modal('<div class="maphead"><div><h2>' + esc(c.name) + '</h2><small><span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span> ' + esc(L.FAMILY[c.fam]) + ' family</small></div><button class="iconbtn" id="bd-x" aria-label="Close">&times;</button></div>' +
+      '<div class="bdtop"><img class="bdpic" alt="" src="' + beastPic(c) + '"><div class="bdfacts">' +
+        row('Home', esc(b.name) + ' (floors ' + regFloors(c.r) + ')') + row('Spawns', 'about ' + Math.round(L.creatureOdds(c, c.r) * 1000) / 10 + '% of fights there') +
+        (wand.length ? row('Wanders into', esc(wand.join(', '))) : '') + row('Size', size) + row('Defeated', fmt(got)) + row('Mastery', mt + '/' + L.BEAST_MAX + (mt ? ' (+' + mt + '% damage and hero XP)' : '')) +
+      '</div></div><p class="bdtext">' + esc(c.text) + '</p>' +
+      '<h3 class="sub">Strength</h3>' + (got >= r1 ? '<div class="bdfacts">' + row('Health', fmt(L.foeHp(f, false))) + row('Attack', fmt(L.foeDps(f, false)) + ' damage per second') + '<small>On floor ' + f + ', before NP+, packs and elites.</small></div>' : lock(r1, 'its strength')) +
+      '<h3 class="sub">Special attack</h3>' + (got >= r2 ? '<div class="bdfacts">' + (sp ? row(esc(sp.name), esc(sp.desc)) + '<small>About ' + Math.round((L.SPECIAL_CHANCE || 0.3) * 100) + '% of them use it, from floor ' + (L.SPECIAL_FLOOR || 8) + '.</small>' : '<small>None known.</small>') + (mod ? row('In ' + esc(b.name), 'may be ' + esc(mod.name) + ': ' + esc(mod.desc)) : '') + '</div>' : lock(r2, 'its special attack')) +
+      '<h3 class="sub">Field notes</h3>' + (got >= la ? '<p class="bdtext bnote">' + esc(c.lore) + '</p>' : lock(la, 'its field notes')) +
+      (next ? '<div class="bdprog"><small>Next discovery at ' + fmt(next) + ' defeated</small><div class="bmbar"><i style="width:' + Math.floor((got - prev) / (next - prev) * 100) + '%"></i></div></div>' : '<div class="bdprog"><small>Everything about the ' + esc(c.name) + ' is known.</small></div>'),
+      md => { md.querySelector('#bd-x').onclick = closeModal; });
+  }
+  $('journal').addEventListener('click', e => { const d = e.target.closest('[data-bdet]'); if (d) { e.preventDefault(); creatureModal(d.dataset.bdet); } });
   // Pictures load only when a region is opened, so the Journal stays quick.
   $('journal').addEventListener('toggle', e => {
     const d = e.target; if (!d.open || !d.dataset || d.dataset.breg == null) return;
@@ -6761,6 +6782,9 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 135, date: 'November 2026', title: 'Creature details', items: [
+      'Bestiary: tap Details on any creature you have met to see its picture, strength, special attack and field notes. More is revealed the more of them you defeat.',
+    ] },
     { v: 134, date: 'November 2026', title: 'Creature homes and team battles', items: [
       'Creatures now have home regions: 120 kinds, 8 per region, each spawning most in its home. Rare and very rare ones glow.',
       'The Bestiary lists every creature by region: where it lives, how many you defeated, and field notes once you have beaten enough. Unmet ones show as silhouettes.',
