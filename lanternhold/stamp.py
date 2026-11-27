@@ -7,6 +7,8 @@ p = os.path.join(here, 'index.html'); s = open(p).read()
 s = re.sub(r'(href="style\.css)(\?v=\w+)?"', r'\1?v=' + build + '"', s)
 for js in ('core', 'sprites', 'vector', 'ui', 'music', 'intro'):
     s = re.sub(r'(src="' + js + r'\.js)(\?v=\w+)?"', r'\1?v=' + build + '"', s)
+for js in ('discord/sdk', 'discord/boot'):  # Discord Activity files, written by an inline script in <head>
+    s = re.sub(r'(src="' + js + r'\.js)(\?v=\w+)?"', r'\1?v=' + build + '"', s)
 if 'window.LH_BUILD' in s: s = re.sub(r'window\.LH_BUILD = "\w*";', 'window.LH_BUILD = "' + build + '";', s)
 else: s = s.replace('<script>window.LH_SUPPORT_URL', '<script>window.LH_BUILD = "' + build + '";</script>\n<script>window.LH_SUPPORT_URL', 1)
 # A build marker at the top of every file lets open games check that the web host is handing out the

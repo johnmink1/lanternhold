@@ -45,6 +45,7 @@ function uiConst(name, close) {
 const GUIDE = uiConst('GUIDE') || [];
 const NOTES = uiConst('PATCH_NOTES') || [];
 const RING_KIT = uiConst('RING_KIT') || [];
+const TEAM_KIT = uiConst('TEAM_KIT') || [];
 const RING_ARMS = uiConst('RING_ARMS', '};') || {};
 const RING_TITLES = uiConst('RING_TITLES', ']];') || [];
 const RING_MAX = +(UI.match(/const RING_MAX = (\d+)/) || [])[1] || 15;
@@ -72,19 +73,19 @@ const CLS = L.CLASSES, CO = L.CLASS_ORDER;
 const clsName = c => (CLS[c] || {}).name || c;
 
 const written = new Set();
-function sprite(name, hue) {
+function sprite(name, hue, ov) {
   if (!SP) return '';
   hue = Math.round(hue || 0);
-  const file = name + (hue ? '-h' + (hue < 0 ? 'm' + -hue : hue) : '') + '.svg';
+  const file = name + (hue ? '-h' + (hue < 0 ? 'm' + -hue : hue) : '') + (ov ? '-' + ov : '') + '.svg';
   if (!written.has(file)) {
-    let svg; try { svg = SP.svgOf(name, hue); } catch (e) { svg = null; }
+    let svg; try { svg = SP.svgOf(name, ov ? hue + '~~' + ov : hue); } catch (e) { svg = null; }
     if (!svg) return '';
     fs.mkdirSync(path.join(OUT, 'img'), { recursive: true });
     fs.writeFileSync(path.join(OUT, 'img', file), svg); written.add(file);
   }
   return '/wiki/img/' + file;
 }
-const pic = (name, hue, alt, cls) => { const u = sprite(name, hue); return u ? '<img class="spr' + (cls ? ' ' + cls : '') + '" src="' + u + '" alt="' + esc(alt || '') + '" loading="lazy" width="96" height="96">' : ''; };
+const pic = (name, hue, alt, cls, ov) => { const u = sprite(name, hue, ov); return u ? '<img class="spr' + (cls ? ' ' + cls : '') + '" src="' + u + '" alt="' + esc(alt || '') + '" loading="lazy" width="96" height="96">' : ''; };
 
 // ---------- page registry ----------
 // Every page: { slug, title, nav, group, icon, desc, body(), search: [{t, a, x}] }
@@ -210,12 +211,19 @@ ref({
   lede: 'Story companions join as you go deeper and rest by the campfire until you bring them along. They are a little weaker than other players’ heroes, by design.',
   body: () => {
     const tiers = [[0, 'The first five'], [1, 'Met deeper down']];
-    return tiers.map(([t, h]) => '<h2>' + h + '</h2><div class="grid2">' + L.MEMBERS.filter(m => m.tier === t).map(m => {
+    return tiers.map(([t, h]) => '<h2>' + h + '</h2><div class="grid2">' + L.MEMBERS.filter(m => m.tier === t && !m.uniq).map(m => {
       const side = L.SIDES[m.side];
       return card(m.id, esc(m.name), { pic: pic(m.cls, m.hue, m.name), style: '--acc:' + CLS[m.cls].color,
         sub: esc(m.title) + ' · ' + chip(esc(clsName(m.cls)), 'c') + (side ? ' ' + chip(esc(side.name), 's') : ''),
         body: '<p>' + esc(m.bio) + '</p>' + (m.line ? '<p class="quote">' + esc(m.line) + '</p>' : '') });
     }).join('') + '</div>').join('') +
+      '<h2 id="unique">Unique Legendaries</h2><p>Eight one-of-a-kind Legendary companions. Each gives a small extra bonus while working their own camp job, on top of the job itself. They draw a Legendary wage like any Legendary hire.</p><div class="grid2">' + L.MEMBERS.filter(m => m.uniq).map(m => {
+        const side = L.SIDES[m.side], u = L.UNIQ[m.id], post = u.job === 'any' ? 'any camp job' : L.JOBS.find(j => j.id === u.job).name;
+        const how = u.how === 'guild' ? 'Now and then on offer at the Guild Hall once you reach floor ' + u.floor + '.' : u.how === 'quest' ? 'Finish the side quest that opens on floor ' + u.floor + '. Joins for free.' : u.how === 'adv' ? 'Joins for free the first time you beat the floor ' + u.floor + ' guardian.' : 'Caged by a monster somewhere past floor ' + u.floor + '. Very rare: a Rogue in the party, the Mercy Corps banner and floors past 100 each make it likelier. Free him to have him join; if the monster gets away, he waits at the Guild Hall.';
+        return card(m.id, esc(m.name), { pic: pic(m.cls, m.hue, m.name), style: '--acc:' + CLS[m.cls].color,
+          sub: esc(m.title) + ' · ' + chip(esc(clsName(m.cls)), 'c') + (side ? ' ' + chip(esc(side.name), 's') : ''),
+          body: '<p>' + esc(m.bio) + '</p>' + kv([['Camp bonus', '<b>' + esc(u.perk) + '</b> as ' + esc(post) + ': ' + esc(u.text)], ['How to find', esc(how)]]) });
+      }).join('') + '</div>' +
       '<h2 id="traits">Companion traits</h2><p>Every story companion rolls three traits when they join: one for a seat, one for a class they fight beside, and one for camp. Traits come in Common, Fine and Rare grades.</p>' +
       table(['Kind', 'Names', 'What it can give'], [
         ['Position', L.POS_TRAIT_NAME.map((n, i) => esc(n) + ' <small>(' + L.POS_NAME[i] + ')</small>').join(', '), Object.values(L.TRAIT_FX).map(f => pct(f.lo, 1) + ' to ' + pct(f.hi, 1) + ' ' + f.n).join('; ')],
@@ -257,7 +265,7 @@ ref({
       '<div class="rcell"><div class="facts">' + kv([
         ['Warband', side ? '<span style="color:' + side.color + '">' + esc(side.name) + '</span>' : ''],
         ['Soldiers', b.war.units.map(esc).join(', ')],
-        b.foe ? ['Native monster', '<a href="/wiki/bestiary/#' + b.foe.id + '">' + esc(b.foe.name) + '</a>'] : null,
+        L.ROSTERS && L.ROSTERS[i] ? ['Home creatures', '<a href="/wiki/bestiary/#' + slug(b.name) + '-creatures">' + L.CREATURES.filter(c => c.r === i).map(c => esc(c.name)).join(', ') + '</a>'] : null,
         b.mod ? ['Signature trick', esc(L.MODS[b.mod].name) + ' <small>' + esc(L.MODS[b.mod].desc) + '</small>'] : null,
         L.BOSS_SPECIAL && L.SPECIALS[L.BOSS_SPECIAL[i]] ? ['Guardian attack', esc(L.SPECIALS[L.BOSS_SPECIAL[i]].name) + ' <small>' + esc(L.SPECIALS[L.BOSS_SPECIAL[i]].desc) + '</small>'] : null,
         (L.REGION_SETS || [])[i] ? ['Region set', '<a href="/wiki/sets/#rset-' + i + '">' + esc(L.REGION_SETS[i].name) + '</a>'] : null,
@@ -273,15 +281,17 @@ ref({
   lede: 'Monsters hit back. Each floor holds ' + L.FOES_PER_FLOOR + ', every ' + L.BOSS_EVERY + 'th floor has a guardian, and ' + pct(L.ELITE_CHANCE) + ' of foes are Grand War warband soldiers.',
   body: () => {
     const foe = (id, name, hue, extra) => { const lo = loreBy('foe_' + id); return card(id, esc(name), { pic: pic(id, hue || 0, name), body: (lo ? '<p>' + esc(lo.text) + '</p>' : '') + (extra || '') }); };
-    const regional = L.BIOMES.map((b, i) => b.foe ? foe(b.foe.id, b.foe.name, b.hue, kv([['Found in', '<a href="/wiki/regions/#' + slug(b.name) + '">' + esc(b.name) + '</a> (floors ' + regionFloors(i).join('–') + ')'], b.mod ? ['Trick', esc(L.MODS[b.mod].name)] : null])) : '').join('');
     const bl = loreBy('boss'), cl = loreBy('foe_chest');
-    return '<h2>Common foes</h2><p class="note">Found everywhere, tinted by the region they live in.</p><div class="grid3">' + L.FOES.map(f => foe(f.id, f.name)).join('') + '</div>' +
-      '<h2>Region monsters</h2><div class="grid3">' + regional + '</div>' +
+    const RN = L.RAR_NAME, cpct = v => (Math.round(v * 1000) / 10) + '%';
+    const creatures = L.ROSTERS.map((list, rn) => { const b = L.BIOMES[rn], cs = L.CREATURES.filter(c => c.r === rn);
+      return '<h3 id="' + slug(b.name) + '-creatures">' + esc(b.name) + ' <small>floors ' + regionFloors(rn).join('–') + '</small></h3><div class="grid3">' + cs.map(c => { const w = L.creatureRegions(c).map(x => '<a href="/wiki/regions/#' + slug(L.BIOMES[x].name) + '">' + esc(L.BIOMES[x].name) + '</a>');
+        return card(c.id, esc(c.name), { pic: pic(c.fam, L.creatureHue(c), c.name, '', c.ov), body: '<p>' + esc(c.text) + '</p>' + kv([['Rarity', RN[c.rar]], ['Family', esc(L.FAMILY[c.fam])], ['Home', '<a href="/wiki/regions/#' + slug(b.name) + '">' + esc(b.name) + '</a> (about ' + cpct(L.creatureOdds(c, rn)) + ' of fights)'], w.length ? ['Wanders into', w.join(', ')] : null]) }); }).join('') + '</div>'; }).join('');
+    return '<h2 id="creatures">Creatures</h2><p class="note">' + L.CREATURES.length + ' creatures, each with a home region where most of them spawn. About ' + Math.round((1 - L.ROSTER_HOME) * 100) + '% of fights are wanderers from the regions next door. Rare and very rare kinds glow. Every kind in a family shares its special attack and its Bestiary mastery.</p>' + creatures +
       '<h2 id="guardians">Guardians</h2>' + (bl ? '<p>' + esc(bl.text) + '</p>' : '') + '<div class="grid3">' + ['golem', 'wyrm', 'lich'].map(s => '<div class="mini center">' + pic(s, 0, s) + '</div>').join('') + '</div>' +
       '<p>Beat a guardian before the lantern runs out (' + 30 + ' seconds to start). Each region guardian is listed on <a href="/wiki/regions/">Regions</a>.</p>' +
       '<h2 id="tricks">Monster tricks</h2>' + table(['Trick', 'What it does'], Object.values(L.MODS).map(m => ['<b>' + esc(m.name) + '</b>', esc(m.desc)])) +
       '<h2 id="merchant">Wandering merchant</h2><p>From floor ' + L.MERCH_FLOOR + ', and only while you are playing, a merchant sometimes stops beside the fight for ' + Math.round(L.MERCH_LIFE / 60) + ' minutes with one deal at ' + pct(L.MERCH_OFF) + ' off: two tonics, three Campfire Draughts or Lantern Oil, or a pile of Dust. Missing it costs nothing.</p>' +
-      '<h2 id="bounties">Bounty board</h2><p>Open it from the Quests button. Three bounties at a time, new every ' + L.BOUNTY_HOURS + ' hours, built from the floors your hero has reached: hunt a kind of monster on certain floors, beat a guardian a few times, open chests, defeat alliance elites or break shields. Each pays gold and Dust, sometimes a tonic. Unclaimed finished bounties are paid when the board changes.</p>' +
+      '<h2 id="bounties">Bounty board</h2><p>Open it from the Quests button. Three bounties at a time, new every ' + L.BOUNTY_HOURS + ' hours, built for your hero from about ' + Math.floor(L.QDEFS.length / 10) * 10 + ' kinds across the whole game: hunts and guardians, monster tricks, the Grand War, crafting, training, the Guild, Ember Ring duels, the Market, world boss weekends, and for NP+ heroes Pip, Gulp and the Hold. You only get what your hero can do right now, and the three on show always come from different parts of the game. Each pays gold and Dust, sometimes a tonic. Unclaimed finished bounties are paid when the board changes.</p>' +
       '<h2 id="keeper">The Lantern Keeper</h2><p>While the store owner is online, every hero gets +' + pct(L.KEEPER) + ' damage, healing, gold, hero XP and gear finds. A gold banner over the fight shows when it is on.</p>' +
       '<h2 id="shielded">Shielded foes</h2><p>From floor ' + L.SHIELD_FLOOR + ', some monsters and many guardians fight inside a shield. While it is up the party deals ' + pct(L.SHIELD_CUT) + ' less damage. Each tap knocks ' + pct(L.SHIELD_TAP) + ' off it (a critical tap twice that), and it wears away on its own in ' + L.SHIELD_DECAY.foe + ' seconds (' + L.SHIELD_DECAY.boss + ' for guardians, who raise it once more at half health).</p>' +
       '<h2 id="ghost-lantern">Ghost Lantern</h2><p>From floor ' + L.GHOST_FLOOR + ', and only while you are playing, a Ghost Lantern sometimes drifts into the fight. It slowly saps party damage or healing, up to ' + pct(L.GHOST_MAX) + '. Tap it to shatter it for a burst of gold, some Dust or a free tonic. Left alone it fades after ' + L.GHOST_LIFE + ' seconds and nothing is lost.</p>' +
@@ -290,7 +300,7 @@ ref({
         table(['Attack', 'Used by', 'What it does'], Object.entries(L.SPECIALS).map(([id, sp]) => { const by = [];
           L.BOSS_SPECIAL.forEach((x, i) => { if (x === id) by.push(L.BIOMES[i].boss); });
           for (const [b, x] of Object.entries(L.BODY_SPECIAL)) if (x === id) by.push({ golem: 'Stone Sentinel', wyrm: 'Tunnel Wyrm', lich: 'Bone Hierarch' }[b]);
-          for (const [f, x] of Object.entries(L.FOE_SPECIAL)) if (x === id) { const fo = L.FOES.find(q => q.id === f) || (L.BIOMES.find(q => q.foe && q.foe.id === f) || {}).foe; if (fo) by.push(fo.name); }
+          for (const [f, x] of Object.entries(L.FOE_SPECIAL)) if (x === id) { const fo = L.FOES.find(q => q.id === f) || (L.BIOMES.find(q => q.foe && q.foe.id === f) || {}).foe; if (fo) by.push(fo.name); else if (L.FAMILY[f]) by.push(L.FAMILY[f] + 's'); }
           if (id === 'volley') by.push('Grand War soldiers');
           return ['<b>' + esc(sp.name) + '</b>', esc([...new Set(by)].join(', ')), esc(sp.desc) + (sp.dot ? ' (' + (sp.dot === 'burn' ? 'burn' : 'poison') + ', ' + L.DOT_FIGHTS + ' fights)' : '')]; })) +
       '<h2 id="ambush">Ambushes</h2><p>From floor ' + L.PACK_FLOOR + ', ' + pct(L.PACK_CHANCE) + ' of fights are ambush packs of 2 to 4 monsters. They hit the rear of your marching order first and pay ' + L.PACK_GOLD + '× gold and ' + L.PACK_XP + '× hero XP for each monster in the pack, so a pack of 3 gives ' + 3 * L.PACK_XP + '× XP.</p>' +
@@ -300,7 +310,7 @@ ref({
         [['chest', 'treasure chests'], ['pack', 'ambushes'], ['lock', 'locked doors and chests'], ['goblin', 'Loot Goblins'], ['ghost', 'Ghost Lanterns'], ['merchant', 'merchants'], ['mercy', 'Mercy Corps encounters']].map(([k, n]) => L.EV_DAY[k] + ' ' + n).join(', ') +
         '. Alliance elites have no limit.</p>' : '') + related(['regions', 'world-boss']);
   },
-  index: () => { for (const f of L.FOES) addSearch('bestiary', f.name, f.id, (loreBy('foe_' + f.id) || {}).text, 'Monster'); for (const b of L.BIOMES) if (b.foe) addSearch('bestiary', b.foe.name, b.foe.id, 'Native to ' + b.name + '. ' + ((loreBy('foe_' + b.foe.id) || {}).text || ''), 'Monster');
+  index: () => { for (const c of L.CREATURES) addSearch('bestiary', c.name, c.id, L.RAR_NAME[c.rar] + '. Home: ' + L.BIOMES[c.r].name + '. ' + c.text, 'Monster');
     for (const m of Object.values(L.MODS)) addSearch('bestiary', m.name, 'tricks', 'Monster trick: ' + m.desc, 'Trick'); for (const sp of Object.values(L.SPECIALS || {})) addSearch('bestiary', sp.name, 'specials', 'Special attack: ' + sp.desc, 'Attack'); addSearch('bestiary', 'Loot Goblin', 'loot-goblin', 'A rare thief from floor ' + L.GOBLIN_FLOOR + '. Kill it within ' + L.GOBLIN_TIME + ' seconds.', 'Monster'); addSearch('bestiary', 'Ambushes', 'ambush', 'Packs of 2 to 4 monsters', 'Combat'); },
 });
 
@@ -411,11 +421,11 @@ ref({
     '<p class="note">Kindling also buys skill tree ranks, +' + L.BAG_STEP + ' pack slots and extra ring and trinket slots. Changing class costs ' + L.CLASS_CHANGE_COST + ' Kindling.</p>' +
     '<h2 id="relics">Relics</h2><p>Guardians from floor 10 sometimes drop a relic. Duplicates level it up, and relics stay through rekindling.</p>' + table(['Relic', 'Bonus'], L.RELICS.map(r => ['<b>' + esc(r.name) + '</b>', esc(r.desc)])) +
     '<h2 id="records">Records</h2><p>Each record you earn adds ' + 1 + '% to party damage, permanently.</p><div class="grid3 tight">' + L.FEATS.filter(f => !f.hidden).map(f => '<div class="mini" id="feat-' + f.id + '">' + icon('cup') + '<b>' + esc(f.name) + '</b><small>' + esc(f.desc) + '</small></div>').join('') + '</div>' +
-    '<h2 id="quests">Daily quests</h2><p>Three a day, picked from the list below. Each pays ' + L.QUEST_REWARD + ' Sigil, and finishing all three pays ' + L.QUEST_BONUS + ' more.</p><ul>' + L.QUESTS.map(q => '<li>' + esc(q.text.replace('{n}', num(q.n))) + '</li>').join('') + '</ul>' +
+    '<h2 id="quests">Daily quests</h2><p>Three a day, picked for your hero from the same kinds as the bounty board, and never the same kind two days running. Each pays ' + L.QUEST_REWARD + ' Sigil, and finishing all three pays ' + L.QUEST_BONUS + ' more.</p>' +
     '<h2 id="milestones">Training milestones</h2><p>Companions get a big power jump at power levels ' + L.MILESTONES.slice(0, 8).join(', ') + ' and on up to ' + num(L.MILESTONES[L.MILESTONES.length - 1]) + '.</p>' +
     '<h2 id="offline">While you are away</h2><p>Your party earns 25% of its gold for ' + (L.OFFLINE_BASE / 3600) + ' hours while the game is closed. Night Watch adds 16 hours a rank, up to ' + (L.OFFLINE_MAX / 3600) + ' hours.</p>' + related(['classes', 'getting-stronger']),
   index: () => { for (const s of L.STATS) addSearch('progression', s.name, 'stats', 'Hero stat: ' + s.desc, 'Stat'); for (const u of L.KINDLE_UPS) addSearch('progression', u.name, 'kindling', 'Kindling upgrade: ' + u.desc, 'Kindling'); for (const r of L.RELICS) addSearch('progression', r.name, 'relics', 'Relic: ' + r.desc, 'Relic');
-    for (const f of L.FEATS.filter(f => !f.hidden)) addSearch('progression', f.name, 'feat-' + f.id, 'Record: ' + f.desc, 'Record'); addSearch('progression', 'Rekindling', 'rekindle', 'Restart for Embers and Kindling from floor ' + L.REKINDLE_FLOOR, 'Progression'); addSearch('progression', 'Daily quests', 'quests', L.QUESTS.map(q => q.text.replace('{n}', q.n)).join('. '), 'Quests'); },
+    for (const f of L.FEATS.filter(f => !f.hidden)) addSearch('progression', f.name, 'feat-' + f.id, 'Record: ' + f.desc, 'Record'); addSearch('progression', 'Rekindling', 'rekindle', 'Restart for Embers and Kindling from floor ' + L.REKINDLE_FLOOR, 'Progression'); addSearch('progression', 'Daily quests', 'quests', 'Three quests a day picked for your hero, 1 Sigil each', 'Quests'); },
 });
 
 // ---- Store items ----
@@ -432,14 +442,19 @@ ref({
 // ---- Ember Ring ----
 ref({
   slug: 'ember-ring', title: 'The Ember Ring (PvP)', nav: 'Ember Ring (PvP)', icon: 'fist',
-  desc: 'Lanternhold PvP: Ember Ring duels, rating titles, Laurels and every piece of the Ringwarden kit with its Edge and Resolve per rank.',
-  lede: 'Duel other players’ heroes for rating and Laurels. Only your own hero fights, and companions, tonics and Sigils never count.',
+  desc: 'Lanternhold PvP: Ember Ring duels and team battles, rating titles, Laurels, the Ringwarden kit and the companion Ring kit with their Edge and Resolve per rank.',
+  lede: 'Duel other players’ heroes, or bring two companions for a team battle, for rating and Laurels. Tonics and Sigils never count.',
   body: () => '<p>You hold up to ' + RING_EMAX + ' challenges, and one comes back every 30 minutes. Wins pay Laurels and rating; losses still pay a few Laurels. Your hero also defends while you are away.</p>' +
     (RING_KIT.length ? '<h2 id="kit">Ringwarden kit</h2><p>PvP gear bought with Laurels, ' + RING_MAX + ' ranks per piece. <b>Edge</b> is more damage to heroes, <b>Resolve</b> is less damage from heroes. It works only in the Ring.</p>' +
       table(['Piece', 'Slot', 'Edge per rank', 'Resolve per rank', 'Health per rank', 'Attack per rank'], RING_KIT.map(k => ['<b>' + esc(k.name) + '</b>', esc(L.SLOT_NAME[k.slot] || k.slot), String(k.E), String(k.R), k.hp ? pct(k.hp, 1) : '–', k.at ? pct(k.at, 1) : '–'])) +
       '<p class="note">Ranks cost 60 Laurels, then 30 more for each rank after. Kit tiers: Plain, Ironbound (ranks 1 to 5), Emberforged (6 to 10) and Starwrought (11 to 15). Higher ranks need a higher rating.</p>' : '') +
+    '<h2 id="teams">Team battles</h2><p>Your hero and two of your own companions fight another player’s team, three against three. Borrowed player heroes can’t join. Place them Front, Middle and Back: the front fighter takes most of the blows, rogues go for the weakest foe and healers mend the weakest teammate. Each companion uses its class ability. Team battles use the same challenges as duels, have their own team rating and standings, and never hurt your dungeon party.</p>' +
+    '<p>A win pays 10 Laurels (up to 14 against a stronger team), a loss 4, and the first team win of each day 10 more. Your team defends while you are away and earns 2 Laurels for each challenger it beats.</p>' +
+    (TEAM_KIT.length ? '<h3 id="companion-kit">Companion Ring kit</h3><p>Ring gear for companions, bought with Laurels. It stays with that companion and counts only in team battles.</p>' +
+      table(['Piece', 'Slot', 'Edge per rank', 'Resolve per rank', 'Health per rank', 'Attack per rank'], TEAM_KIT.map(k => ['<b>' + esc(k.name) + '</b>', esc(L.SLOT_NAME[k.slot] || k.slot), String(k.E), String(k.R), k.hp ? pct(k.hp, 1) : '–', k.at ? pct(k.at, 1) : '–'])) +
+      '<p class="note">10 ranks per piece. Ranks cost 40 Laurels, then 20 more for each rank after. Ironbound (ranks 1 to 5), then Emberforged (6 to 10), which needs a best team rating of 1,300.</p>' : '') +
     (RING_TITLES.length ? '<h2 id="titles">Rating titles</h2>' + table(['Title', 'Rating'], RING_TITLES.map(([r, t]) => ['<b>' + esc(t) + '</b>', r ? num(r) + '+' : 'Starting'])) : '') + related(['playing-together', 'classes']),
-  index: () => { addSearch('ember-ring', 'Ember Ring', '', 'PvP duels, Laurels, rating', 'PvP'); addSearch('ember-ring', 'Ringwarden kit', 'kit', 'PvP gear with Edge and Resolve. ' + RING_KIT.map(k => k.name).join(', '), 'PvP'); addSearch('ember-ring', 'Laurels', 'kit', 'Earned from duels, spent on the Ringwarden kit', 'PvP'); for (const [, t] of RING_TITLES) addSearch('ember-ring', t, 'titles', 'Ember Ring rating title', 'PvP'); },
+  index: () => { addSearch('ember-ring', 'Ember Ring', '', 'PvP duels, Laurels, rating', 'PvP'); addSearch('ember-ring', 'Ringwarden kit', 'kit', 'PvP gear with Edge and Resolve. ' + RING_KIT.map(k => k.name).join(', '), 'PvP'); addSearch('ember-ring', 'Laurels', 'kit', 'Earned from duels and team battles, spent on the Ringwarden kit and companion Ring kits', 'PvP'); addSearch('ember-ring', 'Team battles', 'teams', 'Your hero and two companions against another player’s team', 'PvP'); addSearch('ember-ring', 'Companion Ring kit', 'companion-kit', 'Ring gear for companions: Arms, Mail, Charm', 'PvP'); for (const [, t] of RING_TITLES) addSearch('ember-ring', t, 'titles', 'Ember Ring rating title', 'PvP'); },
 });
 
 // ---- World boss ----
@@ -448,7 +463,7 @@ ref({
   desc: 'Lanternhold world boss weekends: the shared Rift boss every Friday to Sunday, two-minute assaults, phases and Sigil rewards.',
   lede: 'One giant Rift boss every weekend that all signed-in players fight together, Friday to Sunday (UTC).',
   body: () => '<div class="grid2">' + card('boss', 'The Rift bosses', { pic: pic('colossus', 0, 'World boss'), body: '<p>The boss changes each weekend. Each one resists two classes (−' + Math.round(L.WB_RESIST * 100) + '% damage) and is weak to one (+' + Math.round(L.WB_WEAK * 100) + '%):</p><ul>' + L.WB_NAMES.map((n, i) => { const t = L.WB_TRAITS[i], cn = c => L.CLASSES[c].name.toLowerCase() + 's'; return '<li><b>' + esc(n) + '</b>: ' + esc(t.trait) + '. Weak to ' + cn(t.weak) + ', resists ' + t.resist.map(cn).join(' and ') + '. Special: ' + esc(L.SPECIALS[t.sp].name) + '.</li>'; }).join('') + '</ul>' }) +
-    card('assault', 'Assaults', { body: kv([['Length', (L.WB_TIME / 60) + ' minutes'], ['Cooldown', (L.WB_COOL / 60) + ' minutes'], ['Your damage', 'Real damage: the stronger your party, the more you deal'], ['Companions', 'Hired and story companions deal half damage; players\' heroes deal full']]) + '<p>Everyone fills one shared health bar. Each phase broken makes the next one twice as tough.</p>' }) + '</div>' +
+    card('assault', 'Assaults', { body: kv([['Length', (L.WB_TIME / 60) + ' minutes'], ['Cooldown', (L.WB_COOL / 60) + ' minutes'], ['Your damage', 'Real damage: the stronger your party, the more you deal'], ['Your score', 'Your best ' + L.WB_BEST + ' assaults of the weekend (rank, Sigils, Mythic roll)'], ['Companions', 'Hired and story companions deal half damage; players\' heroes deal full']]) + '<p>Everyone fills one shared health bar, and every assault counts toward it. Each phase broken makes the next one twice as tough.</p>' }) + '</div>' +
     '<h2 id="rewards">Rewards</h2><p>After the weekend, tap <b>Claim</b>: 3 Sigils for taking part, 1 more per phase broken (up to 5), 5 more for the top three, and a purse of gold.</p><h2 id="loot">Mythic loot</h2><p>Each boss guards a four-piece Mythic set, the strongest gear in the game, a tier above Legendary. Everyone who fought rolls their own chance at a piece, but a drop is rare: under 3% a weekend even for the strongest delvers, higher the more damage you dealt, and full odds only once the server breaks 3 phases. You also get boss shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' Rift tokens buy a piece of any boss set from Warden Sable at the Rift Gate, a portal just outside the Hold.</p>' + related(['bestiary', 'combat']),
   index: () => { addSearch('world-boss', 'World boss weekends', '', 'Shared Rift boss Friday to Sunday. ' + L.WB_NAMES.join(', '), 'Event'); for (const n of L.WB_NAMES) addSearch('world-boss', n, 'boss', 'World boss', 'Event'); },
 });
@@ -508,7 +523,7 @@ function shell(p, inner) {
 function homeBody() {
   const guide = pages.filter(p => p.group === 'Guide');
   const heroes = CO.map(c => pic(c, 0, clsName(c))).join('');
-  const counts = [[L.BIOMES.length, 'regions'], [L.FOES.length + L.BIOMES.filter(b => b.foe).length, 'monsters'], [L.SETS.length + Object.keys(L.JOB_SETS).length, 'item sets'], [L.RELICS.length, 'relics'], [L.LORE.length, 'lore entries']];
+  const counts = [[L.BIOMES.length, 'regions'], [L.CREATURES.length, 'monsters'], [L.SETS.length + Object.keys(L.JOB_SETS).length, 'item sets'], [L.RELICS.length, 'relics'], [L.LORE.length, 'lore entries']];
   return '<section class="hero"><div class="htext"><p class="eyebrow">The Lantern Deep · A Grand War front</p><h1>Lanternhold Wiki</h1>' +
     '<p class="lede">Everything you need to carry the lantern down to the Nyx Rift: classes and skill trees, companions, gear and sets, every region and monster, and how each system works.</p>' +
     '<div class="hbtns"><a class="btn gold" href="/wiki/getting-started/">New here? Start with the basics</a><a class="btn" href="/?ref=wiki">Play Lanternhold free</a></div>' +

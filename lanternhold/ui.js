@@ -1,4 +1,4 @@
-/* lh-build 202611260519 */
+/* lh-build 202611270233 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -136,7 +136,14 @@
   window.addEventListener('lhsprites', () => { for (const k in spriteCache) delete spriteCache[k]; try { updatePanel(true); updateSeats && updateSeats(true); } catch (e) {} });
   const particles = [];
   const slashes = [];
-  let foeAnim = { key: null, born: 0, flash: 0, shake: 0, dying: null };
+  let foeAnim = { key: null, born: 0, flash: 0, shake: 0, dying: [] };
+  // Fast floors (John, 27 Nov 2026): a party far stronger than its floor kills each foe on the tick it arrives, so the
+  // foe was never drawn. Display only, the rules never see any of this, so gold, loot and kills per minute are unchanged:
+  //  - every foe stays on screen at least SHOW_MIN seconds (hit flashes, health draining) before its defeat animation;
+  //  - SWARM_GAP+ floors above the floor, quick kills are shown in swarms of 3 to 5 that fall together in one burst.
+  // Their gold float waits for the burst. The next foe still arrives on the usual FOE_GAP, so a ghost never blocks it.
+  const SHOW_MIN = 0.45, DIE_T = 0.3, SWARM_GAP = 20, SWARM_FAST = 0.3, SWARM_WAIT = 1.6;
+  let ghost = null; const swarm = { pend: [], want: 0, at: 0, show: null };
 
   // The arena keeps a 240-wide logical space, drawn at the screen's real resolution (R) so the art stays sharp.
   let R = 3;
@@ -232,6 +239,8 @@
     x.fillStyle = g2; x.beginPath(); x.moveTo(fx, fy - h * 0.6); x.bezierCurveTo(fx + w * 0.55, fy - h * 0.3, fx + w * 0.5, fy, fx, fy); x.bezierCurveTo(fx - w * 0.5, fy, fx - w * 0.55, fy - h * 0.3, fx, fy - h * 0.6); x.fill();
   }
 
+  // A creature's tint plus its overlay (home-zone variants), as the vector sprites read it.
+  const foeHue = f => f.ov ? (f.hue || 0) + '~~' + f.ov : f.hue;
   function sprite(name, hue, flash) {
     const k = name + '|' + hue + '|' + (flash ? 1 : 0);
     if (!spriteCache[k]) {
@@ -874,6 +883,88 @@
     ctx.strokeStyle = '#a8742e'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - sw * 0.25, floorY - sh * 0.45); ctx.lineTo(x + sw * 0.25, floorY - sh * 0.4); ctx.moveTo(x - sw * 0.25, floorY - sh * 0.38); ctx.lineTo(x + sw * 0.25, floorY - sh * 0.33); ctx.stroke();
     if (Math.sin(tAnim * 2) > 0.6) { ctx.fillStyle = '#fff'; ctx.font = '600 7px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('Help!', x, floorY - sh - 2); ctx.textAlign = 'left'; }
   }
+  // ---------- fast floors: ghosts and swarms (display only) ----------
+  const swarmFloor = () => !L.isBossFloor(S.floor) && S.floor <= (S.maxFloorEver || 0) - SWARM_GAP;
+  const fastUp = () => !!(ghost || swarm.show);
+  function foeDies(f, cx, cy, w, h, len) {
+    const spr = sprite(f.sprite, f.chest ? 0 : foeHue(f), true);
+    foeAnim.dying.push({ spr, t: tAnim, len, x: cx - w / 2, y: cy - h / 2, w, h }); if (foeAnim.dying.length > 12) foeAnim.dying.shift();
+    burst(cx, cy, f.boss ? 50 : f.chest ? 40 : 14, f.chest || f.boss ? ['#f2c14e', '#fff0a0', '#c8952a'] : ['#f2c14e', '#fff0a0', '#9b8a70'], f.boss ? 70 : 45);
+  }
+  // A foe that died before it was seen stays up for the rest of SHOW_MIN, then falls.
+  function ghostShow(f, g, seen) {
+    if (ghost) ghostFall();
+    ghost = { f, g, t0: tAnim, hold: Math.max(0.15, SHOW_MIN - seen), seen };
+  }
+  function ghostFall() {
+    const gh = ghost; ghost = null; if (!gh) return;
+    foeDies(gh.f, gh.cx || W * FOE_X, gh.cy || H * 0.55, gh.w || 30, gh.h || 30, DIE_T);
+    if (gh.g) pendingGold += gh.g;
+  }
+  function swarmAdd(f, g) {
+    if (!swarm.pend.length) { swarm.want = 3 + Math.floor(Math.random() * 3); swarm.t1 = tAnim; }
+    swarm.pend.push({ f, g }); swarm.at = tAnim;
+    if (swarm.pend.length >= swarm.want) swarmGo();
+  }
+  // The gathered kills take the stage together for about as long as they took to gather, then fall in one burst.
+  function swarmGo() {
+    const list = swarm.pend.splice(0); if (!list.length) return;
+    if (swarm.show) swarmFall();
+    if (list.length === 1) { ghostShow(list[0].f, list[0].g, 0); return; }
+    const dur = Math.max(1.1, Math.min(4, tAnim - swarm.t1 + 0.8));
+    swarm.show = { list, t0: tAnim, dur, slots: swarmSlots(list.length) };
+  }
+  function swarmFall() {
+    const sw = swarm.show; swarm.show = null; if (!sw) return;
+    let g = 0; sw.list.forEach((m, i) => { const p = sw.pos && sw.pos[i]; if (p) foeDies(m.f, p.cx, p.cy, p.w, p.h, DIE_T); g += m.g; });
+    if (g) pendingGold += g;
+    sfx.hit(true);
+  }
+  // Loose cluster around the foe spot: back row first, so the front row overlaps it.
+  function swarmSlots(n) {
+    const xs = { 2: [-0.5, 0.5], 3: [-0.75, 0.75, 0], 4: [-0.55, 0.55, -1.0, 1.0], 5: [-0.55, 0.55, -1.15, 1.15, 0] }[n] || [0];
+    const ys = { 2: [0, 0], 3: [-1, -1, 0], 4: [-1, -1, 0, 0], 5: [-1, -1, 0, 0, 0.35] }[n] || [0];
+    return xs.map((x, i) => ({ x, y: ys[i], ph: Math.random() * 6 }));
+  }
+  function drawFastFoes(fxC, floorY) {
+    if (swarm.pend.length && (!swarmFloor() || tAnim - swarm.at > SWARM_WAIT)) swarmGo();
+    if (ghost) {
+      const gh = ghost, k = (tAnim - gh.t0) / gh.hold, f = gh.f;
+      if (k >= 1) { ghostFall(); return; }
+      const spr = sprite(f.sprite, f.chest ? 0 : foeHue(f), tAnim < foeAnim.flash || Math.sin(tAnim * 40) > 0.6);
+      const sw = Math.round(spr.lw * 3 * (f.sc || 1)), sh = Math.round(spr.lh * 3 * (f.sc || 1));
+      const flier = f.sprite === 'bat' || f.sprite === 'ghost' || f.sprite === 'moth';
+      const drop = gh.seen < 0.25 ? Math.max(0, 1 - (tAnim - gh.t0 + gh.seen) / 0.25) * -12 : 0;
+      const shake = Math.random() < 0.5 ? -1 : 1;
+      const fx = Math.round(fxC - sw / 2 + shake), fy = Math.round(floorY + 4 - sh + drop) - (flier ? 10 : 0);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(fxC, floorY + 4, sw * 0.42, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.globalAlpha = Math.min(1, (tAnim - gh.t0 + gh.seen) / 0.12 + 0.3); ctx.translate(fx + sw, fy); ctx.scale(-1, 1); ctx.drawImage(spr, 0, 0, sw, sh); ctx.restore();
+      gh.cx = fxC; gh.cy = fy + sh / 2; gh.w = sw; gh.h = sh;
+      foeAnim.cx = gh.cx; foeAnim.cy = gh.cy; foeAnim.w = sw; foeAnim.h = sh;
+      return;
+    }
+    const sh0 = swarm.show; if (!sh0) return;
+    const age = tAnim - sh0.t0;
+    if (age >= sh0.dur) { swarmFall(); return; }
+    const n = sh0.list.length, sc = n >= 5 ? 0.68 : n === 4 ? 0.74 : 0.8; sh0.pos = sh0.pos || [];
+    const order = sh0.slots.map((p, i) => i).sort((a, b) => sh0.slots[a].y - sh0.slots[b].y);
+    let minX = Infinity, maxX = -Infinity, top = Infinity;
+    for (const i of order) {
+      const m = sh0.list[i].f, p = sh0.slots[i];
+      const spr = sprite(m.sprite, m.chest ? 0 : foeHue(m), tAnim < foeAnim.flash && i % 2 === Math.floor(tAnim * 10) % 2);
+      const sw = Math.round(spr.lw * 3 * (m.sc || 1) * sc), sh = Math.round(spr.lh * 3 * (m.sc || 1) * sc);
+      const flier = m.sprite === 'bat' || m.sprite === 'ghost' || m.sprite === 'moth';
+      const arrive = Math.min(1, Math.max(0, (age - i * 0.06) / 0.25)), drop = (1 - arrive) * -12;
+      const bob = Math.sin(tAnim * 2.4 + p.ph) * (flier ? 2.2 : 0.6);
+      const cx = Math.round(fxC + p.x * sw * 0.62 * Math.min(1, W / 420)), base = floorY + 4 + p.y * 7;
+      const fx = Math.round(cx - sw / 2 + (tAnim < foeAnim.shake ? (Math.random() < 0.5 ? -1 : 1) : 0)), fy = Math.round(base - sh + bob + drop) - (flier ? 10 : 0);
+      ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(cx, base, sw * 0.4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.globalAlpha = arrive; ctx.translate(fx + sw, fy); ctx.scale(-1, 1); ctx.drawImage(spr, 0, 0, sw, sh); ctx.restore();
+      sh0.pos[i] = { cx, cy: fy + sh / 2, w: sw, h: sh };
+      minX = Math.min(minX, fx); maxX = Math.max(maxX, fx + sw); top = Math.min(top, fy);
+    }
+    foeAnim.cx = fxC; foeAnim.cy = top + (floorY - top) / 2; foeAnim.w = maxX - minX; foeAnim.h = floorY - top;
+  }
   function render(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now; tAnim += dt;
     ctx.setTransform(R, 0, 0, R, 0, 0); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
@@ -911,11 +1002,12 @@
     if (foe && !nxUp) {
       const fk = foe.name + foe.max + S.floor + S.foeIdx;
       if (foeAnim.key !== fk) { foeAnim.key = fk; foeAnim.born = tAnim; }
-      const spr = sprite(foe.sprite, foe.chest ? 0 : foe.hue, tAnim < foeAnim.flash);
-      const sw = spr.lw * 3, sh = spr.lh * 3;
+      foeAnim.obj = foe; if (ghost) ghostFall(); if (swarm.show) swarmFall();
+      const spr = sprite(foe.sprite, foe.chest ? 0 : foeHue(foe), tAnim < foeAnim.flash);
+      const sw = Math.round(spr.lw * 3 * (foe.sc || 1)), sh = Math.round(spr.lh * 3 * (foe.sc || 1));
       const age = tAnim - foeAnim.born;
       const drop = age < 0.25 ? (1 - age / 0.25) * -12 : 0;
-      const flier = foe.sprite === 'bat' || foe.sprite === 'ghost';
+      const flier = foe.sprite === 'bat' || foe.sprite === 'ghost' || foe.sprite === 'moth';
       const bob = Math.sin(tAnim * 2.4) * (flier ? 2.2 : 0.6);
       const shake = tAnim < foeAnim.shake ? (Math.random() < 0.5 ? -1 : 1) : 0;
       const lungeF = tAnim < foeAnim.lunge ? -4 : 0;
@@ -924,6 +1016,13 @@
       if (foe.boss || foe.world) {
         const gg = ctx.createRadialGradient(fxC, fy + sh / 2, 4, fxC, fy + sh / 2, sw), gc = foe.world ? '170,90,255,' : '255,80,40,';
         gg.addColorStop(0, 'rgba(' + gc + (foe.world ? '0.3)' : '0.18)')); gg.addColorStop(1, 'rgba(' + gc + '0)');
+        ctx.fillStyle = gg; ctx.fillRect(fxC - sw, fy - 10, sw * 2, sh + 20);
+      }
+      // rare and very rare creatures shine a little so you notice them
+      if (foe.rk === 'r' || foe.rk === 'v') {
+        const gc = foe.rk === 'v' ? '200,140,255,' : '255,214,110,', pulse = 0.22 + Math.sin(tAnim * 3) * 0.06;
+        const gg = ctx.createRadialGradient(fxC, fy + sh / 2, 4, fxC, fy + sh / 2, sw * 0.75);
+        gg.addColorStop(0, 'rgba(' + gc + pulse + ')'); gg.addColorStop(1, 'rgba(' + gc + '0)');
         ctx.fillStyle = gg; ctx.fillRect(fxC - sw, fy - 10, sw * 2, sh + 20);
       }
       ctx.globalAlpha = Math.min(1, age / 0.15);
@@ -949,17 +1048,18 @@
         ctx.restore();
       }
     }
-    if (foeAnim.dying) {
-      const d = foeAnim.dying, a = 0.7 * (1 - (tAnim - d.t) / 0.25);
-      if (a <= 0) foeAnim.dying = null;
-      else { ctx.globalAlpha = a; ctx.drawImage(d.spr, d.x - (1 - a) * 4, d.y + (1 - a) * 6, d.w * (1 + (1 - a) * 0.15), d.h * (1 - (1 - a) * 0.3)); ctx.globalAlpha = 1; }
+    if (!foe && !nxUp) drawFastFoes(fxC, floorY);
+    for (let i = foeAnim.dying.length - 1; i >= 0; i--) {
+      const d = foeAnim.dying[i], k = (tAnim - d.t) / (d.len || 0.25), a = 0.7 * (1 - k);
+      if (a <= 0) { foeAnim.dying.splice(i, 1); continue; }
+      ctx.globalAlpha = a; ctx.drawImage(d.spr, d.x - (1 - a) * 4, d.y + (1 - a) * 6, d.w * (1 + (1 - a) * 0.15), d.h * (1 - (1 - a) * 0.3)); ctx.globalAlpha = 1;
     }
 
     if (breach && S.nx.ph) drawGuardian(floorY);
     const lay = drawParty(nowMs);
 
     // party attacks: a member lunges and a slash in their colour lands on the foe
-    if ((foe || nxUp) && lay.length) {
+    if ((foe || nxUp || fastUp()) && lay.length) {
       slashTimer -= dt;
       if (slashTimer <= 0) {
         slashTimer = 0.3 + Math.random() * 0.3;
@@ -1080,6 +1180,10 @@
       case 'shufend': flog('party', 'Your line snaps back into marching order', 'shufend', 3000); break;
       case 'ambush': if (e.first) flog('fight', e.guarded ? nm(e.target) + ' guards the rear from an ambush' : '<b class="bad">Ambush!</b> ' + nm(e.target) + ' is hit from behind'); break;
       case 'mercy': flog('fight', '<b class="good">Mercy Corps:</b> ' + esc(e.who) + (e.kind === 'wounded' ? ' is wounded on the path' : ' is held captive')); break;
+      case 'cage': flog('fight', '<b class="good">A caged scout!</b> Defeat ' + esc(e.name) + ' within ' + L.CAGE_TIME + 's to free him'); break;
+      case 'cagefled': flog('fight', 'The caged scout’s captor got away'); break;
+      case 'relit': flog('fight', '<b class="good">Last light:</b> Grimsby relights the lantern'); break;
+      case 'uqjoin': flog('party', '<b class="good">' + esc(e.name) + '</b> ' + (e.camp ? 'joins you' : 'waits at the Guild Hall')); break;
       case 'rescued': flog('fight', '<b class="good">Rescued ' + esc(e.who) + '</b>: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' min'); break;
       case 'aided': flog('fight', '<b class="good">Healed ' + esc(e.who) + '</b>: +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' min'); break;
       case 'craftxp': flog('party', '+' + fmt(e.xp) + ' hero XP for ' + (e.why === 'merge' ? 'merging' : 'enchanting'), 'cx', 1500); break;
@@ -1117,6 +1221,7 @@
   }
   setInterval(paintFlog, 700);
   document.addEventListener('click', e => { const b = e.target.closest('[data-ff]'); if (!b) return; flogFilter = b.dataset.ff; try { localStorage.setItem('lh_flogf', flogFilter); } catch (x) {} paintFlog(true); });
+  document.addEventListener('toggle', e => { if (e.target.id === 'meterbox' && e.target.open) paintMeter(Date.now()); }, true);
   document.addEventListener('toggle', e => { if (e.target.id === 'flogbox') { try { localStorage.setItem('lh_flog', e.target.open ? '1' : ''); } catch (x) {} paintFlog(true); } }, true);
   try { if (localStorage.getItem('lh_flog') && $('flogbox')) $('flogbox').open = true; } catch (e) {}
   function handleEvents() {
@@ -1238,10 +1343,11 @@
         if (e.cls === 'healer') burst(a.x, a.y, 16, ['#9be87a', '#d6ffc2'], 30);
         tone(440, 0.12, 'triangle', 0.035, 880);
       } else if (e.type === 'kill') {
-        kills++; gold += e.gold;
-        const f = e.foe, spr = sprite(f.sprite, f.chest ? 0 : f.hue, true);
-        foeAnim.dying = { spr, t: tAnim, x: foeAnim.cx - foeAnim.w / 2, y: foeAnim.cy - foeAnim.h / 2, w: foeAnim.w, h: foeAnim.h };
-        burst(foeAnim.cx, foeAnim.cy, f.boss ? 50 : f.chest ? 40 : 14, f.chest || f.boss ? ['#f2c14e', '#fff0a0', '#c8952a'] : ['#f2c14e', '#fff0a0', '#9b8a70'], f.boss ? 70 : 45);
+        kills++;
+        const f = e.foe, seen = foeAnim.obj === f ? tAnim - foeAnim.born : 0;
+        if (!f.boss && !f.world && !f.goblin && seen < SWARM_FAST && swarmFloor()) { swarmAdd(f, e.gold || 0); kills--; }
+        else if (seen < SHOW_MIN) { kills--; ghostShow(f, e.gold || 0, seen); }
+        else { gold += e.gold; foeDies(f, foeAnim.cx, foeAnim.cy, foeAnim.w, foeAnim.h); }
         if (f.boss) { sfx.boss(); if (e.first && !(S.maxFloor % 10 === 0 && L.regionNeed(S, S.maxFloor + 1))) toast('crown', f.name + ' defeated', 'The way down is open.', ''); }
       } else if (e.type === 'loot') {
         const it = e.item;
@@ -1273,6 +1379,20 @@
         sfx.relic(); floatText(e.kind === 'wounded' ? 'A wounded medic!' : 'A captive medic!', 'skill', 0.5, 0.2);
         if (e.kind === 'wounded') toast('cross', 'A Mercy Corps companion is hurt', esc(e.who) + ' lies wounded on the path. Your healers will mend them; Lantern Hymn and your taps help too. Heal them to full within ' + L.AID_TIME + ' seconds for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.', 'feat');
         else toast('cross', 'A Mercy Corps companion needs rescue', 'This monster is holding ' + esc(e.who) + ' captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.', 'feat');
+      } else if (e.type === 'uqjoin') {
+        sfx.relic(); floatText(e.name + '!', 'skill', 0.5, 0.2);
+        toast('crown', e.name + (e.camp ? ' joins you' : ' waits at the Guild Hall'), (e.camp ? 'A unique Legendary, at the Campfire now. ' : 'Your Campfire is full, so they wait at the Guild Hall. Sign them on for free when you have a spot. ') + (L.UNIQ[e.id] ? L.UNIQ[e.id].perk + ' as ' + uqPostName(e.id) + ': ' + L.UNIQ[e.id].text : ''), 'feat');
+        updateSeats(true); paintBoard();
+      } else if (e.type === 'uqquest' || e.type === 'uqstep') {
+        toast('map', e.type === 'uqquest' ? 'Side quest: ' + e.name : e.name, (e.type === 'uqstep' ? 'Next: ' : '') + e.text + '. Track it at the Guild Hall.', 'feat');
+      } else if (e.type === 'cage') {
+        sfx.relic(); floatText('A caged scout!', 'skill', 0.5, 0.2);
+        toast('cross', 'Someone is caged!', esc(e.name) + ' has a Mercy Corps scout locked in a cage. Defeat it within ' + L.CAGE_TIME + ' seconds to free him.', 'feat');
+      } else if (e.type === 'cagefled') {
+        toast('cross', 'The monster got away', 'The caged scout slipped free later and made his way to the Guild Hall. Hire ' + esc(e.name) + ' there.', 'warn');
+        paintBoard();
+      } else if (e.type === 'relit') {
+        floatText('Last light!', 'skill', 0.5, 0.2);
       } else if (e.type === 'rescued') {
         sfx.relic(); floatText('Rescued!', 'skill', FOE_X, 0.2);
         toast('cross', esc(e.who) + ' is free', 'The Mercy Corps thanks you: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.', 'feat');
@@ -1290,6 +1410,10 @@
       } else if (e.type === 'pack') {
         floatText('Ambush!', 'crit', 0.5, 0.3);
         if (!(S.stats.packs > 0)) toast('sword', 'Ambush!', e.n + ' monsters have teamed up to jump your party. They hit harder and strike the back first, but they pay ' + (e.n * L.PACK_GOLD) + ' times the gold, ' + (e.n * L.PACK_XP) + ' times the hero XP and often drop gear.', 'feat');
+      } else if (e.type === 'newbeast') {
+        const c = L.creatureById(e.cid);
+        if (c && (c.rar === 'r' || c.rar === 'v')) { sfx.relic(); toast('skull', 'New in the Bestiary: ' + c.name, L.RAR_NAME[c.rar] + ' find. Its page is in the Journal.', 'feat'); }
+        else if (c) floatText('New: ' + c.name, 'skill', FOE_X, 0.3);
       } else if (e.type === 'beast') {
         const lo = L.LORE.find(x => x.id === e.key), nm2 = lo ? lo.title : 'this foe';
         toast('skull', 'Bestiary mastery: ' + nm2 + ' ' + e.tier + '/' + L.BEAST_MAX, '+' + e.tier + '% damage and hero XP against ' + nm2 + '. ' + (e.tier < L.BEAST_MAX ? 'Next step at ' + fmt((e.tier + 1) * L.BEAST_STEP) + ' kills.' : 'Fully mastered.'), 'feat');
@@ -1371,6 +1495,16 @@
   // next cloud sync (pushCloud) and is stored with it on the server for 30 days. Only admins can read it.
   var ACT_KEY = 'lh_acts', acts = [];
   try { acts = JSON.parse(localStorage.getItem(ACT_KEY) || '[]'); if (!Array.isArray(acts)) acts = []; } catch (e) {}
+  // Backup codes (hotfix, 27 Nov 2026): a plain base64 save could be edited by hand (gold set to 999T) and loaded back.
+  // Codes now carry a check value over the save text; codes without a matching one are refused.
+  const BK_SALT = 'lh-bk-2026-11';
+  function bkHash(t) { let a = 0x811c9dc5 ^ t.length, b = 0x9e3779b9; for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = Math.imul(b ^ c, 2246822507) ^ (a >>> 13); } return ((a >>> 0).toString(36) + (b >>> 0).toString(36)); }
+  function backupCode(json) { return 'LH2.' + btoa(unescape(encodeURIComponent(json))) + '.' + bkHash(BK_SALT + json); }
+  function readBackup(code) {
+    const m = /^LH2\.([A-Za-z0-9+/=]+)\.([0-9a-z]+)$/.exec(String(code || '').replace(/\s+/g, ''));
+    if (!m) return null;
+    try { const json = decodeURIComponent(escape(atob(m[1]))); if (bkHash(BK_SALT + json) !== m[2]) return null; const o = JSON.parse(json); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+  }
   function actPush(a) {
     if (!acts) acts = [];
     const cut = l => Array.isArray(l) && l.length ? l.slice(0, 4).map(v => String(v).slice(0, 90)) : undefined;
@@ -1687,6 +1821,8 @@
     if (m.cls === 'healer') parts.push(fmt(L.healPerSec(S, id)) + ' heal/s');
     parts.push(fmt(L.memberDps(S, id, now) || 0) + ' dmg/s');
     parts.push(fmt(L.maxHpOf(S, id)) + ' hp');
+    // A borrowed hero stronger than GUEST_CAP x your hero fights at that cap; say so, or it looks out of date.
+    if (L.isGuest(S, id) && L.guestK(S, id) < 0.999) parts.push('<span class="muted" title="Borrowed heroes fight at up to ' + L.GUEST_CAP + 'x your hero’s damage and ' + L.GUEST_CAP + 'x its health, each on its own. Grow your hero to raise the cap.">capped at ' + L.GUEST_CAP + 'x you</span>');
     return parts.join(' &middot; ');
   }
 
@@ -1734,8 +1870,9 @@
         btn = '<button class="buy anywhere" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button>' + '<div class="minirow"><button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' + (id !== 'you' ? '<button class="rest icon" data-unseat="' + i + '" title="Send ' + esc(m.name) + ' to the campfire to free this seat" aria-label="Send ' + esc(m.name) + ' to the campfire">' + icon('flame') + '</button>' : '') + '</div>';
       } else btn = '<button class="btn ghost small" data-dismiss="' + id + '">Dismiss</button>';
       const mv = '<div class="mv"><button class="mini up" data-move="' + i + ':-1"' + (i === 0 ? ' disabled' : '') + ' title="Move forward" aria-label="Move ' + esc(m.name) + ' forward">&#9650;</button><button class="mini dn" data-move="' + i + ':1"' + (i === L.PARTY_SIZE - 1 ? ' disabled' : '') + ' title="Move back" aria-label="Move ' + esc(m.name) + ' back">&#9660;</button></div>';
-      html += '<div class="seat' + (down ? ' down' : '') + (m.player ? ' mine' : '') + '"><span class="pos">' + (i + 1) + '<small>' + L.POS_NAME[i] + '</small></span>' + mv + portrait(id) +
-        '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + (id === 'you' ? '<span class="you">You</span>' : guest ? '<span class="you guest">Player</span>' : '') + '</div>' +
+      const lk = seatLooks(id), sbg = lk && lk.g && lk.g !== 'night' ? cosOf('g', lk.g)[0] : '';
+      html += '<div class="seat' + (down ? ' down' : '') + (m.player ? ' mine' : '') + (sbg ? ' sbn bn-' + sbg : '') + '"><span class="pos">' + (i + 1) + '<small>' + L.POS_NAME[i] + '</small></span>' + mv + portrait(id) +
+        '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + (id === 'you' ? '<span class="you">You</span>' : guest ? '<span class="you guest">Player</span>' : '') + (lk && lk.b && BANNERS[lk.b] ? '<span class="sban" title="' + esc(BANNERS[lk.b][0]) + '">' + seatBanner(lk.b) + '</span>' : '') + '</div>' +
         '<div class="lv">' + (down ? 'Fallen. Back up in ' + Math.ceil((down - now) / 1000) + 's' : memberStatsLine(id, now)) + '</div>' +
         traitChips(id, 'seat') +
         '<div class="hpbar"><i data-hp="' + id + '"></i></div>' + (L.resKind(id) ? '<div class="resbar r-' + L.resKind(id) + '" title="' + (L.resKind(id) === 'mana' ? 'Mana' : 'Stamina') + '"><i data-res="' + id + '"></i></div>' : '') + '</div><div class="acts">' + btn + '</div></div>';
@@ -1757,13 +1894,13 @@
     const jobsHtml = rosterBar + jobsHead + (!L.canUse(S, 'jobs') ? '' : '<div class="jobs">' + L.JOBS.map(j => {
       const id = S.jobs && S.jobs[j.id], on = L.jobFree(S, id), m = on && L.memberById(id);
       return '<button class="job' + (on ? ' on' : '') + '" data-job="' + j.id + '" title="' + esc(j.desc) + '"><span class="jic">' + icon(j.icon) + '</span><b>' + j.name + '</b>' +
-        (on ? '<small><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt="">' + esc(m.name) + '</small><em>' + L.jobText(j, L.jobValue(S, j, id)) + '</em>' : '<small class="none">Nobody yet</small><em>' + j.fmt + '</em>') + '</button>';
+        (on ? '<small><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt="">' + esc(m.name) + '</small><em>' + L.jobText(j, L.jobValue(S, j, id)) + '</em>' + (L.postOn(S, id) ? uqPerk(id) : '') : '<small class="none">Nobody yet</small><em>' + j.fmt + '</em>') + '</button>';
     }).join('') + '</div>');
     let benchHtml = jobsHtml + bench.map(id => {
       const m = L.memberById(id), job = L.jobOf(S, id);
       const n = buyN() === 'max' ? Math.max(1, L.maxAffordable(S, id)) : buyN(), cost = L.trainCost(S, id, n), td = L.trainDust(S, id, n);
       return '<div class="seat bench">' + portrait(id) + '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + '</div><div class="lv">Power level ' + L.lvl(S, id) + ' &middot; ' + esc(m.title) + '</div>' +
-        '<div class="jobline' + (job ? ' on' : '') + '">' + (job ? icon(job.icon) + '<b>' + job.name + '</b> ' + L.jobText(job, L.jobValue(S, job, id)) : 'No camp job yet') + '</div>' + traitChips(id, true) + '</div>' +
+        '<div class="jobline' + (job ? ' on' : '') + '">' + (job ? icon(job.icon) + '<b>' + job.name + '</b> ' + L.jobText(job, L.jobValue(S, job, id)) : 'No camp job yet') + (L.UNIQ[id] ? (L.postOn(S, id) ? ' ' + uqPerk(id) : ' <small class="uqhint" data-tip="' + esc(L.UNIQ[id].perk + ': ' + L.UNIQ[id].text) + '" tabindex="0">&#9733; ' + esc(L.UNIQ[id].perk) + ' as ' + esc(uqPostName(id)) + '</small>') : '') + '</div>' + traitChips(id, true) + '</div>' +
         '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button><div class="minis">' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
         '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button><button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] ? '<button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button>' : '') + '</div></div></div>';
     }).join('');
@@ -1806,12 +1943,16 @@
   };
   ['tab-party', 'tab-camp', 'tab-market', 'tab-guild'].forEach(id => $(id).addEventListener('click', partyClick));
   // camp jobs: pick who does a job, or which job someone does
+  // Unique Legendaries: their extra on their own camp post (jid), or on any post for Thistle.
+  const uqFits = (id, jid) => { const u = L.UNIQ[id]; return !!u && (u.job === 'any' || u.job === jid); };
+  const uqPerk = (id, cls) => { const u = L.UNIQ[id]; return u ? '<i class="uqp' + (cls ? ' ' + cls : '') + '" data-tip="' + esc(u.perk + ': ' + u.text) + '" tabindex="0">&#9733; ' + esc(u.perk) + '</i>' : ''; };
+  const uqPostName = id => { const u = L.UNIQ[id]; return !u ? '' : u.job === 'any' ? 'any camp job' : jobName(u.job); };
   function jobsFull() { const n = L.JOB_SLOT_LV.find(x => x > L.heroLv(S)); toast('lock', 'Every job slot is taken', 'You can run ' + L.jobSlots(S) + (L.jobSlots(S) === 1 ? ' camp job' : ' camp jobs') + ' at once.' + (n ? ' Another slot opens at hero level ' + n + '.' : '') + ' Clear a job to move someone.', 'warn'); }
   function jobModal(jid) {
     const j = L.JOBS.find(x => x.id === jid), cur = S.jobs && S.jobs[jid];
     const free = S.unlocked.filter(id => L.jobFree(S, id)).sort((a, b) => L.jobValue(S, j, b) - L.jobValue(S, j, a));
     modal('<div class="maphead"><div><h2>' + j.name + '</h2><small>' + esc(j.desc) + ' Gives ' + j.fmt + '. Higher level companions do it better' + ', and a ' + L.CLASSES[j.aff].name.toLowerCase() + ' does it half again as well.</small></div><button class="iconbtn" id="j-x" aria-label="Close">&times;</button></div>' +
-      (free.length ? '<div class="choice">' + free.map(id => { const m = L.memberById(id), o = L.jobOf(S, id); return '<button class="pick jpick' + (cur === id ? ' on' : '') + '" data-pick="' + id + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""><span><b>' + esc(m.name) + (m.cls === j.aff ? ' <i class="aff">&#9733; ' + L.CLASSES[m.cls].name + '</i>' : '') + '</b><small>Power level ' + L.lvl(S, id) + (o && o.id !== jid ? ' &middot; now ' + o.name : '') + '</small></span><em>' + L.jobText(j, L.jobValue(S, j, id)) + '</em></button>'; }).join('') + '</div>'
+      (free.length ? '<div class="choice">' + free.map(id => { const m = L.memberById(id), o = L.jobOf(S, id); return '<button class="pick jpick' + (cur === id ? ' on' : '') + '" data-pick="' + id + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""><span><b>' + esc(m.name) + (m.cls === j.aff ? ' <i class="aff">&#9733; ' + L.CLASSES[m.cls].name + '</i>' : '') + '</b><small>Power level ' + L.lvl(S, id) + (o && o.id !== jid ? ' &middot; now ' + o.name : '') + (uqFits(id, jid) ? ' &middot; &#9733; ' + esc(L.UNIQ[id].perk) + ': ' + esc(L.UNIQ[id].text) : '') + '</small></span><em>' + L.jobText(j, L.jobValue(S, j, id)) + '</em></button>'; }).join('') + '</div>'
         : '<p class="note">Nobody is resting at the campfire. Send a companion back from your party to give them a job.</p>') +
       '<div class="row">' + (cur && L.jobFree(S, cur) ? '<button class="btn ghost" id="j-clear">Leave the job empty</button>' : '') + '<button class="btn ghost" id="j-close">Close</button></div>', md => {
         md.className = 'sheet wide';
@@ -1824,7 +1965,7 @@
   function jobForModal(id) {
     const m = L.memberById(id), cur = L.jobOf(S, id);
     modal('<div class="maphead"><div><h2>A job for ' + esc(m.name) + '</h2><small>Power level ' + L.lvl(S, id) + ' ' + L.CLASSES[m.cls].name.toLowerCase() + '. Train them to make their job count for more.</small></div><button class="iconbtn" id="j-x" aria-label="Close">&times;</button></div>' +
-      '<div class="choice">' + L.JOBS.map(j => { const h = S.jobs && S.jobs[j.id], taken = h && h !== id && L.jobFree(S, h); return '<button class="pick jpick' + (cur && cur.id === j.id ? ' on' : '') + '" data-pj="' + j.id + '"><span class="jic">' + icon(j.icon) + '</span><span><b>' + j.name + (m.cls === j.aff ? ' <i class="aff">&#9733; suits them</i>' : '') + '</b><small>' + (taken ? 'Replaces ' + esc(L.memberById(h).name) : esc(j.desc)) + '</small></span><em>' + L.jobText(j, L.jobValue(S, j, id)) + '</em></button>'; }).join('') + '</div>' +
+      '<div class="choice">' + L.JOBS.map(j => { const h = S.jobs && S.jobs[j.id], taken = h && h !== id && L.jobFree(S, h); return '<button class="pick jpick' + (cur && cur.id === j.id ? ' on' : '') + '" data-pj="' + j.id + '"><span class="jic">' + icon(j.icon) + '</span><span><b>' + j.name + (m.cls === j.aff ? ' <i class="aff">&#9733; suits them</i>' : '') + '</b><small>' + (taken ? 'Replaces ' + esc(L.memberById(h).name) : esc(j.desc)) + (uqFits(id, j.id) ? ' <b class="uqt">&#9733; ' + esc(L.UNIQ[id].perk) + ': ' + esc(L.UNIQ[id].text) + '</b>' : '') + '</small></span><em>' + L.jobText(j, L.jobValue(S, j, id)) + '</em></button>'; }).join('') + '</div>' +
       '<div class="row">' + (cur ? '<button class="btn ghost" id="j-clear">No job</button>' : '') + '<button class="btn ghost" id="j-close">Close</button></div>', md => {
         md.className = 'sheet wide';
         const done = () => { save(); closeModal(); updateSeats(true); updatePanel(true); };
@@ -1864,11 +2005,13 @@
     let acts = '';
     if (why) acts = '<span class="npclock">' + icon('lock') + esc(why) + '</span>';
     else if (bench) acts = '<button class="btn small" data-hire="b:' + o.id + '|' + (o.kind || 'sign') + '|gold"' + (can(c) && (o.kind === 'short' || !full) ? '' : ' disabled') + (c.free ? ' data-tip="They left during a wage bug of ours, so they come back free.">Hire back · free' : '>Hire back · ' + price(c)) + '</button>';
+    else if (c.free) acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (!full ? '' : ' disabled') + ' data-tip="They earned their place: no hire fee. Takes a companion spot and draws a Legendary wage of ' + fmt(wage) + ' gold an hour.">Sign on &middot; free</button>';
     else acts = '<button class="btn small" data-hire="' + o.id + '|sign|gold"' + (can(c) && !full ? '' : ' disabled') + ' data-tip="Takes a companion spot. Paid ' + fmt(wage) + ' gold an hour: a ' + R.name + ' base fee of ' + fmt(L.NPC_FEE[o.rar]) + ', more for each power level and their gear, never more than ' + Math.round(L.WAGE_CAP[o.rar] * 100) + '% of your income, less your wage relief.">Sign on · ' + price(c) + '</button>' +
       (c.dustAlt ? '<button class="btn small ghost" data-hire="' + o.id + '|sign|dust"' + ((S.dust || 0) >= c.dustAlt && !full ? '' : ' disabled') + '>Sign on · ' + fmt(c.dustAlt) + ' Dust</button>' : '') +
       '<button class="btn small ghost" data-hire="' + o.id + '|short|gold"' + (can(cs) && nShort < L.NPC_SHORT_MAX ? '' : ' disabled') + ' data-tip="Two hours, paid up front, no wage. Needs no free spot.">2 h · ' + price(cs) + '</button>';
     return '<div class="seat bench npcard" style="--rc:' + R.color + '"><div class="ic c-' + m.cls + '"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""></div><div class="info"><div class="nm">' + esc(m.name) + ' ' + classTag(m.cls) + ' <span class="rartag" style="--rc:' + R.color + '">' + R.name + '</span></div>' +
-      '<div class="lv">' + (m.title ? esc(m.title) : (side ? side.name + (o.need === 'banner' ? ' only' : '') : '')) + ' &middot; wage ' + fmt(wage) + ' gold/h' + (bench ? ' &middot; power level ' + o.lv + ' &middot; leaves in ' + fmtTime(Math.max(0, (o.until - Date.now()) / 1000)) : '') + '</div>' +
+      '<div class="lv">' + (m.title ? esc(m.title) : (side ? side.name + (o.need === 'banner' ? ' only' : '') : '')) + ' &middot; wage ' + fmt(wage) + ' gold/h' + (bench ? ' &middot; power level ' + o.lv + ' &middot; leaves in ' + fmtTime(Math.max(0, (o.until - Date.now()) / 1000)) : '') + (!bench && o.exp ? ' &middot; leaves in ' + fmtTime(Math.max(0, (o.exp - Date.now()) / 1000)) : '') + '</div>' +
+      (L.UNIQ[o.id] ? '<div class="jobline on uqline">' + uqPerk(o.id) + ' <small>as ' + esc(uqPostName(o.id)) + '</small></div>' : '') +
       '<div class="npcacts">' + acts + '</div></div></div>';
   }
   function npcGuildHtml() {
@@ -1876,11 +2019,13 @@
     const h = L.hallState(S), now = Date.now(), wph = L.wagesPerHour(S), away = L.offlineEarnPerSec(S) * 3600;
     const next = Math.max(0, (h.at + L.NPC_ROTATE - now) / 1000), rr = L.npcRerollCost(S), full = L.companions(S).length >= L.rosterCap(S);
     let x = '<h3 class="sub" id="npcg">NPC Guild</h3><div class="growcard npcg">' +
-      '<p>Hire companions for gold or Dust. Rarer ones fight harder and work camp jobs better, but cost more and draw a bigger wage every hour, even while you are away. Legendaries are the lore companions of the story. A wage never passes a share of your income, and full region masteries, Charisma and a Quartermaster at camp bring it down. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p>' +
+      '<p>Hire companions for gold or Dust. Rarer ones fight harder and work camp jobs better, but cost more and draw a bigger wage every hour, even while you are away. Legendaries are the lore companions of the story and a few unique wanderers. A wage never passes a share of your income, and full region masteries, Charisma and a Quartermaster at camp bring it down. If your gold runs dry, unpaid hires walk off to the bench here, and their gear stays in your bag.</p>' +
       '<div class="npcstat"><span data-tip="Half that while you are away.">Wages <b>' + fmt(wph) + ' gold/h</b></span>' + (() => { const rl = L.wageRelief(S); return '<span data-tip="' + esc('Takes a share off every hire\u2019s wage, up to ' + Math.round(L.WAGE_RELIEF_MAX * 100) + '%. ' + (rl.parts.length ? rl.parts.map(p => p[0] + ' ' + Math.round(p[1] * 100) + '%').join(', ') + '. ' : '') + 'Earn more with all three mastery stars in a region (' + Math.round(L.WAGE_RELIEF_MAST * 100) + '% each), Charisma and a Quartermaster at camp.') + '">Wage relief <b>' + Math.round(rl.total * 100) + '%</b></span>'; })() + '<span data-tip="What your party brings home each hour while you are away. You earn more while you play.">Away income <b>' + fmt(away) + ' gold/h</b></span>' + ((S.owed || 0) >= 1 ? '<span class="warn">Owed <b>' + fmt(S.owed) + '</b></span>' : '') + '<span>New faces in <b>' + fmtTime(next) + '</b></span>' +
       '<button class="btn small ghost" data-npcreroll' + ((S.dust || 0) >= rr ? '' : ' disabled') + '>New faces now · ' + fmt(rr) + ' Dust</button></div>' +
       (full ? '<p class="note">Every companion spot is taken. Let someone go from the Campfire, or take a 2 hour contract.</p>' : '') +
       '<div class="board npcoffers">' + h.offers.map(o => npcCard(o, false)).join('') + '</div>';
+    const uqs = Object.keys(L.UNIQ_QUESTS).map(id => [id, L.uniqQuest(S, id)]).filter(q => q[1] && !q[1].done);
+    if (uqs.length) x += '<h4 class="npcbh">Side quests</h4><div class="uqlist">' + uqs.map(([id, q]) => { const m = L.memberById(id); return '<div class="uqrow"><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt=""><div><b>' + esc(q.name) + '</b><small>Step ' + (q.step + 1) + ' of ' + q.steps + ': ' + esc(q.text) + ' (' + fmt(Math.max(0, q.have)) + '/' + fmt(q.n) + ')</small><small>Reward: ' + esc(m.name) + ' joins you, free. ' + uqPerk(id) + '</small></div></div>'; }).join('') + '</div>';
     if (h.bench.length) x += '<h4 class="npcbh">On the bench</h4><p class="note">Hires who left in the last 3 days. They come back at the level they left, for half the price.</p><div class="board">' + h.bench.map(o => npcCard(o, true)).join('') + '</div>';
     return x + '</div>';
   }
@@ -1929,7 +2074,7 @@
       h += (open ? '<p class="note">' + open + (open === 1 ? ' seat is' : ' seats are') + ' open.</p>' : '<p class="note">Your party is full. When a player accepts your invite, you choose who steps out.</p>') +
         '<button class="btn small" id="b-find">' + (boardList ? 'Show other heroes' : 'Browse the guild') + '</button>';
       if (boardMsg) h += '<p class="note">' + esc(boardMsg) + '</p>';
-      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + ' &middot; reached floor ' + g.floor + '</div></div>' +
+      if (boardList) h += '<div class="board">' + boardList.map(g => { const pf = g.pf || {}; return '<div class="seat bench gboard' + (g.wd && g.wd.b && BANNERS[g.wd.b] ? ' hasgb">' + bannerSVG(g.wd.b, 'gban') : '">') + '<div class="pfava sm fr-' + cosOf('f', pf.f)[0] + npRing(g.np) + '>' + (g.wd && g.wd.k && g.wd.k.you ? '<div class="ic c-' + g.cls + ' player dressed"><img src="' + SP.spriteURL(g.cls, 2, outfitHue(g.wd.k.you)) + '" alt=""></div>' : '<div class="ic c-' + g.cls + ' player">' + icon(CLASS_ICON[g.cls]) + '</div>') + '</div><div class="info"><div class="nm"><button class="linkname nc-' + cosOf('c', pf.c)[0] + '" data-gprof="' + g.id + '">' + esc(g.name) + '</button> ' + npBadge(g.np) + classTag(g.cls) + (pf.t ? ' <small class="pftitle' + ttCls(pf.t) + '">' + esc(cosOf('t', pf.t)[1]) + '</small>' : '') + (g.w ? ' ' + warBadge(g.w) : '') + '</div><div class="lv">' + (g.on ? '<span class="online">Online now</span> &middot; ' : '') + 'Power level ' + g.level + (g.floor ? ' &middot; reached floor ' + g.floor : '') + '</div></div>' +
         ((S.guests || []).some(x => x.id === 'p_' + g.id) ? '<span class="muted">In party</span>' : inv.sent[g.id] ? '<span class="invact"><span class="invwait">Invited</span><button class="btn ghost small" data-uninv="' + g.id + '">Cancel</button></span>' : '<button class="btn small" data-recruit="' + g.id + '">Invite</button>') + '</div>'; }).join('') + '</div>';
       if ((S.guests || []).length) h += '<p class="note">To let a player’s hero go, press Dismiss on their seat.</p>';
     }
@@ -1939,13 +2084,26 @@
   const guestIdsQ = () => { const ids = (S.guests || []).map(g => String(g.id).replace(/^p_/, '')).filter(x => /^[0-9a-f]{16}$/.test(x)); return '/heroes' + (ids.length ? '?ids=' + ids.join(',') : ''); };
   function applyGuestCards(r) {
     if (!r) return; let n = 0;
-    for (const g of (r.party || []).concat(r.heroes || [])) if (L.refreshGuest(S, { id: 'p_' + g.id, level: g.level, bp: g.bp })) n++;
+    for (const g of (r.party || []).concat(r.heroes || [])) if (L.refreshGuest(S, { id: 'p_' + g.id, level: g.level, bp: g.bp })) {
+      n++; const gg = (S.guests || []).find(x => x.id === 'p_' + g.id); if (gg) { if (g.pf) gg.pf = g.pf; if (g.wd) gg.wd = g.wd; if (g.w != null) gg.w = g.w; }
+    }
     if (n) { save(); updateSeats(true); }
   }
+  // Borrowed heroes keep up on their own (John, 26 Nov 2026): fresh cards every L.GUEST_REFRESH while the page is open
+  // and on each return to camp (at most once a minute). '&p=1' asks only for the party's rows, not the whole board.
+  let guestAt = 0, guestBusy = false, wasCamp = null;
   async function refreshGuests() {
-    if (!CL || !signedIn() || !(S.guests || []).length) return;
-    try { applyGuestCards(await api('GET', null, guestIdsQ())); } catch (e) {}
+    if (!CL || !signedIn() || !(S.guests || []).length || guestBusy) return;
+    const q = guestIdsQ(); if (q.indexOf('?') < 0) return;
+    guestBusy = true; guestAt = Date.now();
+    try { applyGuestCards(await api('GET', null, q + '&p=1')); } catch (e) {} finally { guestBusy = false; }
   }
+  setInterval(() => {
+    const camp = L.atCamp(S), back = camp && wasCamp === false; wasCamp = camp;
+    if (document.hidden || !(S.guests || []).length) return;
+    const since = Date.now() - guestAt;
+    if (since >= L.GUEST_REFRESH || (back && since >= 6e4)) refreshGuests();
+  }, 15000);
   async function findHeroes() {
     boardMsg = 'Searching the guild…'; paintBoard();
     try { const r = await api('GET', null, guestIdsQ()); await loadWar(); boardList = (r && r.heroes) || []; applyGuestCards(r); boardMsg = boardList.length ? '' : 'The guild hall is quiet right now. Check back soon.'; }
@@ -1982,7 +2140,7 @@
   // Seat a player's hero, asking who steps out when the party is full.
   function seatGuest(g) {
     const join = () => {
-      L.addGuest(S, { id: 'p_' + g.id, name: g.name, cls: g.cls, side: g.side, level: g.level, bp: g.bp });
+      L.addGuest(S, { id: 'p_' + g.id, name: g.name, cls: g.cls, side: g.side, level: g.level, bp: g.bp }); L.qEv(S, 'guest', { id: g.id });
       const gg = (S.guests || []).find(x => x.id === 'p_' + g.id); if (gg) { gg.pf = g.pf || null; gg.w = g.w || ''; gg.wd = g.wd || null; }
       sfx.buy(); toast('users', g.name + ' joins your party', 'They accepted your invite. A ' + L.CLASSES[g.cls].name + ' at level ' + g.level + '.', 'feat');
       updateSeats(true); updateAbilities(true); paintBoard();
@@ -2816,48 +2974,160 @@
       });
   }
 
-  // ---------- companion profile ----------
+  // Party rows show a player's profile banner as the row background and their war banner by the name (John, 26 Nov 2026).
+  // Your own comes from your profile and Wardrobe; a borrowed player's from the Players Guild data (looks are always public).
+  function seatLooks(id) {
+    if (id === 'you') return { g: prof && prof.pf && prof.pf.g, b: S.wd && S.wd.b };
+    const gg = L.isGuest(S, id) && (S.guests || []).find(x => x.id === id);
+    return gg ? { g: gg.pf && gg.pf.g, b: gg.wd && gg.wd.b } : null;
+  }
+  // bannerSVG makes fresh gradient ids on every call, which would make the seat list repaint each tick; keep one per banner.
+  const seatBanCache = {};
+  const seatBanner = b => seatBanCache[b] || (seatBanCache[b] = bannerSVG(b, 'ban'));
+  // ---------- hero profile (v132 redesign, John 26 Nov 2026) ----------
+  // Your own hero has two tabs: My hero (the full character sheet, only you see it) and Public (what other players see
+  // in the Players Guild, with a switch for each part). Companions and borrowed heroes use the same sheet without tabs.
+  // Hidden parts are stored as pf.h on the profile; heroes.js leaves them out of GET /heroes, so it is enforced there.
   const SIDE_OF_MEMBER = id => { const m = L.memberById(id); if (id === 'you') return L.sideOf(S); return m.side || null; };
-  function profileModal(id) {
+  // John (26 Nov 2026): fewer switches. Seven chips, each covering one or two of the server's hide keys.
+  const PUB_PARTS = [
+    [['fl', 'np'], 'Floor & NP+'], [['on'], 'Online'], [['st'], 'Stats'], [['gr'], 'Gear'],
+    [['rc', 'pa'], 'Records & party'], [['b', 'e'], 'Bio & emblems'], [['w'], 'Grand War'],
+  ];
+  const PUB_KEYS = PUB_PARTS.flatMap(x => x[0]);
+  let profTab = 'me', pubTimer = 0;
+  const pubHidden = () => (prof && prof.pf && Array.isArray(prof.pf.h) ? prof.pf.h : []);
+  const pubOff = k => pubHidden().includes(k);
+  const ptile = (k, v, cls) => '<div' + (cls ? ' class="' + cls + '"' : '') + '><span>' + k + '</span><b>' + v + '</b></div>';
+  // What your hero shows in the Players Guild beyond the card: sent with PUT /hero, trimmed by the server.
+  function myShowcase() {
+    const g = S.gear.you || {}, gear = [], st = S.stats || {};
+    for (const p of L.openPos(S, 'you')) { const it = g[p] && L.itemOf(S, g[p]); if (it && !(p === 'legs' && L.robeOn(S, 'you'))) gear.push([p, L.gearName(it).slice(0, 40), it.rar, it.up | 0]); }
+    return { s: { d: Math.round(L.steadyDps(S, 'you') || 0), h: Math.round(L.maxHpOf(S, 'you') || 0), hl: Math.round(L.healPerSec(S, 'you') || 0) },
+      g: gear.slice(0, 14), r: { k: Math.floor(st.kills || 0), b: Math.floor(st.bossKills || 0), c: Math.floor(st.chests || 0), t: Math.floor(st.playTime || 0), f: L.featCount(S), rk: Math.floor(st.rekindles || 0) },
+      pa: S.party.filter(x => x && x !== 'you').map(x => { const m = L.memberById(x); return m ? [String(m.name).slice(0, 20), m.cls] : null; }).filter(Boolean).slice(0, 4) };
+  }
+  // Your own public profile, with your switches applied the same way the server applies them.
+  function myPublic() {
+    const x = pubOff, pf = Object.assign({}, prof && prof.pf), ps = myShowcase();
+    if (x('b')) pf.b = ''; if (x('e')) pf.e = [];
+    if (x('st')) delete ps.s; if (x('gr')) delete ps.g; if (x('rc')) delete ps.r; if (x('pa')) delete ps.pa;
+    return { name: S.hero.name, cls: S.hero.cls, level: L.lvl(S, 'you'), floor: x('fl') ? 0 : S.maxFloorEver, np: x('np') ? 0 : L.npTier(S), on: !x('on'), wd: S.wd, pf, w: !x('w') && prof && prof.wv ? prof.wl : '', ps };
+  }
+  // The public profile: the looks card plus whatever the player chose to show.
+  function publicProfile(o) {
+    const ps = o.ps || {}, s = ps.s, r = ps.r, n = v => fmt(+v || 0);
+    let h = '<div class="pfwrap">' + looksCard(o) + '</div>';
+    if (s) h += '<div class="pubsec"><h4>Combat</h4><div class="pstats">' + ptile('Damage', n(s.d) + '/s') + ptile('Health', n(s.h)) + (s.hl ? ptile('Healing', n(s.hl) + '/s') : '') + '</div></div>';
+    if (r) h += '<div class="pubsec"><h4>Records</h4><div class="pstats">' + ptile('Monsters', n(r.k)) + ptile('Guardians', n(r.b)) + ptile('Feats', n(r.f)) + ptile('Time played', fmtTime(+r.t || 0)) + (r.rk ? ptile('Rekindles', n(r.rk)) : '') + ptile('Chests', n(r.c)) + '</div></div>';
+    if (ps.pa && ps.pa.length) h += '<div class="pubsec"><h4>Party</h4><div class="pparty">' + ps.pa.map(([n, c]) => '<span>' + esc(n) + ' ' + (L.CLASSES[c] ? classTag(c) : '') + '</span>').join('') + '</div></div>';
+    if (ps.g && ps.g.length) h += '<div class="pubsec"><h4>Gear</h4><ul class="pgear two">' + ps.g.map(([p, n, rar, up]) => '<li><span>' + esc(L.SLOT_NAME[p] || p) + '</span><b class="r-' + esc(rar) + '">' + esc(n) + (up ? ' +' + up : '') + '</b></li>').join('') + '</ul></div>';
+    return h;
+  }
+  function savePublic(md) {
+    clearTimeout(pubTimer);
+    const st = () => md.querySelector('#pv-st'); if (st()) st().textContent = 'Saving…';
+    pubTimer = setTimeout(async () => {
+      const p = prof.pf || {}, body = { b: p.b || '', t: p.t || '', f: p.f || '', c: p.c || '', g: p.g || '', e: (p.e || []).slice(), h: pubHidden().slice() };
+      let msg;
+      try {
+        const r = await papi('PUT', '/profile', body), ok = r.pf && Array.isArray(r.pf.h);
+        prof.pf = Object.assign({}, r.pf, { h: body.h });
+        msg = ok ? 'Saved. The Players Guild shows this now.' : 'Not saved yet: the server for this arrives with the next update.';
+        if (ok) publishHero();
+      } catch (e) { msg = 'Could not save right now. Try again in a moment.'; }
+      if (st()) st().textContent = msg;
+    }, 700);
+  }
+  function profileModal(id, tab) {
     const m = L.memberById(id); if (!m) return;
+    const me = id === 'you', tabs = me && CL;
+    profTab = tabs ? (tab || profTab) : 'me';
     const c = L.CLASSES[m.cls], now = Date.now(), side = SIDE_OF_MEMBER(id), sd = side && L.SIDES[side];
     const guest = L.isGuest(S, id), lv = L.lvl(S, id) || 1, inParty = S.party.includes(id), g0 = guest && (S.guests || []).find(x => x.id === id);
-    const stats = [['Level', lv], ['Health', fmt(L.maxHpOf(S, id))], ['Damage', fmt(L.memberDps(S, id, now) || 0) + '/s']];
-    if (m.cls === 'healer') stats.push(['Healing', fmt(L.healPerSec(S, id)) + '/s']);
-    if (c.armor) stats.push(['Blocks', Math.round(c.armor * 100) + '% of hits']);
-    if (c.dodge) stats.push(['Dodges', Math.round(c.dodge * 100) + '% of hits']);
-    if (c.drain) stats.push(['Life drain', 'heals party as it hits']);
-    const rk = L.resKind(id);
-    if (rk) stats.push([rk === 'mana' ? 'Mana' : 'Stamina', Math.round(L.resOf(S, id)) + ' / ' + L.RES_MAX + ', regen ' + L.resRegen(S, id).toFixed(1) + '/s']);
-    const wv = k => L.wearVal(S, id, k);
-    if (wv('leech')) stats.push(['Life steal', (wv('leech') * 100).toFixed(1) + '% of damage']);
-    if (wv('block')) stats.push(['Gear block', (wv('block') * 100).toFixed(1) + '% chance']);
-    if (wv('def')) stats.push(['Defense', (wv('def') * 100).toFixed(1) + '% less damage']);
-    stats.push(['Power', m.player ? 'Full (player hero)' : m.rar ? Math.round(m.pow * 100) + '% (' + L.npcRar(m.rar).name + ' hire)' : L.LEGENDS.includes(id) ? 'Legendary (lore companion, ' + Math.round(L.NPC_POWER * 100) + '% of a much stronger build)' : Math.round(L.NPC_POWER * 100) + '% (story companion)']);
-    if ((S.hires || {})[id]) stats.push(['Contract', L.shortHire(S, id) ? fmtTime(Math.max(0, (S.hires[id].until - Date.now()) / 1000)) + ' left, already paid' : fmt(L.wagePerHour(S, id)) + ' gold an hour']);
-    const gear = S.gear[id] || {};
-    const gearList = L.openPos(S, id).filter(sl => !(sl === 'legs' && L.robeOn(S, id))).map(sl => { const it = gear[sl] && L.itemOf(S, gear[sl]); return '<li><span>' + L.SLOT_NAME[sl] + '</span>' + (it ? '<b class="r-' + it.rar + '">' + esc(L.gearName(it)) + (it.up ? ' +' + it.up : '') + '</b>' : '<i>Empty</i>') + '</li>'; }).join('');
-    const bio = id === 'you' ? 'That is you. You took the lantern from Old Thessaly and carried it down the stair' + (sd ? ', under the banner of the ' + sd.name : '') + '.'
-      : guest ? 'Another player’s hero, lent to your party. They fight at the level their owner trained them to. You cannot change their gear or train them.'
-      : (m.bio || m.line);
-    modal('<div class="prof"><div class="profhead"><div class="profspr c-' + m.cls + '"></div><div><h2>' + esc(m.name) + '</h2><small>' + esc(m.title) + '</small><div class="tags">' + classTag(m.cls) + (sd ? '<span class="sidetag" style="--side:' + sd.color + '">' + sd.name + '</span>' : '') + (guest ? '<span class="you guest">Player</span>' : '') + '</div></div></div>' +
-      '<p class="bio">' + esc(bio) + '</p>' + (m.line && !guest && id !== 'you' ? '<p class="quote">“' + esc(m.line) + '”</p>' : '') +
-      (id === 'you' && L.warAura(S) ? '<h3 class="sub">Grand War aura</h3><div id="p-aura">' + auraBox() + '</div>' : id === 'you' && CL ? '<div id="p-aura"></div>' : '') +
-      (id === 'you' && CL ? '<h3 class="sub">Profile card</h3><p class="note">What other players see in the Players Guild.</p><div class="pfwrap" id="p-card">' + looksCard({ name: m.name, cls: m.cls, level: lv, floor: S.maxFloorEver, np: L.npTier(S), wd: S.wd, pf: prof && prof.pf, w: prof && prof.wv ? prof.wl : '' }) + '</div><div class="row left"><button class="btn small" id="p-looks">Customize profile</button>' + (wardOn() ? '<button class="btn small ghost" id="p-ward">Wardrobe</button>' : '') + '</div>' : '') +
-      (guest && g0 && (g0.pf || g0.w) ? '<div class="pfwrap">' + looksCard(Object.assign({}, g0, { name: m.name, cls: m.cls })) + '</div>' : '') +
-      '<h3 class="sub">' + c.name + '</h3><p class="note">' + esc(CLASS_BLURB[m.cls]) + '</p>' +
-      '<div class="ability"><b>' + c.ability.name + '</b> <span>every ' + c.ability.cd + 's</span><small>' + esc(c.ability.desc) + '</small></div>' +
-      '<div class="pstats">' + stats.map(([k, v]) => '<div><span>' + k + '</span><b>' + v + '</b></div>').join('') + '</div>' +
-      (sd ? '<p class="note">' + sd.name + ': “' + sd.motto + '” ' + esc(sd.desc) + '</p>' : '') +
-      (guest ? '' : '<h3 class="sub">Gear</h3><ul class="pgear">' + gearList + '</ul>') +
-      '<div class="row">' + (guest ? '' : '<button class="btn ghost" id="p-gear">Manage gear</button>') + (!inParty && !guest ? '<button class="btn" id="p-seat">Bring along</button>' : '') + '<button class="btn ghost" id="p-close">Close</button></div></div>', md => {
-        const box = md.querySelector('.profspr'); try { const img = SP.render(m.cls, 5, lookHue(m)); if (img) box.appendChild(img); } catch (e) {}
-        const g = md.querySelector('#p-gear'); if (g) g.onclick = () => { closeModal(); gearWho = id; switchTab('gear'); };
-        const st = md.querySelector('#p-seat'); if (st) st.onclick = () => { closeModal(); if (campGate(true)) pickSeat(id); };
-        md.querySelector('#p-close').onclick = closeModal;
-        const lk = md.querySelector('#p-looks'); if (lk) lk.onclick = openProfileEditor; const pw = md.querySelector('#p-ward'); if (pw) pw.onclick = () => openWardrobe('k', id);
-        if (id === 'you' && CL && signedIn() && !prof) Promise.all([loadProfile(), loadWar()]).then(() => { const c = md.querySelector('#p-card'); if (c && prof) c.innerHTML = looksCard({ name: m.name, cls: m.cls, level: lv, floor: S.maxFloorEver, np: L.npTier(S), wd: S.wd, pf: prof.pf, w: prof.wv ? prof.wl : '' }); const au = md.querySelector('#p-aura'); if (au && !au.innerHTML && L.warAura(S)) au.innerHTML = '<h3 class="sub">Grand War aura</h3>' + auraBox(); });
+    const head = '<div class="profhead"><div class="profspr c-' + m.cls + '"></div><div class="phid"><h2>' + esc(m.name) + '</h2><small>' + esc(guest ? 'Another player’s hero' : m.title) + '</small><div class="tags">' + classTag(m.cls) + (sd ? '<span class="sidetag" style="--side:' + sd.color + '">' + sd.name + '</span>' : '') + (me ? npBadge(L.npTier(S)) : '') + (guest ? '<span class="you guest">Player</span>' : '') + '</div></div></div>';
+    const seg = tabs ? '<div class="seg ptabs" role="tablist"><button data-ptab="me" class="' + (profTab === 'me' ? 'on' : '') + '" role="tab">My hero</button><button data-ptab="pub" class="' + (profTab === 'pub' ? 'on' : '') + '" role="tab">Public profile</button></div>' : '';
+    const sheet = () => {
+      const dmg = (L.steadyDps(S, id) || L.memberDps(S, id, now) || 0), hp = L.maxHpOf(S, id), heal = m.cls === 'healer' ? L.healPerSec(S, id) : 0;
+      const kpi = '<div class="pkpi">' + ptile('Power level', lv) + ptile('Damage', fmt(dmg) + '/s') + ptile('Health', fmt(hp)) +
+        (me ? ptile('Deepest floor', S.maxFloorEver || 1) : heal ? ptile('Healing', fmt(heal) + '/s') : ptile('Power', m.player ? 'Full' : m.rar ? Math.round(m.pow * 100) + '%' : Math.round(L.NPC_POWER * 100) + '%')) + '</div>';
+      let xpbar = '';
+      if (me) {
+        const hl = L.heroLevel(S), pc = Math.floor(hl.xp / hl.need * 100), pts = L.heroPoints(S);
+        xpbar = '<div class="pxp"><div class="pxprow"><b>Hero level ' + hl.lv + '</b><span>' + fmt(hl.xp) + ' / ' + fmt(hl.need) + ' XP</span></div><div class="bmbar"><i style="width:' + pc + '%"></i></div>' + (pts > 0 ? '<small>' + pts + (pts === 1 ? ' stat point' : ' stat points') + ' to spend in the Skills tab.</small>' : '') + '</div>';
+      }
+      const stats = [];
+      if (heal && me) stats.push(['Healing', fmt(heal) + '/s']);
+      if (c.armor) stats.push(['Blocks', Math.round(c.armor * 100) + '% of hits']);
+      if (c.dodge) stats.push(['Dodges', Math.round(c.dodge * 100) + '% of hits']);
+      if (c.drain) stats.push(['Life drain', 'Heals party as it hits']);
+      const rk = L.resKind(id);
+      if (rk) stats.push([rk === 'mana' ? 'Mana' : 'Stamina', Math.round(L.resOf(S, id)) + ' / ' + L.RES_MAX + ' (+' + L.resRegen(S, id).toFixed(1) + '/s)']);
+      const wv = k => L.wearVal(S, id, k);
+      if (wv('leech')) stats.push(['Life steal', (wv('leech') * 100).toFixed(1) + '%']);
+      if (wv('block')) stats.push(['Gear block', (wv('block') * 100).toFixed(1) + '%']);
+      if (wv('def')) stats.push(['Defense', (wv('def') * 100).toFixed(1) + '% less damage']);
+      const pc = L.pierceOf(S, id); if (pc) stats.push(['Piercing', Math.round(pc * 100) + '%']);
+      if (me) stats.push(['Critical hits', (L.critChance(S) * 100).toFixed(1) + '%']);
+      stats.push(['Power', m.player ? 'Full (player hero)' : m.rar ? Math.round(m.pow * 100) + '% (' + L.npcRar(m.rar).name + ' hire)' : L.LEGENDS.includes(id) ? (L.UNIQ[id] ? 'Unique Legendary companion' : 'Legendary companion') : Math.round(L.NPC_POWER * 100) + '% (story companion)']);
+      if (L.UNIQ[id]) stats.push(['Camp bonus', L.UNIQ[id].perk + ' as ' + uqPostName(id) + ': ' + L.UNIQ[id].text]);
+      if ((S.hires || {})[id]) stats.push(['Contract', L.shortHire(S, id) ? fmtTime(Math.max(0, (S.hires[id].until - Date.now()) / 1000)) + ' left, paid' : fmt(L.wagePerHour(S, id)) + ' gold an hour']);
+      const sec = (title, body, open) => '<details class="psec"' + (open ? ' open' : '') + '><summary>' + title + '</summary>' + body + '</details>';
+      const bio = me ? 'You took the lantern from Old Thessaly and carried it down the stair' + (sd ? ', under the banner of the ' + sd.name : '') + '.'
+        : guest ? 'Lent to your party by its owner. It fights with their build. You cannot change its gear or train it.' : (m.bio || m.line);
+      let h = '<p class="bio">' + esc(bio) + '</p>' + (m.line && !guest && !me ? '<p class="quote">“' + esc(m.line) + '”</p>' : '') + kpi + xpbar;
+      h += sec('Combat', '<div class="pstats">' + stats.map(([k, v]) => ptile(k, v)).join('') + '</div>', true);
+      h += sec(c.name + ' ability', '<div class="ability"><b>' + c.ability.name + '</b> <span>every ' + c.ability.cd + 's</span><small>' + esc(c.ability.desc) + '</small></div><p class="note">' + esc(CLASS_BLURB[m.cls]) + '</p>', !me);
+      if (me) {
+        const st = S.stats || {}, lore = Object.keys(S.lore).filter(k => L.LORE.find(l => l.id === k)).length;
+        h += sec('Journey', '<div class="pstats">' + ptile('Floor now', S.floor || 1) + ptile('Deepest floor', S.maxFloorEver || 1) + (L.npTier(S) ? ptile('New Playthrough', 'NP+' + L.npTier(S)) : '') + ptile('Rekindles', fmt(st.rekindles || 0)) +
+          ptile('Monsters', fmt(st.kills || 0)) + ptile('Guardians', fmt(st.bossKills || 0)) + ptile('Chests', fmt(st.chests || 0)) + ptile('Gold earned', fmt(st.goldEarned || 0)) +
+          ptile('Feats', L.featCount(S) + ' / ' + featsShown().length) + ptile('Lore found', lore + ' / ' + L.LORE.length) + ptile('Time played', fmtTime(st.playTime || 0)) + '</div>', true);
+        h += sec('Attributes', '<div class="pstats attr">' + L.STATS.map(x => '<div title="' + esc(x.name) + '"><span>' + esc(x.name) + '</span><b>' + L.statScore(S, x.id) + '</b></div>').join('') + '</div>', false);
+      }
+      if (!guest) {
+        const gear = S.gear[id] || {};
+        h += sec('Gear', '<ul class="pgear two">' + L.openPos(S, id).filter(sl => !(sl === 'legs' && L.robeOn(S, id))).map(sl => { const it = gear[sl] && L.itemOf(S, gear[sl]); return '<li><span>' + L.SLOT_NAME[sl] + '</span>' + (it ? '<b class="r-' + it.rar + '" data-info="' + it.uid + '" role="button" tabindex="0">' + esc(L.gearName(it)) + (it.up ? ' +' + it.up : '') + '</b>' : '<i>Empty</i>') + '</li>'; }).join('') + '</ul>', true);
+      }
+      if (guest && g0 && (g0.pf || g0.w)) h += '<div class="pfwrap">' + looksCard(Object.assign({}, g0, { name: m.name, cls: m.cls })) + '</div>';
+      if (me && L.warAura(S)) h += sec('Grand War aura', auraBox(), false);
+      if (sd) h += sec(sd.name, '<p class="note">“' + sd.motto + '” ' + esc(sd.desc) + '</p>', false);
+      return h + '<div class="row">' + (guest ? '' : '<button class="btn ghost" id="p-gear">Manage gear</button>') + (!inParty && !guest ? '<button class="btn" id="p-seat">Bring along</button>' : '') + '<button class="btn ghost" data-pclose>Close</button></div>';
+    };
+    const pub = () => {
+      if (!signedIn()) return '<p class="note">Sign in to set up the profile other players see in the Players Guild.</p><div class="row"><button class="btn ghost" data-pclose>Close</button></div>';
+      if (!prof) return '<p class="note">Loading your profile…</p>';
+      return         '<div class="pvbox"><b>Show in the Players Guild</b><small>What others see when they open your hero. Name, class, power level and looks always show.</small><div class="pvchips">' + PUB_PARTS.map(([ks, n], i) => { const on = !ks.some(pubOff); return '<button type="button" class="pvchip' + (on ? ' on' : '') + '" data-pv="' + i + '" aria-pressed="' + on + '">' + icon(on ? 'eye' : 'lock') + n + '</button>'; }).join('') + '</div><p class="note" id="pv-st" aria-live="polite"></p></div>' +
+        '<details class="psec" open><summary>Preview</summary><div id="pv-card">' + publicProfile(myPublic()) + '</div></details>' +
+        '<div class="row"><button class="btn small" id="p-looks">Customize looks</button>' + (wardOn() ? '<button class="btn small ghost" id="p-ward">Wardrobe</button>' : '') + '<button class="btn small ghost" data-pclose>Close</button></div>';
+    };
+    modal('<div class="prof v2">' + head + seg + '<div id="p-body">' + (profTab === 'pub' ? pub() : sheet()) + '</div></div>', md => {
+      md.classList.add('profsheet');
+      const box = md.querySelector('.profspr'); try { const img = SP.render(m.cls, 5, lookHue(m)); if (img) box.appendChild(img); } catch (e) {}
+      const body = md.querySelector('#p-body');
+      const paint = () => { body.innerHTML = profTab === 'pub' ? pub() : sheet(); md.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('on', b.dataset.ptab === profTab)); };
+      md.querySelector('.prof').addEventListener('click', e => {
+        const t = e.target;
+        const pt = t.closest('[data-ptab]'); if (pt) { profTab = pt.dataset.ptab; paint(); return; }
+        const pv = t.closest('[data-pv]');
+        if (pv && prof) {
+          const ks = PUB_PARTS[+pv.dataset.pv][0], h = new Set(pubHidden()), show = ks.some(k => h.has(k));
+          ks.forEach(k => show ? h.delete(k) : h.add(k));
+          prof.pf = Object.assign({}, prof.pf, { h: PUB_KEYS.filter(k => h.has(k)) });
+          pv.classList.toggle('on', show); pv.setAttribute('aria-pressed', show); pv.innerHTML = icon(show ? 'eye' : 'lock') + PUB_PARTS[+pv.dataset.pv][1];
+          const cd = md.querySelector('#pv-card'); if (cd) cd.innerHTML = publicProfile(myPublic());
+          savePublic(md); return;
+        }
+        if (t.closest('[data-pclose]')) { closeModal(); return; }
+        if (t.closest('#p-gear')) { closeModal(); gearWho = id; switchTab('gear'); return; }
+        if (t.closest('#p-seat')) { closeModal(); if (campGate(true)) pickSeat(id); return; }
+        if (t.closest('#p-looks')) { openProfileEditor(); return; }
+        if (t.closest('#p-ward')) { openWardrobe('k', id); return; }
+        const inf = t.closest('[data-info]'); if (inf) itemModal(inf.dataset.info);
       });
+
+      if (me && CL && signedIn() && !prof) Promise.all([loadProfile(), loadWar()]).then(() => { if ($('modalbody') === md && md.querySelector('#p-body') === body && profTab === 'pub') paint(); });
+    });
   }
 
   // ---------- journal: story and lore ----------
@@ -2869,6 +3139,57 @@
     return '<div class="bmast"><div class="bmrow"><b>Mastery ' + t + '/' + L.BEAST_MAX + '</b><span>' + fmt(n) + ' defeated' + (max ? ' · fully mastered' : ' · next +1% at ' + fmt(nx)) + '</span></div>' +
       '<div class="bmbar"><i style="width:' + pc + '%"></i></div><small>' + (t ? '+' + t + '% damage and hero XP against them.' : 'Every ' + fmt(L.BEAST_STEP) + ' defeated adds +1% damage and hero XP against them, up to +' + L.BEAST_MAX + '%.') + '</small></div>';
   }
+  // Creatures by home region (27 Nov 2026): found ones show their page, the rest a silhouette and where to look.
+  const beastPic = c => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent((SP.svgOf && SP.svgOf(c.fam, c.ov ? L.creatureHue(c) + '~~' + c.ov : L.creatureHue(c))) || '');
+  const regFloors = rn => (rn * 10 + 1) + '–' + (rn * 10 + 10);
+  function creaturesHtml() {
+    const bx = S.bx || {}, all = L.CREATURES, found = all.filter(c => bx[c.id]).length;
+    let h = '<h3 class="sub">Bestiary <small class="bcount">' + found + '/' + all.length + ' found</small></h3><div class="lore beasts">';
+    L.ROSTERS.forEach((list, rn) => {
+      const b = L.BIOMES[rn];
+      if ((S.maxFloorEver || 1) < rn * 10 + 1) { h += '<div class="lorelock">' + icon('lock') + ' A region you have not reached</div>'; return; }
+      const cs = all.filter(c => c.r === rn), nf = cs.filter(c => bx[c.id]).length;
+      h += '<details data-breg="' + rn + '"><summary>' + esc(b.name) + ' <span class="bsub">floors ' + regFloors(rn) + ' · ' + nf + '/' + cs.length + '</span></summary><div class="blist">' + cs.map(c => {
+        const got = bx[c.id], wand = L.creatureRegions(c).map(r => L.BIOMES[r].name);
+        return '<div class="bst' + (got ? '' : ' unk') + '"><img alt="" data-bpic="' + c.id + '" width="56" height="56"><div><b>' + (got ? esc(c.name) : '???') + '</b> <span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span>' + (got ? beastTag('foe_' + c.fam) : '') + (got ? ' <button class="btn ghost bdet" data-bdet="' + c.id + '">Details</button>' : '') +
+          (got ? '<p>' + esc(c.text) + '</p>' : '') +
+          '<small>Found in: ' + esc(b.name) + ' (home)' + (wand.length ? ' · wanders into ' + esc(wand.join(' and ')) : '') + (got ? ' · ' + fmt(got) + ' defeated' : '') + '</small></div></div>';
+      }).join('') + '</div></details>';
+    });
+    // Chests and guardians keep their own pages at the end (one Bestiary, John 27 Nov 2026).
+    const other = L.LORE.filter(lo => lo.group === 'Bestiary' && !L.FAMILY[lo.id.replace(/^foe_/, '')]);
+    if (other.length) h += '<details><summary>Chests and guardians <span class="bsub">' + other.filter(lo => S.lore[lo.id]).length + '/' + other.length + '</span></summary><div class="lore">' + other.map(lo => S.lore[lo.id]
+      ? '<details><summary>' + esc(lo.title) + beastTag(lo.id) + '</summary><p>' + esc(lo.text) + '</p>' + beastBar(lo.id) + '</details>'
+      : '<div class="lorelock">' + icon('lock') + ' Not yet discovered</div>').join('') + '</div></details>';
+    return h + '</div>';
+  }
+  // Creature details pop-out (John, 27 Nov 2026): more is revealed the more of a kind you defeat.
+  function creatureModal(id) {
+    const c = L.creatureById(id), got = (S.bx || {})[id] || 0; if (!c || !got) return;
+    const b = L.BIOMES[c.r], [r1, r2] = L.REVEAL[c.rar], la = L.LORE_AT[c.rar], fl = L.LORE.find(lo => lo.id === 'foe_' + c.fam);
+    const f = Math.max(c.r * 10 + 1, Math.min(c.r * 10 + 9, S.maxFloorEver || 1)), sp = L.FOE_SPECIAL[c.fam] && L.SPECIALS[L.FOE_SPECIAL[c.fam]], mod = b.mod && L.MODS[b.mod];
+    const wand = L.creatureRegions(c).map(r => L.BIOMES[r].name), size = { s: 'Small', m: 'Normal', l: 'Large' }[c.size];
+    const lock = (n, what) => '<div class="bdlock">' + icon('lock') + ' Defeat ' + fmt(n - got) + ' more to learn ' + what + '.</div>';
+    const steps = [r1, r2, la].filter(n => n > got), next = steps.length ? Math.min(...steps) : 0, prev = [0, r1, r2, la].filter(n => n <= got).pop();
+    const row = (k, v) => '<div class="bdrow"><span>' + k + '</span><b>' + v + '</b></div>';
+    modal('<div class="maphead"><div><h2>' + esc(c.name) + '</h2><small><span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span> ' + esc(L.FAMILY[c.fam]) + ' family</small></div><button class="iconbtn" id="bd-x" aria-label="Close">&times;</button></div>' +
+      '<div class="bdtop"><img class="bdpic" alt="" src="' + beastPic(c) + '"><div class="bdfacts">' +
+        row('Home', esc(b.name) + ' (floors ' + regFloors(c.r) + ')') + row('Spawns', 'about ' + Math.round(L.creatureOdds(c, c.r) * 1000) / 10 + '% of fights there') +
+        (wand.length ? row('Wanders into', esc(wand.join(', '))) : '') + row('Size', size) + row('Defeated', fmt(got)) +
+      '</div></div><p class="bdtext">' + esc(c.text) + '</p>' +
+      '<h3 class="sub">' + esc(L.FAMILY[c.fam]) + ' family</h3>' + (fl && S.lore[fl.id] ? '<p class="bdtext">' + esc(fl.text) + '</p>' : '') + beastBar('foe_' + c.fam) +
+      '<h3 class="sub">Strength</h3>' + (got >= r1 ? '<div class="bdfacts">' + row('Health', fmt(L.foeHp(f, false))) + row('Attack', fmt(L.foeDps(f, false)) + ' damage per second') + '<small>On floor ' + f + ', before NP+, packs and elites.</small></div>' : lock(r1, 'its strength')) +
+      '<h3 class="sub">Special attack</h3>' + (got >= r2 ? '<div class="bdfacts">' + (sp ? row(esc(sp.name), esc(sp.desc)) + '<small>About ' + Math.round((L.SPECIAL_CHANCE || 0.3) * 100) + '% of them use it, from floor ' + (L.SPECIAL_FLOOR || 8) + '.</small>' : '<small>None known.</small>') + (mod ? row('In ' + esc(b.name), 'may be ' + esc(mod.name) + ': ' + esc(mod.desc)) : '') + '</div>' : lock(r2, 'its special attack')) +
+      '<h3 class="sub">Field notes</h3>' + (got >= la ? '<p class="bdtext bnote">' + esc(c.lore) + '</p>' : lock(la, 'its field notes')) +
+      (next ? '<div class="bdprog"><small>Next discovery at ' + fmt(next) + ' defeated</small><div class="bmbar"><i style="width:' + Math.floor((got - prev) / (next - prev) * 100) + '%"></i></div></div>' : '<div class="bdprog"><small>Everything about the ' + esc(c.name) + ' is known.</small></div>'),
+      md => { md.querySelector('#bd-x').onclick = closeModal; });
+  }
+  $('journal').addEventListener('click', e => { const d = e.target.closest('[data-bdet]'); if (d) { e.preventDefault(); creatureModal(d.dataset.bdet); } });
+  // Pictures load only when a region is opened, so the Journal stays quick.
+  $('journal').addEventListener('toggle', e => {
+    const d = e.target; if (!d.open || !d.dataset || d.dataset.breg == null) return;
+    d.querySelectorAll('img[data-bpic]').forEach(im => { if (!im.src) { const c = L.creatureById(im.dataset.bpic); if (c) im.src = beastPic(c); } });
+  }, true);
   function updateJournal() {
     const seen = L.STORY.filter(b => S.story.seen[b.id]);
     let h = '<h3 class="sub">The story so far</h3><div class="scenes">' +
@@ -2877,6 +3198,7 @@
     const groups = {};
     for (const lo of L.LORE) (groups[lo.group] = groups[lo.group] || []).push(lo);
     for (const g in groups) {
+      if (g === 'Bestiary') { h += creaturesHtml(); continue; }
       h += '<h3 class="sub">' + g + '</h3><div class="lore">' + groups[g].map(lo => S.lore[lo.id]
         ? '<details><summary>' + esc(lo.title) + (g === 'Bestiary' ? beastTag(lo.id) : '') + '</summary><p>' + esc(lo.text) + '</p>' + (g === 'Bestiary' ? beastBar(lo.id) : '') + '</details>'
         : '<div class="lorelock">' + icon('lock') + ' Not yet discovered</div>').join('') + '</div>';
@@ -3229,8 +3551,22 @@
     }
   }
 
+  // Damage meter (v132): a collapsed box under the fight log, repainted once a second while open.
+  const METER_NAME = { skel: ['Skeletons', 'necro'], tap: ['Your taps', ''], auto: ['Auto strikes', ''] };
+  function paintMeter(now) {
+    const box = $('meterbox'), el = $('meter'); if (!box || !el || !box.open) return;
+    const rows = L.damageMeter(S, now), tot = rows.reduce((a, x) => a + x.dps, 0);
+    let h;
+    if (!rows.length) h = '<p class="note small mempty">No damage yet. Fight for a few seconds to fill it in.</p>';
+    else h = '<table class="ttab mtab"><tbody>' + rows.map(x => {
+      const m = METER_NAME[x.key] ? null : L.memberById(x.key), nm = m ? esc(m.name) + ' ' + classTag(m.cls) : METER_NAME[x.key][0] + (METER_NAME[x.key][1] ? ' ' + classTag(METER_NAME[x.key][1]) : ''), pct = Math.round(x.dps / tot * 100);
+      return '<tr><td>' + nm + '</td><td>' + fmt(x.dps) + '/s</td><td><span class="tbar"><i style="width:' + pct + '%"></i></span> ' + pct + '%</td></tr>'; }).join('') +
+      '</tbody></table><p class="tsum">Total <b>' + fmt(tot) + '</b> damage/s over the last 30 s <button class="btn ghost small" id="meter-reset">Reset</button></p>';
+    if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; const r = el.querySelector('#meter-reset'); if (r) r.onclick = () => { L.meterReset(S); el.dataset.h = ''; paintMeter(Date.now()); }; }
+  }
   function updatePanel(force) {
     const now = Date.now();
+    if (force || now - (updatePanel.meterAt || 0) > 1000) { updatePanel.meterAt = now; paintMeter(now); }
     if (force) paintTabLocks();
     $('gold').textContent = fmt(S.gold);
     if (now - (updatePanel.tipAt || 0) > 2000) { updatePanel.tipAt = now; paintMoneyTips(); }
@@ -3291,7 +3627,7 @@
     if (f) {
       $('foename').textContent = f.pack ? f.name + ' and ' + (f.pack - 1) + ' more' : f.rescue ? f.name + ', holding ' + f.rescue : f.name;
       if (f.goblin && !f.seen) { f.seen = 1; goblinArrives(f); }
-      const tag = $('foetag'); tag.textContent = f.wounded || f.rescue ? 'Mercy Corps' : f.world ? (f.gob ? 'Golden goblin' : 'World boss') : f.goblin ? 'Thief' : f.pack ? 'Ambush ×' + f.pack + ' · XP ×' + f.pack * L.PACK_XP : f.boss ? 'Guardian' : f.chest ? 'Treasure' : f.elite ? L.SIDES[f.side].name : ''; if (f.pack) tag.dataset.tip = f.pack + ' foes at once: ' + f.pack * L.PACK_XP + '× hero XP and ' + f.pack * L.PACK_GOLD + '× gold.'; else if (f.wounded) tag.dataset.tip = 'A wounded Mercy Corps companion. Nobody fights: your healers mend them, Lantern Hymn helps a lot, and every tap is a bandage. Heal them to full for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.'; else if (f.rescue) tag.dataset.tip = 'This monster holds ' + f.rescue + ' of the Mercy Corps captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.'; else delete tag.dataset.tip; tag.className = 'tag' + (f.wounded || f.rescue ? ' mercy' : '') + (f.world ? ' world' : '') + (f.goblin ? ' thief' : '') + (f.chest ? ' chest' : '') + (f.pack ? ' ambush' : f.elite ? ' war w-' + f.side : '');
+      const tag = $('foetag'); tag.textContent = f.wounded || f.rescue ? 'Mercy Corps' : f.world ? (f.gob ? 'Golden goblin' : 'World boss') : f.goblin ? 'Thief' : f.pack ? 'Ambush ×' + f.pack + ' · XP ×' + f.pack * L.PACK_XP : f.boss ? 'Guardian' : f.chest ? 'Treasure' : f.elite ? L.SIDES[f.side].name : f.rk === 'v' ? 'Very rare' : f.rk === 'r' ? 'Rare' : ''; if (f.pack) tag.dataset.tip = f.pack + ' foes at once: ' + f.pack * L.PACK_XP + '× hero XP and ' + f.pack * L.PACK_GOLD + '× gold.'; else if (f.wounded) tag.dataset.tip = 'A wounded Mercy Corps companion. Nobody fights: your healers mend them, Lantern Hymn helps a lot, and every tap is a bandage. Heal them to full for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.'; else if (f.rescue) tag.dataset.tip = 'This monster holds ' + f.rescue + ' of the Mercy Corps captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.'; else delete tag.dataset.tip; tag.className = 'tag' + (f.wounded || f.rescue ? ' mercy' : '') + (f.world ? ' world' : '') + (f.goblin ? ' thief' : '') + (f.chest ? ' chest' : '') + (f.pack ? ' ambush' : f.elite ? ' war w-' + f.side : '') + (!f.pack && !f.elite && (f.rk === 'r' || f.rk === 'v') ? ' rare-' + f.rk : '');
       { const sp = f.sp && L.SPECIALS[f.sp], mk = (f.mods || []).join(',') + '|' + (f.sp || ''); if (mk !== lastModKey) { lastModKey = mk; $('foemods').innerHTML = (sp ? '<span class="mod m-sp' + (sp.dot ? ' m-' + sp.dot : '') + '" title="' + esc(sp.desc + (sp.dot ? '. ' + (sp.dot === 'burn' ? 'Burns' : 'Poison') + ' last ' + L.DOT_FIGHTS + ' fights.' : '.')) + '">' + esc(sp.name) + '</span>' : '') + (f.mods || []).map(m => '<span class="mod m-' + m + '" title="' + esc(L.MODS[m].desc) + '">' + esc(L.MODS[m].name) + '</span>').join(''); } }
       if (f.world && S.wb && S.wb.gob) {
         const g = gp.st && gp.st.gob, hp = g ? g.hp : 1, left = Math.max(0, 1 - ((g ? g.total : 0) + S.wb.score) / hp);
@@ -3326,6 +3662,17 @@
         $('lanternbar').style.width = (left / lt * 100) + '%';
         $('lanterntext').textContent = 'Lantern oil ' + left.toFixed(1) + 's';
       }
+    } else if (fastUp() && L.alive(S).length && !L.resting(S, Date.now())) {
+      // a foe that fell before it was seen, or a swarm on a fast floor, is still on stage (display only)
+      const sw = swarm.show, gf = ghost ? ghost.f : sw.list[0].f, n = sw ? sw.list.length : 1;
+      const left = ghost ? 1 - Math.min(1, (tAnim - ghost.t0) / ghost.hold) : 1 - Math.min(1, (tAnim - sw.t0) / sw.dur);
+      $('foename').textContent = n > 1 ? gf.name + ' and ' + (n - 1) + ' more' : gf.name;
+      const tag = $('foetag'); tag.textContent = n > 1 ? 'Swarm ×' + n : ''; tag.className = 'tag' + (n > 1 ? ' ambush' : '');
+      if (n > 1) tag.dataset.tip = 'Far above this floor, quick foes come in swarms. Each one still pays its own gold and loot.'; else delete tag.dataset.tip;
+      if (lastModKey !== '') { lastModKey = ''; $('foemods').innerHTML = ''; }
+      $('hpbar').style.width = Math.max(0, left * 100) + '%'; $('wardbar').style.width = '0%'; $('hptext').textContent = '';
+      $('hpbar').parentNode.classList.remove('shielded', 'aid', 'wb');
+      $('lanternwrap').hidden = true; $('b-oil').hidden = true;
     } else {
       // No foe up (between foes, or resting): clear the panel so it never shows a foe from another floor (John, 2026-11-24).
       $('foename').textContent = !L.alive(S).length ? 'Your party is resting' : L.isBossFloor(S.floor) ? 'The guardian steps up\u2026' : 'The next foe steps up\u2026';
@@ -3579,7 +3926,7 @@
       '<div class="row"><button class="btn ghost" id="s-export">Copy backup</button><button class="btn ghost" id="s-import">Load backup</button><button class="btn danger" id="s-reset">Erase progress</button></div>' +
       '<div class="row"><button class="btn ghost" id="s-intro">Watch the intro</button>' + (fsOk() ? '<button class="btn ghost" id="s-full">' + (fsEl() ? 'Leave full screen' : 'Play full screen') + '</button>' : '') + '</div>' +
       '<div id="s-extra"></div>' +
-      (window.LH_SUPPORT_URL ? '<p style="margin-top:16px">Lanternhold is free with no ads. If you enjoy it, you can <a style="color:var(--gold)" target="_blank" rel="noopener" href="' + window.LH_SUPPORT_URL + '">buy the developer a coffee</a>. Thank you.</p>' : '') +
+      (window.LH_SUPPORT_URL ? '<p style="margin-top:16px">Lanternhold is free with no ads. If you enjoy it, you can <a style="color:var(--gold)" target="_blank" rel="noopener" href="' + window.LH_SUPPORT_URL + '">buy the developer a coffee</a>. It supports the time that goes into the game. It is not a charity donation and gives nothing in game. Thank you.</p>' : '') +
       '<p class="credits">Lanternhold &middot; A Grand War game by Born 2 Game, LLC. &copy; 2026 Born 2 Game, LLC. Made with care, no ads, no tracking.</p>' +
       '<div class="row"><button class="btn" id="s-close">Done</button></div>', m => {
         m.querySelector('#s-sound').onchange = e => { S.settings.sound = e.target.checked; };
@@ -3592,7 +3939,7 @@
         m.querySelector('#s-full') && (m.querySelector('#s-full').onclick = () => { save(); closeModal(); toggleFull(); });
         m.querySelector('#s-intro').onclick = () => { save(); closeModal(); if (window.LHIntro) LHIntro.play(); };
         m.querySelector('#s-export').onclick = () => {
-          save(); const code = btoa(unescape(encodeURIComponent(localStorage.getItem(SAVE_KEY) || '')));
+          save(); const code = backupCode(localStorage.getItem(SAVE_KEY) || '');
           m.querySelector('#s-extra').innerHTML = '<p>Your backup code:</p><textarea readonly></textarea>';
           const ta = m.querySelector('textarea'); ta.value = code; ta.select();
           try { navigator.clipboard.writeText(code).then(() => toast('star', 'Backup copied', 'Paste it somewhere safe.', 'feat')).catch(() => {}); } catch (e) {}
@@ -3600,8 +3947,10 @@
         m.querySelector('#s-import').onclick = () => {
           m.querySelector('#s-extra').innerHTML = '<p>Paste a backup code:</p><textarea></textarea><div class="row"><button class="btn" id="s-doimport">Load it</button></div>';
           m.querySelector('#s-doimport').onclick = () => {
-            try { const o = JSON.parse(decodeURIComponent(escape(atob(m.querySelector('textarea').value.trim())))); S = L.migrate(o); save(); closeModal(); location.reload(); }
-            catch (e) { toast('lock', 'That code did not work', 'Check that you copied all of it.', 'warn'); }
+            const o = readBackup(m.querySelector('textarea').value);
+            if (!o) { toast('lock', 'That code did not work', 'Check that you copied all of it. Codes from before this update, or changed by hand, no longer load.', 'warn'); return; }
+            actPush([Date.now(), 'import', 'Loaded a backup code (' + Math.round(((o.stats && o.stats.playTime) || 0) / 60) + ' min played, ' + Math.round(o.gold || 0) + ' gold).']);
+            S = L.migrate(o); save(); closeModal(); location.reload();
           };
         };
         m.querySelector('#s-reset').onclick = () => {
@@ -3620,6 +3969,8 @@
     if (away >= 60) actPush([Date.now(), 'away', Math.round(away), Math.round(g)]);
     const wagesBefore = S.wagesPaid || 0, wev = [];
     L.payWages(S, sec, Date.now(), wev, true);
+    const drilled = L.uniqDrill(S, sec);
+    if (drilled) setTimeout(() => toast('shield', 'Marshal Greaves drilled the camp', drilled + ' power level' + (drilled === 1 ? '' : 's') + ' for idle companions while you were away.', 'feat'), 1200);
     const wpaid = (S.wagesPaid || 0) - wagesBefore;
     if (wev.length) setTimeout(() => { toastKind = 'hires'; for (const e of wev) toast('user', esc(e.name || 'A hire') + (e.why === 'short' ? '’s contract ended' : ' walked off unpaid'), 'While you were away. Their gear is back in your bag.' + (e.why === 'short' ? '' : ' They wait on the Guild Hall bench for 3 days.'), 'warn'); toastKind = null; updateSeats(true); paintBoard(); }, 1500);
     if (fromLoad && sec >= 60 && g > 0) {
@@ -3654,6 +4005,10 @@
   const CL = window.LH_CLOUD && window.LH_CLOUD.clientId ? window.LH_CLOUD : null;
   const TOK_KEY = 'lanternhold.session.v1';
   let sess = null, lastCloud = 0;
+  // Discord Activity (v133 private test): set by discord/boot.js only inside Discord's frame. dcTok is the player's Discord
+  // access token (identify scope, memory only); dcLinkTok waits for an email sign-in to link Discord to that hero.
+  const DC = window.LH_DISCORD || null;
+  let dcTok = '', dcLinkTok = '';
   try { sess = JSON.parse(localStorage.getItem(TOK_KEY) || 'null'); } catch (e) {}
   const signedIn = () => !!(sess && sess.refresh);
   function storeSess() { try { sess ? localStorage.setItem(TOK_KEY, JSON.stringify(sess)) : localStorage.removeItem(TOK_KEY); } catch (e) {} }
@@ -3675,6 +4030,8 @@
     const t = res.AuthenticationResult;
     sess = { id: t.IdToken, exp: Date.now() + (t.ExpiresIn - 60) * 1000, refresh: t.RefreshToken || (sess && sess.refresh), email: email || (sess && sess.email) || claims(t.IdToken).email };
     storeSess(); paintAccount();
+    if (DC && dcLinkTok) dcLink();
+    if (!DC) setTimeout(dcCodeAsk, 400);
   }
   async function idToken() {
     if (!signedIn()) return null;
@@ -3686,7 +4043,7 @@
     const tok = await idToken(); if (!tok) throw new Error('signed out');
     const r = await fetch(CL.api.replace(/\/$/, '') + (path || '/save'), { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     if (r.status === 404) return null;
-    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); }
+    if (r.status === 409 && !path) { const j = await r.json().catch(() => ({})); if (j.error === 'reset') playerReset(); if (j.error === 'moved') elsewhere(); }
     if (!r.ok) throw new Error('cloud ' + r.status);
     return r.json();
   }
@@ -3709,12 +4066,13 @@
     const bin = atob(d.slice(4)), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
     return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
   }
-  async function pushCloud(quiet) {
+  async function pushCloud(quiet, claim) {
     if (!CL || !signedIn() || !S.hero || dormant) return;
+    if (!claim && !cloudReady) return; // not before this device has checked the account save and claimed it
     try {
       const o = saveObj(), sent = acts.slice();
-      await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId() });
-      lastCloud = Date.now();
+      const r = await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId(), claim: claim ? 1 : 0 });
+      lastCloud = Date.now(); cloudReady = true; syncMark(o.stats.playTime, r && r.updated);
       acts = acts.filter(a => !sent.includes(a)); try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
       if (S.mode === 'multi' && S.hero) publishHero();
       if (!quiet) toast('star', 'Progress synced', 'Your save is stored with your account.', 'feat');
@@ -3724,34 +4082,82 @@
   async function publishHero() {
     try {
       let ref = ''; try { ref = localStorage.getItem('lh_ref') || ''; } catch (e) {}
-      const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S) }, '/hero');
-      if (!prof) loadProfile();
+      const r = await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref, bp: L.buildCard(S), ps: myShowcase() }, '/hero');
+      nameAsk = false; if (!prof) loadProfile();
       const n = r && r.recruits;
       if (n > 0) {
-        const g = Math.max(20, L.offlineGoldPerSec(S) * 600) * n;
+        const g = Math.max(20, L.pipRate(S) * 600) * n;
         S.gold += g; S.stats.goldEarned += g;
         toast('user', 'Your hero was recruited', n + (n === 1 ? ' player' : ' players') + ' took ' + S.hero.name + ' into their party. +' + fmt(g) + ' gold.', 'feat');
       }
-    } catch (e) {}
+    } catch (e) { if (e && e.message === 'cloud 409') askNewName(); }
   }
+  // Hero names are unique across players, ignoring case, spaces, hyphens and apostrophes (v132). The server answers 409
+  // when another player holds the name; the player picks a new one and the board, chat and mail use it from then on.
+  let nameAsk = false;
+  function askNewName(msg) {
+    if ((nameAsk && !msg) || !S.hero) return; nameAsk = true;
+    $('modal').dataset.lock = '1';
+    modal('<div class="center"><h2>That name is taken</h2><p>' + (msg || 'Another player already goes by <b>' + esc(S.hero.name) + '</b>. Names are one per player, so choose a new one for your hero. Your progress stays as it is.') + '</p></div>' +
+      '<input id="nn-name" maxlength="16" placeholder="2 to 16 letters" autocomplete="off"><div class="err" id="nn-err"></div>' +
+      '<div class="row" style="justify-content:center"><button class="btn" id="nn-go">Use this name</button></div>', md => {
+      const nm = md.querySelector('#nn-name'), err = md.querySelector('#nn-err');
+      md.querySelector('#nn-go').onclick = async () => {
+        const name = nm.value.trim().replace(/\s+/g, ' ');
+        if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name)) { err.textContent = 'Use 2 to 16 letters. Spaces, hyphens and apostrophes are fine.'; return; }
+        try { await api('PUT', { name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref: '', bp: L.buildCard(S) }, '/hero'); }
+        catch (e) { err.textContent = e && e.message === 'cloud 409' ? 'Someone has that one too. Try another.' : e && e.message === 'cloud 400' ? 'That name is not allowed. Try another.' : 'Could not reach the server. Try again.'; return; }
+        S.hero.name = name; L.registerHero(S); save(); nameAsk = false;
+        delete $('modal').dataset.lock; closeModal(); updateSeats(true); updatePanel(true);
+        toast('user', 'Welcome, ' + name, 'Your hero now goes by this name.', 'feat');
+      };
+    });
+  }
+  // Saves across devices (John, 26 Nov 2026): web, phone and Discord each keep their own copy. One device plays at a
+  // time: opening the game picks the newer save by itself (asking only when both copies changed since the last sync)
+  // and claims the account; any other open device pauses on its next save with "Play here".
+  let cloudReady = false;
+  const SYNC_KEY = 'lh_sync';
+  function syncMark(pt, up) { try { localStorage.setItem(SYNC_KEY, JSON.stringify({ u: sess && sess.id ? claims(sess.id).sub : '', pt: pt || 0, up: up || 0 })); } catch (e) {} }
+  function syncRead() { try { const x = JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); return x && sess && sess.id && x.u === claims(sess.id).sub ? x : null; } catch (e) { return null; } }
   async function reconcile() {
     let rec; try { rec = await api('GET'); } catch (e) { if (!S.hero && $('modal').hidden) setup(); return; }
     const local = saveObj();
+    let take = false; try { take = sessionStorage.getItem('lh_take') === '1'; sessionStorage.removeItem('lh_take'); } catch (e) {}
     if (!rec && !S.hero) { setup('You are signed in, but this account has no hero yet. Create one below and it will be saved to your account.'); return; }
-    if (!rec) { await pushCloud(false); return; }
+    if (!rec) { await pushCloud(false, true); return; }
     if (rec.rst && (S.created || 0) < rec.rst) { playerReset(); return; }
-    let cloud; try { cloud = JSON.parse(await unpackSave(rec.data)); } catch (e) { if (S.hero) await pushCloud(true); else setup(); return; }
+    let cloud; try { cloud = JSON.parse(await unpackSave(rec.data)); } catch (e) { if (S.hero) await pushCloud(true, true); else setup(); return; }
     if (!S.hero) { useSave(cloud); return; }
-    const ct = (cloud.stats && cloud.stats.playTime) || 0;
-    if (Math.abs(ct - local.stats.playTime) < 5) { lastCloud = Date.now(); return; }
+    const ct = (cloud.stats && cloud.stats.playTime) || 0, lt = local.stats.playTime || 0;
+    if (Math.abs(ct - lt) < 5) { await pushCloud(true, true); return; }
+    // "Play here" on a paused device: the account save is the newest by definition.
+    if (take) { useSave(cloud); return; }
+    const sy = syncRead(), localMoved = !sy || Math.abs(lt - sy.pt) >= 5, cloudMoved = !sy || rec.updated !== sy.up;
+    if (sy && !localMoved) { useSave(cloud); return; }               // only the account moved on: load it
+    if (sy && !cloudMoved) { await pushCloud(true, true); return; }  // only this device moved on: send it
     if (!local.stats.kills && !local.embers) { useSave(cloud); return; }
     $('modal').dataset.lock = '1';
-    modal('<h2>Choose a save</h2><p>Your account already has progress, and this device has different progress. Which one do you want to keep? The other is replaced.</p>' +
+    modal('<h2>Choose a save</h2><p>This hero was played on another device and on this one since they last synced. Which one do you want to keep? The other is replaced.</p>' +
       '<div class="choice"><button class="pick" id="c-cloud"><b>Account save</b><small>' + summary(cloud) + '</small></button>' +
       '<button class="pick" id="c-local"><b>This device</b><small>' + summary(local) + '</small></button></div>', m => {
         m.querySelector('#c-cloud').onclick = () => { delete $('modal').dataset.lock; closeModal(); useSave(cloud); };
-        m.querySelector('#c-local').onclick = () => { delete $('modal').dataset.lock; closeModal(); pushCloud(false); };
+        m.querySelector('#c-local').onclick = () => { delete $('modal').dataset.lock; closeModal(); pushCloud(false, true); };
       });
+  }
+  // Another device claimed the account: stop saving here, like a second tab does.
+  function elsewhere() {
+    if (dormant) return;
+    dormant = true;
+    const d = document.createElement('div'); d.id = 'tablock';
+    d.innerHTML = '<div><h2>Playing on another device</h2><p>This hero is open somewhere else, so this ' + (DC ? 'window' : 'device') + ' paused to keep your progress from getting mixed up.</p><button class="btn" id="tablock-go">Play here</button></div>';
+    document.body.appendChild(d);
+    d.querySelector('#tablock-go').onclick = () => { try { sessionStorage.setItem('lh_take', '1'); } catch (e) {} location.reload(); };
+  }
+  // Coming back to a device that sat in the background: check first that no other device took over meanwhile.
+  async function peekCloud() {
+    if (!CL || !signedIn() || dormant || !cloudReady) return;
+    try { const r = await api('GET', null, '/save?peek=1'); if (r && r.dv && r.dv !== devId()) elsewhere(); } catch (e) {}
   }
   function useSave(o) {
     S = L.migrate(o); S.lastSeen = Date.now();
@@ -3800,13 +4206,13 @@
       '<div class="err" id="f-err"></div><button class="btn" type="submit" id="f-go">' + btn + '</button><div class="links">' + links + '</div>' +
       '<button type="button" class="btn ghost skipacct" id="f-skip">' + (S.hero ? 'Play without an account' : 'Back to making a new hero') + '</button>' +
       '<p class="credits">An account is optional. It only keeps your save safe across devices. We only keep your email and game save. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p></form>', m => {
-        m.querySelector('#f-skip').onclick = () => { const had = !!S.hero; closeModal(); if (had) toast('user', 'Playing without an account', 'Your progress saves on this device. You can sign in any time from the top bar.', 'feat'); };
+        m.querySelector('#f-skip').onclick = () => { if (DC && dcLinkTok && !signedIn()) { dcWelcome(); return; } const had = !!S.hero; closeModal(); if (had) toast('user', 'Playing without an account', 'Your progress saves on this device. You can sign in any time from the top bar.', 'feat'); };
         const ca = m.querySelector('.codeage'); if (ca) { const t = codeSent(email); ca.textContent = t ? 'The newest code was sent at ' + new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '. Older codes stop working. It can take a few minutes, so check Spam or Junk too.' : 'It can take a few minutes, so check Spam or Junk too.'; }
         m.querySelectorAll('.em').forEach(x => x.textContent = email || '');
         const em = m.querySelector('#f-email'); if (em && email) em.value = email;
         const err = m.querySelector('#f-err'); if (note) { err.textContent = note; err.classList.add('ok'); }
         m.querySelectorAll('[data-go]').forEach(x => x.onclick = () => authForm(x.dataset.go, em ? em.value.trim() : email));
-        const bg = m.querySelector('#f-b2g'); if (bg) bg.onclick = async () => { bg.disabled = true; try { await storeSignIn(); } catch (e) { bg.disabled = false; err.textContent = 'Could not reach the Born 2 Game store. Please try again.'; } };
+        const bg = m.querySelector('#f-b2g'); if (bg) bg.onclick = async () => { bg.disabled = true; if (DC) { dcCodeStart(bg, err); return; } try { await storeSignIn(); } catch (e) { bg.disabled = false; err.textContent = 'Could not reach the Born 2 Game store. Please try again.'; } };
         const rs = m.querySelector('#f-resend'); if (rs) {
           const tick = () => { const w = Math.ceil((codeSent(email) + 60000 - Date.now()) / 1000); rs.disabled = w > 0; rs.textContent = w > 0 ? 'Send a new code (' + w + 's)' : 'Send a new code'; if (w > 0 && m.isConnected) setTimeout(tick, 1000); };
           tick();
@@ -3873,18 +4279,139 @@
         m.querySelector('#a-close').onclick = closeModal;
       });
   }
+  // ---------- Discord Activity sign-in (v133 private test) ----------
+  // Inside Discord the player's Discord account is the sign-in. The game asks Discord for a one-time code (identify
+  // scope only), and POST /discord/login (infra/lambda/discordlogin.js) swaps it for Discord's token, finds the hero linked
+  // to that Discord id (an Activity link, or the v132 "Link your Discord" support task) and returns game tokens. A Discord
+  // account with no hero yet picks: start a new hero, or sign in once with email and password to link the hero they have.
+  async function dcPost(path, body, auth) {
+    const r = await fetch(CL.api.replace(/\/$/, '') + path, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, auth ? { Authorization: auth } : {}), body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(j.error || 'http ' + r.status); e.code = j.error || r.status; throw e; }
+    return j;
+  }
+  let dcFail = '';
+  async function dcStart() {
+    let j, step = 'ready';
+    try {
+      await DC.ready;
+      step = 'authorize';
+      const a = await DC.sdk.commands.authorize({ client_id: DC.clientId, response_type: 'code', state: '', prompt: 'none', scope: ['identify'] });
+      step = 'login';
+      j = await dcPost('/discord/login', { code: a.code });
+    } catch (e) {
+      // The step and Discord's own message show in the pop-up so a failed sign-in can be traced from a screenshot.
+      dcFail = step + ': ' + String((e && (e.message || e.code)) || e).slice(0, 120);
+      try { console.warn('[LH discord]', dcFail, e); } catch (x) {}
+      if (signedIn()) reconcile();
+      toast('lock', 'Discord sign-in did not finish', (signedIn() ? 'You are still signed in to your hero.' : 'You can still play. Your progress saves on this device until you sign in.') + ' (' + esc(dcFail) + ')', 'warn');
+      return;
+    }
+    dcTok = j.access_token || '';
+    if (dcTok) DC.sdk.commands.authenticate({ access_token: dcTok }).then(a => { DC.user = a && a.user; }).catch(() => {});
+    if (j.AuthenticationResult) { dcSignedIn(j); return; }
+    if (signedIn()) { dcLinkTok = dcTok; dcLink(); reconcile(); return; }
+    dcWelcome();
+  }
+  function dcSignedIn(j) {
+    const sub = claims(j.AuthenticationResult.IdToken).sub, mine = signedIn() && sess.id ? claims(sess.id).sub : '';
+    // Signed in here to another hero before: this Discord account's hero wins, and its own save loads.
+    if (mine && mine !== sub && S.hero) { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} takeTokens(j, j.name); location.reload(); return; }
+    takeTokens(j, j.name);
+    if (mine !== sub) toast('user', 'Signed in with Discord', 'Welcome, ' + esc(j.name || 'adventurer') + '. Your progress syncs to your account.', 'feat');
+    reconcile();
+  }
+  function dcWelcome() {
+    $('modal').dataset.lock = '1';
+    modal('<div class="center"><h2>Welcome to Lanternhold</h2><p>Your Discord account is not linked to a hero yet. Start fresh, or bring the hero you already play.</p></div>' +
+      '<div class="choice"><button class="pick" id="dc-new"><b>Start a new hero</b><small>Your Discord account becomes your sign-in.</small></button>' +
+      '<button class="pick" id="dc-old"><b>I already play</b><small>Sign in once with your Lanternhold email and password. After that, Discord signs you in.</small></button>' +
+      '<button class="pick" id="dc-web"><b>I sign in with Born 2 Game</b><small>No password? Get a short code here and confirm it on the website.</small></button></div>' +
+      '<div class="err" id="dc-err"></div>', md => {
+        const err = md.querySelector('#dc-err');
+        md.querySelector('#dc-new').onclick = async e => {
+          const b = e.currentTarget; b.disabled = true;
+          try { const j = await dcPost('/discord/login', { token: dcTok, create: 1 }); delete $('modal').dataset.lock; closeModal(); dcSignedIn(j); }
+          catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
+        };
+        md.querySelector('#dc-old').onclick = () => { delete $('modal').dataset.lock; dcLinkTok = dcTok; authForm('in', '', 'Sign in to link this hero to your Discord account.'); };
+        md.querySelector('#dc-web').onclick = e => dcCodeStart(e.currentTarget, err);
+      });
+  }
+  // Heroes with no password (Born 2 Game store sign-in): the website confirms a short code while this window waits.
+  // Reached from the Discord welcome screen and from Continue with Born 2 Game on the sign-in form inside Discord.
+  async function dcCodeStart(b, err) {
+    b.disabled = true;
+    if (!dcTok) { b.disabled = false; err.textContent = 'Discord sign-in did not finish. Close and reopen Lanternhold, then try again.' + (dcFail ? ' (' + dcFail + ')' : ''); return; }
+    try { const j = await dcPost('/discord/code', { token: dcTok }); if (j.linked) { delete $('modal').dataset.lock; closeModal(); dcStart(); return; } dcPair(j.pair); }
+    catch (x) { b.disabled = false; err.textContent = x.code === 'token' ? 'Discord sign-in expired. Close and reopen Lanternhold.' : 'Could not reach the server. Try again in a moment.'; }
+  }
+  let dcPairTimer = 0;
+  function dcPair(code) {
+    const until = Date.now() + 15 * 6e4, link = 'https://lanternhold.born2gamellc.com/?dclink=' + code;
+    clearInterval(dcPairTimer);
+    modal('<div class="center"><h2>Link your hero</h2><p>Open Lanternhold in your browser, sign in the way you always do, and confirm this code:</p>' +
+      '<p class="dc-code">' + code + '</p></div>' +
+      '<button class="btn wide" id="dc-open">Open Lanternhold in my browser</button>' +
+      '<p class="note small center" id="dc-wait">Waiting for the website. This window signs you in by itself. The code works for 15 minutes.</p>' +
+      '<button class="btn ghost wide" id="dc-back">Back</button>', md => {
+        md.querySelector('#dc-open').onclick = () => DC.open(link);
+        md.querySelector('#dc-back').onclick = () => { clearInterval(dcPairTimer); if (signedIn()) { delete $('modal').dataset.lock; authForm('in'); } else dcWelcome(); };
+      });
+    $('modal').dataset.lock = '1';
+    dcPairTimer = setInterval(async () => {
+      if (Date.now() > until) { clearInterval(dcPairTimer); const w = $('dc-wait'); if (w) w.textContent = 'The code ran out. Press Back and get a new one.'; return; }
+      try { const j = await dcPost('/discord/login', { token: dcTok }); if (j.AuthenticationResult) { clearInterval(dcPairTimer); delete $('modal').dataset.lock; closeModal(); dcSignedIn(j); } } catch (x) {}
+    }, 4000);
+  }
+  // Website side: ?dclink=CODE from the Activity. Kept through a store sign-in redirect, asked once signed in.
+  let dcAsked = false;
+  function dcCodeKeep() {
+    const q = new URLSearchParams(location.search), c = (q.get('dclink') || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    if (!q.has('dclink')) return;
+    q.delete('dclink'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+    if (c.length === 6) try { localStorage.setItem('lh_dclink', JSON.stringify({ c, exp: Date.now() + 15 * 6e4 })); } catch (e) {}
+  }
+  function dcCodeAsk() {
+    if (DC || dcAsked) return;
+    let p = null; try { p = JSON.parse(localStorage.getItem('lh_dclink') || 'null'); } catch (e) {}
+    if (!p || !p.c || p.exp < Date.now()) { try { localStorage.removeItem('lh_dclink'); } catch (e) {} return; }
+    if (!signedIn()) { dcAsked = true; setTimeout(() => authForm('in', '', 'Sign in to the hero you want to play in Discord, then confirm the code.'), 600); return; }
+    dcAsked = true;
+    const done = () => { try { localStorage.removeItem('lh_dclink'); } catch (e) {} };
+    modal('<div class="center"><h2>Play this hero in Discord?</h2><p>Discord showed you the code <b>' + esc(p.c) + '</b>. Linking it means opening Lanternhold in Discord signs you in to this hero.</p></div>' +
+      '<div class="err" id="dcl-err"></div><button class="btn wide" id="dcl-yes">Link to Discord</button><button class="btn ghost wide" id="dcl-no">Not now</button>', md => {
+        md.querySelector('#dcl-no').onclick = () => { done(); closeModal(); };
+        md.querySelector('#dcl-yes').onclick = async e => {
+          const b = e.currentTarget; b.disabled = true;
+          try { const j = await dcPost('/discord/link', { pair: p.c }, await idToken()); done(); closeModal(); toast('user', 'Discord linked', 'Go back to Discord. ' + esc(j.name || 'Your account') + ' is signing in to this hero now.', 'feat'); }
+          catch (x) { b.disabled = false; md.querySelector('#dcl-err').textContent = x.code === 'taken' ? 'That Discord account already plays another hero.' : x.code === 'code' ? 'That code ran out or was already used. Get a new one in Discord.' : 'Could not reach the server. Try again in a moment.'; if (x.code === 'code' || x.code === 'taken') done(); }
+        };
+      });
+  }
+  async function dcLink() {
+    const t = dcLinkTok; if (!t) return; dcLinkTok = '';
+    try { await dcPost('/discord/link', { token: t }, await idToken()); toast('user', 'Discord linked', 'From now on, opening Lanternhold in Discord signs you in to this hero.', 'feat'); }
+    catch (e) { toast('lock', 'Discord not linked', e.code === 'taken' ? 'That Discord account already belongs to another hero.' : 'You are signed in, but linking did not work. It will try again next time.', 'warn'); }
+  }
   async function eraseCloud() { if (CL && signedIn()) { try { await api('DELETE'); } catch (e) {} } }
   if (CL) {
     $('btn-account').hidden = false; paintAccount();
     $('btn-account').addEventListener('click', openAccount);
-    if (signedIn()) setTimeout(reconcile, 800);
-    setInterval(() => { if (signedIn() && Date.now() - lastCloud > 60000) pushCloud(true); }, 15000);
+    if (DC) setTimeout(dcStart, 300); else { dcCodeKeep(); if (signedIn()) setTimeout(reconcile, 800); setTimeout(dcCodeAsk, 1500); }
+    let recTry = Date.now();
+    setInterval(() => {
+      if (!signedIn() || dormant) return;
+      // The first check of the account save failed (offline?): try again each minute; saving waits for it.
+      if (!cloudReady) { if (Date.now() - recTry > 60000 && $('modal').hidden) { recTry = Date.now(); reconcile(); } return; }
+      if (Date.now() - lastCloud > 60000) pushCloud(true);
+    }, 15000);
     setTimeout(pollInvites, 3000); setInterval(() => { if (!document.hidden) pollInvites(); }, 30000); setInterval(drainJoins, 2000);
-    document.addEventListener('visibilitychange', () => { if (document.hidden && signedIn()) pushCloud(true); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && signedIn()) pushCloud(true); else if (!document.hidden) peekCloud(); });
   }
 
   // ---------- support link ----------
-  if (window.LH_SUPPORT_URL) { const a = $('support'); a.href = window.LH_SUPPORT_URL; a.hidden = false; a.title = 'Buy the developer a coffee'; }
+  if (window.LH_SUPPORT_URL) { const a = $('support'); a.href = window.LH_SUPPORT_URL; a.hidden = false; a.title = 'Buy the developer a coffee (supports the game, not a charity, no in-game reward)'; a.setAttribute('aria-label', 'Support the developer on Buy Me a Coffee'); }
 
   // ---------- player profiles: looks bought with Sigils, and Grand War commander badges ----------
   // Prices live on the server too (infra/lambda/profile.js). Cosmetics only: nothing here changes power.
@@ -3968,14 +4495,14 @@
     const wb = o.wd && o.wd.b && BANNERS[o.wd.b] ? o.wd.b : '';
     return '<div class="pfcard bn-' + bn + (wb ? ' hasban' : '') + '">' + (wb ? '<div class="pfban">' + bannerSVG(wb) + '</div>' : '') + '<div class="pfava fr-' + fr + npRing(o.np) + '><div class="ic c-' + o.cls + ' player' + (ok ? ' dressed' : '') + '">' + (ok ? '<img src="' + SP.spriteURL(o.cls, 2, outfitHue(ok)) + '" alt="">' : icon(CLASS_ICON[o.cls])) + '</div></div>' +
       '<div class="pfmain"><b class="pfname nc-' + nc + '">' + esc(o.name) + '</b>' + (tt ? '<small class="pftitle' + ttCls(pf.t) + '">' + esc(tt) + '</small>' : '') +
-      '<div class="pftags">' + classTag(o.cls) + (o.level ? '<span class="pflv">Power level ' + o.level + (o.floor ? ' · floor ' + o.floor : '') + '</span>' : '') + '</div>' +
+      '<div class="pftags">' + classTag(o.cls) + (o.on ? '<span class="online">Online now</span>' : '') + (o.level ? '<span class="pflv">Power level ' + o.level + (o.floor ? ' · floor ' + o.floor : '') + '</span>' : '') + '</div>' +
       ((pf.e || []).length ? '<div class="pfemb">' + pf.e.map(emblem).join('') + '</div>' : '') + '</div></div>' +
       (pf.b ? '<p class="pfbio">' + esc(pf.b) + '</p>' : '') +
       (o.w ? '<div class="pfwar">' + warBadge(o.w, true) + '</div>' : '');
   }
   function boardProfile(g) {
     loadWar().then(() => {
-      modal('<div class="pfwrap">' + looksCard(g) + '<div class="row"><button class="btn ghost" id="bp-x">Close</button></div></div>', md => { md.querySelector('#bp-x').onclick = closeModal; });
+      modal('<div class="prof v2 pubview">' + publicProfile(g) + '<div class="row"><button class="btn ghost" id="bp-x">Close</button></div></div>', md => { md.classList.add('profsheet'); md.querySelector('#bp-x').onclick = closeModal; });
     });
   }
   // ---- the editor ----
@@ -3987,7 +4514,7 @@
     await Promise.all([loadProfile(), loadWar()]);
     if (!prof) { modal('<div class="center"><h2>Your profile</h2><p>The profile server could not be reached. Try again in a minute.</p><div class="row"><button class="btn ghost" id="pe-x">Close</button></div></div>', md => md.querySelector('#pe-x').onclick = closeModal); return; }
     const p = prof.pf || {};
-    draft = { b: p.b || '', t: p.t || '', f: p.f || '', c: p.c || '', g: p.g || '', e: (p.e || []).slice() };
+    draft = { b: p.b || '', t: p.t || '', f: p.f || '', c: p.c || '', g: p.g || '', e: (p.e || []).slice(), h: (p.h || []).slice() };
     paintEditor();
   }
   const owns = (k, id, price) => !price || prof.own.includes(k + '.' + id);
@@ -4096,6 +4623,7 @@
   const b64u = buf => btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const rnd = n => b64u(crypto.getRandomValues(new Uint8Array(n)));
   async function wixGo(body, tok) {
+    if (DC) { toast('lock', 'Not in Discord yet', 'Sigil packs and the membership are not sold in the Discord version yet.', 'warn'); return; }
     if (!tok) tok = (await wixPost('/oauth2/token', { clientId: WIX_APP, grantType: 'anonymous' })).access_token;
     const r = await wixPost('/redirect-session/v1/redirect-session', body, tok);
     save(); if (signedIn()) await Promise.race([pushCloud(true), new Promise(ok => setTimeout(ok, 3000))]);
@@ -4177,6 +4705,7 @@
         use('gs-look', 'crown', 'Profile looks', 'Frames, titles, banners, emblems', 'Open') +
         (CL ? use('gs-mkt', 'coin', 'Sigil exchange', 'Sell ' + TOKEN + ' for gold, or buy them with gold', 'Open') : '') +
       '</div>' +
+      (CL ? '<div class="shopuses">' + use('gs-sup', 'users', 'Support the game', 'Free one-time ' + TOKEN + ' for linking your Discord or itch.io account', 'Open') + '</div>' : '') +
       // 2. Lanternholder: one set of perks, two ways to get it
       '<div class="shopsec subbox"><h3>Lanternholder <span class="tag">Premium</span></h3>' +
       '<p class="shopsub">Convenience, never power.</p>' +
@@ -4184,21 +4713,22 @@
       '<li><b>+' + L.PASS_BAG + ' bag slots</b><span>More room for loot.</span></li>' +
       '<li><b>+' + L.PASS_OFFLINE / 3600 + ' hours away</b><span>Your party earns offline for longer.</span></li></ul>' +
       (member ? '<p class="passstate">You are a Lanternholder member. It renews on <b>' + subDate() + '</b>.</p>' : left ? '<p class="passstate">Lanternholder is on for <b>' + left + '</b>.</p>' : '') +
-      '<div class="lhways"><div class="lhway"><small>With ' + TOKEN + '</small><b>' + sigil + L.PASS_COST + '</b><span>30 days. Nothing renews. Buy again to add 30 more.</span><button class="btn" id="gs-pass2"' + (member ? ' disabled' : '') + '>' + (left && !member ? 'Add 30 days' : 'Use ' + L.PASS_COST + ' ' + TOKEN) + '</button></div>' +
+      '<div class="lhways"><div class="lhway"><small>With ' + TOKEN + '</small><b>' + sigil + L.PASS_COST + '</b><span>30 days. Nothing renews. Buy again to add 30 more.</span><button class="btn" id="gs-pass2"' + (member ? ' disabled' : '') + '>' + (left && !member ? 'Add 30 days' : 'Use ' + L.PASS_COST + ' ' + TOKEN) + '</button></div>' + (DC ? '</div></div>' :
         '<div class="lhway"><small>Monthly membership</small><b>' + SUB_PRICE + '<i>/month</i></b><span>Renews every month until you cancel in your Born 2 Game account.</span>' +
-        (member ? '<a class="btn ghost" href="' + SUB_MANAGE + '" target="_blank" rel="noopener">Manage or cancel</a>' : '<button class="btn ghost" id="gs-sub">Subscribe</button>') + '</div></div></div>' +
-      // 3. buying Sigils
+        (member ? '<a class="btn ghost" href="' + SUB_MANAGE + '" target="_blank" rel="noopener">Manage or cancel</a>' : '<button class="btn ghost" id="gs-sub">Subscribe</button>') + '</div></div></div>') +
+      // 3. buying Sigils (not inside Discord for now: Discord's rules want paid items sold through Discord too, at the same price)
+      (DC ? '<p class="note small">Packs of ' + TOKEN + ' and the monthly membership are not sold in the Discord version yet.</p>' :
       '<div class="shopsec"><h3>Buy ' + TOKEN + ' <span class="tag once">One-time</span></h3><p class="shopsub">Pay once. Nothing renews. Every pack also lights a <b>Lantern Surge</b> for everyone: +25% gold and XP, 30 minutes per 500 ' + TOKEN + '.</p></div>' +
       '<div class="packs">' + tiles + '</div>' +
       (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' :
         linked ? '<div class="storelink"><span>Store account: <b>' + esc(w.n || 'linked') + '</b></span><button class="btn small ghost" id="gs-sync">Check for purchases</button><button class="btn small ghost" id="gs-out">Unlink</button></div>' :
-        '<div class="storelink"><span>Packs and memberships are sold in the Born 2 Game store. Sign in there once and every purchase lands on this hero.</span><button class="btn small" id="gs-in">Sign in with Born 2 Game</button></div>') +
+        '<div class="storelink"><span>Packs and memberships are sold in the Born 2 Game store. Sign in there once and every purchase lands on this hero.</span><button class="btn small" id="gs-in">Sign in with Born 2 Game</button></div>')) +
       // 4. Mercy Corps: real donations to Extra Life, paid on Extra Life's own page
       '<div class="shopsec subbox mercygive"><h3>Give to the Mercy Corps <span class="tag">Charity</span></h3>' +
       '<p class="shopsub">Donate to our Extra Life team for Children’s Miracle Network Hospitals. Gifts also light Mercy’s Blessing for every hero' + (warTag() ? ' and credit your alliance (' + esc(warTag()) + ')' : '') + '.</p>' +
       '<div class="row left"><button class="btn" id="gs-give1">Give $1</button><button class="btn ghost" id="gs-giveo">Other amount</button></div>' +
       '<p class="note small">Opens Extra Life’s secure page. The money goes straight to the charity, never to the game, and you get the receipt.</p></div>' +
-      '<p class="note small">Payment is handled by the Born 2 Game store at born2gamellc.com. Every account starts with 100 ' + TOKEN + ', and the team hands more out at Grand War events.</p>' +
+      '<p class="note small">' + (DC ? '' : 'Payment is handled by the Born 2 Game store at born2gamellc.com. ') + 'Every account starts with 100 ' + TOKEN + ', and the team hands more out at Grand War events.</p>' +
       '<div class="row"><button class="btn ghost" id="gs-ok">Back</button></div>', md => {
         md.querySelector('#gs-x').onclick = closeModal; md.querySelector('#gs-ok').onclick = () => back();
         const go = async (b, f) => { b.disabled = true; try { await f(); } catch (e) { b.disabled = false; toast('lock', 'Could not reach the store', 'Check your connection and try again.', 'warn'); } };
@@ -4212,6 +4742,7 @@
         const wd = md.querySelector('#gs-ward'); if (wd) wd.onclick = () => openWardrobe('k');
         md.querySelector('#gs-look').onclick = () => openProfileEditor();
         const mk = md.querySelector('#gs-mkt'); if (mk) mk.onclick = () => { closeModal(); openTrade('sigils'); };
+        const su = md.querySelector('#gs-sup'); if (su) su.onclick = () => openSupport(reopen);
         const i = md.querySelector('#gs-in'); if (i) i.onclick = () => go(i, storeSignIn);
         const sy = md.querySelector('#gs-sync'); if (sy) sy.onclick = async () => { sy.disabled = true; await storeSync(true); getSigils(back); };
         md.querySelector('#gs-give1').onclick = () => giveMercy(1);
@@ -4220,7 +4751,7 @@
       });
     if (signedIn() && !prof && CL) loadProfile().then(() => { if (prof && document.querySelector('#gs-x')) getSigils(back); }).catch(() => {});
   }
-  setTimeout(() => { storeReturn().then(done => { if (!done) storeSync(false); }); }, 1500);
+  if (!DC) setTimeout(() => { storeReturn().then(done => { if (!done) storeSync(false); }); }, 1500);
   async function linkCommander(n) {
     n = String(n || '').trim();
     if (n && !commander(n)) { toast('lock', 'Commander not found', 'Pick your name from the Grand War list. It must match the war ladder exactly.', 'warn'); return; }
@@ -4353,32 +4884,39 @@
     } catch (e) {}
     claiming = false;
   }
+  // Quest book (26 Nov 2026): each quest can point at the place that does it.
+  const QGO = { ring: ['To the Ring', () => document.querySelector('.tabs [data-tab="ring"]').click()], guild: ['To the Guild', () => document.querySelector('.tabs [data-tab="guild"]').click()],
+    market: ['To the Market', () => document.querySelector('.tabs [data-tab="market"]').click()], armor: ['Armorer', () => visitEnch('arm')], ench: ['Enchanter', () => visitEnch('ench')],
+    store: ['Store', () => openStore()], pip: ['Pip\u2019s wagon', () => visitEnch('dicer')], gulp: ['Gulp', () => visitEnch('gulp')], rift: ['Rift Gate', () => visitEnch('portal')],
+    works: ['Hold works', () => openWorks()], dummy: ['Training', () => openTraining()] };
+  const qgoBtn = k => QGO[k] ? '<button class="btn small ghost" data-qgo="' + k + '">' + QGO[k][0] + '</button>' : '';
+  const qCtx = () => { try { L.questCtx({ on: !!(CL && signedIn()), gob: !!(typeof gp !== 'undefined' && gp.st && gp.st.gob && Date.now() < gp.st.gob.until) }); } catch (e) {} };
   const bountyReady = () => { try { return L.bountyState(S, Date.now()).list.filter(b => b.have >= b.n && !b.got).length; } catch (e) { return 0; } };
-  const questsReady = () => { const q = L.questState(S); const got = S.daily.got; return q.filter(x => x.done && !x.got).length + (q.every(x => x.got) && !(got & 8) ? 1 : 0) + bountyReady(); };
+  const questsReady = () => { qCtx(); const q = L.questState(S); const got = S.daily.got; return q.filter(x => x.done && !x.got).length + (q.every(x => x.got) && !(got & 8) ? 1 : 0) + bountyReady(); };
   function paintQuests() {
-    const q = L.questState(S), b = $('quests'); if (!b) return;
+    qCtx(); const q = L.questState(S), b = $('quests'); if (!b) return;
     const n = q.filter(x => x.got).length, rd = questsReady(), all = n === 3 && (S.daily.got & 8);
     $('questct').innerHTML = rd ? 'Claim ' + rd : '<small class="ql">Quests </small>' + (all ? 'done' : n + '/3');
     b.classList.toggle('ready', rd > 0); b.classList.toggle('done', !rd && !!all);
     b.title = rd ? 'Daily quests: ' + rd + (rd === 1 ? ' reward' : ' rewards') + ' ready to claim' : all ? 'Daily quests: all done for today' : 'Daily quests: ' + n + ' of 3 done';
   }
   function bountyHtml() {
-    const st = L.bountyState(S, Date.now()), left = (st.w + 1) * L.BOUNTY_MS - Date.now();
+    qCtx(); const st = L.bountyState(S, Date.now()), left = (st.w + 1) * L.BOUNTY_MS - Date.now();
     if (st.paid && st.paid.length) { const g = st.paid.reduce((a, x) => a + x.gold, 0), d = st.paid.reduce((a, x) => a + x.dust, 0); toast('star', 'Bounties paid out', 'Finished bounties from the last board: +' + fmt(g) + ' gold, +' + fmt(d) + ' Dust.', 'loot'); delete st.paid; save(); }
     const rows = st.list.map((b, i) => {
       const rw = L.bountyReward(S, b), done = b.have >= b.n, go = b.a && !b.got && !done ? Math.min(S.maxFloor, b.a === b.b ? b.a : Math.max(b.a, Math.min(b.b, S.floor >= b.a && S.floor <= b.b ? S.floor : b.a))) : 0;
       return '<li class="quest bounty' + (b.got ? ' got' : done ? ' done' : '') + '"><div><b>' + esc(L.bountyText(b)) + '</b><div class="qbar"><i style="width:' + Math.round(b.have / b.n * 100) + '%"></i></div><small>' + b.have + ' / ' + b.n + ' · ' + fmt(rw.gold) + ' gold + ' + rw.dust + ' Dust</small></div>' +
-        (b.got ? '<span class="qok">Paid</span>' : done ? '<button class="btn small" data-bty="' + i + '">Claim</button>' : go ? '<button class="btn small ghost" data-farm="' + go + '">' + (S.floor === go ? 'Farming here' : 'Go to floor ' + go) + '</button>' : '') + '</li>';
+        (b.got ? '<span class="qok">Paid</span>' : done ? '<button class="btn small" data-bty="' + i + '">Claim</button>' : go ? '<button class="btn small ghost" data-farm="' + go + '">' + (S.floor === go ? 'Farming here' : 'Go to floor ' + go) + '</button>' : qgoBtn(L.bountyGo(b))) + '</li>';
     }).join('');
     if (st.locked) return '<h3 class="sub">Bounty board</h3><p class="note small">The bounty board opens when you reach floor ' + L.BOUNTY_FLOOR + '.</p>';
-    return '<h3 class="sub">Bounty board</h3><p class="note small">New bounties in ' + Math.floor(left / 36e5) + 'h ' + Math.floor(left % 36e5 / 6e4) + 'm. Built from the floors you have reached. Finished ones you forget to claim are paid when the board changes. Rewards: gold, Dust and sometimes a tonic.</p><ul class="quests">' + rows + '</ul>';
+    return '<h3 class="sub">Bounty board</h3><p class="note small">New bounties in ' + Math.floor(left / 36e5) + 'h ' + Math.floor(left % 36e5 / 6e4) + 'm. Built for your hero from every part of the game you have opened. Finished ones you forget to claim are paid when the board changes. Rewards: gold, Dust and sometimes a tonic.</p><ul class="quests">' + rows + '</ul>';
   }
   function openQuests() {
-    const q = L.questState(S), got = S.daily.got, allGot = q.every(x => x.got), msLeft = Date.parse(L.questDay() + 'T00:00:00Z') + 864e5 - Date.now();
+    qCtx(); const q = L.questState(S), got = S.daily.got, allGot = q.every(x => x.got), msLeft = Date.parse(L.questDay() + 'T00:00:00Z') + 864e5 - Date.now();
     const pct = v => (Math.round(v * 10000) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }) + '%';
-    const row = x => '<li class="quest' + (x.got ? ' got' : x.done ? ' done' : '') + '"><div><b>' + esc(x.text) + '</b><div class="qbar"><i style="width:' + Math.round(x.have / x.n * 100) + '%"></i></div><small>' + x.have.toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US') + '</small></div>' +
+    const row = x => '<li class="quest' + (x.got ? ' got' : x.done ? ' done' : '') + '"><div><b>' + esc(x.text) + '</b><div class="qbar"><i style="width:' + Math.round(x.have / x.n * 100) + '%"></i></div><small>' + x.have.toLocaleString('en-US') + ' / ' + x.n.toLocaleString('en-US') + '</small>' + (!x.got && !x.done && x.go ? '<div class="qgorow">' + qgoBtn(x.go) + '</div>' : '') + '</div>' +
       (x.got ? '<span class="qok">' + sigil + '+' + L.QUEST_REWARD + '</span>' : '<button class="btn small" data-q="' + x.i + '"' + (x.done ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_REWARD + '</button>') + '</li>';
-    modal('<div class="maphead"><div><h2>Quests and bounties</h2><small>New quests in ' + Math.max(1, Math.floor(msLeft / 36e5)) + 'h ' + Math.floor(msLeft % 36e5 / 6e4) + 'm. Same quests for every hero.</small></div><button class="iconbtn" id="dq-x" aria-label="Close">&times;</button></div>' +
+    modal('<div class="maphead"><div><h2>Quests and bounties</h2><small>New quests in ' + Math.max(1, Math.floor(msLeft / 36e5)) + 'h ' + Math.floor(msLeft % 36e5 / 6e4) + 'm. Picked for your hero, and never the same twice in a row.</small></div><button class="iconbtn" id="dq-x" aria-label="Close">&times;</button></div>' +
       bountyHtml() + '<h3 class="sub">Daily quests</h3>' +
       '<ul class="quests">' + q.map(row).join('') +
       '<li class="quest bonus' + (got & 8 ? ' got' : allGot ? ' done' : '') + '"><div><b>Finish all three</b><small>A bonus for clearing the day.</small></div>' + (got & 8 ? '<span class="qok">' + sigil + '+' + L.QUEST_BONUS + '</span>' : '<button class="btn small" data-q="3"' + (allGot ? '' : ' disabled') + '>' + sigil + ' Claim ' + L.QUEST_BONUS + '</button>') + '</li></ul>' +
@@ -4393,6 +4931,7 @@
           openQuests();
         });
         md.querySelectorAll('[data-farm]').forEach(btn => btn.addEventListener('click', () => setTimeout(closeModal, 50)));
+        md.querySelectorAll('[data-qgo]').forEach(btn => btn.onclick = () => { const g = QGO[btn.dataset.qgo]; closeModal(); if (g) g[1](); });
         md.querySelectorAll('[data-q]').forEach(btn => btn.onclick = async () => {
           if (!signedIn()) { toast('user', 'Sign in first', 'Quest rewards go to your account wallet.', 'warn'); return; }
           const i = +btn.dataset.q; btn.disabled = true;
@@ -4520,6 +5059,66 @@
     if (w) setTimeout(() => toast('flame', 'A fresh start', w === 'me' ? 'An admin reset your account. Your delve starts again from the top of the stair.' : 'The Deep has been reset for everyone. Every delver starts again from the top of the stair.', 'feat'), 1500);
   }
   function isAdmin() { return !!(sess && sess.id && String(claims(sess.id)['cognito:groups'] || '').includes('admins')); }
+  // Support tasks (v132, John 26 Nov 2026): one-time Sigil thanks for linking a Discord or itch.io account to the hero, checked and
+  // paid by the server. The player signs in in a pop-up (identity-only OAuth, implicit grant); oauth.html hands the token back here
+  // and POST /support/claim asks Discord or itch who it belongs to. Nothing rewards joining, following, collecting, rating, reviewing
+  // or commenting: those would break Discord's or itch.io's rules (John: never break a platform's terms).
+  // OAuth client ids (public): Discord app 'Lanternhold' and itch.io app 'Lanternhold', both on Born 2 Game accounts (26 Nov 2026).
+  const SUP_APP = { discord: '1575635134277886114', itch: '411a6fe66ce95d4cd43404b039805d84' }; // empty = that task shows as coming soon
+  const SUP_CB = location.origin + '/oauth.html';
+  const SUP = [
+    { id: 'discord', icon: 'discord', name: 'Link your Discord', how: 'Sign in with Discord to link it to your hero. We only see your Discord name and id, nothing else. Our community is on the <a href="https://discord.gg/6G7E7rhGFu" target="_blank" rel="noopener">Born 2 Game Discord</a> if you want to say hi.', check: 'Link Discord',
+      auth: (id, st) => 'https://discord.com/oauth2/authorize?response_type=token&client_id=' + id + '&scope=identify&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
+    { id: 'itch', icon: 'star', name: 'Link your itch.io account', how: 'Sign in with itch.io to link it to your hero. We only see your public itch.io profile.', check: 'Link itch.io',
+      auth: (id, st) => 'https://itch.io/user/oauth?response_type=token&client_id=' + id + '&scope=profile%3Ame&redirect_uri=' + encodeURIComponent(SUP_CB) + '&state=' + st },
+  ];
+  const SUP_ERR = { taken: 'That account is already linked to another hero.', done: 'You already have this one.',
+    floor: 'Reach floor 10 first, then try again.', hero: 'Play a little first so your hero is registered, then try again.', token: 'The sign-in did not go through. Try again.', remote: 'We could not reach them just now. Try again in a minute.' };
+  let supData = null, supBusy = false, supBack = null;
+  function supStart(task) {
+    const t = SUP.find(x => x.id === task); if (!t || !SUP_APP[task]) return;
+    if (DC) { if (task === 'discord' && dcTok) supClaim('discord', dcTok); return; }
+    const st = 'sup' + task + Math.random().toString(36).slice(2, 12);
+    try { localStorage.setItem('lh_oauth_st', st); localStorage.removeItem('lh_oauth'); } catch (e) {}
+    const w = window.open(t.auth(SUP_APP[task], st), 'lhoauth', 'width=520,height=760');
+    if (!w) location.href = t.auth(SUP_APP[task], st);
+  }
+  // oauth.html posts the token back to this window, or (when the pop-up was blocked) leaves it in localStorage and reloads the game.
+  async function supFinish(m) {
+    let want = null; try { want = localStorage.getItem('lh_oauth_st'); localStorage.removeItem('lh_oauth_st'); localStorage.removeItem('lh_oauth'); } catch (e) {}
+    if (!m || !m.token || !m.state || m.state !== want) return;
+    const task = m.state.startsWith('supdiscord') ? 'discord' : m.state.startsWith('supitch') ? 'itch' : '';
+    supClaim(task, m.token);
+  }
+  async function supClaim(task, token) {
+    if (!task || supBusy) return; supBusy = true;
+    try { const r = await papi('POST', '/support/claim', { task, token }); if (supData) supData.mine = r.mine; if (prof && r.bal != null) prof.bal = r.bal; sfx.buy(); toast('star', '+' + r.add + ' ' + TOKEN, 'Thank you for supporting Lanternhold!', 'feat'); }
+    catch (e) { toast('lock', 'Not yet', SUP_ERR[e.code] || 'Try again in a moment.', 'warn'); }
+    supBusy = false; if (document.querySelector('#sp-x')) openSupport(supBack);
+  }
+  window.addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.lhOauth) supFinish(e.data.lhOauth); });
+  setTimeout(() => { let m = null; try { m = JSON.parse(localStorage.getItem('lh_oauth') || 'null'); } catch (e) {} if (m && Date.now() - (m.at || 0) < 6e5 && signedIn()) { openSupport(); supFinish(m); } }, 2500);
+  async function openSupport(back) {
+    supBack = back = typeof back === 'function' ? back : closeModal;
+    const row = t => { const c = supData && supData.mine[t.id], sig = supData ? supData.tasks[t.id] : null, live = !!SUP_APP[t.id];
+      return '<div class="supt"><div class="supth">' + icon(t.icon) + '<b>' + t.name + '</b>' + (sig ? '<span class="supsig">' + sigil + sig + '</span>' : '') + (c ? '<span class="tag once">Done</span>' : '') + '</div>' +
+        (c ? '<small>Thank you! The ' + TOKEN + ' are in your account.</small>' : '<small>' + t.how + '</small>' +
+          '<div class="supform"><button class="btn small" data-supgo="' + t.id + '"' + (supData && live && !(DC && t.id !== 'discord') ? '' : ' disabled') + '>' + (DC && t.id !== 'discord' ? 'On the website' : live ? t.check : 'Coming soon') + '</button></div>') + '</div>'; };
+    modal('<div class="maphead"><div><h2>Support the game</h2><small>Link your accounts to your hero and get free ' + TOKEN + ', once each, paid right away.</small></div><button class="iconbtn" id="sp-x" aria-label="Close">&times;</button></div>' +
+      (!signedIn() ? '<p class="note">Sign in to the game first so we know which hero gets the ' + TOKEN + '.</p>' : !supData ? '<p class="note">Loading…</p>' : '') +
+      '<div class="supts">' + SUP.map(row).join('') + '</div>' +
+      '<div class="supnote"><b>Reviews and comments</b><small>If you enjoy Lanternhold, an honest rating, review or comment on <a href="https://born2gamellc.itch.io/lanternhold" target="_blank" rel="noopener">itch.io</a> or anywhere you play helps new players find us. These never earn rewards or any in-game benefit, and we never penalize anyone for what they write or for not writing. We do not pay for likes, ratings, reviews or comments.</small></div>' +
+      '<p class="note small">Each one pays once per account, and each Discord or itch.io account can link to one hero. Your hero needs to reach floor 10 first. We never post anything for you.</p>' +
+      '<div class="row"><button class="btn ghost" id="sp-ok">Back</button></div>', md => {
+        md.className = 'sheet';
+        md.querySelector('#sp-x').onclick = closeModal; md.querySelector('#sp-ok').onclick = () => back();
+        md.querySelectorAll('[data-supgo]').forEach(b => b.onclick = () => supStart(b.dataset.supgo));
+      });
+    if (signedIn() && CL && !supData) {
+      try { supData = await papi('GET', '/support'); } catch (e) { const n = document.querySelector('#sp-x') && $('modalbody').querySelector('.note'); if (n) n.textContent = e.code === 404 || e.code === 'Not Found' ? 'Support tasks open with the next server update.' : 'Could not load your tasks. Try again in a moment.'; return; }
+      if (document.querySelector('#sp-x')) openSupport(back);
+    }
+  }
   async function adminApi(method, path, body) {
     const tok = await idToken(); if (!tok) throw new Error('Sign in first.');
     const r = await fetch(CL.api.replace(/\/$/, '') + path, { method, headers: { Authorization: tok, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -4753,7 +5352,8 @@
   $('codexseg').addEventListener('click', e => { if (e.target.closest('[data-cx="board"]')) loadBoard(); });
   // ---------- the Grand War: season strip and war room ----------
   const WAR_URL = 'https://war.born2gamellc.com/';
-  const WAR_ART = { covenant: WAR_URL + 'static/alliance-covenant.jpg', radiant: WAR_URL + 'static/alliance-ascendancy.jpg', tide: WAR_URL + 'static/alliance-tide.jpg' };
+  const WAR_IMG = DC && !DC.mock ? location.origin + '/lh-war/' : WAR_URL; // inside Discord the art comes through the /lh-war URL mapping
+  const WAR_ART = { covenant: WAR_IMG + 'static/alliance-covenant.jpg', radiant: WAR_IMG + 'static/alliance-ascendancy.jpg', tide: WAR_IMG + 'static/alliance-tide.jpg' };
   const SEASON = { n: 1, name: 'The First Incursion', start: Date.UTC(2026, 10, 1, 5), week1: Date.UTC(2026, 10, 8, 5), surge: Date.UTC(2027, 0, 24, 5), weeks: 12 };
   function paintWarStrip() {
     const now = Date.now(), wk = Math.max(1, Math.min(SEASON.weeks, Math.floor((now - SEASON.week1) / 6048e5) + 1));
@@ -4869,7 +5469,7 @@
   // A Loot Goblin's Sack is rare enough to tell everyone: post it to Global chat with a link (signed-in players only).
   async function bragSack(it) {
     if (!CL || !signedIn() || !S.hero) return;
-    try { await chatCall('POST', '/chat', { ch: 'global', text: 'just pulled the Loot Goblin’s Sack off a Loot Goblin! ' + tokenOf(it), name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined }); } catch (e) {}
+    try { await chatCall('POST', '/chat', { ch: 'global', text: 'just pulled the Loot Goblin’s Sack off a Loot Goblin! ' + tokenOf(it), name: S.hero.name, cls: S.hero.cls, np: (!pubOff('np') && L.npTier(S)) || undefined }); } catch (e) {}
   }
   function linkItem(it) {
     if (!it || !CL) return false;
@@ -4917,22 +5517,26 @@
   function trainRows() {
     const ids = S.party.filter(Boolean), d = ids.map(id => L.steadyDps(S, id)), tot = d.reduce((a, b) => a + b, 0) || 1;
     return '<table class="ttab"><thead><tr><th>Member</th><th>Damage/s</th><th>vs guardians</th><th>Share</th><th>Heal/s</th><th>Health</th></tr></thead><tbody>' +
-      ids.map((id, i) => { const m = L.memberById(id), pct = Math.round(d[i] / tot * 100), hl = L.healPerSec(S, id);
-        return '<tr><td><b>' + esc(m.name) + '</b> ' + classTag(m.cls) + '</td><td>' + fmt(d[i]) + '</td><td>' + fmt(d[i] * (1 + L.wearVal(S, id, 'boss'))) + '</td><td><span class="tbar"><i style="width:' + pct + '%"></i></span> ' + pct + '%</td><td>' + (hl ? fmt(hl) : '-') + '</td><td>' + fmt(L.maxHpOf(S, id)) + '</td></tr>'; }).join('') +
-      '</tbody></table><p class="tsum">Party <b>' + fmt(tot) + '</b> damage/s steady &middot; strike <b>' + fmt(L.clickDamage(S, Date.now())) + '</b> &middot; critical chance <b>' + Math.round(L.critChance(S) * 100) + '%</b> (x5)</p>';
+      ids.map((id, i) => { const m = L.memberById(id), pct = Math.round(d[i] / tot * 100), hl = L.steadyHeal(S, id);
+        return '<tr><td><b>' + esc(m.name) + '</b> ' + classTag(m.cls) + (S.down[id] ? ' <small class="tdown">down</small>' : '') + '</td><td>' + fmt(d[i]) + '</td><td>' + fmt(d[i] * (1 + L.wearVal(S, id, 'boss'))) + '</td><td><span class="tbar"><i style="width:' + pct + '%"></i></span> ' + pct + '%</td><td>' + (hl ? fmt(hl) : '-') + '</td><td>' + fmt(L.maxHpOf(S, id)) + '</td></tr>'; }).join('') +
+      '</tbody></table><p class="tsum">Party <b>' + fmt(tot) + '</b> damage/s steady &middot; tap <b>' + fmt(L.steadyClick(S)) + '</b> per hit (<span id="tr-now">' + fmt(L.clickDamage(S, Date.now())) + '</span> right now) &middot; critical chance <b>' + Math.round(L.critChance(S) * 100) + '%</b> (x5)</p>' +
+      '<p class="note tnote">Each tap hits for 1 + 5% of your party\'s damage/s at that moment, so it rises when buffs or a mage spell are up. The monster does not change it.</p>';
   }
   function openTraining() {
     trainRun = null;
-    modal('<div class="center"><h2>Training Grounds</h2><p class="note">A practice dummy for comparing gear, seats and skills. Steady numbers leave out timed buffs and anyone who is down.</p></div>' +
+    modal('<div class="center"><h2>Training Grounds</h2><p class="note">A practice dummy for comparing gear, seats and skills. Steady numbers leave out timed buffs and count everyone as standing.</p></div>' +
       '<div id="tr-rows">' + trainRows() + '</div>' +
       '<div class="tdummy"><button class="dummy" id="tr-hit" title="Strike the dummy">' + icon('shield') + '<span>Dummy</span></button><div id="tr-live"><p>Press <b>Start 10 s test</b>, then strike the dummy as fast as you like. The test counts your party as it is right now, buffs and all.</p></div></div>' +
       '<div class="row"><button class="btn" id="tr-go">Start 10 s test</button><button class="btn ghost" id="tr-x">Close</button></div>', md => {
       const live = md.querySelector('#tr-live'), go = md.querySelector('#tr-go');
       const paint = () => { const r = trainRun; if (!r) return; const t = Math.min(10, (Date.now() - r.at) / 1000), all = r.party + r.taps;
-        live.innerHTML = '<p><b>' + t.toFixed(1) + ' s</b> &middot; party ' + fmt(r.party) + ' &middot; strikes ' + fmt(r.taps) + ' (' + r.n + (r.crit ? ', ' + r.crit + ' critical' : '') + ')</p><p class="tbig">' + fmt(all / Math.max(0.1, t)) + ' <small>damage/s</small></p>' + (r.done ? '<p class="note">Done. Change gear or seats and run it again to compare.</p>' : ''); };
+        const tt = Math.max(0.1, t);
+        live.innerHTML = '<p><b>' + t.toFixed(1) + ' s</b> &middot; party ' + fmt(r.party) + ' &middot; taps ' + fmt(r.taps) + '</p><p class="tbig">' + fmt(all / tt) + ' <small>damage/s</small></p>' +
+          '<p class="ttaps">' + r.n + ' taps &middot; <b>' + (r.n / tt).toFixed(1) + '</b>/s &middot; <b>' + fmt(r.n ? r.taps / r.n : 0) + '</b> per tap' + (r.crit ? ' &middot; ' + r.crit + ' critical' : '') + ' &middot; tap damage/s <b>' + fmt(r.taps / tt) + '</b></p>' + (r.done ? '<p class="note">Done. Change gear or seats and run it again to compare.</p>' : ''); };
       const step = () => { const r = trainRun; if (!r || r.done || !document.body.contains(live)) return; const now = Date.now(), dt = Math.min(0.5, (now - r.last) / 1000); r.last = now; r.party += L.totalDps(S, now) * dt;
+        { const n = md.querySelector('#tr-now'); if (n) n.textContent = fmt(L.clickDamage(S, now)); }
         if (now - r.at >= 10000) { r.done = true; go.disabled = false; go.textContent = 'Run again'; } paint(); if (!r.done) setTimeout(step, 100); };
-      go.onclick = () => { trainRun = { at: Date.now(), last: Date.now(), party: 0, taps: 0, n: 0, crit: 0 }; go.disabled = true; md.querySelector('#tr-rows').innerHTML = trainRows(); step(); };
+      go.onclick = () => { L.qEv(S, 'dummy'); trainRun = { at: Date.now(), last: Date.now(), party: 0, taps: 0, n: 0, crit: 0 }; go.disabled = true; md.querySelector('#tr-rows').innerHTML = trainRows(); step(); };
       md.querySelector('#tr-hit').onclick = () => { const r = trainRun; if (!r || r.done) return; const c = Math.random() < L.critChance(S); r.taps += L.clickDamage(S, Date.now()) * (c ? 5 : 1); r.n++; if (c) r.crit++; try { sfx.hit && sfx.hit(); } catch (e) {} paint(); };
       md.querySelector('#tr-x').onclick = () => { trainRun = null; closeModal(); };
     });
@@ -5154,7 +5758,7 @@
       if (chat.ch === 'dm' && !chat.dmTo) { chatNote('Pick who to whisper first: tap a player’s name in Global, Banner, Trade or Party and choose Whisper.', true); return; }
       inp.disabled = true;
       try {
-        await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined });
+        await chatCall('POST', '/chat', { ch: chat.ch, leader: chat.leader || undefined, to: chat.ch === 'dm' ? chat.dmTo.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: (!pubOff('np') && L.npTier(S)) || undefined });
         inp.value = ''; chat.links = []; chatNote(); pollChat();
       } catch (err) {
         chatNote({ slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat. Start a new hero with a different name.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.', true);
@@ -5279,7 +5883,7 @@
       const inp = el.querySelector('input'), nt = el.querySelector('.cpnote'); let text = inp.value.trim(); if (!text) return;
       for (const l of chat.links) text = text.replace(l.label, l.token); text = text.replace(/\[\[(?!i:)/g, '[');
       inp.disabled = true;
-      try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: L.npTier(S) || undefined }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
+      try { await chatCall('POST', '/chat', { ch: p.ch, to: p.ch === 'dm' ? p.pid : undefined, text, name: S.hero.name, cls: S.hero.cls, np: (!pubOff('np') && L.npTier(S)) || undefined }); inp.value = ''; chat.links = []; nt.hidden = true; pollPops(); }
       catch (err) { nt.hidden = false; nt.textContent = { slow: 'Easy there. One message every few seconds.', links: linkMsg(text), name: 'Your hero’s name can’t be used in chat.', room: 'You can’t post in that party.', to: 'That player can’t get whispers right now.' }[err.code] || 'Message not sent. Try again in a moment.'; }
       inp.disabled = false; inp.focus();
     });
@@ -5752,7 +6356,7 @@
     { id: 'end', title: 'You are ready', text: 'That is the basics. The story will introduce new companions as you descend. Open the Guide (the ? at the top) any time for the details.', target: '#btn-guide', ready: () => true },
   ];
   let coachCtx = null, coachEl = null;
-  function tutState() { if (!S.tut) { S.tut = { i: 0, done: false }; S.seenNotes = NOTES_V; } return S.tut; }
+  function tutState() { if (!S.tut) { S.tut = { i: 0, done: false }; S.seenNotes = S.notesShown = NOTES_V; } return S.tut; }
   function coachHide() { $('coach').hidden = true; if (coachEl) coachEl.classList.remove('tut-hi'); coachEl = null; }
   function coachShow(step, i) {
     if (step.tab && tab !== step.tab) switchTab(step.tab);
@@ -5936,6 +6540,7 @@
       ['NPC Guild', 'i:crown', 'Hire more companions at the Guild Hall for gold or Dust, and pay them by the hour.', [
         'Open the <b>Guild</b> tab. Six hires are on offer, and new faces arrive every <b>4 hours</b>. <b>New faces now</b> rerolls them for Dust.',
         'Rarity: <b>Common, Uncommon, Rare, Epic, Legendary</b>. Rarer hires fight harder, work camp jobs better, cost more and draw a bigger wage. Legendaries are the lore companions of the story.',
+        '<b>Unique Legendaries</b>: eight one-of-a-kind companions, each with an extra bonus on their own camp job. Some turn up at the Guild Hall now and then, some finish a side quest or join on the adventure, and one is caged by a monster somewhere past floor ' + L.CAGE_FLOOR + '.',
         'Some need a hero level, a floor reached or your banner. Costs follow your gold income, so they stay fair at any depth.',
         '<b>Sign on</b> takes a companion spot and pays a wage every hour, even while you are away. <b>2 h</b> is a short contract: paid up front, no wage, no free spot needed (up to 2 at once).',
         'If your gold runs dry for an hour of wages, the priciest hire walks off to the bench. <b>Let go</b> at the Campfire sends one back. Either way their gear returns to your bag, and they wait on the bench 3 days to be hired back for half price.']],
@@ -5978,8 +6583,9 @@
         'Tap the merchant to see the deal: two tonics, Campfire Draughts or Lantern Oil, or a pile of Dust, all at ' + Math.round(L.MERCH_OFF * 100) + '% off.',
         'Buy it or let it go. Missing the merchant costs nothing.']],
       ['Bounty board', 'i:star', 'Three bounties at a time, new every ' + L.BOUNTY_HOURS + ' hours. Open it from the Quests button.', [
-        'Bounties are built for your hero from the floors you have reached: hunt a kind of monster on certain floors, beat a guardian a few times, open chests, defeat alliance elites or break monster shields.',
-        'Some send you back up to older floors. Tap <b>Go to floor</b> on a bounty to farm there (Descend automatically turns off).',
+        'Bounties and daily quests come from about ' + Math.floor(L.QDEFS.length / 10) * 10 + ' kinds across the whole game: hunts and guardians, monster tricks, the Grand War, crafting at the Armorer and Enchanter, training, the Guild, Ember Ring duels, the Market, world boss weekends, and for NP+ heroes Pip, Gulp and the Hold.',
+        'You are only offered what your hero can do right now, the three on show are always from different parts of the game, and a kind you saw lately waits its turn.',
+        'Some send you back up to older floors. Tap <b>Go to floor</b> on a bounty to farm there (Descend automatically turns off). Others have a button that takes you to the right place.',
         'Each pays gold and Dust, sometimes a tonic too. Finished bounties you forget to claim are paid when the board changes.']],
       ['The Lantern Keeper', 'i:lantern', 'When the store owner is online, every hero gets a boost.', [
         'While the Lantern Keeper is online, every hero gets <b>+' + Math.round(L.KEEPER * 100) + '%</b> damage, healing, gold, hero XP and gear finds.',
@@ -6023,6 +6629,7 @@
         'Slow down for about three seconds and it withdraws. You lose nothing but the time.']],
       ['World boss weekends', 's:colossus', 'One giant Rift boss every weekend that all signed-in players fight together.', [
         'Runs Friday to Sunday (UTC). A purple bar on the stage shows it; tap it to join a <b>two-minute assault</b>, once every 15 minutes.',
+        'Every assault chips the shared health bar, but only your <b>best ' + L.WB_BEST + ' assaults</b> count toward your rank, Sigils and Mythic roll.',
         'Every point of <b>real damage</b> counts, so the stronger your party, the more you chip off. Going deeper never lowers it.',
         'Each boss resists two classes (−30%) and is weak to one (+30%); the boss window shows which. It hits hard and uses a special attack.',
         'Hired and story companions deal half damage to the boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
@@ -6180,12 +6787,13 @@
         '<b>Sell</b>: tap an item in Gear, choose <b>Sell on market</b>. Listings last a week.',
         '<b>Mail</b>: send to someone you recruited or chatted with, as a gift or for a price.',
         'Gold and gear have no real-money value.']],
-      ['The Ember Ring (PvP)', 'i:duel', 'Duel other players\u2019 heroes for Laurels and rating.', [
+      ['The Ember Ring (PvP)', 'i:duel', 'Duel other players\u2019 heroes, or fight their teams, for Laurels and rating.', [
         'Open the <b>PvP</b> tab and press <b>Duel</b>. Only your own hero fights; companions, tonics and Sigils never count.',
         'Each class has the edge on two classes and is countered by two. Learn <b>Ring skills</b> with Laurels and pick 2 abilities and 2 passives for your loadout.',
         'Rematches against the same hero within a day pay less each time, so spread your duels around.',
         '10 challenges, one back every 30 minutes. Wins give rating and Laurels, losses a few Laurels; your hero also defends while you are away. A full kit is a long climb.',
-        'Laurels buy the <b>Ringwarden kit</b>: PvP gear with <b>Edge</b> (more damage to heroes) and <b>Resolve</b> (less damage from heroes). It works only in the Ring.']],
+        'Laurels buy the <b>Ringwarden kit</b>: PvP gear with <b>Edge</b> (more damage to heroes) and <b>Resolve</b> (less damage from heroes). It works only in the Ring.',
+        '<b>Team battles</b> (Team view): your hero and two of your own companions against another player\u2019s team. Borrowed player heroes can\u2019t join. The front fighter takes most of the blows. Companions wear their own <b>companion Ring kit</b>, bought with Laurels. A win pays 10 Laurels, a loss 4.']],
       ['Your profile', 'i:user', 'The card other players see.', [
         'Tap your portrait, then <b>Customize profile</b>: frame, title, color, banner, emblems and a bio.']],
       ['The Wardrobe', 'i:star', 'Outfits, lanterns and war banners, looks only.', [
@@ -6284,8 +6892,41 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
-    { v: 132, date: 'November 2026', title: 'Give to the Mercy Corps', items: [
+    { v: 138, date: 'November 2026', title: 'Give to the Mercy Corps', items: [
       'Sigil shop: Give $1 or any amount to our Extra Life team for children’s hospitals. Add your #WarName to credit your alliance.',
+    ] },
+    { v: 137, date: 'November 2026', title: 'Fast floors and world boss', items: [
+      'Foes no longer vanish before you see them on easy floors: each one stays up a moment before it falls.',
+      'Far above a floor, foes come in swarms of 3 to 5 that fall together. Gold, loot and kills are the same as before.',
+      'World boss: every assault still chips the shared health bar, but only your best 12 assaults of the weekend count toward your rank, Sigils and Mythic roll.',
+    ] },
+    { v: 136, date: 'November 2026', title: 'One Bestiary', items: [
+      'The Bestiary is now one list by region. Each creature\u2019s Details shows its family story and mastery; chests and guardians sit at the end.',
+    ] },
+    { v: 135, date: 'November 2026', title: 'Creature details', items: [
+      'Bestiary: tap Details on any creature you have met to see its picture, strength, special attack and field notes. More is revealed the more of them you defeat.',
+    ] },
+    { v: 134, date: 'November 2026', title: 'Creature homes and team battles', items: [
+      'Creatures now have home regions: 120 kinds, 8 per region, each spawning most in its home. Rare and very rare ones glow.',
+      'The Bestiary lists every creature by region: where it lives, how many you defeated, and field notes once you have beaten enough. Unmet ones show as silhouettes.',
+      'Team battles in the Ember Ring: your hero and two of your companions against another player\u2019s team. Pick who stands Front, Middle and Back.',
+      'Companions can wear a Ring kit bought with Laurels. A team win pays 10 Laurels, a loss 4, and your team defends while you are away.',
+    ] },
+    { v: 132, date: 'November 2026', title: 'Quests, profiles and one name each', items: [
+      'Hero names are now one per player. If yours is taken, the game asks you to pick a new one.',
+      'Quests: the Bounty Board and daily quests now draw from 200 kinds across the game, picked for your hero. Many have a button that takes you there.',
+      'New hero profile: key stats up top and sections you can fold. A Public profile tab lets you choose what other players see.',
+      'Tap a name in the Players Guild to see that hero’s public profile. Banners now show on party rows.',
+      'Borrowed player heroes now keep up with their owner’s latest gear and power level on their own. Their damage and health are each capped at twice yours.',
+      'Training Grounds: healers always show Heal/s, and the dummy run shows your taps per second and tap damage.',
+      'Eight unique Legendary companions to find: at the Guild Hall, through side quests, deep in the adventure, and one rare rescue. Each gives a small extra bonus on their own camp job.',
+      'New damage meter under the fight log: who deals your damage over the last 30 seconds.',
+      'Sigil shop: give $1 or any amount to our Extra Life team for children’s hospitals.',
+      'Sigil shop: Support the game gives free one-time Sigils for linking your Discord (10) or itch.io (5) account.',
+      'New Support the dev button: buy the developer a coffee. It gives nothing in game.',
+      'Balance: repeat guardian kills give at most 5 relics a day per hero. First clears are not capped.',
+      'Balance: NP+ foes drop more gold (x2 at NP+1, x3 at NP+2, and so on).',
+      'Fix: Store, merchant, ghost, recruit and world boss gold now use your steady income, so swapping your party no longer changes them.',
     ] },
     { v: 131, date: 'November 2026', title: 'Borrowed heroes and deep gold', items: [
       'Players Guild: borrowed player heroes now bring their own gear, stats and skills (up to twice your hero’s damage and health). Each one in your party adds +5% damage and gold, up to two.',
@@ -6922,14 +7563,18 @@
   const NOTES_V = PATCH_NOTES[0].v;
   try { const ve = $('ver'), b = window.LH_BUILD || ''; if (ve) { ve.textContent = 'v' + NOTES_V + (b ? ' \u00b7 build ' + b.slice(4, 8) + '.' + b.slice(8) : ''); ve.dataset.tip = 'Version ' + NOTES_V + (b ? ', build ' + b + ' (UTC). The game updates itself when a new build is out.' : ''); } } catch (e) {}
   function openNotes() {
-    S.seenNotes = NOTES_V; save();
+    S.seenNotes = S.notesShown = NOTES_V; save();
     modal('<div class="maphead"><div><h2>What’s new</h2><small>Patch notes for Lanternhold.</small></div><button class="iconbtn" id="n-x" aria-label="Close">&times;</button></div><div class="notes">' +
       PATCH_NOTES.map((n, i) => '<section' + (i ? '' : ' class="latest"') + '><div class="nh"><b>' + esc(n.title) + '</b><span>' + esc(n.date) + (i ? '' : ' · Latest') + '</span></div><ul>' + n.items.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></section>').join('') +
       '</div><div class="row"><button class="btn" id="n-ok">Back to the Deep</button></div>', md => { md.querySelector('#n-x').onclick = closeModal; md.querySelector('#n-ok').onclick = closeModal; });
   }
-  // Show once after an update, when nothing else is on screen. Brand-new players get the tutorial instead.
-  if (S.hero && !S.seenNotes && S.tut && !S.tut.done) S.seenNotes = NOTES_V;
-  setInterval(() => { if (S.hero && (S.seenNotes || 0) < NOTES_V && $('modal').hidden && !sceneOpen && !(S.tut && !S.tut.done)) openNotes(); }, 3000);
+  // Show once after every update, when nothing else is on screen. `notesShown` is set only when the window really
+  // opens (v132 fix, John 26 Nov 2026: players got no pop-up). Before, a hero who never finished or skipped the
+  // tutorial never saw patch notes, and `seenNotes` could be set without the window showing. Only heroes in their
+  // first day with the tutorial still running are skipped; they get the tutorial instead.
+  if (S.hero && !S.notesShown && S.tut && !S.tut.done && Date.now() - (S.created || 0) < 864e5) S.notesShown = NOTES_V;
+  const tutBusy = () => S.tut && !S.tut.done && Date.now() - (S.created || 0) < 864e5;
+  setInterval(() => { if (S.hero && (S.notesShown || 0) < NOTES_V && $('modal').hidden && !sceneOpen && !tutBusy()) openNotes(); }, 3000);
   // ---------- trading post: market and player mail ----------
   // Items and gold live in each player's save, so the client moves them; the server keeps
   // listings, offers and letters so both sides see the same thing.
@@ -7132,7 +7777,7 @@
     if (bagFull()) { toast('bag', 'Your pack is full', 'Salvage something first.', 'warn'); return; }
     if (l.price > S.gold) return;
     const r = await chatCall('POST', '/market/buy', { id: l.id, cls: l.cls, name: S.hero.name });
-    S.gold -= r.price; S.bag.push(fromServer(r.item)); afterTrade(); sfx.coin();
+    S.gold -= r.price; S.bag.push(fromServer(r.item)); L.qEv(S, 'mbuy', { g: r.price }); afterTrade(); sfx.coin();
     toast('bag', 'Bought ' + L.gearName(L.normItem(r.item)), 'It is in your pack now.', 'feat'); loadMarket();
   });
   const doCancel = (id, cls) => tradeAct(async () => {
@@ -7201,7 +7846,7 @@
         if (l.type === 'return' && bagFull()) { toast('bag', 'Your pack is full', 'Salvage something to collect returned gear.', 'warn'); break; }
         const r = await chatCall('POST', '/mail/claim', { id });
         const L2 = r.letter;
-        if (L2.type === 'return') { S.bag.push(fromServer(L2.item)); items++; } else { const g2 = nowGold(L2.gold, L2.at); S.gold += g2; S.stats.goldEarned += g2; gold += g2; }
+        if (L2.type === 'return') { S.bag.push(fromServer(L2.item)); items++; } else { const g2 = nowGold(L2.gold, L2.at); S.gold += g2; S.stats.goldEarned += g2; gold += g2; if (L2.type === 'sale') L.qEv(S, 'msold'); }
       }
       afterTrade(); sfx.coin();
       toast('coin', 'Collected', [gold ? '+' + fmt(gold) + ' gold' : '', items ? items + (items === 1 ? ' item' : ' items') + ' back in your pack' : ''].filter(Boolean).join(', ') || 'Done.', 'feat');
@@ -7350,8 +7995,9 @@
     if (h !== wb.key) { wb.key = h; el.innerHTML = h; el.hidden = !h; el.classList.toggle('on', !!inA); }
   }
   function openBoss() {
-    if (!gateUse('boss')) return;
-    const x = wbState(), st = wb.st, ph = L.wbPhase(x.total, x.w.id), pct = Math.floor(ph.into / ph.need * 100), old = L.wbOld(x.w.id), tr = L.WB_TRAITS[L.wbBoss(x.w.id)];
+    // A reward already earned can always be claimed, even when the hero is below the unlock level again (NP+ resets it).
+    const x = wbState(); if (!x.claim && !gateUse('boss')) return;
+    const st = wb.st, ph = L.wbPhase(x.total, x.w.id), pct = Math.floor(ph.into / ph.need * 100), old = L.wbOld(x.w.id), tr = L.WB_TRAITS[L.wbBoss(x.w.id)];
     const cn = c => L.CLASSES[c].name.toLowerCase() + 's';
     const top = st && st.w.id === x.w.id ? st.top : [];
     const rank = x.me && x.me.score > 0 ? top.findIndex(t => t.score <= x.me.score) + 1 : 0;
@@ -7360,14 +8006,14 @@
       '<p>A giant of void crystal has torn through the Nyx Rift beneath the Hold. Every delver fights the same monster: each assault you make chips at one shared health bar.</p>' +
       '<div class="wbphase"><div class="wbph"><b>Phase ' + (ph.broken + 1) + '</b><span>' + pct + '%</span></div><div class="bar wbbar2"><i style="width:' + pct + '%"></i></div><small>' + ph.broken + (ph.broken === 1 ? ' phase' : ' phases') + ' broken so far · ' + (st ? st.n : 0) + (st && st.n === 1 ? ' delver has' : ' delvers have') + ' joined</small></div></div></div>' +
       '<ul class="passfx">' + (old ? '<li><b>Assaults</b><span>Two minutes against the boss at the strength of your deepest floor. One every 15 minutes. Strike and use your abilities for more damage.</span></li>' :
-        '<li><b>Assaults</b><span>Two minutes against the boss. One every 15 minutes. Every point of real damage you deal chips the shared health bar, so the stronger your party, the more you deal. It hits hard and uses ' + esc(L.SPECIALS[tr.sp].name) + ': if your party falls, the assault ends.</span></li>' +
+        '<li><b>Assaults</b><span>Two minutes against the boss. One every 15 minutes. Every point of real damage you deal chips the shared health bar, so the stronger your party, the more you deal. Your best ' + L.WB_BEST + ' assaults count toward your rank, Sigils and Mythic roll. It hits hard and uses ' + esc(L.SPECIALS[tr.sp].name) + ': if your party falls, the assault ends.</span></li>' +
         '<li><b>' + esc(tr.trait) + '</b><span>' + esc(tr.line) + ' Weak to ' + cn(tr.weak) + ' (+' + Math.round(L.WB_WEAK * 100) + '% damage), resists ' + tr.resist.map(cn).join(' and ') + ' (−' + Math.round(L.WB_RESIST * 100) + '%).</span></li>' +
         '<li><b>Fight beside players</b><span>Hired and story companions deal half damage to the boss. Your hero and other players\' heroes in your party deal full damage.</span></li>') +
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
       '<li><b>Mythic loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a Mythic piece of <b>' + esc(s2.name) + '</b>. Mythic gear is above Legendary and very rare: under 3% even for the strongest delvers, higher the more damage you dealt, and full odds only once the server breaks 3 phases. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set from Warden Sable at the Rift Gate, just outside the Hold.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
       (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
-      (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
+      (x.me && x.me.score > 0 ? '<p class="passstate">' + (old ? 'Your damage this event' : 'Your best ' + L.WB_BEST + ' assaults') + ': <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
       '<div class="row">' + (x.claim ? '<button class="btn" id="wb-claim">Claim your reward</button>' : !CL || !signedIn() ? '<button class="btn" id="wb-in">Sign in to fight</button>' : x.live ? (x.ready > 0 ? '<button class="btn" disabled>Next assault in ' + wbDur(x.ready) + '</button>' : '<button class="btn" id="wb-go">Join the assault</button>') : '') + '<button class="btn ghost" id="wb-no">Close</button></div>', md => {
       md.querySelector('#wb-x').onclick = closeModal; md.querySelector('#wb-no').onclick = closeModal;
       const go = md.querySelector('#wb-go'); if (go) go.onclick = () => { closeModal(); joinAssault(); };
@@ -7391,8 +8037,8 @@
     if (!(score > 0)) { toast('skull', 'Assault over', fell ? 'Your party fell before landing a blow.' : 'No damage this time.', ''); return; }
     try {
       const r = await api('POST', { score, ck: ck || 0, iv: iv || [] }, '/boss/hit');
-      if (wb.st && r) { wb.st.total = r.total; wb.st.me.score += r.add; wb.st.me.last = Date.now(); }
-      toast('skull', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + wbNum(score, wbOld()) + ' damage to ' + wbState().name + '. Every assault counts toward the next phase.', 'feat');
+      if (wb.st && r) { wb.st.total = r.total; wb.st.me.score = r.score != null ? r.score : wb.st.me.score + r.add; wb.st.me.last = Date.now(); }
+      toast('skull', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + wbNum(score, wbOld()) + ' damage to ' + wbState().name + '. Every assault counts toward the next phase; your best ' + L.WB_BEST + ' count toward your rank.', 'feat');
     } catch (e) { toast('lock', 'The assault did not count', 'The server could not record it. Try again in a moment.', 'warn'); }
     loadBoss().then(paintBoss);
   }
@@ -7401,7 +8047,7 @@
     try {
       const r = await api('POST', { id }, '/boss/claim');
       if (!r) throw 0;
-      const g = Math.max(2000, L.offlineGoldPerSec(S) * 1800 * (1 + r.phases));
+      const g = Math.max(2000, L.pipRate(S) * 1800 * (1 + r.phases));
       S.gold += g; S.stats.goldEarned += g; if (typeof prof !== 'undefined' && prof) prof.bal = r.bal; save();
       closeModal(); sfx.relic();
       toast('crown', 'World boss reward', '+' + r.sig + ' Sigils and ' + fmt(g) + ' gold. You ranked ' + r.rank + ' of ' + r.n + '.', 'feat');
@@ -7588,7 +8234,7 @@
   const ringTitle = r => RING_TITLES.find(t => r >= t[0])[1];
   // A rough strength score for "even match" hints: damage per hit times health, Edge and Resolve included.
   const ringPower = s => s.at * (1 + s.E / (s.E + 300)) * s.hp / (1 - .5 * s.R / (s.R + 300));
-  const rg = { st: null, at: 0, view: 'foes', busy: false, err: '', sent: 0 };
+  const rg = { st: null, at: 0, view: 'foes', busy: false, err: '', sent: 0, tl: null, gid: '', topv: 'duel' };
   // ---- Ring skills and class matchups (the data comes with GET /arena) ----
   const CLS_NAME = c => L.CLASSES[c].name;
   const ringPc = x => Math.round(x * 1000) / 10 + '%';
@@ -7611,11 +8257,12 @@
   const ringEdge = (a, b) => { const m = rg.st && rg.st.match; if (!m) return 0; return m.beats[a].includes(b) ? 1 : m.beats[b].includes(a) ? -1 : 0; };
   const ringWhy = (a, b) => (rg.st && rg.st.match.why[a + '>' + b]) || '';
   const laurel = n => '<span class="laurel">' + icon('crown') + Number(n).toLocaleString('en-US') + '</span>';
-  // Our build: the log of the hero's own damage and health, with no tonics, abilities or knocked-out state.
-  function ringBuild() {
+  // A Ring build: the log of a member's own damage and health (the hero by default), with no tonics, abilities or knocked-out state.
+  function ringBuild(id) {
+    id = id || 'you';
     const keep = { t: S.tonic, d: S.down, a: S.abil, f: S.fx };
     let dps = 0, hp = 0;
-    try { S.tonic = {}; S.down = {}; S.abil = {}; S.fx = {}; dps = L.memberDps(S, 'you', Date.now()); hp = L.maxHpOf(S, 'you'); }
+    try { S.tonic = {}; S.down = {}; S.abil = {}; S.fx = {}; dps = L.memberDps(S, id, Date.now()); hp = L.maxHpOf(S, id); }
     catch (e) {} finally { S.tonic = keep.t; S.down = keep.d; S.abil = keep.a; S.fx = keep.f; }
     const lg = x => Math.round(Math.log(1 + Math.max(0, x || 0)) * 10) / 10;
     return { m: lg(dps), v: lg(hp) };
@@ -7628,10 +8275,12 @@
     rg.busy = true; rg.err = '';
     try {
       // The hero board row must exist first (it holds the name); publishing is quick and harmless.
-      if (Date.now() - rg.sent > 5 * 6e4) { try { await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref: '', bp: L.buildCard(S) }, '/hero'); } catch (e) {} await api('PUT', ringBuild(), '/arena'); rg.sent = Date.now(); }
+      if (Date.now() - rg.sent > 5 * 6e4) { try { await api('PUT', { name: S.hero.name, cls: S.hero.cls, side: S.hero.side, level: L.lvl(S, 'you'), floor: S.maxFloorEver, ref: '', bp: L.buildCard(S) }, '/hero'); } catch (e) {} const t = rg.st ? teamLine() : null; await api('PUT', Object.assign(ringBuild(), t && t.length === 3 ? { tl: teamBody(t) } : {}), '/arena'); rg.sent = Date.now(); }
       const st = await api('GET', null, '/arena'); if (!st) throw 0; rg.st = st; rg.at = Date.now();
       fetchLooks((st.foes || []).map(f => f.id).concat((st.top || []).map(t => t.id))).then(n => { if (n) paintRing(); });
       ringDefenseNews();
+      // a first visit: enter your strongest two companions as your team, so it can defend and be challenged
+      if (st.me && !st.me.tl) { const t = teamLine(); if (t.length === 3) { const u = await api('PUT', Object.assign(ringBuild(), { tl: teamBody(t) }), '/arena'); if (u && u.me) rg.st.me = u.me; } }
     } catch (e) { rg.err = 'The Ring could not be reached right now. Try again in a minute.'; }
     rg.busy = false; paintRing();
   }
@@ -7639,9 +8288,12 @@
   function ringDefenseNews() {
     const me = rg.st && rg.st.me; if (!me) return;
     let old = null; try { old = JSON.parse(localStorage.getItem('lh_ringdef') || 'null'); } catch (e) {}
-    try { localStorage.setItem('lh_ringdef', JSON.stringify({ dw: me.dw, dl: me.dl })); } catch (e) {}
+    try { localStorage.setItem('lh_ringdef', JSON.stringify({ dw: me.dw, dl: me.dl, tw: me.tdw || 0, tl: me.tdl || 0 })); } catch (e) {}
     if (!old) return;
+    const tw = (me.tdw || 0) - (old.tw || 0), tl = (me.tdl || 0) - (old.tl || 0);
+    if (old.tw != null && (tw > 0 || tl > 0)) toast('users', 'Your team held the Ring', (tw ? tw + (tw === 1 ? ' team beaten' : ' teams beaten') : '') + (tw && tl ? ', ' : '') + (tl ? tl + ' lost' : '') + ' while you were away.' + (tw ? ' +' + (tw * 2) + ' Laurels.' : ''), tw >= tl ? 'feat' : '');
     const w = me.dw - old.dw, l = me.dl - old.dl;
+    if (w > 0) { L.qEv(S, 'ringdef', { n: w }); save(); }
     if (w > 0 || l > 0) toast('shield', 'Your hero held the Ring', (w ? w + (w === 1 ? ' challenger beaten' : ' challengers beaten') : '') + (w && l ? ', ' : '') + (l ? l + ' lost' : '') + ' while you were away.' + (w ? ' +' + (w * 2) + ' Laurels.' : ''), w >= l ? 'feat' : '');
   }
   function ringFig(cls, hue, size) { return '<img class="ringspr" src="' + SP.spriteURL(cls, size || 3, hue || 0) + '" alt="">'; }
@@ -7658,7 +8310,7 @@
       '<div class="rhrate"><b>' + me.r.toLocaleString('en-US') + '</b> rating' + (st.rank ? ' &middot; rank ' + st.rank + ' of ' + st.n : '') + (me.pk > me.r ? ' &middot; best ' + me.pk.toLocaleString('en-US') : '') + '</div>' +
       '<div class="rhchips"><span title="Wins and losses">' + icon('sword') + me.w + '&ndash;' + me.l + '</span>' + '<span title="Laurels, spent on Ring skills and the Ringwarden kit">' + laurel(me.ll) + '</span>' +
       '<span title="Challenges refill one every 30 minutes, up to 10" class="' + (en ? '' : 'out') + '">' + icon('flame') + en + '/' + RING_EMAX + (en < RING_EMAX ? ' <small>+1 in ' + fmtTime(Math.max(1, Math.ceil(nextIn / 1000))) + '</small>' : '') + '</span></div></div></div>' +
-      '<div class="seg ringseg">' + [['foes', 'Challengers'], ['skills', 'Skills'], ['kit', 'Kit'], ['top', 'Standings']].map(v => '<button data-rv="' + v[0] + '"' + (rg.view === v[0] ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
+      '<div class="seg ringseg">' + [['foes', 'Duels'], ['team', 'Team'], ['skills', 'Skills'], ['kit', 'Kit'], ['top', 'Standings']].map(v => '<button data-rv="' + v[0] + '"' + (rg.view === v[0] || (v[0] === 'team' && rg.view === 'tgear') ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
     if (rg.view === 'foes') {
       const ms = me.s, mp = ringPower(ms);
       h += '<p class="note small ringbuild"><b>Your hero in the Ring:</b> ' + ringStatLine(ms) + '. Deeper delving helps a little; the Ringwarden kit helps a lot.</p>';
@@ -7672,6 +8324,10 @@
           '<button class="btn small" data-duel="' + f.id + '"' + (en ? '' : ' disabled title="No challenges left. One returns every 30 minutes."') + '>Duel</button></div>';
       }).join('') + '</div>' : '<p class="note">No other heroes have entered the Ring yet. Check back soon, or tell a friend to bring their hero.</p>';
       h += '<div class="row"><button class="btn ghost small" id="ring-ref">' + icon('refresh') + ' New challengers</button></div>';
+    } else if (rg.view === 'team') {
+      h += teamView(me, you);
+    } else if (rg.view === 'tgear') {
+      h += teamGearView(me);
     } else if (rg.view === 'skills') {
       h += ringSkillsView(me, you.cls);
     } else if (rg.view === 'kit') {
@@ -7687,6 +8343,13 @@
         return '<div class="ringpiece r-' + t[1] + '"><div class="tile r-' + t[1] + (r ? '' : ' ghost') + '"><img class="iimg" src="' + SP.itemIcon(you.cls, p.slot, r ? t[1] : 'common') + '" alt=""></div><div class="rpinfo"><b>' + nm + '</b><small>' + (r ? fx(r) : 'Not claimed yet') + '</small>' + (r < RING_MAX ? '<small class="dim">Next rank: ' + fx(1) + '</small>' : '') + '</div><div class="rpact">' + act + '</div></div>';
       }).join('') + '</div>';
     } else {
+      h += '<div class="seg ringseg tmtopseg">' + [['duel', 'Duels'], ['team', 'Teams']].map(v => '<button data-rtop="' + v[0] + '"' + (rg.topv === v[0] ? ' class="on"' : '') + '>' + v[1] + '</button>').join('') + '</div>';
+      if (rg.topv === 'team') {
+        const tt = st.ttop || [];
+        h += tt.length ? '<ol class="ringtop tmtop">' + tt.map((t, i) => '<li class="' + (t.id === me.id ? 'me' : '') + '"><span class="rk">' + (i + 1) + '</span><span class="tmtrio">' + t.t.map(x => ringFig(x.c, teamHue(x, t.id), 1)).join('') + '</span><span class="nm c-' + esc(t.c) + '">' + esc(t.n) + '</span><span class="rtitle sm rt-' + ringTitle(t.tr).toLowerCase() + '">' + ringTitle(t.tr) + '</span><b>' + t.tr.toLocaleString('en-US') + '</b><small>' + t.tw + '&ndash;' + t.tx + '</small></li>').join('') + '</ol>' : '<p class="note">No team battles yet. The first win puts your team on top.</p>';
+        h += '<p class="note small">Every team starts at 1,000 team rating. Beating a higher-rated team is worth more.</p>';
+        box.innerHTML = h; return;
+      }
       h += st.top.length ? '<ol class="ringtop">' + st.top.map((t, i) => '<li class="' + (t.id === me.id ? 'me' : '') + '"><span class="rk">' + (i + 1) + '</span>' + ((t.id === me.id ? myBanner() : theirBanner(t.id)) ? bannerSVG(t.id === me.id ? myBanner() : theirBanner(t.id), 'tban') : '') + ringFig(t.c, outfitHue((looksCache[t.id] || {}).k), 1) + '<span class="nm c-' + esc(t.c) + '">' + esc(t.n) + '</span><span class="rtitle sm rt-' + ringTitle(t.r).toLowerCase() + '">' + ringTitle(t.r) + '</span><b>' + t.r.toLocaleString('en-US') + '</b><small>' + t.w + '&ndash;' + t.l + '</small></li>').join('') + '</ol>' : '<p class="note">Nobody has fought yet. The first win puts you on top.</p>';
       h += '<p class="note small">Everyone starts at 1,000. Beating a higher-rated hero is worth more. Heroes that defend well while their owner is away climb too.</p>';
     }
@@ -7719,7 +8382,7 @@
     if (rg.busy) return; rg.busy = true; if (btn) btn.disabled = true;
     try {
       const r = await api('POST', { id }, '/arena/skill'); if (!r || !r.me) throw 0;
-      const was = (rg.st.me.sk || {})[id] || 0; rg.st.me = r.me; sfx.buy();
+      const was = (rg.st.me.sk || {})[id] || 0; rg.st.me = r.me; sfx.buy(); L.qEv(S, 'ringskill'); save();
       const s = ringSkill(id), lo = r.me.lo;
       toast('star', s.n + (was ? ' rank ' + (was + 1) : ' learned'), was ? 'Stronger in every duel it is equipped for.' : 'Equip it in your loadout to take it into duels.', 'feat');
       // A first ability or passive goes straight into an empty slot.
@@ -7750,11 +8413,205 @@
     try {
       const r = await api('POST', { p: i }, '/arena/kit');
       if (!r || !r.me) throw 0;
-      rg.st.me = r.me; sfx.buy();
+      rg.st.me = r.me; sfx.buy(); L.qEv(S, 'ringkit'); save();
       const p = RING_KIT[i], k = r.me.k[i];
       toast('shield', RING_TIER(k)[0] + ' ' + (p.id === 'arms' ? RING_ARMS[L.memberById('you').cls] : p.name) + ' +' + k, 'Your Ringwarden kit grows stronger. It only counts in the Ring.', 'feat');
     } catch (e) { toast('lock', 'Could not upgrade', 'Check your Laurels and try again in a moment.', 'warn'); }
     rg.busy = false; paintRing();
+  }
+  // ---- team battles (John, 27 Nov 2026): the hero plus two of your own companions, 3 vs 3 ----
+  // Borrowed player heroes never join. The lineup (Front, Middle, Back) is saved on the server with each companion's
+  // Ring build (the log of its own damage and health, like the hero's) and fights for you while you are away.
+  // Companions wear a companion Ring kit bought with Laurels; it stays with that companion.
+  // Keep TEAM_KIT, teamGate, teamCost and the stat formula in step with CKIT/cgate/ccost/cstats in infra/ring/index.js.
+  const TEAM_KIT = [
+    { id: 'arms', name: 'Arms', slot: 'main', R: 0, E: 6, hp: 0, at: .02 },
+    { id: 'mail', name: 'Mail', slot: 'chest', R: 6, E: 0, hp: .02, at: 0 },
+    { id: 'charm', name: 'Charm', slot: 'neck', R: 3, E: 3, hp: .01, at: .01 },
+  ];
+  const TEAM_MAX = 10, teamGate = r => r >= 5 ? 1300 : 0, teamCost = r => 40 + 20 * r;
+  const TEAM_TIER = r => r <= 0 ? ['Plain', 'common'] : r <= 5 ? ['Ironbound', 'rare'] : ['Emberforged', 'epic'];
+  const TEAM_POS = ['Front', 'Middle', 'Back'];
+  const ringFree = c => ({ tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain' })[c];
+  // Companions that can fight: your own, not borrowed players and not two-hour contracts.
+  function teamPool() {
+    return (S.unlocked || []).filter(id => id !== 'you' && L.memberById(id) && !L.isGuest(S, id) && L.lvl(S, id) > 0 && !(S.hires && S.hires[id] && S.hires[id].kind === 'short'));
+  }
+  const teamKitOf = id => { const me = rg.st && rg.st.me; return (((me && me.ck) || {})[id] || '0.0.0').split('.').map(Number); };
+  function teamStats(id) {
+    const b = ringBuild(id), k = teamKitOf(id);
+    let R = 0, E = 0, hp = 1, at = 1;
+    k.forEach((r, i) => { const p = TEAM_KIT[i]; R += p.R * r; E += p.E * r; hp += p.hp * r; at += p.at * r; });
+    return { hp: Math.round((800 + 28 * b.v) * hp), at: Math.round((100 + 4 * b.m) * at), E, R };
+  }
+  // The lineup: the saved one, with companions you no longer have dropped; with none saved, you plus your two strongest.
+  function teamLine() {
+    const me = rg.st && rg.st.me, pool = teamPool();
+    if (rg.tl) return rg.tl.filter(id => id === 'you' || pool.includes(id));
+    const saved = me && Array.isArray(me.tl) ? me.tl.map(e => e.id).filter(id => id === 'you' || pool.includes(id)) : null;
+    if (saved && saved.length) return saved.includes('you') ? saved : ['you'].concat(saved).slice(0, 3);
+    const best = pool.map(id => { const s = teamStats(id); return [id, s.hp * s.at]; }).sort((a, b) => b[1] - a[1]).slice(0, 2).map(x => x[0]);
+    return ['you'].concat(best);
+  }
+  const teamBody = ids => ids.map(id => { if (id === 'you') return { id: 'you' }; const m = L.memberById(id), b = ringBuild(id); return { id, n: m.name, c: m.cls, m: b.m, v: b.v }; });
+  async function teamSave(ids) {
+    rg.tl = ids.slice();
+    if (ids.length !== 3) { paintRing(); return; }
+    if (rg.busy) return; rg.busy = true;
+    try { const r = await api('PUT', Object.assign(ringBuild(), { tl: teamBody(ids) }), '/arena'); if (!r || !r.me) throw 0; rg.st.me = r.me; rg.tl = null; rg.sent = Date.now(); sfx.buy(); }
+    catch (e) { toast('lock', 'Lineup not saved', 'Try again in a moment.', 'warn'); }
+    rg.busy = false; paintRing();
+  }
+  const teamName = (t, i) => esc(t.hero ? t.n : t.n || '');
+  const teamHue = (t, owner) => t.hero ? (owner === rg.st.me.id ? lookHue(L.memberById('you')) : outfitHue((looksCache[owner] || {}).k)) : ((L.memberById(t.id) || {}).hue || 0);
+  function teamView(me, you) {
+    // the server learns team battles in its own deploy; until then, say so instead of sending fights it would treat as duels
+    if (!rg.st.tkit) return '<p class="note">Team battles open soon. Check back after the next update.</p>';
+    const line = teamLine(), pool = teamPool(), en = ringEnergy(me), full = line.length === 3, saved = !!(me.tl && me.tl.length === 3) && !rg.tl;
+    let h = '<p class="note small tmnote">Fight another player’s team with your hero and two companions. Borrowed player heroes can’t join, only companions you hired or found. The front fighter takes most of the blows; rogues go for the weakest foe and healers mend the weakest teammate.</p>';
+    h += '<div class="tmhead"><span><b>' + (me.tr || 1000).toLocaleString('en-US') + '</b> team rating</span><span class="rtitle sm rt-' + ringTitle(me.tr || 1000).toLowerCase() + '">' + ringTitle(me.tr || 1000) + '</span>' + (rg.st.trank ? '<span>rank ' + rg.st.trank + ' of ' + rg.st.tn + '</span>' : '') + '<span title="Team wins and losses">' + icon('sword') + (me.tw || 0) + '&ndash;' + (me.tx || 0) + '</span><span>' + laurel(me.ll) + '</span></div>';
+    h += '<h3 class="sub">Your lineup</h3><div class="tmline">' + [0, 1, 2].map(i => {
+      const id = line[i];
+      if (!id) return '<div class="tmslot empty"><span class="tmposl">' + TEAM_POS[i] + '</span><div class="tmempty">' + icon('users') + '</div><small>' + (pool.length > line.length - 1 ? 'Add a companion below' : 'Hire or find more companions to fill this spot') + '</small></div>';
+      const m = L.memberById(id), isYou = id === 'you', s = isYou ? me.s : teamStats(id), k = isYou ? null : teamKitOf(id);
+      return '<div class="tmslot' + (i === 0 ? ' tmfront' : '') + '"><span class="tmposl' + (isYou ? ' tmyou' : '') + '">' + TEAM_POS[i] + '</span>' + ringFig(m.cls, isYou ? lookHue(m) : m.hue, 3) +
+        '<div class="nm">' + esc(isYou ? S.hero.name : m.name) + '</div><div class="tmtags">' + classTag(m.cls) + (isYou ? '<span class="rartag" style="--rc:#6cc4e8">Your hero</span>' : rarTag(id)) + '</div>' +
+        '<small>Power level ' + L.lvl(S, id) + '</small><small class="st">' + fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack</small>' +
+        (isYou ? '<small class="st">Ringwarden kit + Ring skills</small>' : '<div class="tmkit" title="Companion Ring kit">' + k.map(r => '<i class="' + (r > 5 ? 'ep' : r ? 'on' : '') + '"></i>').join('') + '</div>') +
+        '<div class="tmbtn"><button class="btn ghost small" data-tmmove="' + i + '" title="Move one spot toward the front">Move</button>' + (isYou ? '' : '<button class="btn ghost small" data-tmgear="' + esc(id) + '">Gear</button>') + '</div>' + (isYou ? '' : '<button class="tmx" data-tmout="' + esc(id) + '" title="Remove from the lineup" aria-label="Remove ' + esc(m.name) + ' from the lineup">&times;</button>') + '</div>';
+    }).join('') + '</div>';
+    if (!full) h += '<p class="note small">' + (pool.length < 2 ? 'You need two companions of your own for a team. Hire some at the Guild Hall.' : 'Pick two companions to save your team.') + '</p>';
+    else if (!saved) h += '<p class="note small">Saving your lineup…</p>';
+    const fr = line.filter(id => id !== 'you').length;
+    h += '<details class="tmfold"' + (full ? '' : ' open') + '><summary>Pick companions <small>' + fr + ' of 2 chosen</small></summary><div class="tmroster">' + (pool.length ? pool.map(id => {
+      const m = L.memberById(id), on = line.includes(id), s = teamStats(id);
+      return '<div class="tmrow' + (on ? ' in' : '') + '">' + ringFig(m.cls, m.hue, 2) + '<div><span class="nm">' + esc(m.name) + '</span> ' + classTag(m.cls) + ' ' + rarTag(id) + '<small>Power level ' + L.lvl(S, id) + ' &middot; ' + fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack</small></div>' +
+        (on ? '<span class="inl">In lineup</span>' : '<button class="btn ghost small" data-tmin="' + esc(id) + '"' + (full ? ' disabled title="Remove a companion from your lineup first"' : '') + '>Add</button>') + '</div>';
+    }).join('') : '<p class="note small">No companions yet.</p>') + '</div></details>';
+    const tf = rg.st.tfoes || [];
+    h += '<h3 class="sub">Team challengers</h3>' + (tf.length ? '<div class="tmfoes">' + tf.map(f => {
+      const my = (me.team || []).reduce((t, x) => t + ringPower(x.s), 0) || 1, q = f.t.reduce((t, x) => t + ringPower(x.s), 0) / my;
+      const odd = q > 1.35 ? ['tough', 'Tough fight'] : q < 0.75 ? ['easy', 'You are favored'] : ['even', 'Even match'];
+      const rc = me.trc && me.trc[f.id], rq = rc ? (me.rep || [1, .5, .25, 0])[Math.min(rc[0], 3)] : 1;
+      const rm = !rc ? '' : rq > 0 ? '<small><span class="mu rep">' + icon('refresh') + 'Rematch: ' + Math.round(rq * 100) + '% rating and Laurels</span></small>' : '<small><span class="mu bad">' + icon('refresh') + 'Rematch pays nothing for ' + ringIn(rc[1] - Date.now()) + '</span></small>';
+      return '<div class="tmfoe"><div class="tmtrio">' + f.t.map(t => ringFig(t.c, teamHue(t, f.id), 2)).join('') + '</div><div><span class="nm">' + esc(f.n) + '’s team</span><small><span class="rtitle sm rt-' + ringTitle(f.tr).toLowerCase() + '">' + ringTitle(f.tr) + '</span> ' + f.tr.toLocaleString('en-US') + ' &middot; ' + f.tw + '&ndash;' + f.tx + ' &middot; <i class="odds ' + odd[0] + '">' + odd[1] + '</i></small>' + rm + '<small class="dim">' + f.t.map(t => esc(t.n)).join(' &middot; ') + '</small></div>' +
+        '<button class="btn small" data-tfight="' + f.id + '"' + (!saved ? ' disabled title="Save a full lineup first"' : !en ? ' disabled title="No challenges left. One returns every 30 minutes."' : '') + '>Fight</button></div>';
+    }).join('') + '</div>' : '<p class="note">No other teams have entered yet. Check back soon.</p>');
+    h += '<details class="tmfold"><summary>How team battles work <small>tap to open</small></summary><ul class="tmrule"><li>Win: 10 Laurels, up to 14 against a stronger team. Loss: 4. First team win of the day: +10.</li><li>Uses the same challenges as duels.</li><li>Your team defends while you are away: +2 Laurels for each challenger it beats.</li><li>Companions use their class ability and their companion Ring kit. Your hero brings its Ringwarden kit and Ring skills.</li><li>Team battles have their own rating and standings, and never hurt your dungeon party.</li></ul></details>';
+    return h;
+  }
+  function teamGearView(me) {
+    const line = teamLine().filter(id => id !== 'you');
+    let id = rg.gid && line.includes(rg.gid) ? rg.gid : line[0];
+    if (!id) return '<p class="note">Add companions to your lineup first.</p><div class="row"><button class="btn ghost small" data-rv="team">Back to lineup</button></div>';
+    rg.gid = id;
+    const m = L.memberById(id), k = teamKitOf(id), s = teamStats(id), ab = ringSkill(ringFree(m.cls));
+    let h = '<div class="tmgear-who">' + line.map(x => '<button data-tmgear="' + esc(x) + '" class="' + (x === id ? 'on' : '') + '">' + ringFig(L.memberById(x).cls, L.memberById(x).hue, 2) + esc(L.memberById(x).name) + '</button>').join('') + '<button class="tmback" data-rv="team">Back to lineup</button></div>';
+    h += '<div class="tmgearhead">' + ringFig(m.cls, m.hue, 3) + '<div><h3>' + esc(m.name) + '’s Ring kit</h3><small>' + classTag(m.cls) + ' ' + rarTag(id) + ' Power level ' + L.lvl(S, id) + '</small><small>In the Ring: ' + fmt(s.hp) + ' health &middot; ' + fmt(s.at) + ' attack' + (s.E ? ' &middot; Edge ' + s.E : '') + (s.R ? ' &middot; Resolve ' + s.R : '') + '</small>' + (ab ? '<small>Fights with: ' + esc(ab.n) + ' (class ability)</small>' : '') + '</div></div>';
+    h += '<p class="note small">Companion Ring gear is separate from dungeon gear and counts only in team battles. It stays with this companion. Each piece has ' + TEAM_MAX + ' ranks: Ironbound, then Emberforged (needs a best team rating of 1,300).</p><div class="ringkit">';
+    h += TEAM_KIT.map((p, i) => {
+      const r = k[i] || 0, t = TEAM_TIER(r), g = teamGate(r), cost = teamCost(r);
+      const nm = (r ? t[0] + ' ' : 'Ringwarden ') + p.name + (r ? ' <em>+' + r + '</em>' : '');
+      const fx = x => [p.R ? 'Resolve +' + p.R * x : '', p.E ? 'Edge +' + p.E * x : '', p.hp ? 'health +' + Math.round(p.hp * x * 1000) / 10 + '%' : '', p.at ? 'attack +' + Math.round(p.at * x * 1000) / 10 + '%' : ''].filter(Boolean).join(' &middot; ');
+      let act;
+      if (r >= TEAM_MAX) act = '<span class="rkmax">Mastered</span>';
+      else if ((me.tp || 1000) < g) act = '<span class="rklock" title="Reach a team rating of ' + g.toLocaleString('en-US') + ' once to unlock Emberforged ranks">' + icon('lock') + g.toLocaleString('en-US') + ' team rating</span>';
+      else act = '<button class="btn small" data-ckit="' + i + '"' + (me.ll < cost ? ' disabled title="Not enough Laurels"' : '') + '>' + (r ? 'Upgrade' : 'Claim') + ' ' + laurel(cost) + '</button>';
+      return '<div class="ringpiece r-' + t[1] + '"><div class="tile r-' + t[1] + (r ? '' : ' ghost') + '"><img class="iimg" src="' + SP.itemIcon(m.cls, p.slot, r ? t[1] : 'common') + '" alt=""></div><div class="rpinfo"><b>' + nm + '</b><small>' + (r ? fx(r) : 'Not claimed yet') + '</small>' + (r < TEAM_MAX ? '<small class="dim">Next rank: ' + fx(1) + '</small>' : '') + '</div><div class="rpact">' + act + '</div></div>';
+    }).join('') + '</div>';
+    return h;
+  }
+  async function teamKit(i, btn) {
+    const id = rg.gid; if (rg.busy || !id) return; rg.busy = true; if (btn) btn.disabled = true;
+    try {
+      const r = await api('POST', { cid: id, p: i }, '/arena/kit'); if (!r || !r.me) throw 0;
+      rg.st.me = r.me; sfx.buy(); save();
+      const k = teamKitOf(id)[i];
+      toast('shield', TEAM_TIER(k)[0] + ' ' + TEAM_KIT[i].name + ' +' + k, L.memberById(id).name + '’s Ring kit grows stronger. It counts only in team battles.', 'feat');
+    } catch (e) { toast('lock', 'Could not upgrade', 'Check your Laurels and try again in a moment.', 'warn'); }
+    rg.busy = false; paintRing();
+  }
+  function teamClick(e) {
+    const mv = e.target.closest('[data-tmmove]'), out = e.target.closest('[data-tmout]'), add = e.target.closest('[data-tmin]'), gear = e.target.closest('[data-tmgear]'), ck = e.target.closest('[data-ckit]'), tf = e.target.closest('[data-tfight]');
+    if (gear) { rg.gid = gear.dataset.tmgear; rg.view = 'tgear'; paintRing(); return true; }
+    if (ck) { teamKit(+ck.dataset.ckit, ck); return true; }
+    if (tf) { if (rg.st && rg.st.tkit) teamFight(tf.dataset.tfight, tf); return true; }
+    if (!mv && !out && !add) return false;
+    const line = teamLine().slice();
+    if (mv) { const i = +mv.dataset.tmmove, j = (i + line.length - 1) % line.length; if (line.length > 1) [line[i], line[j]] = [line[j], line[i]]; }
+    if (out) line.splice(line.indexOf(out.dataset.tmout), 1);
+    if (add && line.length < 3 && !line.includes(add.dataset.tmin)) line.push(add.dataset.tmin);
+    teamSave(line); return true;
+  }
+  async function teamFight(id, btn) {
+    if (rg.busy) return;
+    const me = rg.st && rg.st.me; if (!me || !ringEnergy(me)) return;
+    rg.busy = true; if (btn) btn.disabled = true;
+    let r;
+    try {
+      // refresh the lineup's builds first, so the companions fight as strong as they are now
+      if (Date.now() - rg.sent > 5 * 6e4) { const t = teamLine(); const u = await api('PUT', Object.assign(ringBuild(), t.length === 3 ? { tl: teamBody(t) } : {}), '/arena'); if (u && u.me) rg.st.me = u.me; rg.sent = Date.now(); }
+      r = await api('POST', { id, team: 1 }, '/arena/fight'); if (!r || !r.log || !r.team) throw 0;
+    } catch (e) { rg.busy = false; if (btn) btn.disabled = false; toast('lock', 'The battle did not start', 'The Ring could not be reached. Your challenge was not spent.', 'warn'); return; }
+    rg.st.me = r.me; rg.busy = false;
+    playTeam(r);
+  }
+  // Play a team battle back from the server's log: [side, slot, target side, target slot, damage, flag, heal, tag, ...six healths].
+  function playTeam(r) {
+    const T = [r.a.t, r.b.t], own = [r.a.id, r.b.id], max = T[0].concat(T[1]).map(t => t.s.hp), cur = max.slice();
+    const sname = id => { const k = ringSkill(id); return k ? k.n : ''; };
+    const nm = (sd, i) => esc(T[sd][i] ? T[sd][i].n : '');
+    const fig = (t, sd, i) => '<div class="tmf" id="tm-f' + (sd * 3 + i) + '"><span class="tmpos">' + TEAM_POS[i] + '</span><div class="fig"><img src="' + SP.spriteURL(t.c, 5, teamHue(t, own[sd])) + '" alt=""><div class="rdpop" id="tm-pop' + (sd * 3 + i) + '"></div></div><b>' + esc(t.n) + '</b><div class="bar"><i id="tm-hp' + (sd * 3 + i) + '" style="width:100%"></i><span id="tm-ht' + (sd * 3 + i) + '">' + fmt(t.s.hp) + '</span></div></div>';
+    modal('<div class="maphead"><div><h2>Team battle</h2><small>Your team challenges ' + esc(r.b.n) + '’s team</small></div><button class="iconbtn" id="tm-x" aria-label="Close">&times;</button></div>' +
+      '<div class="tmarena"><div class="tmside them">' + T[1].map((t, i) => fig(t, 1, i)).join('') + '</div><div class="tmmid"><small>' + esc(r.b.n) + '’s team</small><span class="rdvs">VS</span><small>Your team</small></div><div class="tmside us">' + T[0].map((t, i) => fig(t, 0, i)).join('') + '</div></div>' +
+      '<div class="rdlog" id="tm-log"></div><div class="rdres" id="tm-res" hidden></div><div class="row"><button class="btn ghost" id="tm-skip">Skip to the end</button></div>', md => {
+      $('modal').dataset.lock = '1';
+      const lines = []; let i = 0, timer = 0, done = false;
+      const q = s => md.querySelector(s);
+      const pop = (k, txt, cls) => { const p = q('#tm-pop' + k); if (!p) return; const s = document.createElement('span'); s.className = cls; s.textContent = txt; p.appendChild(s); setTimeout(() => s.remove(), 900); };
+      const paint = () => { for (let k = 0; k < 6; k++) { if (!q('#tm-hp' + k)) continue; q('#tm-hp' + k).style.width = Math.max(0, cur[k] / max[k] * 100) + '%'; q('#tm-ht' + k).textContent = fmt(Math.max(0, cur[k])); q('#tm-f' + k).classList.toggle('fallen', cur[k] <= 0); } q('#tm-log').innerHTML = lines.slice(-3).map(l => '<p>' + l + '</p>').join(''); };
+      const step = quiet => {
+        const e = r.log[i++]; if (!e) return false;
+        const [sd, a, ts, ti, d, c, hl, tag] = e, before = cur.slice();
+        for (let k = 0; k < 6; k++) cur[k] = e[8 + k] != null ? e[8 + k] : cur[k];
+        if (quiet) return true;
+        const A = sd * 3 + a, D = ts * 3 + ti, an = tag && tag !== 'dot' && tag !== 'stun' && tag !== 'und' ? sname(tag) : '';
+        if (c === 3) { pop(A, 'Stunned', 'miss'); sfx.thud(); lines.push('<b>' + nm(sd, a) + '</b> is stunned and loses the turn.'); return true; }
+        if (c === 5) { pop(A, 'Survives!', 'crit'); sfx.relic(); lines.push('<b>' + nm(sd, a) + '</b> refuses to fall!'); return true; }
+        if (c === 4) { pop(D, '-' + fmt(d), 'dot'); lines.push('<b>' + nm(ts, ti) + '</b> suffers ' + fmt(d) + ' from the lingering wound.' + (before[D] > 0 && cur[D] <= 0 ? ' <b>' + nm(ts, ti) + '</b> falls.' : '')); return true; }
+        const f = q('#tm-f' + A + ' .fig'); if (f) { f.classList.remove('lunge'); void f.offsetWidth; f.classList.add('lunge'); }
+        if (an) pop(A, an, 'abil');
+        if (ts === sd) { // a heal on a teammate
+          if (hl) pop(D, '+' + fmt(hl), 'heal'); sfx.buy();
+          lines.push('<b>' + nm(sd, a) + '</b> uses <em class="ab">' + esc(an) + '</em>' + (D !== A ? ' on <b>' + nm(ts, ti) + '</b>' : '') + (hl ? ' and restores ' + fmt(hl) : '') + '.');
+          return true;
+        }
+        const tf = q('#tm-f' + D + ' .fig'); if (tf && (d > 0 || c === 1)) { tf.classList.remove('struck'); void tf.offsetWidth; tf.classList.add('struck'); }
+        if (c === 2) pop(D, 'Miss', 'miss'); else if (d > 0) pop(D, '-' + fmt(d), c ? 'crit' : 'dmg');
+        if (hl) pop(A, '+' + fmt(hl), 'heal');
+        c === 2 ? sfx.thud() : d > 0 ? sfx.hit(c === 1) : sfx.buy();
+        const what = an ? 'uses <em class="ab">' + esc(an) + '</em> on <b>' + nm(ts, ti) + '</b>' + (c === 2 ? ' but misses' : d > 0 ? ' for ' + fmt(d) + (c ? ' (critical)' : '') : '') : c === 2 ? 'misses <b>' + nm(ts, ti) + '</b>' : (c ? 'lands a <em>critical</em> blow on <b>' + nm(ts, ti) + '</b> for ' : 'hits <b>' + nm(ts, ti) + '</b> for ') + fmt(d);
+        lines.push('<b>' + nm(sd, a) + '</b> ' + what + (hl ? ' and recovers ' + fmt(hl) : '') + '.' + (before[D] > 0 && cur[D] <= 0 ? ' <b>' + nm(ts, ti) + '</b> falls.' : ''));
+        return true;
+      };
+      const finish = () => {
+        if (done) return; done = true; clearInterval(timer);
+        while (step(true)); paint();
+        const res = q('#tm-res'); res.hidden = false; res.className = 'rdres ' + (r.win ? 'won' : 'lost');
+        const down = T[0].filter((t, k) => cur[k] <= 0 && !t.hero).map(t => esc(t.n));
+        res.innerHTML = '<h3>' + (r.win ? 'Victory' : 'Defeat') + '</h3><p>' + (r.dr >= 0 ? '+' : '') + r.dr + ' team rating &middot; +' + r.ll + ' Laurels' + (r.fw ? ' (first team win of the day bonus)' : '') + '</p>' +
+          (r.q < 1 ? '<p class="note small">' + (r.q > 0 ? 'Rematch: ' + Math.round(r.q * 100) + '% of the usual rating and Laurels.' : 'You have fought this team too often today, so this battle paid nothing. Try another team.') + '</p>' : '') +
+          (down.length ? '<p class="note small">' + down.join(' and ') + (down.length > 1 ? ' are' : ' is') + ' fine after the match. Team battles never hurt your dungeon party.</p>' : '');
+        r.win ? sfx.relic() : sfx.fail();
+        const sk = q('#tm-skip'); sk.textContent = 'Back to the Ring'; sk.className = 'btn'; sk.onclick = close;
+        rg.at = 0; loadRing(true);
+      };
+      const close = () => { clearInterval(timer); delete $('modal').dataset.lock; closeModal(); paintRing(); };
+      q('#tm-x').onclick = () => { finish(); close(); };
+      q('#tm-skip').onclick = finish;
+      paint(); sfx.boss();
+      timer = setInterval(() => { if (!step(false)) return finish(); paint(); }, 360);
+    });
   }
   // ---- the duel itself, played back from the server's log ----
   async function ringDuel(id, btn) {
@@ -7765,6 +8622,7 @@
     try { if (Date.now() - rg.sent > 5 * 6e4) { await api('PUT', ringBuild(), '/arena'); rg.sent = Date.now(); } r = await api('POST', { id }, '/arena/fight'); if (!r || !r.log) throw 0; }
     catch (e) { rg.busy = false; if (btn) btn.disabled = false; toast('lock', 'The duel did not start', 'The Ring could not be reached. Your challenge was not spent.', 'warn'); return; }
     rg.st.me = r.me; rg.busy = false;
+    try { const A = r.a, B = r.b, q = ringPower(B.s) / ringPower(A.s); L.qEv(S, 'duel', { id: B.id, cls: B.c, win: !!r.win, up: B.r > A.r, edge: ringEdge(A.c, B.c), even: q >= 0.75 && q <= 1.35, top10: (rg.st.top || []).slice(0, 10).some(t => t.id === B.id) }); save(); } catch (e) {}
     playDuel(r);
   }
   function playDuel(r) {
@@ -7824,7 +8682,9 @@
     });
   }
   if ($('ringbox')) $('ringbox').addEventListener('click', e => {
-    const v = e.target.closest('[data-rv]'); if (v) { rg.view = v.dataset.rv; paintRing(); if (v.dataset.rv === 'foes' || v.dataset.rv === 'top') loadRing(); return; }
+    const v = e.target.closest('[data-rv]'); if (v) { rg.view = v.dataset.rv; paintRing(); if (v.dataset.rv === 'foes' || v.dataset.rv === 'top' || v.dataset.rv === 'team') loadRing(); return; }
+    const tv = e.target.closest('[data-rtop]'); if (tv) { rg.topv = tv.dataset.rtop; paintRing(); return; }
+    if (teamClick(e)) return;
     const d = e.target.closest('[data-duel]'); if (d) { ringDuel(d.dataset.duel, d); return; }
     const k = e.target.closest('[data-kit]'); if (k) { ringKit(+k.dataset.kit, k); return; }
     const sk = e.target.closest('[data-skl]'); if (sk) { ringLearn(sk.dataset.skl, sk); return; }
@@ -8079,5 +8939,5 @@
   requestAnimationFrame(render);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   window.addEventListener('pagehide', save);
-  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch };
+  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch, openProfile: id => profileModal(id), boardProfile: g => boardProfile(g), openSupport, getSigils };
 })();

@@ -1,4 +1,4 @@
-/* lh-build 202611260519 */
+/* lh-build 202611270233 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -42,7 +42,18 @@
     { id: 'varga',   name: 'Varga',     title: 'Tide Knife for Hire',  side: 'tide',     cls: 'rogue',  tier: 1, hue: 150,  bio: "Kestrel's older sister and a knife for hire who took Tide coin and Thessaly's coin at the same time. Family won in the end, narrowly.", line: 'Kestrel’s sister. Took Tide coin. Charges double for family.' },
     { id: 'brann',   name: 'Brann',     title: 'Covenant Runesmith',   side: 'covenant', cls: 'mage',   tier: 1, hue: 180,  bio: 'The Covenant runesmith who carved the seal-wards around the lantern. He knows exactly what they hold in and is trying to make up for it.', line: 'Carved the seal-wards that keep the Rift shut. Regrets some of them.' },
     { id: 'hollow',  name: 'The Hollow King', title: 'The First Bearer', side: 'unsworn', cls: 'necro', tier: 1, hue: 60, bio: 'The very first lantern-bearer, fed to the seal before the Grand War had a name. He came back hollow and crowned. He wants his name back.', line: 'The first lantern-bearer. Fed to the seal. Came back anyway.' },
+    // Unique Legendaries (John, 26 Nov 2026): one of each, found at the Guild Hall, through a side quest, on the
+    // adventure or (Thistle) by a rare rescue. Each has a small extra bonus while working their own camp post (UNIQ).
+    { id: 'greaves', name: 'Marshal Greaves', title: 'Covenant Drillmaster', side: 'covenant', cls: 'tank', tier: 1, uniq: 1, hue: 20, bio: 'A Covenant drillmaster who trained three generations of stair guards. Retired twice. Bored both times.', line: 'Drills anyone who sits still long enough.' },
+    { id: 'alder',   name: 'Sister Alder', title: 'Mercy Corps Field Surgeon', side: 'mercy', cls: 'healer', tier: 1, uniq: 1, hue: 90, bio: 'The Mercy Corps surgeon who runs the aid tents on the Lantern Deep front. She has stitched up soldiers from every banner, sometimes in the same afternoon.', line: 'Has patched up every banner in the war. Twice.' },
+    { id: 'pell',    name: 'Tinker Pell', title: 'Unsworn Lockwright', side: 'unsworn', cls: 'rogue', tier: 1, uniq: 1, hue: 200, bio: 'A cheerful Unsworn lockwright who lost her toolkit somewhere below floor sixty. She can open anything, as long as she has her picks back.', line: 'Opens any lock. Asks permission first. Usually.' },
+    { id: 'ilse',    name: 'Magister Ilse', title: 'Ascendancy Archivist', side: 'radiant', cls: 'mage', tier: 1, uniq: 1, hue: 260, bio: 'An Ascendancy archivist chasing the torn pages of an old guardian bestiary. Every guardian you fell gives her another page.', line: 'Knows where every guardian is weakest. It is in the footnotes.' },
+    { id: 'grimsby', name: 'Grimsby the Lampwright', title: 'Unsworn Lampwright', side: 'unsworn', cls: 'necro', tier: 1, uniq: 1, hue: 110, bio: 'An old lampwright who has lived beside the deep stair longer than anyone remembers. He talks to his lamps. Sometimes they listen.', line: 'Has never let a lamp go out. Not for long.' },
+    { id: 'corra',   name: 'Dame Corra', title: 'Covenant Rearguard', side: 'covenant', cls: 'tank', tier: 1, uniq: 1, hue: 330, bio: 'The Covenant knight who walks last in every column. Ambushers who try her once rarely try again.', line: 'Walks at the back so nobody else has to.' },
+    { id: 'bramble', name: 'Bramble', title: 'Tide Treasure Hunter', side: 'tide', cls: 'rogue', tier: 1, uniq: 1, hue: 40, bio: 'A Tide treasure hunter who sold maps of the deep vaults to anyone who would pay. Then she found out the maps were right.', line: 'Every locked door is a promise.' },
+    { id: 'thistle', name: 'Thistle', title: 'Mercy Corps Scout', side: 'mercy', cls: 'rogue', tier: 1, uniq: 1, hue: 140, bio: 'A Mercy Corps scout who went looking for lost travellers and got caged by a monster instead. If you find him, he will never forget it.', line: 'Finds the lost. Got lost once. Knows how it feels.' },
   ];
+  const LORE_COUNT = 10; // the story companions (Full Roster feat); the unique Legendaries come after them
   // The Grand War alliances, as they appear on the Lantern Deep front.
   const SIDES = {
     covenant: { name: 'Iron Covenant',       motto: 'Hold the line.',            color: '#9fb4c8', perk: '+15% party health',  desc: 'Seal the Rift at any cost. The Hold was a Covenant fortress once.' },
@@ -64,7 +75,7 @@
   const WARWIN_REVIVE = 10;
   const WAR_KEY = { covenant: 'covenant', ascendancy: 'radiant', tide: 'tide' };
   const warWinOn = s => !!(s && s.warWin && s.warWin.side && sideOf(s) === s.warWin.side);
-  const reviveMs = s => (warWinOn(s) ? WARWIN_REVIVE : REVIVE_TIME) * 1000;
+  const reviveMs = s => (warWinOn(s) ? WARWIN_REVIVE : REVIVE_TIME) * 1000 * (postOn(s, 'alder') ? 1 - UNIQ_ALDER : 1);
   // v125 Two-Headed Coin (Pip's Curio): a fallen hero has a 25% chance to be back up in 3 seconds.
   const downAt = (s, now) => now + (fxOnW(s, 'coin') && Math.random() < 0.25 ? 3000 : reviveMs(s));
   // Banner lantern (John, 2026-11-24): the more Grand War territories your banner holds right now, the bigger its buff:
@@ -186,7 +197,7 @@
   // guardian signature moves by region, and the move each guardian body uses on the in-between boss floors
   const BOSS_SPECIAL = ['gorge', 'rotcloud', 'spores', 'bonespear', 'magma', 'tidal', 'roots', 'void', 'shards', 'charge', 'tidal', 'rotcloud', 'beam', 'volley', 'eclipse'];
   const BODY_SPECIAL = { golem: 'slam', wyrm: 'breath', lich: 'mark' };
-  const FOE_SPECIAL = { slime: 'acid', bat: 'dive', ghost: 'wail', eye: 'mark', shroom: 'spores', rat: 'venombite', thorn: 'lash', eel: 'tidal', sentinel: 'slam', prism: 'beam', hound: 'dive', riftling: 'void', shard: 'shards' };
+  const FOE_SPECIAL = { slime: 'acid', bat: 'dive', ghost: 'wail', eye: 'mark', shroom: 'spores', rat: 'venombite', thorn: 'lash', eel: 'tidal', sentinel: 'slam', prism: 'beam', hound: 'dive', riftling: 'void', shard: 'shards', beetle: 'charge', crab: 'gorge', moth: 'beam' };
   const SPECIAL_FLOOR = 8, SPECIAL_CHANCE = 0.3, SPECIAL_WARN = 1.5, DOT_FIGHTS = 3;
   const DOTS = { burn: { name: 'Burning', dps: 0.05 }, poison: { name: 'Poisoned', dps: 0.035 } };
   // Who a burn or poison hurts most (John, 2026-11-24): fire eats cloth, plate shrugs some of it off;
@@ -205,7 +216,7 @@
     let sec = CC[k].sec * (m.cls === 'tank' ? 0.5 : 1) * (short ? 0.67 : 1);
     s.cc = s.cc || {}; const cur = ccOf(s, id, now);
     if (cur && cur.k === 'stun' && k === 'disarm') return; // a stun already holds them; keep it simple
-    s.cc[id] = { k, until: now + sec * 1000 };
+    s.cc[id] = { k, until: now + sec * 1000 }; qEv(s, 'cc');
     events && events.push({ type: 'cc', id, k, sec });
   }
   function rollSpecial(f, boss, elite, sprite, b, r) {
@@ -221,6 +232,319 @@
     { id: 'skeleton', name: 'Rattlebones' }, { id: 'eye', name: 'Watcher' }, { id: 'shroom', name: 'Capling' }, { id: 'ghost', name: 'Wisp' },
   ];
   const BOSS_SPRITES = ['golem', 'wyrm', 'lich'];
+  // Creature home zones (John, 27 Nov 2026): every region has its own roster of 8 creatures, each a variant of one of
+  // the drawn bodies (fam). Spawns come from the region's roster ROSTER_HOME of the time, the rest are wanderers from
+  // the regions next door. Rarity sets the weight. Bestiary mastery, specials and hunts follow the family (the body).
+  // Row: [id, name, fam, rarity c/u/r/v, size s/m/l, overlay, hue (absolute; null = the region's), fluff]
+  const ROSTER_HOME = 0.8, RAR_W = { c: 30, u: 14, r: 4, v: 1 }, RAR_NAME = { c: 'Common', u: 'Uncommon', r: 'Rare', v: 'Very rare' };
+  const SIZE_X = { s: 0.85, m: 1, l: 1.2 };
+  const FAMILY = { slime: 'Gloop', rat: 'Gnawer', bat: 'Flitterwing', skeleton: 'Rattlebones', eye: 'Watcher', shroom: 'Capling', ghost: 'Wisp',
+    shard: 'Glass Crawler', sentinel: 'Iron Husk', eel: 'Sluice Eel', thorn: 'Thornling', prism: 'Storm Lens', hound: 'Rift Hound', riftling: 'Riftling',
+    beetle: 'Beetle', moth: 'Moth', crab: 'Crab' };
+  const ROSTERS = [
+    [ // 0 The Lamplit Cellars
+      ['slime', 'Gloop', 'slime', 'c', 'm', '', 0, 'Lamp oil left too long near the Rift grows hungry. Gloops are what it becomes. Harmless alone, ruinous in barrels.'],
+      ['rat', 'Gnawer', 'rat', 'c', 'm', '', 0, 'The Hold’s rats went down for the oil and came back up bigger. The Tide uses them as scouts now.'],
+      ['wickbeetle', 'Wick Beetle', 'beetle', 'c', 'm', '', 0, 'Beetles that nest in old lamp wicks. Their shells hold a little warmth, so the Hold’s children carry them about in winter.'],
+      ['lampmoth', 'Lampmoth', 'moth', 'u', 's', '', 20, 'Lampmoths circle any flame bigger than a candle. They mean no harm, but there are always a great many of them.'],
+      ['caskgloop', 'Cask Gloop', 'slime', 'u', 'm', 'plate', 30, 'A Gloop that soaked into a cider cask and kept its shape, hoops and all. It still sloshes when it moves.'],
+      ['pantryrobber', 'Pantry Robber', 'rat', 'u', 's', '', 20, 'Small, quick and always carrying something it should not. Every cellar in the Hold has lost a cheese to one.'],
+      ['cellarking', 'Cellar King', 'rat', 'r', 'l', 'crown', 0, 'The biggest Gnawer anyone has seen, wearing a thimble for a crown. The others bring it the best crumbs.'],
+      ['goldengloop', 'Golden Gloop', 'slime', 'v', 'm', 'spots', -70, 'A Gloop that swallowed a coin purse and turned the colour of it. Delvers say seeing one means the lantern will burn long tonight.'],
+    ],
+    [ // 1 Mosswater Crypts
+      ['ghost', 'Wisp', 'ghost', 'c', 'm', '', 0, 'A wisp is the warmth a person leaves behind. The Pale Oracle says she can tell whose by the colour.'],
+      ['boggloop', 'Bog Gloop', 'slime', 'c', 'm', 'moss', null, 'A Gloop that sat in crypt water until moss grew on it. It does not seem to mind.'],
+      ['mossbones', 'Mossbones', 'skeleton', 'c', 'm', 'moss', null, 'Old bones wrapped in moss like a blanket. They creak less than other skeletons, and they smell of rain.'],
+      ['cryptflitter', 'Crypt Flitter', 'bat', 'u', 's', '', null, 'Little bats that roost in the crypt alcoves. They count delvers as they pass and squeak the total.'],
+      ['cryptcrab', 'Crypt Crab', 'crab', 'u', 'm', 'moss', null, 'Shell-backed scuttlers that carry candle stubs on their backs. Nobody knows where they find them.'],
+      ['mosswatcher', 'Moss Watcher', 'eye', 'u', 'm', 'moss', null, 'A Watcher grown over with moss, like a stone left in a stream. It still sees everything.'],
+      ['lanternwisp', 'Lantern Wisp', 'ghost', 'r', 'l', 'spots', 40, 'A wisp that still remembers holding a light. It drifts ahead of delvers as if showing them the way.'],
+      ['rotbloom', 'Rot Bloom', 'shroom', 'v', 'l', 'crown', 60, 'Grandmother Rot’s favourite. It is very old, very slow, and very sure of itself.'],
+    ],
+    [ // 2 The Glimmer Fungus Deep
+      ['shroom', 'Capling', 'shroom', 'c', 'm', '', 0, 'They walk on their roots and sing in a pitch only the dead can hear. The Choir is what happens when enough of them agree.'],
+      ['glowcap', 'Glowcap Drifter', 'shroom', 'c', 's', 'spots', null, 'Tiny Caplings that float on their own spores. They glow brighter when they are happy, which is rarely near delvers.'],
+      ['sporemoth', 'Spore Moth', 'moth', 'c', 'm', 'spots', null, 'Its wings are dusted with glowing spores. Where it lands, a new Capling sprouts a week later.'],
+      ['luridgloop', 'Lurid Gloop', 'slime', 'u', 'm', 'spots', null, 'A Gloop that ate too many glowcaps. Now it lights up the tunnel, which makes it very easy to find.'],
+      ['glimmerbeetle', 'Glimmer Beetle', 'beetle', 'u', 'm', 'crystal', null, 'Beetles that grow tiny glass crystals on their backs, like a garden. They are proud of them.'],
+      ['sporewing', 'Sporewing', 'bat', 'u', 'm', 'spots', null, 'A Flitterwing that roosts upside down in glowcap fields. It sneezes a lot.'],
+      ['sporematron', 'Spore Matron', 'shroom', 'r', 'l', 'moss', 300, 'A Capling as tall as a door. Smaller Caplings sprout from her shoulders and hop off when she walks.'],
+      ['choirherald', 'Choir Herald', 'shroom', 'v', 'l', 'crown', 40, 'The voice that leads the Mycelial Choir. When it sings, every Capling on the floor turns to listen.'],
+    ],
+    [ // 3 Saltbone Galleries
+      ['skeleton', 'Rattlebones', 'skeleton', 'c', 'm', '', 0, 'Most wear the tatters of lantern-bearer coats or Covenant iron. Vael says they are not angry. They are lost.'],
+      ['saltcrab', 'Salt Crab', 'crab', 'c', 'm', 'barnacle', null, 'Crabs that walked in from an underground sea long gone. They still wave their claws at the tide that is not there.'],
+      ['brinebones', 'Brine Bones', 'skeleton', 'c', 'm', 'barnacle', null, 'Skeletons crusted white with salt. They crunch when they walk, so you always hear them coming.'],
+      ['bleachwing', 'Bleachwing', 'bat', 'u', 'm', '', 170, 'A Flitterwing bleached pale by the salt air. It is hard to see against the white walls.'],
+      ['saltwatcher', 'Salt Watcher', 'eye', 'u', 'm', 'crystal', null, 'Salt crystals grow around this Watcher like frost on a window. It does not blink. None of them do.'],
+      ['bonegnawer', 'Bone Gnawer', 'rat', 'u', 'm', '', null, 'Gnawers that moved into the galleries for the bones. They polish each one before they hide it.'],
+      ['drummer', 'Covenant Drummer', 'skeleton', 'r', 'l', 'plate', null, 'A skeleton in Covenant iron, still beating time on its ribs. The others march when it plays.'],
+      ['gallerywarden', 'Gallery Warden', 'ghost', 'v', 'l', 'chain', 170, 'A wisp wearing chains of salt. It counts every delver who passes and never loses track.'],
+    ],
+    [ // 4 The Cinder Forges
+      ['slaggloop', 'Slag Gloop', 'slime', 'c', 'm', 'ember', null, 'Molten slag that cooled into a Gloop. It is warm to the touch, so please do not touch it.'],
+      ['cinderbeetle', 'Cinder Beetle', 'beetle', 'c', 'm', 'ember', null, 'Beetles that eat soot and glow orange from the inside. Forge workers used them as night-lights.'],
+      ['ashwing', 'Ashwing', 'bat', 'c', 'm', 'ember', null, 'A Flitterwing that flies through smoke without coughing. Its wings leave little trails of sparks.'],
+      ['sootgnawer', 'Soot Gnawer', 'rat', 'u', 'm', '', null, 'Gnawers black with soot from nose to tail. Only their eyes give them away in the dark.'],
+      ['kilncrab', 'Kiln Crab', 'crab', 'u', 'm', 'ember', null, 'A crab that lives inside old kilns. Its shell is baked hard as pottery.'],
+      ['furnaceeye', 'Furnace Eye', 'eye', 'u', 'm', 'ember', null, 'A Watcher that stares into the forge fires until its eye glows. It is not as scary as it looks. Mostly.'],
+      ['forgehand', 'Forge Hand', 'skeleton', 'r', 'l', 'plate', null, 'Bones in a smith’s apron, still hammering on nothing. Ascendancy smiths left it working and never came back.'],
+      ['moltenheart', 'Molten Heart', 'slime', 'v', 'l', 'ember', null, 'A Gloop that fell into the Furnace-Heart and climbed back out glowing. It is warm enough to toast bread on.'],
+    ],
+    [ // 5 The Drowned Archive
+      ['eye', 'Watcher', 'eye', 'c', 'm', '', 0, 'Nobody has seen a Watcher blink. Moss thinks they report to the Ascendancy. Kestrel thinks Moss worries too much.'],
+      ['inkwisp', 'Inkwisp', 'ghost', 'c', 'm', 'spots', 200, 'Spilled ink from the drowned books that still wants to write. It leaves little letters wherever it floats.'],
+      ['archivecrab', 'Archive Crab', 'crab', 'c', 'm', 'barnacle', null, 'Crabs that file things. Nobody knows what they file, or where, but they are very busy.'],
+      ['inkgloop', 'Ink Gloop', 'slime', 'u', 'm', '', 200, 'A Gloop made of spilled ink. Delvers who fight one go home with blue hands for a week.'],
+      ['pagemoth', 'Page Moth', 'moth', 'u', 'm', '', null, 'Moths that eat old paper and fly in the shapes of the letters they ate.'],
+      ['dampflitter', 'Damp Flitter', 'bat', 'u', 's', 'barnacle', null, 'A small, soggy bat. It shakes itself dry on whoever stands nearest.'],
+      ['readinglens', 'Reading Lens', 'eye', 'r', 'l', 'crystal', null, 'A Watcher that wears a reading glass. It stares at delvers as if checking their names against a list.'],
+      ['sunkenscribe', 'Sunken Scribe', 'ghost', 'v', 'l', 'chain', 140, 'The Sunken Magister’s last apprentice, still taking notes. It writes down everything you do.'],
+    ],
+    [ // 6 Hollow Roots
+      ['bat', 'Flitterwing', 'bat', 'c', 'm', '', 0, 'Drawn to any light. A lantern-bearer learns to love them, because they always fly toward the way out.'],
+      ['rootcap', 'Rootcap', 'shroom', 'c', 'm', 'leaf', null, 'A Capling that grew on a tree root instead of the ground. It walks with a slight lean.'],
+      ['barkbeetle', 'Bark Beetle', 'beetle', 'c', 'm', 'leaf', null, 'Its shell looks just like bark. Delvers lean on them by accident more often than you would think.'],
+      ['rootgnawer', 'Root Gnawer', 'rat', 'u', 'm', 'moss', null, 'Gnawers that chew tunnels through the roots. The Root Mother does not like them at all.'],
+      ['hollowmoth', 'Hollow Moth', 'moth', 'u', 'm', 'leaf', null, 'Its wings are shaped like dry leaves. It hides in plain sight until a lantern comes close.'],
+      ['sapgloop', 'Sap Gloop', 'slime', 'u', 'm', '', -80, 'Tree sap that wandered off. It is very sticky and very slow, and it smells of honey.'],
+      ['knotwatcher', 'Knot Watcher', 'eye', 'r', 'l', 'leaf', null, 'A Watcher that grew inside a knot of old wood. The bark around it is shaped like an eyelid that never closes.'],
+      ['rootbloom', 'Root Mother’s Bloom', 'shroom', 'v', 'l', 'crown', 100, 'A flower the Root Mother grew to watch the tunnels for her. It turns to follow anything warm.'],
+    ],
+    [ // 7 The Starless Vault
+      ['voidwatcher', 'Void Watcher', 'eye', 'c', 'm', 'spots', null, 'A Watcher from the dark below the lantern. Its eye shows stars that are not in any sky.'],
+      ['umbralwisp', 'Umbral Wisp', 'ghost', 'c', 'm', '', null, 'A wisp so dim you only see it when it passes in front of something brighter.'],
+      ['starlessflitter', 'Starless Flitter', 'bat', 'c', 'm', '', null, 'Bats that have never seen daylight, and never will. They are fond of lanterns all the same.'],
+      ['nightmoth', 'Night Moth', 'moth', 'u', 'm', 'spots', null, 'Its wings carry little dots of starlight. It is the only moth that flies away from the lantern.'],
+      ['umbralgloop', 'Umbral Gloop', 'slime', 'u', 'm', '', null, 'A Gloop of pure shadow. It swallows light the way other Gloops swallow lamp oil.'],
+      ['vaultsentry', 'Vault Sentry', 'skeleton', 'u', 'm', 'plate', null, 'A skeleton still guarding a vault door that no longer exists. It takes the job very seriously.'],
+      ['starshell', 'Starshell', 'crab', 'r', 'l', 'crystal', null, 'A crab with a shell full of tiny stars. Nobody knows where it found them, and it will not say.'],
+      ['lastlight', 'Last Light', 'ghost', 'v', 'l', 'spots', 30, 'A wisp from the very first lantern carried into the Vault. It is the only light the Unlit has never put out.'],
+    ],
+    [ // 8 The Glass Wastes
+      ['shard', 'Glass Crawler', 'shard', 'c', 'm', '', null, 'Splinters of Rift-glass that learned to walk. They reflect the light you carry and throw it back as a ward.'],
+      ['prismmite', 'Prism Mite', 'shard', 'c', 's', '', 300, 'Glass Crawlers no bigger than a teacup. They travel in clinking crowds.'],
+      ['glassmoth', 'Glass Moth', 'moth', 'c', 'm', 'crystal', null, 'A moth with see-through wings. When it flies past a lantern it throws rainbows on the walls.'],
+      ['shardcrab', 'Shard Crab', 'crab', 'u', 'm', 'crystal', null, 'A crab that wears a broken bottle for a shell. It picks a bigger one each year.'],
+      ['glassgloop', 'Glass Gloop', 'slime', 'u', 'm', 'crystal', null, 'A Gloop that swallowed so much Rift-glass it started to sparkle. It spits it back out when angry.'],
+      ['glintflitter', 'Glint Flitter', 'bat', 'u', 'm', 'crystal', null, 'Bats with glass in their wings. They dive at anything shiny, including your helmet.'],
+      ['mirroreye', 'Mirror Eye', 'eye', 'r', 'l', 'crystal', null, 'A Watcher with a mirror for an eye. When it looks at you, you see yourself looking back.'],
+      ['facet', 'Regent’s Facet', 'shard', 'v', 'l', 'crown', 40, 'A shard that broke off the Glass Regent. It still thinks it is in charge.'],
+    ],
+    [ // 9 The Ironbound Bastion
+      ['sentinel', 'Iron Husk', 'sentinel', 'c', 'm', '', null, 'Empty Covenant armour, still on patrol. They swing wide, as they were drilled to, and hit whoever stands beside you too.'],
+      ['rusthusk', 'Rust Husk', 'sentinel', 'c', 'm', 'chain', null, 'An Iron Husk that has stood in the damp too long. It squeaks at every step.'],
+      ['rivetgnawer', 'Rivet Gnawer', 'rat', 'c', 'm', 'plate', null, 'Gnawers that chew the rivets out of old armour and wear the plates themselves.'],
+      ['bastionbones', 'Bastion Bones', 'skeleton', 'u', 'm', 'plate', null, 'Covenant soldiers who held the wall until the end, and then kept holding it.'],
+      ['ironbeetle', 'Iron Beetle', 'beetle', 'u', 'm', 'plate', null, 'A beetle that grows a shell of real iron. Bastion smiths used to trade them for nails.'],
+      ['oathwisp', 'Oath Wisp', 'ghost', 'u', 'm', '', null, 'All that is left of a promise someone made on these walls. It still means to keep it.'],
+      ['watchpost', 'Watch-Post Eye', 'eye', 'r', 'l', 'plate', null, 'A Watcher fitted with an iron visor by the Covenant. It was put on guard duty and never relieved.'],
+      ['standard', 'Last Standard', 'sentinel', 'v', 'l', 'crown', null, 'An Iron Husk still carrying the Bastion’s banner. It will not lower it for anyone.'],
+    ],
+    [ // 10 The Weeping Aqueduct
+      ['eel', 'Sluice Eel', 'eel', 'c', 'm', '', null, 'They swim up the aqueduct against the current. A cut eel knits itself shut if you let it rest.'],
+      ['silteel', 'Silt Eel', 'eel', 'c', 's', '', 30, 'Young eels that hide in the mud of the channels. They nibble boots.'],
+      ['aqueductcrab', 'Aqueduct Crab', 'crab', 'c', 'm', 'barnacle', null, 'Crabs that ride the current down the aqueduct and walk all the way back up for another go.'],
+      ['brackishgloop', 'Brackish Gloop', 'slime', 'u', 'm', 'barnacle', null, 'A Gloop of salty channel water. Barnacles grow on it, which it finds annoying.'],
+      ['dripcap', 'Drip Cap', 'shroom', 'u', 'm', 'moss', null, 'A Capling that grows under the dripping arches. Its spores come out as a fine mist.'],
+      ['weepingflitter', 'Weeping Flitter', 'bat', 'u', 'm', '', null, 'A bat that cries like the aqueduct. It is not sad. That is just how it talks.'],
+      ['ribboneel', 'Ribbon Eel', 'eel', 'r', 'l', 'spots', 260, 'A long, bright eel that the Brine Matriarch keeps close. It glows when she calls.'],
+      ['weepingwisp', 'Weeping Wisp', 'ghost', 'v', 'l', 'spots', 150, 'The sound the aqueduct makes when it weeps. Delvers hear it long before they see it.'],
+    ],
+    [ // 11 The Bone Orchard
+      ['thorn', 'Thornling', 'thorn', 'c', 'm', '', null, 'Seedlings of the Bone Orchard that walked away from their trees. Their barbs carry a slow venom that keeps working after the fight.'],
+      ['bramblesprout', 'Bramble Sprout', 'thorn', 'c', 's', 'leaf', null, 'A Thornling only a few days old. It is all prickles and no manners.'],
+      ['marrowcap', 'Marrow Cap', 'shroom', 'c', 'm', 'leaf', 0, 'Pale Caplings that grow in the orchard soil. They hum along with the wind through the branches.'],
+      ['orchardgnawer', 'Orchard Gnawer', 'rat', 'u', 'm', '', null, 'Gnawers that steal the orchard’s white fruit. The Keeper chases them off with his shears.'],
+      ['blossommoth', 'Blossom Moth', 'moth', 'u', 'm', 'leaf', null, 'A moth that looks just like a white blossom until it flies off your shoulder.'],
+      ['orchardbones', 'Orchard Bones', 'skeleton', 'u', 'm', 'leaf', null, 'Bones with roots growing through them. They tend the trees and do not like visitors.'],
+      ['petalwisp', 'Petal Wisp', 'ghost', 'r', 'l', 'leaf', 320, 'A wisp that wears a crown of petals. It drifts from tree to tree, as if visiting old friends.'],
+      ['elderthorn', 'Elder Thorn', 'thorn', 'v', 'l', 'crown', 60, 'The oldest Thornling in the orchard. The others still wait for it before they do anything.'],
+    ],
+    [ // 12 Stormglass Spire
+      ['prism', 'Storm Lens', 'prism', 'c', 'm', '', null, 'Shards of the Spire that caught a lightning stroke and kept it. They strike before you see them move.'],
+      ['sparklens', 'Spark Lens', 'prism', 'c', 's', 'spots', 60, 'A small Storm Lens, still learning. It crackles when it is excited, which is always.'],
+      ['stormwing', 'Stormwing', 'bat', 'c', 'm', 'spots', null, 'A bat that rides the Spire’s lightning. Its fur stands straight up.'],
+      ['thundereye', 'Thunder Eye', 'eye', 'u', 'm', 'spots', null, 'A Watcher charged with storm. When it marks you, your hair stands on end first.'],
+      ['staticgloop', 'Static Gloop', 'slime', 'u', 'm', 'spots', null, 'A Gloop full of static. Everything it touches gets a small, annoying shock.'],
+      ['boltmoth', 'Bolt Moth', 'moth', 'u', 'm', 'spots', null, 'Moths that fly toward lightning instead of lanterns. Nobody knows how they survive it.'],
+      ['chargedshard', 'Charged Shard', 'shard', 'r', 'l', 'spots', null, 'A Glass Crawler that climbed the Spire and got struck. It has been buzzing ever since.'],
+      ['choirprism', 'Choir Prism', 'prism', 'v', 'l', 'crown', 300, 'The lens the Spire’s choir tunes to. It hums one note, perfectly, forever.'],
+    ],
+    [ // 13 The Nexus Scar
+      ['hound', 'Rift Hound', 'hound', 'c', 'm', '', null, 'Bred by no alliance, followed by all of them. Wounding one only makes it angry.'],
+      ['scarpup', 'Scar Pup', 'hound', 'c', 's', '', null, 'A young Rift Hound. It already growls like a big one, and it is very proud of that.'],
+      ['warbornbones', 'Warborn Bones', 'skeleton', 'c', 'm', 'plate', null, 'Skeletons from all three alliances, still fighting each other when nobody is looking.'],
+      ['scargnawer', 'Scar Gnawer', 'rat', 'u', 'm', '', null, 'Gnawers that follow the armies for dropped rations. They know every side’s marching songs.'],
+      ['bannereye', 'Banner Eye', 'eye', 'u', 'm', '', null, 'A Watcher that floats over the battle lines, keeping score for nobody.'],
+      ['scarcap', 'Scar Cap', 'shroom', 'u', 'm', 'ember', null, 'A Capling that grows in scorched ground. Its spores smell of smoke.'],
+      ['threefoldhusk', 'Threefold Husk', 'sentinel', 'r', 'l', 'chain', -40, 'Three suits of armour from three alliances, chained into one. They argue about which way to walk.'],
+      ['warhosthound', 'Warhost Hound', 'hound', 'v', 'l', 'crown', 40, 'The hound that runs ahead of the Threefold Warhost. Every other hound in the Scar follows it.'],
+    ],
+    [ // 14 The Rift Threshold
+      ['riftling', 'Riftling', 'riftling', 'c', 'm', '', null, 'Small pieces of the Rift that wandered up toward the lantern. They are curious. They are also very hard to hurt.'],
+      ['riftmote', 'Rift Mote', 'riftling', 'c', 's', 'spots', null, 'A Riftling so small it fits in a cupped hand. Please do not try.'],
+      ['starbornwisp', 'Starborn Wisp', 'ghost', 'c', 'm', 'spots', null, 'A wisp made of starlight from the far side of the Rift. It is a long way from home.'],
+      ['riftmoth', 'Rift Moth', 'moth', 'u', 'm', 'spots', null, 'Moths that flew through the Rift and came back strange. Their wings show other places.'],
+      ['unmadegloop', 'Unmade Gloop', 'slime', 'u', 'm', 'spots', null, 'A Gloop that is not quite finished. Bits of it flicker in and out.'],
+      ['hollowflitter', 'Hollow-lit Flitter', 'bat', 'u', 'm', '', null, 'Bats lit from the inside by Rift light. They look like flying lanterns.'],
+      ['thresholdeye', 'Threshold Eye', 'eye', 'r', 'l', 'crystal', null, 'A Watcher that looks through the Rift instead of at you. That is somehow worse.'],
+      ['firstspark', 'Firstspark', 'riftling', 'v', 'l', 'crown', 40, 'A Riftling that has almost become a star. It hums a tune every delver seems to know.'],
+    ],
+  ];
+  // Field notes: a second page of lore that opens after enough of a kind are defeated (John, 27 Nov 2026).
+  const LORE_AT = { c: 25, u: 10, r: 3, v: 1 };
+  // Creature details (John, 27 Nov 2026): defeats needed to learn its strength, then its special attack.
+  const REVEAL = { c: [5, 15], u: [3, 6], r: [1, 2], v: [1, 1] };
+  const CREATURE_LORE = {
+    "slime": "Oduya keeps a bucket by the stair for Gloops. She says the trick is to scoop, not swing.",
+    "rat": "Kestrel once trained a Gnawer to fetch coins. It learned, then kept them.",
+    "wickbeetle": "When a Wick Beetle\u2019s glow fades, an old lamp somewhere in the Hold has gone out. Children leave crumbs by the cellar door to keep them bright.",
+    "lampmoth": "Lampmoth wings leave a fine gold dust. Mercy Corps medics brush it onto bandages, because the moths always find their way back to whoever wears them.",
+    "caskgloop": "Nobody admits to leaving the cask open. The cider was very good, everyone agrees.",
+    "pantryrobber": "Every Pantry Robber has a hoard. The biggest one ever found held forty spoons, a boot and a Covenant medal.",
+    "cellarking": "The thimble crown was Moss\u2019s. She noticed it missing the week she arrived and has decided it looks better on him.",
+    "goldengloop": "Old delvers tip their caps when one passes. Nobody remembers who started it, but nobody wants to be the one who stops.",
+    "ghost": "Wisps gather where people once sat by a fire. The Mosswater crypts are full of them, which says something kind about whoever was buried there.",
+    "boggloop": "Bog Gloops grow a new layer of moss every season. Count the rings and you know how long it has been since anyone came down here.",
+    "mossbones": "Vael says these were gardeners. They still tug at weeds when they think no one is looking.",
+    "cryptflitter": "Their squeaks match the number of delvers exactly. Mercy Corps scouts use them to check nobody has been left behind.",
+    "cryptcrab": "Follow a Crypt Crab long enough and it leads you to a shrine full of candle stubs, each one lit. Nobody has ever seen who lights them.",
+    "mosswatcher": "The moss on a Watcher grows only on the side facing the stair. Kestrel says it is watching for something coming down.",
+    "lanternwisp": "If a Lantern Wisp drifts ahead of you, follow it. It has never once led a delver the wrong way.",
+    "rotbloom": "Grandmother Rot planted it the year the crypts flooded. It has outlived every gardener who tried to dig it up.",
+    "shroom": "Caplings sing in rounds. Wren tried to write the tune down and ran out of paper on the third verse.",
+    "glowcap": "On quiet nights in the Deep the Glowcap Drifters rise all at once, like lanterns let go on a festival night.",
+    "sporemoth": "Spore Moths and Caplings help each other. The moths carry the spores, and the Caplings sing them to sleep.",
+    "luridgloop": "Ascendancy prospectors once followed Lurid Gloops to find the richest glowcap beds. The Gloops ate the beds first.",
+    "glimmerbeetle": "Each Glimmer Beetle grows crystals in its own colour. Two beetles with the same colour are said to be siblings.",
+    "sporewing": "A Sporewing sneeze can start a whole new glowcap patch. The Deep would be much darker without them.",
+    "sporematron": "Every Capling in the Deep can trace its roots back to a Spore Matron. They are the grandmothers of the Choir.",
+    "choirherald": "The Herald only sings when the whole Choir is listening. Delvers who have heard it say the tune stays with them for days.",
+    "skeleton": "Some Rattlebones still carry letters in their coat pockets. Moss reads them out loud before the party moves on.",
+    "saltcrab": "Salt Crabs remember the sea that dried up. Hold one to your ear and you can almost hear waves.",
+    "brinebones": "The salt keeps them strong. Oduya respects that. She says the Covenant would have liked them.",
+    "bleachwing": "Bleachwings are almost invisible against the gallery walls. Delvers learn to listen for the flap instead.",
+    "saltwatcher": "The crystals on a Salt Watcher grow a hair\u2019s width each year. The oldest ones look like chandeliers.",
+    "bonegnawer": "Bone Gnawers sort their treasure by size. Their nests are tidier than most barracks.",
+    "drummer": "The Drummer keeps the old Covenant marching beat. Oduya catches herself stepping in time and frowns about it.",
+    "gallerywarden": "The Warden counted every Covenant soldier who walked into the galleries. It is still waiting for the same number to walk out.",
+    "slaggloop": "Slag Gloops pool in the forge channels where the metal once ran. They keep the old furnaces warm for nobody.",
+    "cinderbeetle": "Forge workers kept Cinder Beetles in glass jars by their beds. Some jars are still glowing, on shelves nobody has dusted in years.",
+    "ashwing": "Ashwings nest in chimneys. When the Forges smoke again, it is usually because a flock just landed.",
+    "sootgnawer": "Kestrel\u2019s favourite Gnawer. She says anyone who stays that dirty on purpose is a professional.",
+    "kilncrab": "Kiln Crabs crack their shells every spring and bake a new one. The old shells make very good bowls.",
+    "furnaceeye": "Wren insists the Furnace Eye winked at her. Moss pointed out that Watchers cannot blink. Wren has not let it go.",
+    "forgehand": "The Forge Hand is still finishing an order from the Ascendancy. Nobody has the heart to tell it the buyer is gone.",
+    "moltenheart": "Mercy Corps cooks have been known to warm a pot of soup beside a sleeping Molten Heart. It does not seem to mind sharing.",
+    "eye": "Watchers float in pairs in the Archive, one above each reading table. Whoever studied here was never alone, and never unobserved.",
+    "inkwisp": "If you can read what an Inkwisp writes, it is usually a shopping list. The scribes were people too.",
+    "archivecrab": "Archive Crabs sort fallen pages by colour, then by size, then start again. They have been at it for a hundred years.",
+    "inkgloop": "An Ink Gloop splatter dries into the shape of a word. Wren has collected nine so far and thinks they spell a recipe.",
+    "pagemoth": "Catch a Page Moth and its wings show the last book it ate. Most were very boring.",
+    "dampflitter": "The Damp Flitter is the only bat in the Archive that likes being wet. The others think it is showing off.",
+    "readinglens": "The list the Reading Lens checks is real. It is the Archive\u2019s library card ledger, and almost everyone on it has overdue books.",
+    "sunkenscribe": "The Scribe\u2019s notes on your party are surprisingly kind. It underlined the part where you helped someone.",
+    "bat": "Flitterwings roost in Hollow Roots by the thousand. At dusk they pour up toward the Hold like smoke going the right way.",
+    "rootcap": "Rootcaps lean toward water. Lost delvers have followed them to a spring more than once.",
+    "barkbeetle": "Bark Beetles do not mind being leaned on. They just walk off slowly, taking your elbow with them.",
+    "rootgnawer": "The Root Mother sends Thornlings after Root Gnawers. The Gnawers send their cousins to the Bone Orchard in return. It has been a long feud.",
+    "hollowmoth": "Hollow Moths fall like leaves when a lantern swings past. Delvers who stop to watch say it is the prettiest thing in the Roots.",
+    "sapgloop": "A Sap Gloop left in the sun turns into amber. Kestrel sold one to a jeweller and swears it twitched on the counter.",
+    "knotwatcher": "The Knot Watcher has been in its tree so long the tree has grown a second ring of bark around it, like a hood.",
+    "rootbloom": "The Bloom turns toward anything warm. Delvers who stand very still have watched it follow their lantern across the whole cavern.",
+    "voidwatcher": "The stars in a Void Watcher\u2019s eye move. Wren is mapping them, slowly, and refuses to say what she thinks they are.",
+    "umbralwisp": "Umbral Wisps are shy. Shade your lantern and they come closer, curious about the people who brought light down here.",
+    "starlessflitter": "Starless Flitters cannot see colour. They know your lantern by its warmth, and they are always glad of it.",
+    "nightmoth": "Night Moths fly toward the dark because they are carrying starlight to it. At least, that is what the Mercy Corps tells children.",
+    "umbralgloop": "An Umbral Gloop that swallows a lantern spits it back out lit. Nobody can explain this.",
+    "vaultsentry": "The Sentry asks every delver for the password. Nobody knows it. It lets them through anyway, sighing.",
+    "starshell": "Starshells trade stars with each other. The oldest ones have the dimmest stars, because they gave the bright ones away.",
+    "lastlight": "The Last Light is small and steady. Delvers who see it say they felt braver for the rest of the delve.",
+    "shard": "Glass Crawlers sing when they move, a high clinking note. A whole field of them sounds like wind chimes in a storm.",
+    "prismmite": "Prism Mites gather on any shiny surface. A Covenant shield left in the Wastes was found covered in hundreds, like a mosaic.",
+    "glassmoth": "A Glass Moth\u2019s rainbows point toward water. In the Wastes, that is the most useful thing a moth can do.",
+    "shardcrab": "Shard Crabs carry their old bottles to the young ones when they move house. Nothing in the Wastes goes to waste.",
+    "glassgloop": "Ascendancy lens-grinders once harvested Glass Gloops for their polish. The Gloops did not appreciate it.",
+    "glintflitter": "Kestrel keeps a pocketful of buttons to throw at Glint Flitters. It works every time.",
+    "mirroreye": "Some delvers say the reflection in the Mirror Eye looks a little older. Nobody stays long enough to check.",
+    "facet": "The Facet still gives orders in the Regent\u2019s voice. The other Crawlers ignore it, politely.",
+    "sentinel": "Iron Husks salute Oduya when she passes. She salutes back, every time, and does not talk about it.",
+    "rusthusk": "Rust Husks squeak loudest when it is about to rain on the surface. Bastion soldiers used them as weather vanes.",
+    "rivetgnawer": "A Rivet Gnawer in full plate is very proud and very slow. It is hard not to cheer for it.",
+    "bastionbones": "Bastion Bones still change the guard at midnight. If you stand on the wall then, one will hand you a spear.",
+    "ironbeetle": "Iron Beetles moult once a decade. Bastion smiths used the old shells to patch the gates.",
+    "oathwisp": "An Oath Wisp follows anyone who makes a promise on the walls. Be careful what you swear in the Bastion.",
+    "watchpost": "The Watch-Post Eye still reports to an officer who left long ago. Every hour it says: all quiet.",
+    "standard": "The banner is so faded nobody can read its colours. The Husk carrying it remembers them perfectly.",
+    "eel": "Sluice Eels swim up the aqueduct every night and drift back down every morning. It is the most dependable thing in the deep.",
+    "silteel": "Silt Eels are harmless, but they do like boots. Mercy Corps medics tie their laces twice down here.",
+    "aqueductcrab": "Aqueduct Crabs have worn a groove in the stone from walking back up. It took them three hundred years.",
+    "brackishgloop": "Brackish Gloops scrape their barnacles off against the arches. That is why the aqueduct walls are so smooth.",
+    "dripcap": "Drip Caps drink so much mist they glow faintly blue. Wren calls them the aqueduct\u2019s night-lights.",
+    "weepingflitter": "The Weeping Flitter\u2019s cry is a greeting. Answer it and it will circle you twice before flying off.",
+    "ribboneel": "When the Brine Matriarch calls, the Ribbon Eels light the whole channel. It looks like a road made of lanterns.",
+    "weepingwisp": "The Weeping Wisp is not sad. Moss thinks it is the aqueduct remembering when it was full of clean water.",
+    "thorn": "Thornlings are seedlings that got restless. Plant one in good soil and it will settle down and grow into a tree. Probably.",
+    "bramblesprout": "Bramble Sprouts poke delvers for fun. It is how young Thornlings learn what is soft.",
+    "marrowcap": "Marrow Caps hum the same note as the orchard wind. On calm days they hum it anyway, so the trees do not feel lonely.",
+    "orchardgnawer": "The white fruit of the orchard tastes of honey and chalk. Orchard Gnawers think it is worth any number of shears.",
+    "blossommoth": "Blossom Moths only land on people who are standing still. Delvers sometimes stop just to see if one will choose them.",
+    "orchardbones": "Orchard Bones water the trees with their own helmets. They have never once missed a day.",
+    "petalwisp": "The Petal Wisp visits every tree in the orchard once a year. The trees it visits flower first.",
+    "elderthorn": "The Elder Thorn remembers when the orchard was a garden. It is the only one who still calls it that.",
+    "prism": "Storm Lenses hum before they strike. Delvers who listen for the hum keep their eyebrows.",
+    "sparklens": "Spark Lenses chase each other up and down the Spire like children in a corridor. They leave scorch marks everywhere.",
+    "stormwing": "A Stormwing\u2019s fur crackles when it lands. Every other bat in the Spire refuses to roost next to one.",
+    "thundereye": "The Thunder Eye\u2019s mark leaves a little star-shaped scorch. Some delvers keep it as a badge.",
+    "staticgloop": "Static Gloops stick to the walls by themselves. Ascendancy students used them to hang notes.",
+    "boltmoth": "Bolt Moths fly into lightning and come out faster. Nobody has ever caught one, and many have tried.",
+    "chargedshard": "The Charged Shard climbed the Spire on purpose. Wren respects that kind of ambition.",
+    "choirprism": "The Spire choir tuned to the Prism for a hundred years. When it hums, the whole tower answers.",
+    "hound": "Rift Hounds follow whichever army is winning. Lately they have been following the delvers.",
+    "scarpup": "Scar Pups chew on dropped banners from every side. They do not care whose colours they ruin.",
+    "warbornbones": "Warborn Bones from different alliances fight each other until a delver arrives. Then, for a while, they fight together.",
+    "scargnawer": "Scar Gnawers sing the marching songs of all three armies, badly and all at once.",
+    "bannereye": "The Banner Eye keeps score for every battle in the Scar. By its count, nobody is winning.",
+    "scarcap": "Scar Caps grow where the fighting was worst. Mercy Corps medics say that means even the Scar can heal.",
+    "threefoldhusk": "The Threefold Husk argues with itself in three accents. On good days it agrees on which foot to start with.",
+    "warhosthound": "Every hound in the Scar follows the Warhost Hound, and the Warhost Hound follows the loudest drum.",
+    "riftling": "Riftlings come up toward the lantern to see what light is. Vael says they go back down and tell the others.",
+    "riftmote": "Rift Motes gather on lantern glass like moths. Wipe them off gently. They are very young.",
+    "starbornwisp": "The Starborn Wisp has seen the far side of the Rift. If you listen closely, it is humming a lullaby from there.",
+    "riftmoth": "A Rift Moth\u2019s wings show other places. Delvers have seen meadows, oceans and once, very briefly, the Hold itself.",
+    "unmadegloop": "Unmade Gloops flicker between colours they have not chosen yet. Wren is betting on blue.",
+    "hollowflitter": "Hollow-lit Flitters guide lost Riftlings back toward the dark. They are kinder than they look.",
+    "thresholdeye": "The Threshold Eye has never looked at a delver directly. Moss thinks it is being polite.",
+    "firstspark": "The Firstspark\u2019s tune is the one every delver\u2019s mother hummed. Nobody can explain how it knows."
+  };
+  const CREATURES = [];
+  ROSTERS.forEach((list, r) => list.forEach(([id, name, fam, rar, size, ov, hue, text]) => CREATURES.push({ id, name, fam, r, rar, size, ov, hue: hue == null ? null : hue, text, lore: CREATURE_LORE[id] || '' })));
+  const creatureById = id => CREATURES.find(c => c.id === id);
+  const creatureHue = c => c.hue == null ? BIOMES[c.r].hue : c.hue;
+  // Where a creature shows up: its home region, and the regions next door it wanders into.
+  const creatureRegions = c => [c.r - 1, c.r + 1].filter(x => x >= 0 && x < ROSTERS.length);
+  const rosterOf = f => Math.floor((f - 1) / 10) % ROSTERS.length;
+  function pickCreature(f, r) {
+    const home = rosterOf(f);
+    let rn = home;
+    if (r() >= ROSTER_HOME) { const nb = [home - 1, home + 1].filter(x => x >= 0 && x < ROSTERS.length); rn = nb[Math.floor(r() * nb.length)]; }
+    const list = CREATURES.filter(c => c.r === rn), tot = list.reduce((a, c) => a + RAR_W[c.rar], 0);
+    let x = r() * tot;
+    for (const c of list) { x -= RAR_W[c.rar]; if (x < 0) return c; }
+    return list[0];
+  }
+  // Chance that a normal spawn on floor f is this creature (for the Bestiary and the wiki).
+  function creatureOdds(c, rn) {
+    const share = (from, w) => { const list = CREATURES.filter(x => x.r === from), tot = list.reduce((a, x) => a + RAR_W[x.rar], 0); return w * RAR_W[c.rar] / tot; };
+    if (c.r === rn) return share(rn, ROSTER_HOME);
+    if (Math.abs(c.r - rn) !== 1) return 0;
+    const nb = [rn - 1, rn + 1].filter(x => x >= 0 && x < ROSTERS.length).length;
+    return share(c.r, (1 - ROSTER_HOME) / nb);
+  }
+  // Families that live (home or wandering) somewhere in floors a..b.
+  function famsIn(a, b) { const out = new Set(), fl = []; for (let f = Math.max(1, a); f < b; f += 10) fl.push(f); fl.push(Math.max(1, b)); for (const f of fl) { const rn = rosterOf(f); for (const c of CREATURES) if (creatureOdds(c, rn) > 0) out.add(c.fam); } return out; }
 
   const RELICS = [
     { id: 'locket',   name: "Miner's Locket",          desc: '+6% gold per level',                    per: 0.06 },
@@ -255,7 +579,7 @@
     { id: 'c500',  name: 'Busy Hands',        desc: 'Strike 500 times',           test: s => s.stats.clicks >= 500 },
     { id: 'full',  name: 'A Full Table',      desc: 'Fill all five party seats',  test: s => s.party.filter(Boolean).length >= 5 },
     { id: 'h100',  name: 'Veteran',           desc: 'Train a companion to power level 100', test: s => Object.values(s.levels).some(l => l >= 100) },
-    { id: 'hall',  name: 'Full Roster',       desc: 'Meet all ten companions',    test: s => s.unlocked.length >= MEMBERS.length },
+    { id: 'hall',  name: 'Full Roster',       desc: 'Meet all ten companions',    test: s => s.unlocked.length >= LORE_COUNT },
     { id: 'guest', name: 'Strength in Numbers', desc: 'Recruit another player\u2019s hero', test: s => (s.guests || []).length >= 1 },
     { id: 'heal',  name: 'Not Today',         desc: 'Lift 25 fallen allies with the Lantern Hymn', test: s => s.stats.revives >= 25 },
     { id: 'r1',    name: 'Relighting',        desc: 'Rekindle the lantern once',  test: s => s.stats.rekindles >= 1 },
@@ -489,16 +813,18 @@
   const guestRec = (s, id) => isGuest(s, id) ? (s.guests || []).find(x => x.id === id) : null;
   const cardOf = (s, id) => { const g = guestRec(s, id); return g && g.bp && g.bp.d >= 0 ? g.bp : null; };
   let gkCache = { s: null, t: -1, v: {} };
-  function guestK(s, id) {
+  // v132 (John, 26 Nov 2026: separate caps): damage ('d') and health ('h') are each capped on their own, so a hero with
+  // big health still hits up to GUEST_CAP x your damage. Healing (no kind) keeps the stricter shared factor.
+  function guestK(s, id, kind) {
     const bp = cardOf(s, id); if (!bp) return 1;
     const t = s.clock || 0; if (gkCache.s !== s || gkCache.t !== t) gkCache = { s, t, v: {} };
-    if (gkCache.v[id] != null) return gkCache.v[id];
-    gkCache.v[id] = 1; // guards re-entry while your own numbers are worked out
-    const yd = s.hero ? steadyDps(s, 'you') : 0, yh = s.hero ? maxHpOf(s, 'you') : 0;
-    let k = 1;
-    if (bp.d > 0) k = Math.min(k, GUEST_CAP * yd / bp.d);
-    if (bp.h > 0) k = Math.min(k, GUEST_CAP * yh / bp.h);
-    return (gkCache.v[id] = Math.max(0, k));
+    let c = gkCache.v[id];
+    if (c == null) {
+      gkCache.v[id] = { d: 1, h: 1 }; // guards re-entry while your own numbers are worked out
+      const yd = s.hero ? steadyDps(s, 'you') : 0, yh = s.hero ? maxHpOf(s, 'you') : 0;
+      c = gkCache.v[id] = { d: bp.d > 0 ? Math.max(0, Math.min(1, GUEST_CAP * yd / bp.d)) : 1, h: bp.h > 0 ? Math.max(0, Math.min(1, GUEST_CAP * yh / bp.h)) : 1 };
+    }
+    return kind === 'd' ? c.d : kind === 'h' ? c.h : Math.min(c.d, c.h);
   }
   const friendsSeated = s => Math.min(FRIEND_MAX, (s.party || []).filter(id => id && isGuest(s, id)).length);
   const friendMult = s => 1 + FRIEND_PER * friendsSeated(s);
@@ -543,6 +869,8 @@
   function npFoeAtk(s, f) { const n = npTier(s); return n ? (1 + NP_ATK * n) * (1 + NP_ATK_DEPTH * n * Math.max(1, f || 1)) : 1; }
   function npFoe(s) { return npFoeHp(s, s && s.floor); }
   function npBonus(s) { return 1 + NP_PER * npTier(s); }
+  // NP+ foes drop gold x(1 + NP_HP x tier), matching their floor-1 health bump, so training keeps pace with the tougher fights.
+  function npGold(s) { return 1 + NP_HP * npTier(s); }
   function npIlvl(s, f) { return npTier(s) ? Math.round(f * (1 + NP_ILVL * npTier(s))) : f; }
   // Gear from an earlier tier can't be worn (no stashing gear on an alt before starting over).
   function npOld(s, it) { return !!it && ((it.t | 0) < npTier(s)); }
@@ -550,7 +878,7 @@
   const scale = (s, id) => { const m = memberById(id), L = lvl(s, id); return Math.pow(L * milestoneMult(L) * TIER[m.tier].stat * (m.player ? 1 : (m.pow || NPC_POWER)), POW); };
 
   function maxHpOf(s, id) {
-    const bp = cardOf(s, id); if (bp) return Math.max(1, bp.h * guestK(s, id));
+    const bp = cardOf(s, id); if (bp) return Math.max(1, bp.h * guestK(s, id, 'h'));
     const m = memberById(id);
     return Math.max(1, CLASSES[m.cls].hp * scale(s, id) * (1 + relicVal(s, 'ward')) * (1 + masteryVal(s, 'hp')) * (1 + EMBER_HP * s.embers) * npBonus(s) * gearMult(s, id, 'hp') * sidePerk(s, 'hp') * (1 + campBonus(s, 'hp')) * (1 + sk(s, 'php') + (id === 'you' ? sk(s, 'hp') : 0)) * (1 + renoVal(s, 'hp') + (fxOnW(s, 'globe') ? 0.05 : 0) + (fxOnW(s, 'g2') ? 0.05 : 0)));
   }
@@ -565,7 +893,7 @@
   function memberDps(s, id, now) {
     if (!id || s.down[id] || !lvl(s, id)) return 0;
     const bp = cardOf(s, id);
-    if (bp) { const cc = s.cc && ccOf(s, id, now); return bp.d * guestK(s, id) * (cc ? (cc.k === 'stun' ? 0 : CC.disarm.dmg) : 1) * (1 - ghostSap(s, 'dps', now)) * wbMult(s, id); }
+    if (bp) { const cc = s.cc && ccOf(s, id, now); return bp.d * guestK(s, id, 'd') * (cc ? (cc.k === 'stun' ? 0 : CC.disarm.dmg) : 1) * (1 - ghostSap(s, 'dps', now)) * wbMult(s, id); }
     const m = memberById(id), c = CLASSES[m.cls];
     let d = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps');
     if (id === 'you') { d *= (HERO_DPS[m.cls] || 1) * (1 + sk(s, 'dps')); const fu = fxOn(s, 'fury', now); if (fu) d *= fu; }
@@ -582,6 +910,24 @@
     let d = 0; for (const id of s.party) d += memberDps(s, id, now);
     return d + minionDps(s, now) * npMarkCls(s, 'necro', 0);
   }
+  // Damage meter (Kyvia, Discord 26 Nov 2026): who really deals the damage, counting abilities, skeletons and taps.
+  // Display only: a fading 30 s average of damage that landed, kept off the save and never read by the game rules.
+  const METER_TAU = 30, meters = new WeakMap();
+  function meterAdd(s, key, amt, now) {
+    if (!(amt > 0)) return;
+    let m = meters.get(s); if (!m) { m = { at: now, src: {} }; meters.set(s, m); }
+    const e = m.src[key] || (m.src[key] = { v: 0, t: now });
+    e.v = e.v * Math.exp(-Math.max(0, now - e.t) / 1000 / METER_TAU) + amt; e.t = Math.max(e.t, now);
+  }
+  // [{ key, dps }] strongest first. key is a party member id, 'skel', 'tap' or 'auto'.
+  function damageMeter(s, now) {
+    const m = meters.get(s); if (!m) return [];
+    now = now || Date.now();
+    const warm = 1 - Math.exp(-Math.max(1000, now - m.at) / 1000 / METER_TAU);
+    return Object.keys(m.src).map(key => { const e = m.src[key]; return { key, dps: e.v * Math.exp(-Math.max(0, now - e.t) / 1000 / METER_TAU) / (METER_TAU * warm) }; })
+      .filter(x => x.dps > 0.01).sort((a, b) => b.dps - a.dps);
+  }
+  function meterReset(s) { meters.delete(s); }
   // How much of a party member's damage gets through the foe's NP+ marks (1 when it has none).
   function npMarkCls(s, cls, pierce) {
     const m = s.foe && s.foe.mods; if (!m || !m.length || s.foe.world) return 1;
@@ -596,10 +942,16 @@
   const npHealCut = s => (s.foe && !s.foe.world && s.foe.mods && s.foe.mods.includes('plague') ? 1 - NP_PLAGUE : 1);
   function healPerSec(s, id) { return healPerSec0(s, id) * npHealCut(s); }
   function healPerSec0(s, id) {
-    if (!id || s.down[id] || !lvl(s, id)) return 0;
+    if (!id || s.down[id]) return 0;
+    return steadyHeal(s, id) * (1 - ghostSap(s, 'heal')) * (s.cc && ccOf(s, id) ? (ccOf(s, id).k === 'stun' ? 0 : CC.disarm.heal) : 1);
+  }
+  // A healer's heal/s before anything that comes and goes (down, stunned, disarmed, a Ghost Lantern, a Plague mark).
+  // v132: the Training Grounds table uses this, so a healer who was down or stunned when it opened no longer shows "-".
+  function steadyHeal(s, id) {
+    if (!id || !lvl(s, id)) return 0;
     const bp = cardOf(s, id); if (bp) return memberById(id).cls === 'healer' ? (bp.hl || 0) * guestK(s, id) : 0;
-    const m = memberById(id); if (m.cls !== 'healer') return 0;
-    return (CLASSES.healer.heal * scale(s, id) * gearMult(s, id, 'heal') * (1 + wearVal(s, id, 'heal')) * (1 + relicVal(s, 'censer')) * (1 + EMBER_HP * s.embers) * (1 + FEAT_PER * featCount(s)) * sidePerk(s, 'heal') * (1 + campBonus(s, 'heal')) * (1 + sk(s, 'pheal') + (id === 'you' ? sk(s, 'heal') : 0))) * keeperMult(s) * (1 - ghostSap(s, 'heal')) * (s.cc && ccOf(s, id) ? (ccOf(s, id).k === 'stun' ? 0 : CC.disarm.heal) : 1);
+    const m = memberById(id); if (!m || m.cls !== 'healer') return 0;
+    return (CLASSES.healer.heal * scale(s, id) * gearMult(s, id, 'heal') * (1 + wearVal(s, id, 'heal')) * (1 + relicVal(s, 'censer')) * (1 + EMBER_HP * s.embers) * (1 + FEAT_PER * featCount(s)) * sidePerk(s, 'heal') * (1 + campBonus(s, 'heal')) * (1 + sk(s, 'pheal') + (id === 'you' ? sk(s, 'heal') : 0))) * keeperMult(s);
   }
   // Mana and stamina (John, 2026-11-24). Healers, mages and necromancers run on mana; rogues and tanks on stamina.
   // Every ability costs some. A healer also spends mana to heal: run dry and it stops healing and only attacks
@@ -612,6 +964,8 @@
   function spendRes(s, id, n) { const v = resOf(s, id); if (v < n) return false; s.res[id] = v - n; return true; }
   const oom = (s, id) => !!(s.oom && s.oom[id]);
   function clickDamage(s, now) { return (1 + totalDps(s, now) * 0.05) * (1 + relicVal(s, 'whet')); }
+  // What one tap hits for from the party's steady damage (no timed buffs), for the Training Grounds (v132).
+  function steadyClick(s) { let d = 0; for (const id of s.party) d += steadyDps(s, id); return (1 + d * 0.05) * (1 + relicVal(s, 'whet')); }
   function goldMult(s) { return friendMult(s) * keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'gold')) * (1 + gearGold(s)) * (1 + kup(s, 'purse')) * (1 + relicVal(s, 'locket')) * sidePerk(s, 'gold') * (1 + campBonus(s, 'gold')) * (1 + sk(s, 'gold')); }
   function critChance(s) { return 0.04 + relicVal(s, 'dice') + sk(s, 'crit') + (fxOnW(s, 'die') ? 0.06 : 0) + (fxOnW(s, 'g1') ? 0.03 : 0); }
   function lanternTime(s) { return BASE_LANTERN + kup(s, 'oil') + relicVal(s, 'lamp') + campBonus(s, 'lamp') + sk(s, 'lantern') + (fxOnW(s, 'glass') ? 10 : 0); }
@@ -623,12 +977,13 @@
   function chestChance(s) { return Math.min(CHEST_MAX, CHEST_BASE + Math.min(MOTH_MAX, relicVal(s, 'moth')) + sk(s, 'chest')); }
   // Daily caps on random events, per hero, reset at UTC midnight like the daily quests. Once a cap is hit that event
   // stops showing up until tomorrow (a normal foe takes its place). The Admin event spawner ignores the caps.
-  const EV_DAY = { chest: 40, pack: 60, lock: 20, goblin: 6, ghost: 12, merchant: 8, mercy: 6 };
+  const EV_DAY = { chest: 40, pack: 60, lock: 20, goblin: 6, ghost: 12, merchant: 8, mercy: 6, relic: 5 };
   function evDay(s, now) {
     const d = new Date(now || s.clock || Date.now()).toISOString().slice(0, 10);
     if (!s.evd || s.evd.d !== d) s.evd = { d, n: {} };
     return s.evd;
   }
+  // relic: repeat-guardian relics a day (John picked this 26 Nov 2026 after the PvE audit: farming a beaten guardian paid ~58 relic levels an hour).
   const evOk = (s, k, now) => (evDay(s, now).n[k] || 0) < EV_DAY[k];
   function evUse(s, k, now) { const e = evDay(s, now); e.n[k] = (e.n[k] || 0) + 1; }
   function abilityDuration(s, ab) { return ab.dur * (1 + relicVal(s, 'hourglass')); }
@@ -836,7 +1191,142 @@
     { id: 'legendary', name: 'Legendary', pow: 0,   job: 0,    hireMin: 720, wage: 0.18, dust: 600, dustAlt: 0,   lvF: 1,    w: 3,  color: '#ff8a3d' },
   ];
   const npcRar = id => NPC_RAR.find(r => r.id === id) || NPC_RAR[0];
-  const LEGENDS = ['ashe', 'oracle', 'varga', 'brann', 'hollow'];
+  const LORE_LEGENDS = ['ashe', 'oracle', 'varga', 'brann', 'hollow'];
+  // ---------- unique Legendaries (John, 26 Nov 2026) ----------
+  // Eight one-of-a-kind Legendary companions, each with a small extra while they work their own camp post (Thistle:
+  // any post). They are hired like the lore Legendaries (Legendary wage) but join in four ways:
+  //   guild:  a UNIQ_GUILD chance each Guild Hall rotation that one of them is on offer, for UNIQ_OFFER_MS (paid hire)
+  //   quest:  a three-step side quest chain that opens at a floor; finishing it brings them for free
+  //   adv:    the first time you beat the guardian on their floor, they join for free
+  //   rescue: Thistle is caged by a monster (thistleFoe). Win and he joins free; let it get away and he waits at the Hall.
+  // A unique you lose (sent away, walked off) can come back through the Guild Hall roll.
+  // Sim (26 Nov 2026, bot on PR #60 economy, 36 h): Drill that also trained job workers raised gold 37-75% (job output
+  // grows with power level), so Drill only trains idle companions; then gold and pace stayed within the sim's noise.
+  const UNIQ = {
+    greaves: { how: 'guild', floor: 60, job: 'quarter', perk: 'Drill', text: 'Up to 3 idle companions at the Campfire each gain 1 power level an hour, never past half your strongest fighter’s power level. Works while you are away.' },
+    alder:   { how: 'guild', floor: 40, job: 'herb', perk: 'Field surgeon', text: 'Fallen companions get back up 10% sooner.' },
+    pell:    { how: 'quest', floor: 60, job: 'forage', perk: 'Sticky fingers', text: 'Locked chests give 25% more Dust.' },
+    ilse:    { how: 'quest', floor: 90, job: 'smith', perk: 'Seal-wards', text: 'The party deals 5% more damage to guardians.' },
+    grimsby: { how: 'adv', floor: 100, job: 'lamp', perk: 'Last light', text: 'Once each guardian fight, the lantern relights for 3 seconds after it goes out.' },
+    corra:   { how: 'adv', floor: 125, job: 'armor', perk: 'Hold the stair', text: 'Whoever guards the rear takes 20% less damage from ambushes.' },
+    bramble: { how: 'adv', floor: 150, job: 'prospect', perk: 'Double pay', text: 'Locked doors give 25% more gold.' },
+    thistle: { how: 'rescue', floor: 50, job: 'any', perk: 'Scout’s eye', text: 'Works any camp post. Mercy Corps rescues and wounded companions turn up 25% more often (still within the daily limit).' },
+  };
+  const UNIQ_IDS = Object.keys(UNIQ);
+  const LEGENDS = LORE_LEGENDS.concat(UNIQ_IDS);
+  const UNIQ_GUILD = 0.05, UNIQ_OFFER_MS = 24 * 3600e3;
+  const UNIQ_DRILL_SEC = 3600, UNIQ_DRILL_N = 3, UNIQ_DRILL_CAP = 0.5, UNIQ_ALDER = 0.1, UNIQ_PELL = 0.25, UNIQ_ILSE = 0.05, UNIQ_GRIMSBY = 3, UNIQ_CORRA = 0.2, UNIQ_BRAMBLE = 0.25, UNIQ_THISTLE = 0.25;
+  // Thistle's cage: from CAGE_FLOOR every new foe rolls CAGE_BASE x (1 + foes since the last cage / CAGE_GROW), at most
+  // CAGE_MAX, times 1.5 for each of a Rogue in the party, the Mercy Corps banner, floor 100 or deeper (at most x3).
+  // At ~420 foes an hour with a Rogue along: half find him by ~34 h, 64% by 42 h (no Rogue: ~41 h). The caged foe has 1.5x health and gets away
+  // after CAGE_TIME seconds or if the party falls.
+  const CAGE_FLOOR = 50, CAGE_BASE = 1e-5, CAGE_GROW = 3000, CAGE_MAX = 0.001, CAGE_TIME = 60;
+  const UNIQ_QUESTS = {
+    pell: { name: 'Tinker Pell’s lost toolkit', steps: [
+      { text: 'Open 3 locked doors or chests', n: 3, st: s => s.stats.locks || 0 },
+      { text: 'Open 5 treasure chests', n: 5, st: s => s.stats.chests || 0 },
+      { text: 'Defeat 5 guardians', n: 5, st: s => s.stats.bossKills || 0 } ] },
+    ilse: { name: 'The Magister’s missing pages', steps: [
+      { text: 'Defeat 1,000 foes', n: 1000, st: s => s.stats.kills || 0 },
+      { text: 'Rescue or aid a Mercy Corps companion', n: 1, st: s => (s.stats.rescues || 0) + (s.stats.aided || 0) },
+      { text: 'Defeat 10 guardians', n: 10, st: s => s.stats.bossKills || 0 } ] },
+  };
+  const uqOf = s => (s.uq = s.uq || { got: {}, q: {}, tn: 0, dt: 0 });
+  // Is this unique Legendary at camp working their own post right now?
+  function postOn(s, id) {
+    const u = UNIQ[id]; if (!u || !s || !s.jobs || !jobFree(s, id)) return false;
+    if (u.job === 'any') { for (const k in s.jobs) if (s.jobs[k] === id) return true; return false; }
+    return s.jobs[u.job] === id;
+  }
+  const uniqWaiting = (s, id) => s.unlocked.includes(id) || ((s.hall && s.hall.offers) || []).some(o => o.id === id) || ((s.hall && s.hall.bench) || []).some(b => b.id === id) || ((s.hall && s.hall.keep) || []).some(o => o.id === id);
+  // A unique earns their place (quest, adventure, rescue): they join free, straight to the Campfire if there is room,
+  // otherwise they wait at the Guild Hall, free to sign on.
+  function uniqArrive(s, id, events, now) {
+    now = now || Date.now();
+    const q = uqOf(s); q.got[id] = q.got[id] || now;
+    if (uniqWaiting(s, id)) return;
+    const h = hallState(s, now), o = { id, rar: 'legendary', legend: 1, keep: 1, free: 1 };
+    h.offers.push(o);
+    const r = companions(s).length < rosterCap(s) ? npcHire(s, id, 'sign', 'gold', now) : { ok: false };
+    events && events.push({ type: 'uqjoin', id, name: memberById(id).name, camp: !!r.ok });
+  }
+  // The Guild Hall roll, once per rotation: a unique whose floor you have reached, or one you had and lost.
+  function uniqGuildRoll(s, r, now) {
+    const q = uqOf(s), f = s.maxFloorEver || 1;
+    const pool = UNIQ_IDS.filter(id => !uniqWaiting(s, id) && (q.got[id] || (UNIQ[id].how === 'guild' && f >= UNIQ[id].floor)));
+    if (!pool.length || r() >= UNIQ_GUILD) return null;
+    return { id: pool[Math.floor(r() * pool.length)], rar: 'legendary', legend: 1, keep: 1, exp: now + UNIQ_OFFER_MS };
+  }
+  function uniqQuest(s, id) {
+    const Q = UNIQ_QUESTS[id], q = uqOf(s).q[id]; if (!Q || !q) return null;
+    if (q.done) return { name: Q.name, done: true, steps: Q.steps.length };
+    const st = Q.steps[q.step];
+    return { name: Q.name, step: q.step, steps: Q.steps.length, text: st.text, have: Math.min(st.n, st.st(s) - q.base), n: st.n };
+  }
+  // Drill (Marshal Greaves as Quartermaster): sec of time, in play or away.
+  function uniqDrill(s, sec, events) {
+    if (!postOn(s, 'greaves')) return 0;
+    const q = uqOf(s); q.dt = (q.dt || 0) + sec;
+    let n = 0;
+    while (q.dt >= UNIQ_DRILL_SEC) {
+      q.dt -= UNIQ_DRILL_SEC;
+      const top = Math.max(1, ...s.party.filter(Boolean).map(id => lvl(s, id)));
+      const cap = Math.floor(top * UNIQ_DRILL_CAP);
+      const idle = companions(s).filter(id => id !== 'greaves' && !s.party.includes(id) && !jobOf(s, id) && !isGuest(s, id) && lvl(s, id) < cap)
+        .sort((a, b) => lvl(s, a) - lvl(s, b)).slice(0, UNIQ_DRILL_N);
+      if (!idle.length) { q.dt = Math.min(q.dt, UNIQ_DRILL_SEC); break; }
+      for (const id of idle) { s.levels[id] = lvl(s, id) + 1; n++; }
+    }
+    if (n) { s.stats.drilled = (s.stats.drilled || 0) + n; events && events.push({ type: 'drill', n }); }
+    return n;
+  }
+  // Every tick: Drill, side quest chains and adventure arrivals.
+  function uniqTick(s, dt, now, events) {
+    if (!s.hero) return;
+    const q = uqOf(s), f = s.maxFloorEver || 1;
+    if (q.cageOn && !(s.foe && s.foe.cage)) cageFled(s, events); // the game closed (or the foe vanished) mid-rescue
+    uniqDrill(s, dt, events);
+    for (const id in UNIQ_QUESTS) {
+      if (q.got[id] || f < UNIQ[id].floor) continue;
+      const Q = UNIQ_QUESTS[id];
+      let c = q.q[id];
+      if (!c) { c = q.q[id] = { step: 0, base: Q.steps[0].st(s) }; events && events.push({ type: 'uqquest', id, name: Q.name, text: Q.steps[0].text }); }
+      if (c.done) continue;
+      const st = Q.steps[c.step];
+      if (st.st(s) - c.base >= st.n) {
+        c.step++;
+        if (c.step >= Q.steps.length) { c.done = 1; uniqArrive(s, id, events, now); }
+        else { c.base = Q.steps[c.step].st(s); events && events.push({ type: 'uqstep', id, name: Q.name, text: Q.steps[c.step].text }); }
+      }
+    }
+    for (const id of UNIQ_IDS) if (UNIQ[id].how === 'adv' && !q.got[id] && f > UNIQ[id].floor) uniqArrive(s, id, events, now);
+  }
+  // Thistle's cage, rolled as each new foe appears.
+  function cageMult(s) {
+    let m = 1;
+    if (s.party.some(id => id && (memberById(id) || {}).cls === 'rogue')) m *= 1.5;
+    if (sideOf(s) === 'mercy') m *= 1.5;
+    if (s.floor >= 100) m *= 1.5;
+    return Math.min(3, m);
+  }
+  const cageChance = s => Math.min(CAGE_MAX, CAGE_BASE * (1 + (uqOf(s).tn || 0) / CAGE_GROW) * cageMult(s));
+  function thistleFoe(s, now, rng) {
+    const r = rng || Math.random, f = s.floor;
+    if (!s.hero || f < CAGE_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now)) return null;
+    const q = uqOf(s);
+    if (q.got.thistle || q.fled || uniqWaiting(s, 'thistle')) return null;
+    if (r() >= cageChance(s)) { q.tn = (q.tn || 0) + 1; return null; }
+    const foe = makeFoe(s, r); if (foe.boss || foe.chest || foe.goblin || foe.pack || foe.world || foe.lock) return foe;
+    q.tn = 0; q.cageOn = 1; s.stats.cages = (s.stats.cages || 0) + 1;
+    foe.cage = 'thistle'; foe.cageT = 0; foe.hp *= 1.5; foe.max = foe.hp;
+    return foe;
+  }
+  // The caged foe got away: Thistle slips out later and waits at the Guild Hall (a paid hire).
+  function cageFled(s, events) {
+    const q = uqOf(s); q.fled = Date.now(); q.cageOn = 0;
+    if (!uniqWaiting(s, 'thistle')) hallState(s).offers.push({ id: 'thistle', rar: 'legendary', legend: 1, keep: 1 });
+    events && events.push({ type: 'cagefled', name: memberById('thistle').name });
+  }
   const NPC_ROTATE = 4 * 3600e3, NPC_OFFERS = 6, NPC_SHORT_MS = 2 * 3600e3, NPC_SHORT_MAX = 2, NPC_BENCH_MS = 3 * 86400e3, NPC_SHORT_PART = 0.25, NPC_REHIRE = 0.5;
   const NPC_NAMES = ['Tamsin', 'Odile', 'Corwin', 'Ysolde', 'Garrick', 'Petra', 'Jory', 'Mirela', 'Halden', 'Sable', 'Fenna', 'Rook', 'Isolt', 'Dacey', 'Orrin', 'Liesl', 'Tobin', 'Maren', 'Cass', 'Ulric', 'Nell', 'Aldous', 'Briar', 'Quill', 'Hesper', 'Joss', 'Wynn', 'Edda', 'Lorcan', 'Merrit', 'Saoirse', 'Dunstan', 'Ilse', 'Torvald', 'Junia', 'Cael'];
   const NPC_JOB = { tank: 'Shieldhand', healer: 'Field Medic', rogue: 'Sellsword', mage: 'Hedge Mage', necro: 'Bonecaller' };
@@ -853,7 +1343,7 @@
   // so the price can't be lowered by unseating companions and doesn't swing mid-fight (v119 fix, John 25 Nov 2026).
   function steadyDps(s, id) {
     if (!id || !lvl(s, id)) return 0;
-    const bp = cardOf(s, id); if (bp) return bp.d * guestK(s, id);
+    const bp = cardOf(s, id); if (bp) return bp.d * guestK(s, id, 'd');
     const m = memberById(id); if (!m) return 0;
     let d = CLASSES[m.cls].dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps');
     if (id === 'you') d *= (HERO_DPS[m.cls] || 1) * (1 + sk(s, 'dps'));
@@ -865,7 +1355,7 @@
     if (d <= 0) return 0;
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
-    return Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f))) * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
+    return Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f))) * foeGold(f, false) * goldMult(s) * npGold(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
   const incCache = new WeakMap();
   function npcIncomeMin(s, now) {
@@ -888,6 +1378,7 @@
   // price no longer creeps up while you save for it (v119 fix, Tim/John 25 Nov 2026). Anyone who went to the bench
   // before prices were locked (entries not priced at release) comes back free: the full-rate away wages were our bug.
   function npcLock(s, o, bench) {
+    if (!bench && o.free) return { gold: 0, dust: 0, dustAlt: 0, free: 1 };
     if (bench || o.until) {
       if (!o.cr) { o.c = { gold: 0, dust: 0, dustAlt: 0, free: 1 }; o.cr = 1; }
     } else if (!o.c || o.ca !== (s.hall && s.hall.at) || o.cv !== 2) { o.c = npcCost(s, o.rar, 'sign', (memberById(o.id) || o).cls); o.ca = s.hall && s.hall.at; o.cv = 2; }
@@ -958,7 +1449,7 @@
   }
   function rollOffers(s, r) {
     r = r || Math.random;
-    const out = [], free = LEGENDS.filter(id => !s.unlocked.includes(id) && !(s.hall.bench || []).some(b => b.id === id));
+    const out = [], free = LORE_LEGENDS.filter(id => !s.unlocked.includes(id) && !(s.hall.bench || []).some(b => b.id === id));
     const tot = NPC_RAR.reduce((a, x) => a + x.w, 0);
     for (let i = 0; i < NPC_OFFERS; i++) {
       let x = r() * tot, rar = NPC_RAR[0];
@@ -977,8 +1468,8 @@
     s.hall.bench = (s.hall.bench || []).filter(b => b.until > now);
     const win = Math.floor(now / NPC_ROTATE) * NPC_ROTATE;
     if (s.hall.at !== win || (s.hall.keep || []).length) {
-      const kept = (s.hall.offers || []).filter(o => o.keep).concat(s.hall.keep || []).filter((o, i, a) => !s.unlocked.includes(o.id) && a.findIndex(x => x.id === o.id) === i);
-      if (s.hall.at !== win) { s.hall.at = win; s.hall.rr = 0; s.hall.offers = rollOffers(s).filter(o => !kept.some(k => k.id === o.id)).concat(kept); }
+      const kept = (s.hall.offers || []).filter(o => o.keep && !(o.exp && o.exp <= now)).concat(s.hall.keep || []).filter((o, i, a) => !s.unlocked.includes(o.id) && a.findIndex(x => x.id === o.id) === i);
+      if (s.hall.at !== win) { s.hall.at = win; s.hall.rr = 0; s.hall.offers = rollOffers(s).filter(o => !kept.some(k => k.id === o.id)).concat(kept); const u = s.hero && uniqGuildRoll(s, Math.random, now); if (u) s.hall.offers.push(u); }
       else s.hall.offers = s.hall.offers.filter(o => !kept.some(k => k.id === o.id)).concat(kept);
       s.hall.keep = [];
     }
@@ -987,7 +1478,7 @@
   const npcRerollCost = s => npcDust(s, 25) * (1 + ((s.hall && s.hall.rr) || 0));
   function npcReroll(s) {
     const h = hallState(s), c = npcRerollCost(s); if ((s.dust || 0) < c) return false;
-    s.dust -= c; s.npcDust = (s.npcDust || 0) + c; h.rr = (h.rr || 0) + 1; h.offers = rollOffers(s).concat((h.offers || []).filter(o => o.keep)); return true;
+    s.dust -= c; s.npcDust = (s.npcDust || 0) + c; h.rr = (h.rr || 0) + 1; h.offers = rollOffers(s).concat((h.offers || []).filter(o => o.keep)); qEv(s, 'reroll'); return true;
   }
   // A lore companion's story beat: they wait at the Guild Hall as a Legendary hire, kept on offer until hired.
   function npcLegendArrives(s, id) {
@@ -1009,7 +1500,7 @@
     else if (companions(s).length >= rosterCap(s)) return { ok: false, why: 'No free spot. Send someone back to the Hall, or take a short contract' };
     const c = npcPrice(s, o, kind, !!bench);
     if (pay === 'dust') { if (!c.dustAlt || (s.dust || 0) < c.dustAlt) return { ok: false, why: 'Not enough Dust' }; s.dust -= c.dustAlt; s.npcDust = (s.npcDust || 0) + c.dustAlt; }
-    else { if (s.gold < c.gold || (s.dust || 0) < c.dust) return { ok: false, why: s.gold < c.gold ? 'Not enough gold' : 'Not enough Dust' }; s.gold -= c.gold; s.dust = (s.dust || 0) - c.dust; s.npcDust = (s.npcDust || 0) + c.dust; s.npcGold = (s.npcGold || 0) + c.gold; }
+    else { if (s.gold < c.gold || (s.dust || 0) < c.dust) return { ok: false, why: s.gold < c.gold ? 'Not enough gold' : 'Not enough Dust' }; s.gold -= c.gold; s.dust = (s.dust || 0) - c.dust; s.npcDust = (s.npcDust || 0) + c.dust; s.npcGold = (s.npcGold || 0) + c.gold; qSpend(s, 'guild', c.gold); }
     s.hires = s.hires || {};
     const legend = LEGENDS.includes(o.id);
     s.hires[o.id] = { rar: o.rar, kind: bench ? (bench.kind || 'sign') : kind, at: now, until: (bench ? bench.kind : kind) === 'short' ? now + NPC_SHORT_MS : 0, m: legend ? null : { id: o.id, name: o.name, cls: o.cls, side: o.side, rar: o.rar, hue: o.hue } };
@@ -1021,7 +1512,7 @@
     s.levels[o.id] = lv;
     if (bench && bench.traits) { s.traits = s.traits || {}; s.traits[o.id] = bench.traits; }
     if (s.gone) delete s.gone[o.id];
-    recruit(s, o.id);
+    recruit(s, o.id); qEv(s, 'hire', { rar: o.rar, kind: s.hires[o.id].kind });
     if (bench) h.bench = h.bench.filter(b => b !== bench); else h.offers = h.offers.filter(x => x !== o);
     return { ok: true, id: o.id };
   }
@@ -1080,7 +1571,7 @@
   ];
   function masteryMark(s, r, bit, events) {
     s.mast = s.mast || {}; const had = s.mast[r] || 0; if (had & bit) return;
-    s.mast[r] = had | bit; events && events.push({ type: 'mastery', region: r, goal: MASTERY.find(m => m.bit === bit) });
+    s.mast[r] = had | bit; qEv(s, 'mastery'); events && events.push({ type: 'mastery', region: r, goal: MASTERY.find(m => m.bit === bit) });
   }
   function masteryStars(s, r) { const v = (s.mast || {})[r] || 0; return (v & 1 ? 1 : 0) + (v & 2 ? 1 : 0) + (v & 4 ? 1 : 0); }
   // Hero XP from mastery (John, 2026-11-24): every star is +1% hero XP, and a region with all three stars adds +2% more.
@@ -1180,7 +1671,7 @@
     if (!t || !s.items || !(s.items[id] > 0)) return false;
     if (tonicLeft(s, id, now) + t.min * 60 > TONIC_CAP + 1) return false;
     s.items[id]--; s.tonic = s.tonic || {};
-    s.tonic[id] = Math.max(now, s.tonic[id] || 0) + t.min * 60000; return true;
+    s.tonic[id] = Math.max(now, s.tonic[id] || 0) + t.min * 60000; qEv(s, 'tonic', { id }); return true;
   }
   // ---------- Companion traits ----------
   // Every story companion rolls three traits the first time they join (kept for good):
@@ -1274,7 +1765,7 @@
     if (st.readyAt > now) return false;
     if (!spendRes(s, 'you', SPEC_COST)) { events && events.push({ type: 'nores', id: 'you', k: resKind('you') }); return false; }
     st.readyAt = now + ab.cd * 1000 * (1 - Math.min(0.5, sk(s, 'cd')) * 0.5);
-    st.until = now + abilityDuration(s, ab) * 1000; s.abil[key] = st;
+    st.until = now + abilityDuration(s, ab) * 1000; s.abil[key] = st; qEv(s, 'spec');
     const fx = ab.fx; s.fx = s.fx || {};
     for (const k of ['shield', 'vuln', 'fury']) if (fx[k]) s.fx[k] = { v: fx[k], until: st.until };
     if (fx.heal) healParty(s, fx.heal, true);
@@ -1283,7 +1774,7 @@
     let d = 0;
     if (fx.burst) { const c = CLASSES[heroCls(s)]; d = Math.max(c.dps, 1) * scale(s, 'you') * partyMult(s) * gearMult(s, 'you', 'dps') * (1 + sk(s, 'dps')) * fx.burst * wbMult(s, 'you'); }
     events && events.push({ type: 'ability', id: 'you', cls: heroCls(s), name: ab.name, dmg: d || undefined });
-    if (d) damageFoe(s, d, now, null, events);
+    if (d) damageFoe(s, d, now, null, events, 'you');
     return true;
   }
   function wantsSpec(s, ab, now) {
@@ -1306,7 +1797,7 @@
   }
   function learnSkill(s, id) {
     if (canLearn(s, id) !== 'ok') return false;
-    const k = skillById(id); s.kindling -= skillCost(k); s.skills[id] = (s.skills[id] || 0) + 1; return true;
+    const k = skillById(id); s.kindling -= skillCost(k); s.skills[id] = (s.skills[id] || 0) + 1; qEv(s, 'learn'); return true;
   }
   // Items in the pack. Gear someone is wearing lives on them, not in the pack.
   function packCount(s) { let n = 0; for (const it of s.bag) if (!wearer(s, it.uid)) n++; return n; }
@@ -1582,6 +2073,7 @@
     else if (foe.elite) { if (r() < 0.15 * loot) it = rollGear(s, f, { boost: 0.5 }, r); }
     else if (r() < 0.012 * loot) it = rollGear(s, f, null, r);
     if (!it) return;
+    qEv(s, 'loot', { it, f });
     if (autoScrapHit(s, it)) {
       const g = salvageValue(it), d = dustValue(it); s.gold += g; s.dust = (s.dust || 0) + d;
       events && events.push({ type: 'autoscrap', item: it, gold: g, dust: d }); return;
@@ -1736,9 +2228,9 @@
   const UP_MAX = 10;
   function upgrade(s, uid) {
     const it = itemOf(s, uid); if (!it || it.up >= UP_MAX) return false;
-    if (it.wb != null) { const c = wbUpCost(it), sh = shardsOf(s); if ((sh[it.wb] || 0) < c) return false; sh[it.wb] -= c; it.up++; return true; }
+    if (it.wb != null) { const c = wbUpCost(it), sh = shardsOf(s); if ((sh[it.wb] || 0) < c) return false; sh[it.wb] -= c; it.up++; qEv(s, 'upgrade', { it, wb: 1 }); return true; }
     const c = upgradeCost(it); if (c > s.gold) return false;
-    s.gold -= c; it.up++; return true;
+    s.gold -= c; it.up++; qEv(s, 'upgrade', { it }); qSpend(s, 'armor', c); return true;
   }
   const salvageValue = it => foeGold(Math.max(1, it.ilvl), false) * 3 * (1 + RARITY.findIndex(r => r.id === it.rar)) * (1 + it.up);
   // Dust (John, 2026-11-23): scrapping gear also gives Dust, more for rarer and deeper pieces. Moving an enchant costs Dust.
@@ -1749,7 +2241,7 @@
     const it = itemOf(s, uid); if (!it || it.lk) return 0;
     s.dust = (s.dust || 0) + dustValue(it);
     const w = wornAt(s, uid); if (w) delete s.gear[w[0]][w[1]];
-    s.bag = s.bag.filter(x => x !== it);
+    s.bag = s.bag.filter(x => x !== it); qEv(s, 'salvage', { it });
     const v = salvageValue(it); s.gold += v; return v;
   }
   // Enchantments (John, 2026-11-23): items have enchant sockets by rarity and item level. A socket can hold one
@@ -1835,6 +2327,7 @@
     const put = { id: x.id, t: shop ? x.t + (boost ? 1 : 0) : fieldTier(x) };
     const old = lb[slot] || null; lb[slot] = put; b.en = enchStr(lb);
     s.dust -= cost; s.bag = s.bag.filter(y => y !== a); enchDirty();
+    qEv(s, 'ench', { t: x.t, boost, field: !shop }); if (cost > 0) qEv(s, 'dustspend', { n: cost });
     const xp = craftXp(s, CRAFT_XP.ench * x.t, events, 'enchant');
     return { item: b, moved: put, from: x, boost, field: !shop, replaced: old, lost: a, cost, xp };
   }
@@ -1857,6 +2350,7 @@
     const drop = it => { const w = wornAt(s, it.uid); if (w) delete s.gear[w[0]][w[1]]; s.bag = s.bag.filter(x => x !== it); };
     // merging teaches your hero too, a little even when it fails
     const xp = craftXp(s, CRAFT_XP.merge * m.to * (lose ? 0.5 : 1), events, 'merge');
+    qEv(s, 'merge', { ok: !lose, a, to: m.to, shop: m.shop });
     if (lose) { drop(a); drop(b); return { ok: false, risk: m.risk, a, b, xp }; }
     a.up = m.to; a.ilvl = Math.max(a.ilvl, b.ilvl);
     if (b.aff && (!a.aff || b.aff.v > a.aff.v)) a.aff = b.aff;
@@ -1968,7 +2462,7 @@
   const WB_TOKEN_COST = 150; // v125: was 40. A long grind on purpose (John)
   function buyLegend(s, b, rng) {
     if (!s.hero || !WB_SETS[b] || b >= WB_BOSSES || (s.wbTok || 0) < WB_TOKEN_COST) return null;
-    s.wbTok -= WB_TOKEN_COST; const it = makeLegend(s, b, rng); s.bag.push(it); s.stats.legends = (s.stats.legends || 0) + 1;
+    s.wbTok -= WB_TOKEN_COST; const it = makeLegend(s, b, rng); s.bag.push(it); s.stats.legends = (s.stats.legends || 0) + 1; qEv(s, 'legend');
     return it;
   }
   // Party-wide gold find from worn gear: gold region sets and the Loot Goblin's Sack.
@@ -2010,7 +2504,7 @@
   const bagUpCost = s => 1 + (s.bagUps || 0);
   function buyBag(s) {
     if ((s.bagUps || 0) >= BAG_UPS_MAX || s.kindling < bagUpCost(s)) return false;
-    s.kindling -= bagUpCost(s); s.bagUps = (s.bagUps || 0) + 1; return true;
+    s.kindling -= bagUpCost(s); s.bagUps = (s.bagUps || 0) + 1; qEv(s, 'bag'); return true;
   }
   // Kindling upgrades: permanent account bonuses bought with Kindling. They are never refunded.
   const KINDLE_UPS = [
@@ -2025,7 +2519,7 @@
   const kupCost = (s, id) => { const u = KINDLE_UPS.find(x => x.id === id), r = (s.kup || {})[id] || 0; return r >= u.max ? 0 : u.base + r * 2; };
   function buyKup(s, id) {
     const c = kupCost(s, id); if (!c || (s.kindling || 0) < c) return false;
-    s.kindling -= c; s.kup = s.kup || {}; s.kup[id] = (s.kup[id] || 0) + 1; return true;
+    s.kindling -= c; s.kup = s.kup || {}; s.kup[id] = (s.kup[id] || 0) + 1; qEv(s, 'kup'); return true;
   }
   // Class change: a costly respec. Kindling spent on the skill tree comes back; everything else stays spent.
   const CLASS_CHANGE_COST = 15;
@@ -2105,6 +2599,9 @@
     { id: 'foe_prism', title: 'Storm Lenses', group: 'Bestiary', text: 'Shards of the Spire that caught a lightning stroke and kept it. They strike before you see them move.' },
     { id: 'foe_hound', title: 'Rift Hounds', group: 'Bestiary', text: 'Bred by no alliance, followed by all of them. Wounding one only makes it angry.' },
     { id: 'foe_riftling', title: 'Riftlings', group: 'Bestiary', text: 'Small pieces of the Rift that wandered up toward the lantern. They are curious. They are also very hard to hurt.' },
+    { id: 'foe_beetle', title: 'Beetles', group: 'Bestiary', text: 'Hard shells, busy legs and a habit of charging headfirst. Every region grows its own kind, and each is sure it is the best one.' },
+    { id: 'foe_moth', title: 'Moths', group: 'Bestiary', text: 'Wherever a lantern goes, moths follow. Down here some of them have learned to focus the light they love into a burning beam.' },
+    { id: 'foe_crab', title: 'Crabs', group: 'Bestiary', text: 'The underground seas dried up long ago. The crabs never noticed, and they still scuttle sideways through every damp corner of the deep.' },
     { id: 'foe_chest', title: 'Treasure Chests', group: 'Bestiary', text: 'Lantern-bearers stashed supplies for whoever came next. Some chests are still waiting for the right hands.' },
     { id: 'boss', title: 'Guardians', group: 'Bestiary', text: 'Every fifth landing has something that will not move. The old maps call them guardians. The bones call them jailers.' },
     { id: 'set_vigil', title: "Gravewarden's Vigil", group: 'Relics of the Bearers', text: SETS[0].lore },
@@ -2233,7 +2730,9 @@
     { id: 'oil', name: 'Flask of Lantern Oil', icon: 'oil', desc: 'Pour it during a guardian fight for ' + OIL_TIME + ' more seconds before the lantern gutters.' },
   ].concat(TONICS);
   function shopPrice(s, id) {
-    const income = offlineGoldPerSec(s) * 60;
+    // Steady dive-income average (pipRate), not the party seated right now: benching strong heroes in camp made
+    // tonics nearly free to stockpile (same fix as Pip, Bounty Board).
+    const income = pipRate(s) * 60;
     const t = tonicById(id);
     if (t) return Math.max(60, Math.round(income * t.mult));
     return Math.max(id === 'draught' ? 40 : 25, Math.round(income * (id === 'draught' ? 2 : 1.5)));
@@ -2244,16 +2743,16 @@
   function buyShop(s, id, n) {
     n = n || 1; const c = shopPrice(s, id) * n;
     if (!SHOP.some(x => x.id === id) || c > s.gold) return false;
-    s.gold -= c; s.items = s.items || {}; s.items[id] = (s.items[id] || 0) + n; return true;
+    s.gold -= c; s.items = s.items || {}; s.items[id] = (s.items[id] || 0) + n; qSpend(s, 'store', c); return true;
   }
   function useDraught(s, now) {
     now = now || Date.now();
     if (!s.items || !(s.items.draught > 0)) return false;
-    s.enchAt = 0; s.shopK = null; s.items.draught--; s.campUntil = Math.max(now, s.campUntil || 0) + (DRAUGHT_TIME + kup(s, 'draught')) * 1000; return true;
+    s.enchAt = 0; s.shopK = null; s.items.draught--; s.campUntil = Math.max(now, s.campUntil || 0) + (DRAUGHT_TIME + kup(s, 'draught')) * 1000; qEv(s, 'draught'); return true;
   }
   function useOil(s) {
     if (!s.foe || !isBossFloor(s.floor) || !s.items || !(s.items.oil > 0) || s.lantern <= 0) return false;
-    s.items.oil--; s.lantern = Math.max(0, s.lantern - OIL_TIME); return true;
+    s.items.oil--; s.lantern = Math.max(0, s.lantern - OIL_TIME); qEv(s, 'oil'); return true;
   }
 
   // ---------- setup and guests ----------
@@ -2277,13 +2776,30 @@
     const f = friendMult(s) * keeperMult(s);
     return { d: steadyDps(s, 'you') / f, h: maxHpOf(s, 'you'), hl: heroCls(s) === 'healer' ? healPerSec0(s, 'you') / f : 0, pc: pierceOf(s, 'you'), t: npTier(s) };
   }
-  // A newer card or level for a hero already in your party (from the Players Guild).
-  function refreshGuest(s, g) {
+  // A newer card or level for a hero already in your party (from the Players Guild). The game asks for fresh cards
+  // every GUEST_REFRESH and on each camp return (John, 26 Nov 2026: no more dismiss and re-invite to update them).
+  // Growth lands at once. A weaker card (gear stripped or swapped to Gold Find, a reset) waits GUEST_DROP_HOLD and only
+  // lands if it is still the newest card then, so a quick swap or a strip timed to a refresh changes nothing.
+  const GUEST_REFRESH = 5 * 6e4, GUEST_DROP_HOLD = 30 * 6e4;
+  const cardLower = (a, b) => !!(a && b && (a.d < b.d * 0.999 || a.h < b.h * 0.999 || a.hl < (b.hl || 0) * 0.999));
+  function refreshGuest(s, g, now) {
     const x = (s.guests || []).find(y => y.id === g.id); if (!x) return false;
-    if (g.level) x.level = Math.max(1, Math.floor(g.level));
-    const c = cleanCard(g.bp); if (c) x.bp = c;
+    now = now || Date.now();
+    const was = JSON.stringify([x.level, x.bp, x.drop]);
+    const c = cleanCard(g.bp);
+    if (c && x.bp && cardLower(c, x.bp)) {
+      // Hold the weaker card (and the level that came with it) until it has stood for GUEST_DROP_HOLD.
+      // The clock starts at the first weaker card; later weaker cards replace it without restarting the clock.
+      x.drop = { bp: c, lv: g.level ? Math.max(1, Math.floor(g.level)) : x.level, at: x.drop && x.drop.at <= now ? x.drop.at : now };
+      if (now - x.drop.at >= GUEST_DROP_HOLD) { x.bp = x.drop.bp; x.level = x.drop.lv; delete x.drop; }
+    } else {
+      if (g.level) x.level = Math.max(1, Math.floor(g.level));
+      if (c) x.bp = c;
+      delete x.drop;
+    }
+    gkCache = { s: null, t: -1, v: {} }; // the cap is worked out again from the new card
     if (s.hp[x.id] != null) s.hp[x.id] = Math.min(s.hp[x.id], maxHpOf(s, x.id));
-    return true;
+    return JSON.stringify([x.level, x.bp, x.drop]) !== was;
   }
   function addGuest(s, g) {
     // g: { id, name, cls, level } from the hero board
@@ -2307,9 +2823,10 @@
     if (n <= 0) return false;
     const c = trainCost(s, id, n), dd = trainDust(s, id, n);
     if (c > s.gold || dd > (s.dust || 0)) return false;
-    const before = maxHpOf(s, id);
+    const before = maxHpOf(s, id), lv0 = lvl(s, id), top = lv0 >= 0.8 * Math.max(...s.unlocked.filter(x => !isGuest(s, x)).map(x => lvl(s, x)));
     s.gold -= c; if (dd) { s.dust -= dd; s.stats.trainDust = (s.stats.trainDust || 0) + dd; } s.levels[id] = lvl(s, id) + n;
     if (!s.down[id]) s.hp[id] = Math.min(maxHpOf(s, id), (s.hp[id] || before) + (maxHpOf(s, id) - before));
+    qEv(s, 'train', { id, n, dust: dd, top }); qSpend(s, 'train', c);
     return true;
   }
   const alive = s => s.party.filter(id => id && !s.down[id] && lvl(s, id));
@@ -2333,7 +2850,7 @@
     const r = rng || Math.random, f = s.floor;
     if (f < MERCY_FLOOR || isBossFloor(f) || (s.wb && s.wb.until > now) || now < (s.mercyNext || 0) || !mercyActive(s, now) || !evOk(s, 'mercy', now)) return null;
     if (s.goblin && s.goblin.item && f >= s.goblin.floor) return null;
-    const who = MERCY_NAMES[Math.floor(r() * MERCY_NAMES.length)], roll = r(), heal = partyHeal(s);
+    const who = MERCY_NAMES[Math.floor(r() * MERCY_NAMES.length)], roll = r() / (postOn(s, 'thistle') ? 1 + UNIQ_THISTLE : 1), heal = partyHeal(s);
     if (heal > 0 && roll < WOUNDED_CHANCE) {
       const max = Math.max(200, heal * AID_SEC / 0.9);
       s.mercyNext = now + MERCY_COOL; s.stats.mercySeen = (s.stats.mercySeen || 0) + 1; evUse(s, 'mercy', now);
@@ -2349,7 +2866,7 @@
   }
   function mercyAided(s, now, events) {
     const f = s.foe; if (!f || !f.wounded || f.hp < f.max - 1e-6) return false;
-    s.mercyAid = Math.max(now, s.mercyAid || 0) + MERCY_MIN * 60000; s.stats.aided = (s.stats.aided || 0) + 1;
+    s.mercyAid = Math.max(now, s.mercyAid || 0) + MERCY_MIN * 60000; s.stats.aided = (s.stats.aided || 0) + 1; qEv(s, 'aid');
     s.foe = null; s.foeGap = now + 900; events && events.push({ type: 'aided', who: f.who }); return true;
   }
   // NP+: every foe outside the shared world boss fight is tougher and hits harder (npFoeHp / npFoeAtk).
@@ -2380,16 +2897,16 @@
     const chest = !boss && r() < chestChance(s) && evOk(s, 'chest');
     if (chest) evUse(s, 'chest');
     const b = biomeOf(f);
-    let sprite, name;
+    let sprite, name, cr = null;
     if (boss) {
       sprite = BOSS_SPRITES[Math.floor(f / BOSS_EVERY) % BOSS_SPRITES.length];
       name = (f % 10 === 0) ? b.boss : ['Stone Sentinel', 'Tunnel Wyrm', 'Bone Hierarch'][BOSS_SPRITES.indexOf(sprite)];
     } else if (chest) { sprite = 'chest'; name = 'Treasure Chest'; }
-    else { const fo = b.foe && r() < 0.55 ? b.foe : FOES[Math.floor(r() * FOES.length)]; sprite = fo.id; name = b.adj[Math.floor(r() * b.adj.length)] + ' ' + fo.name; }
+    else { cr = pickCreature(f, r); sprite = cr.fam; name = cr.name; }
     // Grand War warbands: soldiers of the alliances fighting over the Rift.
     const elite = !boss && !chest && f >= 4 && r() < ELITE_CHANCE;
     let side = null;
-    if (elite) { side = b.war.side; name = b.war.units[Math.floor(r() * b.war.units.length)]; sprite = ['skeleton', 'ghost', 'eye'][Math.floor(r() * 3)]; }
+    if (elite) { cr = null; side = b.war.side; name = b.war.units[Math.floor(r() * b.war.units.length)]; sprite = ['skeleton', 'ghost', 'eye'][Math.floor(r() * 3)]; }
     const hp = foeHp(f, boss) * (chest ? 0.5 : elite ? 2.5 : 1);
     // Some foes sneak up and hit the back of the line first.
     let ambush = !boss && !chest && f >= 6 && r() < (elite ? 0.3 : 0.1) ? 2 : 0;
@@ -2401,7 +2918,7 @@
     const mods = chest ? [] : rollMods(f, boss, elite, b, r);
     if (!chest && !pack && f >= SHIELD_FLOOR && r() < (boss ? SHIELD_BOSS_CHANCE : SHIELD_CHANCE)) mods.push('shield');
     const sp = chest ? null : rollSpecial(f, boss, elite, sprite, b, r);
-    return { sp, spAt: 0, spWind: null, name, sprite, boss, chest, elite, side, ambush, pack, hp: hpx, max: hpx, hue: elite ? b.hue + 40 : b.hue, atk: chest ? 0 : foeDps(f, boss) * FOE_SWING * (elite ? 1.3 : 1) * (pack ? 1 + 0.3 * (pack - 1) : 1) * (mods.includes('swift') ? 1.35 : 1), mods, ward: 0, wardAt: 0 };
+    return { sp, spAt: 0, spWind: null, name, sprite, boss, chest, elite, side, ambush, pack, hp: hpx, max: hpx, hue: elite ? b.hue + 40 : cr ? creatureHue(cr) : b.hue, cid: cr ? cr.id : null, rk: cr ? cr.rar : null, sc: cr ? SIZE_X[cr.size] : 1, ov: cr ? cr.ov : '', atk: chest ? 0 : foeDps(f, boss) * FOE_SWING * (elite ? 1.3 : 1) * (pack ? 1 + 0.3 * (pack - 1) : 1) * (mods.includes('swift') ? 1.35 : 1), mods, ward: 0, wardAt: 0 };
   }
   // Locked doors and chests (John, 2026-11-25): now and then the way is barred by a lock instead of a monster. Only a
   // Rogue can pick it (LOCK_TIME seconds, faster with taps; a stunned or fallen Rogue pauses it). A door hides gold, a
@@ -2410,8 +2927,8 @@
   const LOCK_FLOOR = 10, LOCK_CHANCE = 0.01, LOCK_TIME = 5, LOCK_TAP = 0.35, LOCK_SKIP = 4, LOCK_SIGIL = 0.01, LOCK_GOLD = 8;
   const lockFoe = r => { const door = r() < 0.5; return { lock: door ? 'door' : 'chest', name: door ? 'Locked Door' : 'Locked Chest', sprite: door ? 'door' : 'lockbox', hp: 100, max: 100, atk: 0, mods: [], sp: null, pick: 0, wait: 0, hue: 0, ambush: 0, pack: 0, ward: 0, wardAt: 0 }; };
   const lockRogue = s => s.party.find(id => id && memberById(id).cls === 'rogue') || null;
-  const lockDust = (s, f) => Math.round((10 + f * 1.2) * npBonus(s));
-  const lockGold = (s, f) => foeGold(f, false) * goldMult(s) * LOCK_GOLD;
+  const lockDust = (s, f) => Math.round((10 + f * 1.2) * npBonus(s) * (postOn(s, 'pell') ? 1 + UNIQ_PELL : 1));
+  const lockGold = (s, f) => foeGold(f, false) * goldMult(s) * npGold(s) * LOCK_GOLD * (postOn(s, 'bramble') ? 1 + UNIQ_BRAMBLE : 1);
   function lockDone(s, now) { s.foe = null; s.foeSwing = 0; s.foeGap = now + FOE_GAP * 1000; s.foeIdx++; }
   function lockTick(s, dt, now, rng, events) {
     const f = s.foe, rog = lockRogue(s);
@@ -2431,7 +2948,7 @@
     if (f.lock === 'door') { out.gold = lockGold(s, fl); s.gold += out.gold; s.stats.goldEarned += out.gold; }
     else { out.dust = lockDust(s, fl); s.dust = (s.dust || 0) + out.dust; }
     if (r() < LOCK_SIGIL) { out.sigil = 1; s.sigPend = (s.sigPend || 0) + 1; s.stats.sigils = (s.stats.sigils || 0) + 1; }
-    s.stats.locks = (s.stats.locks || 0) + 1;
+    s.stats.locks = (s.stats.locks || 0) + 1; qEv(s, 'lockopen', { k: f.lock });
     events && events.push(out);
     if (out.sigil) events && events.push({ type: 'sigil', n: 1, lock: f.lock });
     lockDone(s, now || Date.now());
@@ -2475,7 +2992,8 @@
   // weak to one (WB_TRAITS, index = wbBoss(id), same order as WB_NAMES and loot.js), and it hits harder and uses a
   // special attack. One assault counts at most WB_CEIL monsters' worth of your deepest floor (the server checks the
   // same against your hero's floor). The preview event (2026-11-23) keeps the old monsters'-worth scoring.
-  const WB_HP1R = 1e9, WB_CEIL = 600, WB_NPC = 0.5, WB_WEAK = 0.3, WB_RESIST = 0.3, WB_ATK = 1.3;
+  // v137 (John, 27 Nov 2026): every assault hits the shared bar, but only your best WB_BEST count for rank, Sigils and loot.
+  const WB_HP1R = 1e9, WB_BEST = 12, WB_CEIL = 600, WB_NPC = 0.5, WB_WEAK = 0.3, WB_RESIST = 0.3, WB_ATK = 1.3;
   const WB_TRAITS = [
     { weak: 'mage', resist: ['tank', 'rogue'], sp: 'shards', trait: 'Crystal hide', line: 'Blades skid off its void crystal, but spells crack it.' },
     { weak: 'healer', resist: ['necro', 'mage'], sp: 'void', trait: 'Hollow crown', line: 'Dark arts feed it and spells sink into its hollow, but holy light burns it.' },
@@ -2503,7 +3021,7 @@
     if (resting(s, now) || !alive(s).length || (s.wb && s.wb.until > now)) return false;
     const id = wbWindow(now).id, old = wbOld(id), unit = foeHp(Math.max(1, s.maxFloorEver), false);
     s.wb = old ? { until: now + WB_TIME * 1000, score: 0, unit, name, old: true } : { until: now + WB_TIME * 1000, score: 0, name, id, k: wbBoss(id), cap: WB_CEIL * unit };
-    s.foe = null; s.foeSwing = 0;
+    s.foe = null; s.foeSwing = 0; qEv(s, 'assault', { gob: false });
     return true;
   }
   function endAssault(s, events, fell) {
@@ -2529,19 +3047,20 @@
     return out;
   }
 
-  function damageFoe(s, amount, now, rng, events) {
+  function damageFoe(s, amount, now, rng, events, src) {
     if (s.foe && (s.foe.wounded || s.foe.lock)) return; // nobody fights a wounded Mercy Corps companion, or a lock
+    const mt = now || Date.now(), rec = !src ? () => {} : typeof src === 'string' ? x => meterAdd(s, src, x, mt) : x => { for (const k in src) meterAdd(s, k, x * src[k], mt); };
     let guard = 0;
     while (amount > 0 && guard++ < 60) {
       if (!s.foe) s.foe = makeFoe(s, rng);
       if (s.foe.lock || s.foe.wounded) return; // overkill never spills onto a lock
-      const foe = s.foe, mult = (foe.boss ? 1 + relicVal(s, 'lens') : 1) * (1 + fxOn(s, 'vuln', now || Date.now())) * (1 + beastBonus(s, foe));
+      const foe = s.foe, mult = (foe.boss ? (1 + relicVal(s, 'lens')) * (postOn(s, 'ilse') ? 1 + UNIQ_ILSE : 1) : 1) * (1 + fxOn(s, 'vuln', now || Date.now())) * (1 + beastBonus(s, foe));
       let dmg = amount * mult;
-      if (foe.world) { if (s.wb.gob && gobDash(s, now || Date.now()) && !gobRogue(s)) return; s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); return; }
+      if (foe.world) { if (s.wb.gob && gobDash(s, now || Date.now()) && !gobRogue(s)) return; s.wb.score += s.wb.old || !s.wb.cap ? dmg / s.wb.unit : dmg; drain(s, dmg); rec(dmg); return; }
       if (foe.shield > 0) dmg *= 1 - SHIELD_CUT;
       if (foe.ward > 0) { const soak = Math.min(foe.ward, dmg); foe.ward -= soak; dmg -= soak; amount = dmg / mult; if (dmg <= 0) return; }
-      if (dmg < foe.hp) { foe.hp -= dmg; drain(s, dmg); return; }
-      amount -= foe.hp / mult; drain(s, foe.hp);
+      if (dmg < foe.hp) { foe.hp -= dmg; drain(s, dmg); rec(dmg); return; }
+      amount -= foe.hp / mult; drain(s, foe.hp); rec(foe.hp);
       killFoe(s, now, rng, events);
       if (s.foeGap > (now || Date.now())) return;
       if (s.foe && s.foe.boss) return;
@@ -2567,107 +3086,6 @@
     s.sigPend = (s.sigPend || 0) + n; s.stats.sigils = (s.stats.sigils || 0) + n;
     events && events.push({ type: 'sigil', n, chest: !!foe.chest });
   }
-  // Daily quests: three a day, the same for everyone, picked from the UTC date. Progress counts stats since the day began.
-  const QUESTS = [
-    { id: 'kills',  stat: 'kills',     n: 400, text: 'Defeat {n} monsters' },
-    { id: 'boss',   stat: 'bossKills', n: 12,  text: 'Defeat {n} guardians' },
-    { id: 'chests', stat: 'chests',    n: 5,   text: 'Open {n} treasure chests' },
-    { id: 'crits',  stat: 'crits',     n: 150, text: 'Land {n} critical hits' },
-    { id: 'clicks', stat: 'clicks',    n: 250, text: 'Strike {n} times with your lantern' },
-  ];
-  const QUEST_REWARD = 1, QUEST_BONUS = 2;
-  const questDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
-  function dailyQuests(day) {
-    let h = 0; for (const c of day) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    const pool = QUESTS.slice(), out = [];
-    for (let i = 0; i < 3; i++) { h = (h * 1103515245 + 12345) >>> 0; out.push(pool.splice(h % pool.length, 1)[0]); }
-    return out;
-  }
-  // Rolls the quest log over at UTC midnight and returns today's quests with progress.
-  function questState(s) {
-    const day = questDay();
-    if (!s.daily || s.daily.day !== day) s.daily = { day, base: Object.assign({}, s.stats), got: 0 };
-    return dailyQuests(day).map((q, i) => { const have = Math.max(0, (s.stats[q.stat] || 0) - (s.daily.base[q.stat] || 0)); return { i, id: q.id, text: q.text.replace('{n}', q.n.toLocaleString('en-US')), have: Math.min(have, q.n), n: q.n, done: have >= q.n, got: !!(s.daily.got & (1 << i)) }; });
-  }
-  // ---------- Bounty board (John, 2026-11-24) ----------
-  // Three bounties at a time, fresh every BOUNTY_HOURS. They are built for your hero from the floors you have reached,
-  // so some send you back up to farm older floors. Finished bounties left unclaimed are paid out when the board turns over.
-  const BOUNTY_FLOOR = 5, BOUNTY_HOURS = 4, BOUNTY_MS = BOUNTY_HOURS * 3600e3;
-  const bountyWin = (t = Date.now()) => Math.floor(t / BOUNTY_MS);
-  function bountyRng(seed) { let h = 2166136261; for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; }; }
-  function makeBounties(s, w) {
-    const r = bountyRng(w + ':' + ((s.hero && s.hero.name) || '') + ':' + (s.created || 0));
-    const top = Math.max(1, s.maxFloor || 1), topR = regionNo(top);
-    const pickRegion = () => Math.max(0, topR - Math.floor(r() * Math.min(3, topR + 1)));
-    const span = rn => [rn * 10 + 1, Math.min(top, rn * 10 + 10)];
-    const kinds = ['hunt', 'hunt', 'region', 'guardian', 'chest'];
-    if (top >= 20) kinds.push('elite');
-    if (top >= SHIELD_FLOOR + 3) kinds.push('shield');
-    const out = [];
-    while (out.length < 3 && kinds.length) {
-      const k = kinds.splice(Math.floor(r() * kinds.length), 1)[0];
-      if (k === 'hunt') {
-        const rn = pickRegion(), [a, b] = span(rn), bi = BIOMES[rn % BIOMES.length];
-        const fo = bi.foe && r() < 0.7 ? bi.foe : FOES[Math.floor(r() * FOES.length)], sig = fo === bi.foe;
-        if (out.some(x => x.k === 'hunt' && x.sp === fo.id)) continue;
-        out.push({ k, sp: fo.id, name: fo.name, a, b, n: sig ? 30 : 12, have: 0 });
-      } else if (k === 'region') { const rn = pickRegion(), [a, b] = span(rn); out.push({ k, a, b, n: 60, have: 0, rname: BIOMES[rn % BIOMES.length].name }); }
-      else if (k === 'guardian') { const bf = Math.max(BOSS_EVERY, Math.floor(top / BOSS_EVERY) * BOSS_EVERY - BOSS_EVERY * Math.floor(r() * 3)); out.push({ k, a: bf, b: bf, n: 3, have: 0 }); }
-      else if (k === 'chest') out.push({ k, n: 6, have: 0 });
-      else if (k === 'elite') out.push({ k, n: 6, have: 0 });
-      else if (k === 'shield') out.push({ k, n: 4, have: 0 });
-    }
-    return out;
-  }
-  function bountyReward(s, b) {
-    const mins = { hunt: 6, region: 5, guardian: 5, chest: 4, elite: 6, shield: 4 }[b.k] || 4;
-    // Hotfix (Kyvia, Discord 26 Nov 2026): the gold used live away income, so swapping a Gold Find hero in just before
-    // claiming raised it by about a billion. It now uses the same slow dive-income average as Pip's prices (pipRate).
-    return { gold: Math.max(50, Math.round(pipRate(s) * 60 * mins)), dust: Math.round(3 + (s.maxFloor || 1) * 0.3) };
-  }
-  // Rolls the board over when the window changes (paying out finished, unclaimed bounties) and returns it.
-  function bountyState(s, now) {
-    const w = bountyWin(now);
-    if ((s.maxFloor || 1) < BOUNTY_FLOOR) return { w, list: [], locked: true };
-    if (!s.bounty || s.bounty.w !== w) {
-      const paid = [];
-      if (s.bounty && Array.isArray(s.bounty.list)) for (const b of s.bounty.list) if (b.have >= b.n && !b.got) paid.push(claimBounty(s, b));
-      s.bounty = { w, list: makeBounties(s, w) };
-      if (paid.length) s.bounty.paid = paid;
-    }
-    return s.bounty;
-  }
-  function claimBounty(s, b, rng) {
-    const rw = bountyReward(s, b); b.got = 1;
-    s.gold += rw.gold; s.dust = (s.dust || 0) + rw.dust; s.stats.bounties = (s.stats.bounties || 0) + 1;
-    if ((rng || Math.random)() < 0.25) { const t = TONICS[Math.floor((rng || Math.random)() * TONICS.length)]; s.items[t.id] = (s.items[t.id] || 0) + 1; rw.tonic = t.name; }
-    return rw;
-  }
-  function claimBountyAt(s, i, now) { const st = bountyState(s, now), b = st.list[i]; if (!b || b.got || b.have < b.n) return null; return claimBounty(s, b); }
-  function bountyCount(s, ev, foe, f) {
-    if (!s.bounty || !Array.isArray(s.bounty.list) || s.bounty.w !== bountyWin()) return;
-    for (const b of s.bounty.list) {
-      if (b.got || b.have >= b.n) continue;
-      let add = 0;
-      if (ev === 'kill' && foe && !foe.world && !foe.goblin) {
-        const m = foe.pack || 1, inR = b.a == null || (f >= b.a && f <= b.b);
-        if (b.k === 'hunt' && foe.sprite === b.sp && inR) add = m;
-        else if (b.k === 'region' && !foe.chest && !foe.boss && inR) add = m;
-        else if (b.k === 'guardian' && foe.boss && f === b.a) add = 1;
-        else if (b.k === 'chest' && foe.chest) add = 1;
-        else if (b.k === 'elite' && foe.elite) add = 1;
-      } else if (ev === 'shield' && b.k === 'shield') add = 1;
-      if (add) b.have = Math.min(b.n, b.have + add);
-    }
-  }
-  const flr = b => b.a === b.b ? 'on floor ' + b.a : 'on floors ' + b.a + '–' + b.b;
-  const bountyText = b => b.k === 'hunt' ? 'Defeat ' + b.n + ' ' + b.name + 's ' + flr(b)
-    : b.k === 'region' ? 'Defeat ' + b.n + ' monsters ' + flr(b)
-    : b.k === 'guardian' ? 'Defeat the floor ' + b.a + ' guardian ' + b.n + ' times'
-    : b.k === 'chest' ? 'Open ' + b.n + ' treasure chests'
-    : b.k === 'elite' ? 'Defeat ' + b.n + ' alliance elites'
-    : 'Break ' + b.n + ' monster shields with your strikes';
-
   // ---------- Wandering merchant (John, 2026-11-24) ----------
   // Only while you are playing: now and then a merchant sets up beside the fight for MERCH_LIFE seconds with one deal
   // at MERCH_OFF off. Buy it or let it go; missing it costs nothing.
@@ -2678,7 +3096,7 @@
     const k = opts[Math.floor(r() * opts.length)];
     if (k === 'tonic') { const t = TONICS[Math.floor(r() * TONICS.length)]; const was = shopPrice(s, t.id) * 2; return { k, id: t.id, n: 2, name: '2 × ' + t.name, desc: t.desc, was, price: Math.round(was * (1 - MERCH_OFF)) }; }
     if (k === 'draught' || k === 'oil') { const it = SHOP.find(x => x.id === k); const was = shopPrice(s, k) * 3; return { k, id: k, n: 3, name: '3 × ' + it.name, desc: it.desc, was, price: Math.round(was * (1 - MERCH_OFF)) }; }
-    const n = Math.round(20 + (s.maxFloorEver || 1) * 1.5), was = Math.max(80, Math.round(offlineGoldPerSec(s) * 60 * 6));
+    const n = Math.round(20 + (s.maxFloorEver || 1) * 1.5), was = Math.max(80, Math.round(pipRate(s) * 60 * 6));
     return { k: 'dust', n, name: n + ' Dust', desc: 'Dust for enchanting, without scrapping a thing.', was, price: Math.round(was * (1 - MERCH_OFF)) };
   }
   function merchantTick(s, now, active, rng, events) {
@@ -2695,12 +3113,12 @@
     const o = m.offer; if (s.gold < o.price) return null;
     s.gold -= o.price; s.items = s.items || {};
     if (o.k === 'dust') s.dust = (s.dust || 0) + o.n; else s.items[o.id] = (s.items[o.id] || 0) + o.n;
-    s.merchant = null; s.merchNext = now + MERCH_COOL * 1000; s.stats.merchant = (s.stats.merchant || 0) + 1;
+    s.merchant = null; s.merchNext = now + MERCH_COOL * 1000; s.stats.merchant = (s.stats.merchant || 0) + 1; qEv(s, 'merchant');
     return o;
   }
   function killFoe(s, now, rng, events) {
     const foe = s.foe, f = s.floor;
-    let g = foeGold(f, foe.boss) * goldMult(s);
+    let g = foeGold(f, foe.boss) * goldMult(s) * npGold(s);
     if (foe.chest) { g *= 10 * (1 + relicVal(s, 'tooth')); s.stats.chests++; }
     if (foe.elite) { g *= 3; unlockLore(s, 'war_' + foe.side, events); const rn = regionNo(f); s.mastE = s.mastE || {}; s.mastE[rn] = (s.mastE[rn] || 0) + 1; if (s.mastE[rn] >= MASTERY_ELITES) masteryMark(s, rn, 2, events); if (rn < REGIONS - 1 && (rn + 1) * 10 + 1 > s.maxFloorEver && s.mastE[rn] <= TRIAL_ELITES) events && events.push({ type: 'trial', region: rn, elites: s.mastE[rn], guardian: trialOf(s, rn).guardian }); }
     if (foe.pack) { g *= foe.pack * PACK_GOLD * (1 + sk(s, 'spoils')); s.stats.packs = (s.stats.packs || 0) + 1; s.stats.kills += foe.pack - 1; }
@@ -2711,15 +3129,18 @@
       events && events.push({ type: 'goblinkill', item: back || null });
       if ((rng || Math.random)() < GOBLIN_SACK_CHANCE) { const sack = rollGoblinSack(s, f, rng || Math.random); s.bag.push(sack); s.stats.sacks = (s.stats.sacks || 0) + 1; events && events.push({ type: 'goblinsack', item: sack }); }
     }
+    if (foe.cage) { s.stats.freed = (s.stats.freed || 0) + 1; uniqArrive(s, foe.cage, events, now); uqOf(s).cageOn = 0; foe.cage = null; }
     if (foe.rescue) { s.mercyXp = Math.max(now, s.mercyXp || 0) + MERCY_MIN * 60000; s.stats.rescues = (s.stats.rescues || 0) + 1; events && events.push({ type: 'rescued', who: foe.rescue }); }
     s.gold += g; s.stats.goldEarned += g; s.stats.kills++;
-    bountyCount(s, 'kill', foe, f);
+    qEv(s, 'kill', { foe, f, clean: !s.qdown, spare: foe.boss ? lanternTime(s) - (s.lantern || 0) : 0 });
+    if (!foe.world) qEv(s, 'gold', { f, n: g });
     if (s.dots) for (const id in s.dots) if (--s.dots[id].n <= 0) delete s.dots[id];
     const xp = gainXp(s, foe, events);
     // first: this kill opens the way down (not a repeat kill while farming a floor already cleared)
     events && events.push({ type: 'kill', gold: g, xp, foe, first: !!foe.boss && s.floor >= s.maxFloor });
     unlockLore(s, foe.boss ? 'boss' : 'foe_' + foe.sprite, events);
-    { const bk = beastKey(foe); if (bk) { s.bk = s.bk || {}; const t0 = beastTier(s, bk); s.bk[bk] = (s.bk[bk] || 0) + (foe.pack || 1); const t1 = beastTier(s, bk); if (t1 > t0 && events) events.push({ type: 'beast', key: bk, tier: t1 }); } }
+    if (foe.cid && !foe.world) { s.bx = s.bx || {}; if (!s.bx[foe.cid]) events && events.push({ type: 'newbeast', cid: foe.cid }); s.bx[foe.cid] = (s.bx[foe.cid] || 0) + (foe.pack || 1); }
+    { const bk = beastKey(foe); if (bk) { s.bk = s.bk || {}; const t0 = beastTier(s, bk); s.bk[bk] = (s.bk[bk] || 0) + (foe.pack || 1); const t1 = beastTier(s, bk); if (t1 > t0) { qEv(s, 'beast'); events && events.push({ type: 'beast', key: bk, tier: t1 }); } } }
     if (foe.boss && f % 10 === 0) unlockLore(s, 'g' + (Math.floor((f - 1) / 10) % BIOMES.length), events);
     dropGear(s, foe, rng, events);
     dropSigils(s, foe, rng, events);
@@ -2733,7 +3154,8 @@
       const firstClear = f >= s.maxFloorEver && !regionNeed(s, f + 1);
       const chance = f < 10 ? 0 : (firstClear ? 0.35 : 0.03);
       const r = rng || Math.random;
-      if (r() < chance) {
+      if (r() < chance && (firstClear || evOk(s, 'relic', now))) {
+        if (!firstClear) evUse(s, 'relic', now);
         const rel = RELICS[Math.floor(r() * RELICS.length)];
         s.relics[rel.id] = (s.relics[rel.id] || 0) + 1;
         events && events.push({ type: 'relic', relic: rel, level: s.relics[rel.id] });
@@ -2746,9 +3168,10 @@
   }
 
   function clearFloor(s, events, boss) {
+    qEv(s, 'floor', { f: s.floor, clean: !s.qdown }); s.qdown = 0;
     // Past the end of Act One the way is sealed until Season 2.
     if (s.floor >= ACT_ONE_END && !actTwoOpen()) {
-      if (s.floor >= s.maxFloor) { s.maxFloor = Math.max(s.maxFloor, ACT_ONE_END + 1); if (s.maxFloor > s.maxFloorEver) { s.maxFloorEver = s.maxFloor; events && events.push({ type: 'newfloor', floor: s.maxFloor }); } }
+      if (s.floor >= s.maxFloor) { s.maxFloor = Math.max(s.maxFloor, ACT_ONE_END + 1); if (s.maxFloor > s.maxFloorEver) { s.maxFloorEver = s.maxFloor; qEv(s, 'newfloor'); events && events.push({ type: 'newfloor', floor: s.maxFloor }); } }
       s.lantern = 0; s.foeIdx = 0; healParty(s, 0.3, true); events && events.push({ type: 'sealed' });
       return;
     }
@@ -2763,7 +3186,7 @@
     }
     if (!need && s.floor >= s.maxFloor) {
       s.maxFloor = s.floor + 1;
-      if (s.maxFloor > s.maxFloorEver) { s.maxFloorEver = s.maxFloor; events && events.push({ type: 'newfloor', floor: s.maxFloor }); }
+      if (s.maxFloor > s.maxFloorEver) { s.maxFloorEver = s.maxFloor; qEv(s, 'newfloor'); events && events.push({ type: 'newfloor', floor: s.maxFloor }); }
       unlockLore(s, 'biome' + (Math.floor((s.maxFloor - 1) / 10) % BIOMES.length), events);
     }
     s.lantern = 0; s.foeIdx = 0;
@@ -2773,7 +3196,8 @@
 
   function gotoFloor(s, f) {
     f = Math.max(1, Math.min(s.maxFloor, f, actTwoOpen() ? Infinity : ACT_ONE_END));
-    s.floor = f; s.foeIdx = 0; s.foe = null; s.lantern = 0; s.foeSwing = 0;
+    if (s.foe && s.foe.cage) cageFled(s); // the caged foe gets away when the party leaves or falls
+    s.floor = f; s.foeIdx = 0; s.foe = null; s.lantern = 0; s.foeSwing = 0; s.qdown = 0;
     s.enchAt = 0; s.shopK = null; // travelling anywhere ends a shop visit (v104)
   }
 
@@ -2804,8 +3228,8 @@
   // Damage after dodges, armour, shields and guards. Returns -1 for a dodge.
   function soak(s, t, dmg, now, rng) {
     const m = memberById(t), c = CLASSES[m.cls];
-    { const dg = (c.dodge || 0) + wearVal(s, t, 'dodge'); if (dg > 0 && (rng || Math.random)() < dg + (c.dodge && setBonus(s, t) >= 2 ? 0.1 : 0) + (c.dodge && t === 'you' ? sk(s, 'dodge') : 0)) return -1; }
-    const bl = wearVal(s, t, 'block'); if (bl > 0 && (rng || Math.random)() < bl) return -2;
+    { const dg = (c.dodge || 0) + wearVal(s, t, 'dodge'); if (dg > 0 && (rng || Math.random)() < dg + (c.dodge && setBonus(s, t) >= 2 ? 0.1 : 0) + (c.dodge && t === 'you' ? sk(s, 'dodge') : 0)) { qEv(s, 'dodge'); return -1; } }
+    const bl = wearVal(s, t, 'block'); if (bl > 0 && (rng || Math.random)() < bl) { qEv(s, 'dodge'); return -2; }
     if (c.armor) dmg *= 1 - c.armor;
     dmg *= 1 - wearVal(s, t, 'def');
     if (m.cls === 'tank' && abilityActive(s, t, now)) dmg *= 0.3 * (t === 'you' ? 1 - sk(s, 'power') : 1);
@@ -2815,12 +3239,13 @@
   }
   function hurtHero(s, t, dmg, now, events) {
     s.hp[t] = (s.hp[t] == null ? maxHpOf(s, t) : s.hp[t]) - dmg;
-    if (s.hp[t] <= 0) { s.hp[t] = 0; s.down[t] = downAt(s, now); if (s.dots) delete s.dots[t]; events && events.push({ type: 'fall', id: t }); return true; }
+    if (s.hp[t] <= 0) { s.hp[t] = 0; s.qdown = 1; s.down[t] = downAt(s, now); if (s.dots) delete s.dots[t]; events && events.push({ type: 'fall', id: t }); return true; }
     return false;
   }
   function addDot(s, t, k, dps, events) {
     s.dots = s.dots || {};
     const d = s.dots[t];
+    if (!d) qEv(s, 'dot');
     s.dots[t] = { k, dps: Math.max(dps, d && d.k === k ? d.dps : 0), n: DOT_FIGHTS };
     events && events.push({ type: 'dot', id: t, k });
   }
@@ -2853,7 +3278,7 @@
     if (!foe.shWind || now < foe.shAt) return;
     foe.shWind = 0; foe.shAt = now + SHUFFLE_GAP * 1000;
     const tank = s.party.find(id => id && !s.down[id] && memberById(id).cls === 'tank' && abilityActive(s, id, now));
-    if (tank) { s.stats.shufBlocks = (s.stats.shufBlocks || 0) + 1; events && events.push({ type: 'shufblock', id: tank }); return; }
+    if (tank) { s.stats.shufBlocks = (s.stats.shufBlocks || 0) + 1; qEv(s, 'shufblock'); events && events.push({ type: 'shufblock', id: tank }); return; }
     const seats = s.party.map((id, i) => (id ? i : -1)).filter(i => i >= 0);
     if (seats.length < 2) return;
     const ids = seats.map(i => s.party[i]), r = rng || Math.random;
@@ -2864,7 +3289,7 @@
     seats.forEach((si, k) => { s.party[si] = p[k]; });
     foe.shOn = 1;
     s.shuf = { orig, until: now + shuffleTime(s) * 1000 };
-    s.stats.shuffles = (s.stats.shuffles || 0) + 1;
+    s.stats.shuffles = (s.stats.shuffles || 0) + 1; qEv(s, 'shuffle');
     events && events.push({ type: 'shuffle', sec: shuffleTime(s) });
   }
   function specialTick(s, now, rng, events) {
@@ -2899,7 +3324,7 @@
         // stuns and disarms: a whole-party move catches about a third of the line, aimed moves always land on the main target
         if (!fell && sp.cc && (sp.kind === 'all' ? (rng || Math.random)() < 0.35 : mult >= sp.mult)) addCC(s, id, sp.cc, now, events, sp.kind === 'all');
       }
-      s.stats.specials = (s.stats.specials || 0) + 1;
+      s.stats.specials = (s.stats.specials || 0) + 1; qEv(s, 'special', { sp: foe.sp, f: s.floor });
       events && events.push({ type: 'special', sp: foe.sp, kind: sp.kind, hits: out });
       if (!alive(s).length) wipe(s, now, events);
     }
@@ -2917,9 +3342,11 @@
       foe.ambush--;
       const guard = memberById(t).cls === 'tank';
       if (!guard) dmg *= 1.6;
+      if (postOn(s, 'corra')) dmg *= 1 - UNIQ_CORRA;
       events && events.push({ type: 'ambush', target: t, guarded: guard, first: foe.ambush === 1 });
     }
     if (t === 'minion') {
+      qEv(s, 'minionhit');
       const m = s.minions.find(x => x.hp > 0); m.hp -= dmg;
       events && events.push({ type: 'foehit', target: 'minion', dmg });
       return;
@@ -2964,17 +3391,18 @@
     const sb = setBonus(s, id), me = id === 'you', pw = me ? 1 + sk(s, 'power') : 1;
     st.readyAt = now + ab.cd * 1000 * (m.cls === 'rogue' && sb >= 3 ? 0.6 : 1) * (me ? 1 - Math.min(0.5, sk(s, 'cd')) : 1);
     st.until = now + abilityDuration(s, ab) * 1000 * (m.cls === 'tank' && sb >= 3 ? 2 : 1) * (me ? 1 + sk(s, 'dur') : 1);
-    s.abil[id] = st;
+    s.abil[id] = st; qEv(s, 'cast', { cls: m.cls });
     if (m.cls === 'healer') {
+      if (s.dots && Object.keys(s.dots).length) qEv(s, 'cleanse');
       healParty(s, 0.45 * pw, true);
       if (s.foe && s.foe.wounded) s.foe.hp = Math.min(s.foe.max, s.foe.hp + s.foe.max * AID_HYMN * pw);
       s.dots = {};
       const fallen = s.party.filter(x => x && s.down[x]).slice(0, (sb >= 3 ? 5 : 1) + (me ? sk(s, 'revive') : 0));
-      for (const f of fallen) { delete s.down[f]; s.hp[f] = maxHpOf(s, f) * 0.5; s.stats.revives++; events && events.push({ type: 'revive', id: f }); }
+      for (const f of fallen) { delete s.down[f]; s.hp[f] = maxHpOf(s, f) * 0.5; s.stats.revives++; qEv(s, 'revive'); events && events.push({ type: 'revive', id: f }); }
     } else if (m.cls === 'rogue') {
       const d = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 12 * pw * wbMult(s, id);
       events && events.push({ type: 'ability', id, cls: m.cls, dmg: d });
-      damageFoe(s, d, now, null, events);
+      damageFoe(s, d, now, null, events, id);
       return true;
     } else if (m.cls === 'necro') {
       const each = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 0.6 * (sb >= 2 ? 1.3 : 1) * pw * wbMult(s, id);
@@ -3018,7 +3446,7 @@
     const it = itemOf(s, uid); if (!it || it.lk) return 0;
     const w = wornAt(s, uid); if (w) delete s.gear[w[0]][w[1]];
     s.bag = s.bag.filter(x => x !== it);
-    const v = smeltValue(it); s.gold += v; s.stats.smelted = (s.stats.smelted || 0) + 1; return v;
+    const v = smeltValue(it); s.gold += v; s.stats.smelted = (s.stats.smelted || 0) + 1; qEv(s, 'smelt', { it }); return v;
   }
   // Ghost Lantern (John, 2026-11-24): now and then, only while the player is actively playing, a ghost lantern drifts
   // into the fight and slowly saps party damage or healing, never more than GHOST_MAX. Tap it to shatter it for a small
@@ -3045,10 +3473,10 @@
   // Tap: shatter it. Rewards: a short burst of gold, some Dust, or a free tonic.
   function ghostBreak(s, now, rng) {
     rng = rng || Math.random; const g = s.ghost; if (!g || now >= g.until) return null;
-    s.ghost = null; s.ghostNext = now + GHOST_COOL * 1000; s.stats.ghosts = (s.stats.ghosts || 0) + 1;
+    s.ghost = null; s.ghostNext = now + GHOST_COOL * 1000; s.stats.ghosts = (s.stats.ghosts || 0) + 1; qEv(s, 'ghost');
     const r = rng(), f = Math.max(1, s.floor);
     let out;
-    if (r < 0.45) { const gold = Math.max(25, Math.round(offlineGoldPerSec(s) * 120)); s.gold += gold; out = { kind: 'gold', n: gold }; }
+    if (r < 0.45) { const gold = Math.max(25, Math.round(pipRate(s) * 120)); s.gold += gold; out = { kind: 'gold', n: gold }; }
     else if (r < 0.8) { const d = Math.round(4 + f * 0.4); s.dust = (s.dust || 0) + d; out = { kind: 'dust', n: d }; }
     else { const t = TONICS[Math.floor(rng() * TONICS.length)]; s.items[t.id] = (s.items[t.id] || 0) + 1; out = { kind: 'tonic', id: t.id, name: t.name }; }
     return out;
@@ -3102,7 +3530,7 @@
       const b = biomeOf(f);
       if (kind === 'shield') foe.mods.push('shield');
       else if (kind === 'pack') { foe.pack = 3; foe.ambush = 2; foe.hp = foe.max = foeHp(f, false) * 3 * 0.85; foe.atk = foeDps(f, false) * FOE_SWING * 1.6; }
-      else if (kind === 'elite') { foe.elite = true; foe.side = b.war.side; foe.name = b.war.units[Math.floor(r() * b.war.units.length)]; foe.sprite = ['skeleton', 'ghost', 'eye'][Math.floor(r() * 3)]; foe.hp = foe.max = foeHp(f, false) * 2.5; foe.atk = foeDps(f, false) * FOE_SWING * 1.3; foe.hue = b.hue + 40; }
+      else if (kind === 'elite') { foe.elite = true; foe.cid = null; foe.rk = null; foe.sc = 1; foe.ov = ''; foe.side = b.war.side; foe.name = b.war.units[Math.floor(r() * b.war.units.length)]; foe.sprite = ['skeleton', 'ghost', 'eye'][Math.floor(r() * 3)]; foe.hp = foe.max = foeHp(f, false) * 2.5; foe.atk = foeDps(f, false) * FOE_SWING * 1.3; foe.hue = b.hue + 40; }
       else if (kind === 'rescue') { foe.rescue = MERCY_NAMES[Math.floor(r() * MERCY_NAMES.length)]; foe.hp *= 1.5; foe.max = foe.hp; }
       else if (kind === 'special') { if (!SPECIALS[sp]) return 'Pick a special attack.'; foe.sp = sp; foe.spAt = now + 3000; foe.spWind = null; }
       else return 'Unknown event.';
@@ -3117,6 +3545,7 @@
     if (s.shuf && (now >= s.shuf.until || !s.foe || !s.foe.shOn)) shufRestore(s, events); // the line snaps back
     nxTick(s, dt, now, events);
     payWages(s, dt, now, events);
+    uniqTick(s, dt, now, events);
     if (s.wb && (now >= s.wb.until || resting(s, now))) endAssault(s, events);
     if (s.unlocked.length && !(s.traits && s.unlocked.every(id => s.traits[id]))) for (const id of s.unlocked) traitsOf(s, id);
     if (visiting(s)) return;
@@ -3136,19 +3565,24 @@
     if (!alive(s).length) return; // nobody to fight
     if (nexusOn(s)) return; // the Nexus Guardian holds the floor: the foe behind it waits and nothing lands
     if ((s.foeGap || 0) > now) return; // the next foe is still on its way
-    if (!s.foe) { s.foe = mercyFoe(s, now, rng) || makeFoe(s, rng); if (s.foe.wounded || s.foe.rescue) events && events.push({ type: 'mercy', kind: s.foe.wounded ? 'wounded' : 'rescue', who: s.foe.who || s.foe.rescue }); if (s.foe.pack) events && events.push({ type: 'pack', n: s.foe.pack, name: s.foe.name }); }
+    if (!s.foe) { s.foe = thistleFoe(s, now, rng) || mercyFoe(s, now, rng) || makeFoe(s, rng); if (s.foe.cage) events && events.push({ type: 'cage', name: s.foe.name }); if (s.foe.wounded || s.foe.rescue) events && events.push({ type: 'mercy', kind: s.foe.wounded ? 'wounded' : 'rescue', who: s.foe.who || s.foe.rescue }); if (s.foe.pack) events && events.push({ type: 'pack', n: s.foe.pack, name: s.foe.name }); }
     if (s.retryAt && !s.autoAdvance && now >= s.retryAt) { s.autoAdvance = true; s.retryAt = 0; events && events.push({ type: 'retry' }); }
     if (s.foe.wounded) {
       s.foe.aidT += dt;
       if (s.foe.aidT >= AID_TIME) { const who = s.foe.who; s.foe = null; s.foeGap = now + 900; events && events.push({ type: 'mercyleft', who }); return; }
     }
     if (s.foe.lock) { lockTick(s, dt, now, rng, events); return; }
+    if (s.foe.cage) {
+      s.foe.cageT += dt;
+      if (s.foe.cageT >= CAGE_TIME) { s.foe = null; s.foeGap = now + 900; cageFled(s, events); return; }
+    }
     if (s.foe.goblin) {
       s.foe.flee += dt;
       if (s.foe.flee >= GOBLIN_TIME + (fxOnW(s, 'mouse') ? 5 : 0)) { goblinFlee(s, rng, events); return; }
     }
     if (s.foe.boss) {
       s.lantern += dt;
+      if (s.lantern >= lanternTime(s) && !s.foe.relit && postOn(s, 'grimsby')) { s.foe.relit = 1; s.lantern -= UNIQ_GRIMSBY; events && events.push({ type: 'relit' }); }
       if (s.lantern >= lanternTime(s)) {
         events && events.push({ type: 'bossfail', name: s.foe.name });
         s.autoAdvance = false; s.retryAt = now + RETRY_AFTER * 1000;
@@ -3201,7 +3635,12 @@
       s.foeSwing += dt;
       while (s.foeSwing >= FOE_SWING && s.foe) { s.foeSwing -= FOE_SWING; foeAttack(s, now, rng, events); if (!alive(s).length) return; }
     }
-    damageFoe(s, totalDps(s, now) * dt, now, rng, events);
+    // Same sum as totalDps, split by who dealt it for the damage meter.
+    const parts = {}; let tot = 0;
+    for (const id of s.party) { const d = memberDps(s, id, now); if (d > 0) { parts[id] = (parts[id] || 0) + d; tot += d; } }
+    const skd = minionDps(s, now) * npMarkCls(s, 'necro', 0); if (skd > 0) { parts.skel = skd; tot += skd; }
+    if (tot > 0) for (const k in parts) parts[k] /= tot;
+    damageFoe(s, tot * dt, now, rng, events, tot > 0 ? parts : null);
   }
 
   // The Nexus Guardian: a soft, in-world brake on click bots (John, 2026-11-23).
@@ -3262,12 +3701,12 @@
     }
     let dmg = clickDamage(s, now);
     const crit = (rng || Math.random)() < critChance(s);
-    if (crit) { dmg *= 5; s.stats.crits++; }
-    if (!auto) s.stats.clicks++;
+    if (crit) { dmg *= 5; s.stats.crits++; qEv(s, 'crit'); }
+    if (!auto) { s.stats.clicks++; qEv(s, 'click', { boss: !!s.foe.boss }); }
     events && events.push({ type: 'hit', dmg, crit, auto });
-    if (s.foe && s.foe.shield > 0 && !auto) { s.foe.shield = Math.max(0, s.foe.shield - SHIELD_TAP * (crit ? 2 : 1)); if (s.foe.shield <= 0) { s.stats.shields = (s.stats.shields || 0) + 1; bountyCount(s, 'shield'); events && events.push({ type: 'shieldbreak', tap: true }); } }
+    if (s.foe && s.foe.shield > 0 && !auto) { s.foe.shield = Math.max(0, s.foe.shield - SHIELD_TAP * (crit ? 2 : 1)); if (s.foe.shield <= 0) { s.stats.shields = (s.stats.shields || 0) + 1; qEv(s, 'shield'); events && events.push({ type: 'shieldbreak', tap: true }); } }
     const sc0 = s.wb ? s.wb.score : 0;
-    damageFoe(s, dmg, now, rng, events);
+    damageFoe(s, dmg, now, rng, events, auto ? 'auto' : 'tap');
     if (s.wb && !auto) s.wb.ck = (s.wb.ck || 0) + s.wb.score - sc0;
     return { dmg, crit };
   }
@@ -3276,7 +3715,7 @@
     const e = embersFor(s);
     if (e <= 0 || !canUse(s, 'rekindle')) return 0;
     s.kindling = (s.kindling || 0) + skillPointsFor(s);
-    s.embers += e; s.stats.rekindles++;
+    s.embers += e; s.stats.rekindles++; qEv(s, 'rekindle');
     s.gold = 0; s.floor = 1; s.foeIdx = 0; s.maxFloor = 1; s.foe = null; s.lantern = 0; s.campReturn = 0; s.campUntil = 0;
     for (const id of s.unlocked) s.levels[id] = 1;
     if (s.hero) s.levels.you = 1;
@@ -3292,7 +3731,7 @@
   // Everything else (gold, Dust, floors, levels, XP, stat points, skills, Kindling, gear, Embers, relics, companions,
   // hires, story) starts fresh.
   const NP_KEEP = ['hero', 'mode', 'lore', 'feats', 'settings', 'stats', 'boh', 'rosterUps', 'pass', 'passTrial', 'passTrialGiven', 'sub', 'keeper', 'created', 'econ', 'wd', 'ref', 'npLog',
-    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv', 'curios', 'reno', 'pip', 'gulpLoot'];
+    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'notesShown', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv', 'curios', 'reno', 'pip', 'gulpLoot'];
   // Applies the reset in place once the server has granted tier `tier` at time `at`. Returns false if not allowed.
   // force: the server says this account is already on `tier` (another device started it), so reset to it anyway.
   function startNP(s, tier, at, force) {
@@ -3392,7 +3831,7 @@
     let f = Math.max(1, s.maxFloor - 1);
     if (isBossFloor(f)) f = Math.max(1, f - 1);
     const killsPerSec = Math.min(4, d / (foeHp(f, false) * npFoeHp(s, f)));
-    return killsPerSec * foeGold(f, false) * goldMult(s) * 0.5 * (1 + relicVal(s, 'bell'));
+    return killsPerSec * foeGold(f, false) * goldMult(s) * npGold(s) * 0.5 * (1 + relicVal(s, 'bell'));
   }
 
   function migrate(o) {
@@ -3416,6 +3855,8 @@
     s.formation = 1;
     s.foe = null; s.lantern = 0; s.minions = []; s.abil = {}; s.down = {};
     s.guests = o.guests || [];
+    // Home zones (27 Nov 2026): kills from before count toward the original creature of each family.
+    if (!o.bx) { s.bx = {}; for (const c of CREATURES) if (c.id === c.fam && (s.bk || {})['foe_' + c.fam]) s.bx[c.id] = s.bk['foe_' + c.fam]; }
     s.items = Object.assign({ draught: 1, oil: 0 }, o.items || {}); s.tonic = o.tonic || {}; s.campUntil = o.campUntil || 0; s.jobs = o.jobs || {};
     // Skill trees arrived after some players had already rekindled: 2 points for each past rekindle.
     s.kup = o.kup || {}; s.autoTrain = o.autoTrain || {}; s.skills = o.skills || {}; s.kindling = o.kindling != null ? o.kindling : 2 * ((o.stats && o.stats.rekindles) || 0);
@@ -3450,7 +3891,7 @@
   const PIP_TAU = 3 * 3600e3, PIP_STEP = 10e3, PIP_GAP = 60e3, PIP_READY = 1800e3;
   function acctGoldPerSec(s) {
     const f0 = Math.max(1, (s.maxFloor || 1) - 1), f = isBossFloor(f0) ? Math.max(1, f0 - 1) : f0;
-    return 4 * foeGold(f, false) * goldMult(s) / ((1 + gearGold(s)) * (1 + campBonus(s, 'gold'))) * 0.5 * (1 + relicVal(s, 'bell'));
+    return 4 * foeGold(f, false) * goldMult(s) * npGold(s) / ((1 + gearGold(s)) * (1 + campBonus(s, 'gold'))) * 0.5 * (1 + relicVal(s, 'bell'));
   }
   function pipOf(s) { const p = s.pip || (s.pip = { n: 0, spent: 0, opened: 0 }); if (p.pk || p.lk) { delete p.pk; delete p.lk; delete p.pkAt; } return p; }
   function samplePipIncome(s, now) {
@@ -3529,7 +3970,7 @@
         const q = missing[Math.floor(r() * missing.length)]; curio = makeCurio(s, q.id, r); s.bag.push(curio); curiosOf(s)[q.id] = Date.now(); pip.n = 0;
       }
     }
-    s.stats.goldSunk = (s.stats.goldSunk || 0) + cost;
+    s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; qEv(s, 'crate', { id }); qSpend(s, 'pip', cost);
     return { cost, item, curio };
   }
   // A Curio you own but no longer carry (sold, or left behind by a new NP+ tier) can be taken again from Pip for free.
@@ -3551,7 +3992,7 @@
     const was = { en: it.en, ty: it.ty, aff: it.aff };
     if (it.slot === 'main') { const l = TY_MAIN[it.cls] || ['sword']; it.ty = l[Math.floor(r() * l.length)]; }
     delete it.aff; if (r() < (AFFIX_CHANCE[it.rar] || 0) * 2) it.aff = { j: JOB_KEYS[Math.floor(r() * JOB_KEYS.length)], v: Math.round((0.1 + r() * 0.2) * (it.rar === 'epic' ? 1.5 : 1) * 100) / 100 };
-    rollEnch(it, r); it.rf = (it.rf || 0) + 1; enchDirty && enchDirty();
+    rollEnch(it, r); it.rf = (it.rf || 0) + 1; enchDirty && enchDirty(); qEv(s, 'reforge');
     return { cost, item: it, was };
   }
 
@@ -3573,7 +4014,7 @@
   function buildReno(s, id) {
     if (!npPlus(s) || !s.hero) return false; s.reno = s.reno || {}; if (s.reno[id]) return false;
     const cost = renoCost(s, id); if (!(cost <= s.gold)) return false;
-    s.gold -= cost; s.reno[id] = Date.now(); s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; return cost;
+    s.gold -= cost; s.reno[id] = Date.now(); s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; qEv(s, RENOS.some(x => x.id === id) ? 'reno' : 'deco'); return cost;
   }
 
   // The Enchanter's Dust Press: gold into Dust at a poor rate, capped each day.
@@ -3585,7 +4026,7 @@
     n = Math.min(n | 0, pressLeft(s, now)); if (!npPlus(s) || n <= 0) return 0;
     const cost = pressCost(s, n); if (s.gold < cost) return 0;
     const d = pressDay(now); if (!s.press || s.press.d !== d) s.press = { d, n: 0 };
-    s.gold -= cost; s.press.n += n; s.dust = (s.dust || 0) + n; s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; return cost;
+    s.gold -= cost; s.press.n += n; s.dust = (s.dust || 0) + n; s.stats.goldSunk = (s.stats.goldSunk || 0) + cost; qEv(s, 'press', { n }); return cost;
   }
 
   // Gulp the Hoard Mimic: one morsel = 10 minutes of income. The server (gulp.js) counts them, rolls the goblin and keeps
@@ -3603,6 +4044,7 @@
       else if (k < 0.75) { const d = Math.max(5, Math.round(5 + sinkFloor(s) / 5)); s.dust = (s.dust || 0) + d; burps.push(d + ' Dust'); }
       else { const it = crateGear(s, 'fine', r); s.bag.push(it); burps.push(gearName(it)); }
     }
+    qEv(s, 'morsel', { n }); if (burps.length) qEv(s, 'burp');
     return { cost, burps };
   }
   // The Golden Loot Goblin, fought like a world boss (2-minute assaults on a shared health bar, server goblin.js) but it
@@ -3613,7 +4055,7 @@
     if (!npPlus(s) || !gob || now >= gob.until || resting(s, now) || !alive(s).length || (s.wb && s.wb.until > now)) return false;
     const unit = foeHp(Math.max(1, s.maxFloorEver), false);
     s.wb = { until: Math.min(gob.until, now + WB_TIME * 1000), at: now, score: 0, name: 'The Golden Loot Goblin', id: gob.id, gob: 1, cap: WB_CEIL * unit };
-    s.foe = null; s.foeSwing = 0; return true;
+    s.foe = null; s.foeSwing = 0; qEv(s, 'assault', { gob: true }); return true;
   }
   const gobDash = (s, now) => !!(s.wb && s.wb.gob && ((now - s.wb.at) / 1000) % GOB_DASH >= GOB_DASH - GOB_DASH_LEN);
   const gobRogue = s => alive(s).some(id => memberById(id).cls === 'rogue');
@@ -3635,18 +4077,384 @@
     return { item: it, dup };
   }
 
+  // ---------- Quest book: daily quests and the Bounty Board (John, 26 Nov 2026) ----------
+  // John: "change things up... add in PVP like battle 3 players, feed the mimic, gamble with Pip... about 200 different
+  // ones using different mechanics of the game." QDEFS holds every quest kind. Each one is only offered to a hero who
+  // can do it right now (g), a board never repeats a kind this hero saw recently (s.qh) and never puts two quests from
+  // one category side by side. Progress comes from qEv(s, event, data), called where the action happens.
+  // Anti-cheese rules: kills only count near your deepest floor (QDEEP), spending quests always cost more than they pay,
+  // nothing is counted for a free on/off toggle (seating, jobs, looks), and bounty gold uses the steady dive-income
+  // average (pipRate, locked for the day) so swapping heroes before a claim changes nothing.
+  // Legacy daily list (kept so a day that began on an older build finishes the way it started).
+  const QUESTS = [
+    { id: 'kills',  stat: 'kills',     n: 400, text: 'Defeat {n} monsters' },
+    { id: 'boss',   stat: 'bossKills', n: 12,  text: 'Defeat {n} guardians' },
+    { id: 'chests', stat: 'chests',    n: 5,   text: 'Open {n} treasure chests' },
+    { id: 'crits',  stat: 'crits',     n: 150, text: 'Land {n} critical hits' },
+    { id: 'clicks', stat: 'clicks',    n: 250, text: 'Strike {n} times with your lantern' },
+  ];
+  const QUEST_REWARD = 1, QUEST_BONUS = 2;
+  const questDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+  function dailyQuests(day) {
+    let h = 0; for (const c of day) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const pool = QUESTS.slice(), out = [];
+    for (let i = 0; i < 3; i++) { h = (h * 1103515245 + 12345) >>> 0; out.push(pool.splice(h % pool.length, 1)[0]); }
+    return out;
+  }
+  const BOUNTY_FLOOR = 5, BOUNTY_HOURS = 4, BOUNTY_MS = BOUNTY_HOURS * 3600e3;
+  const bountyWin = (t = Date.now()) => Math.floor(t / BOUNTY_MS);
+  function bountyRng(seed) { let h = 2166136261; for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return (h >>> 0) / 4294967296; }; }
+  // What the UI tells us about the session: signed in with the online server (Ring, Market, world boss, Gulp) and
+  // whether a Golden Loot Goblin is loose right now.
+  const QCTX = { on: false, gob: false };
+  function questCtx(c) { Object.assign(QCTX, c || {}); }
+  const QDEEP = 12, QH_MAX = 90, QDAILY_X = 2;
+  const qTop = s => Math.max(1, s.maxFloor || 1);
+  const qDeep = (s, f) => f >= Math.max(1, qTop(s) - QDEEP);
+  const qFoe = d => d.foe && !d.foe.world && !d.foe.goblin && !d.foe.lock && !d.foe.wounded;
+  const qMob = d => qFoe(d) && !d.foe.boss && !d.foe.chest;
+  const qHas = (s, cls) => (s.hero && s.hero.cls === cls) || s.unlocked.some(id => { const m = memberById(id); return m && m.cls === cls && !shortHire(s, id); });
+  const qSeated = (s, cls) => s.party.some(id => id && memberById(id) && memberById(id).cls === cls);
+  const qAt = n => s => qTop(s) >= n;
+  const qUse = id => s => canUse(s, id);
+  const qOn = id => s => QCTX.on && canUse(s, id);
+  const qNP = s => npPlus(s) && !!s.hero;
+  const RAR_I = id => RARITY.findIndex(r => r.id === id);
+  const qRare = it => it && RAR_I(it.rar) >= RAR_I('rare');
+  const qFresh = (s, it) => it && (it.ilvl || 0) >= npIlvl(s, Math.max(1, qTop(s) - 20));
+  const qSide = s => s.hero && s.hero.side && SIDES[s.hero.side] && s.hero.side !== 'unsworn' && s.hero.side !== 'mercy';
+  const regSpan = (s, rn) => [rn * 10 + 1, Math.min(qTop(s), rn * 10 + 10)];
+  const pickReg = (s, r) => { const t = regionNo(qTop(s)); return Math.max(0, t - Math.floor(r() * Math.min(3, t + 1))); };
+  // Every 'kill' near your deepest floor; packs count each monster.
+  const qKill = test => (d, s) => qFoe(d) && qDeep(s, d.f) && test(d.foe, s, d);
+  const qInR = (d, q) => d.f >= q.a && d.f <= q.b;
+  // def: { id, c: category, ev, n, w: bounty minutes of steady income, g: gate, t: text, m: match(d, s, q),
+  //        add(d) amount, u(d) count-once key, sp: spend minutes (n becomes gold), mk(s, r) params, only 'b'|'d', go }
+  const QDEFS = [];
+  const Q = o => QDEFS.push(o);
+  const packN = d => d.foe.pack || 1;
+  const qPl = w => /man$/.test(w) ? w.slice(0, -3) + 'men' : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + 'ies' : /(ch|sh|x|Lens)$/.test(w) ? w + 'es' : /(s|Brood|spawn|born)$/.test(w) ? w : w + 's';
+
+  // -- The hunt: named monsters in a region you have reached (the old bounty kinds live on here) --
+  // Since home zones (27 Nov 2026) each hunt names one common creature of the family in a region where it lives.
+  const huntRegs = (s, fam) => { const top = Math.min(REGIONS - 1, regionNo(qTop(s))), out = []; for (let rn = top; rn >= 0; rn--) if (CREATURES.some(c => c.r === rn && c.fam === fam && c.rar === 'c')) out.push(rn); return out.slice(0, 2); };
+  for (const fam of FOES.map(fo => fo.id).concat(['beetle', 'moth', 'crab'])) Q({ id: 'hunt_' + fam, c: 'hunt', ev: 'kill', n: 14, w: 6, g: s => qTop(s) >= 2 && huntRegs(s, fam).length > 0, add: packN,
+    mk: (s, r) => { const rs = huntRegs(s, fam); if (!rs.length) return null; const rn = rs[Math.floor(r() * rs.length)], cs = CREATURES.filter(c => c.r === rn && c.fam === fam && c.rar === 'c'), c = cs[Math.floor(r() * cs.length)], [a, b] = regSpan(s, rn); return { a, b, sp: fam, cid: c.id, name: c.name }; },
+    m: (d, s, q) => qFoe(d) && (q.cid ? d.foe.cid === q.cid : d.foe.sprite === q.sp) && qInR(d, q), t: q => 'Hunt ' + q.n + ' ' + qPl(q.name) + ' on floors ' + q.a + '–' + q.b });
+  BIOMES.forEach((bi, rn) => { if (bi.foe) Q({ id: 'hunt_' + bi.foe.id, c: 'hunt', ev: 'kill', n: 30, w: 6, g: qAt(rn * 10 + 2), add: packN,
+    mk: s => { const [a, b] = regSpan(s, rn); return { a, b, sp: bi.foe.id, name: bi.foe.name }; },
+    m: (d, s, q) => qFoe(d) && d.foe.sprite === q.sp && qInR(d, q), t: q => 'Hunt ' + q.n + ' ' + qPl(q.name) + ' in ' + bi.name }); });
+  Q({ id: 'sweep', c: 'hunt', ev: 'kill', n: 60, w: 5, g: qAt(2), add: packN, mk: (s, r) => { const rn = pickReg(s, r), [a, b] = regSpan(s, rn); return { a, b, rname: BIOMES[rn % BIOMES.length].name }; },
+    m: (d, s, q) => qMob(d) && qInR(d, q), t: q => 'Clear ' + q.n + ' monsters from ' + q.rname + ' (floors ' + q.a + '–' + q.b + ')' });
+  Q({ id: 'old_sweep', c: 'hunt', ev: 'kill', n: 80, w: 5, g: qAt(31), add: packN, mk: (s, r) => { const t = regionNo(qTop(s)), rn = Math.max(0, t - 2 - Math.floor(r() * 3)), [a, b] = regSpan(s, rn); return { a, b, rname: BIOMES[rn % BIOMES.length].name }; },
+    m: (d, s, q) => qMob(d) && d.f >= q.a && d.f <= q.b, t: q => 'Travel back up to ' + q.rname + ' and clear ' + q.n + ' monsters there' });
+
+  // -- Fights in the deep (near your deepest floor) --
+  Q({ id: 'kill150', c: 'deep', ev: 'kill', n: 150, w: 5, g: qAt(2), add: packN, m: qKill(f => !f.chest), t: q => 'Defeat ' + q.n + ' monsters within ' + QDEEP + ' floors of your deepest' });
+  Q({ id: 'kill400', c: 'deep', ev: 'kill', n: 400, w: 6, g: qAt(10), add: packN, m: qKill(f => !f.chest), t: q => 'Defeat ' + q.n + ' monsters within ' + QDEEP + ' floors of your deepest' });
+  Q({ id: 'floors', c: 'deep', ev: 'floor', n: 10, w: 5, g: qAt(6), m: (d, s) => qDeep(s, d.f), t: q => 'Clear ' + q.n + ' floors near your deepest' });
+  Q({ id: 'newfloor', c: 'deep', ev: 'newfloor', n: 3, w: 6, g: s => qTop(s) >= 6 && qTop(s) <= ACT_ONE_END && !regionNeed(s, qTop(s) + 1), t: q => 'Push ' + q.n + ' floors deeper than you have ever been' });
+  Q({ id: 'gold', c: 'deep', ev: 'gold', n: 0, gm: 40, w: 5, g: qAt(3), m: (d, s) => qDeep(s, d.f), t: q => 'Earn ' + fmtQ(q.n) + ' gold from monsters near your deepest floor' });
+  Q({ id: 'packs', c: 'deep', ev: 'kill', n: 4, w: 5, g: qAt(PACK_FLOOR + 2), m: qKill(f => f.pack > 0), t: q => 'Fight off ' + q.n + ' ambushes' });
+  Q({ id: 'bigpack', c: 'deep', ev: 'kill', n: 2, w: 6, g: qAt(12), m: qKill(f => f.pack >= 4), t: q => 'Beat ' + q.n + ' ambushes of four monsters' });
+  Q({ id: 'specials', c: 'deep', ev: 'kill', n: 25, w: 5, g: qAt(SPECIAL_FLOOR + 3), m: qKill(f => !!f.sp && !f.boss), t: q => 'Defeat ' + q.n + ' monsters that wind up special attacks' });
+  Q({ id: 'tonicfight', c: 'deep', ev: 'kill', n: 120, w: 5, g: qAt(5), add: packN, m: qKill((f, s, d) => TONICS.some(t => (s.tonic || {})[t.id] > (s.clock || 0))), t: q => 'Defeat ' + q.n + ' monsters while a tonic is working', go: 'store' });
+  Q({ id: 'drops', c: 'deep', ev: 'loot', n: 5, w: 5, g: qAt(8), m: (d, s) => qRare(d.it) && qDeep(s, d.f), t: q => 'Find ' + q.n + ' Rare or better gear drops in the deep' });
+  Q({ id: 'epicdrop', c: 'deep', ev: 'loot', n: 1, w: 6, g: qAt(20), m: (d, s) => d.it && RAR_I(d.it.rar) >= RAR_I('epic') && qDeep(s, d.f), t: () => 'Find an Epic or better gear drop in the deep' });
+  Q({ id: 'beast', c: 'deep', ev: 'beast', n: 1, w: 5, g: qAt(10), t: () => 'Raise a Bestiary mastery one step' });
+  Q({ id: 'gild', c: 'deep', ev: 'kill', n: 200, w: 5, g: s => qTop(s) >= 15 && qHas(s, 'rogue'), add: packN, m: qKill((f, s) => !f.chest && qSeated(s, 'rogue')), t: q => 'Defeat ' + q.n + ' monsters with a Rogue in your party' });
+  Q({ id: 'necrofight', c: 'deep', ev: 'kill', n: 200, w: 5, g: s => qTop(s) >= 15 && qHas(s, 'necro'), add: packN, m: qKill((f, s) => !f.chest && qSeated(s, 'necro')), t: q => 'Defeat ' + q.n + ' monsters with a Necromancer in your party' });
+
+  // -- Monster tricks: modifiers and special attacks --
+  const MODQ = { enrage: ['Enraging', 13], ward: ['Warded', 8], regen: ['Regenerating', 10], venom: ['Venomous', 11], cleave: ['Cleaving', 9], swift: ['Swift', 12] };
+  for (const k in MODQ) Q({ id: 'mod_' + k, c: 'tricks', ev: 'kill', n: 8, w: 5, g: qAt(45), m: qKill(f => (f.mods || []).includes(k)), t: q => 'Defeat ' + q.n + ' ' + MODQ[k][0] + ' foes' });
+  Q({ id: 'shieldkill', c: 'tricks', ev: 'kill', n: 8, w: 5, g: qAt(SHIELD_FLOOR + 3), m: qKill(f => (f.mods || []).includes('shield')), t: q => 'Defeat ' + q.n + ' shielded foes' });
+  Q({ id: 'shields', c: 'tricks', ev: 'shield', n: 4, w: 4, g: qAt(SHIELD_FLOOR + 3), t: q => 'Break ' + q.n + ' monster shields with your strikes' });
+  const SPQ = { acid: ['Acid Spits', 'Gloop'], dive: ['Dives', 'Flitterwing'], wail: ['Wails', 'Wisp'], mark: ['Death Marks', 'Watcher'], spores: ['Choking Spores', 'Capling'], venombite: ['Venom Bites', 'Gnawer'] };
+  // Only offered when that family lives (or wanders) near your deepest floor; every kind in the family uses the attack.
+  const SPQ_FAM = { acid: 'slime', dive: 'bat', wail: 'ghost', mark: 'eye', spores: 'shroom', venombite: 'rat' };
+  for (const k in SPQ) Q({ id: 'sp_' + k, c: 'tricks', ev: 'special', n: 6, w: 5, g: s => qTop(s) >= SPECIAL_FLOOR + 4 && famsIn(qTop(s) - QDEEP, qTop(s)).has(SPQ_FAM[k]), m: (d, s) => d.sp === k && qDeep(s, d.f), t: q => 'Weather ' + q.n + ' ' + SPQ[k][0] + ' (' + SPQ[k][1] + 's and their kin use them)' });
+  Q({ id: 'sp_volley', c: 'tricks', ev: 'special', n: 4, w: 5, g: qAt(SPECIAL_FLOOR + 12), m: (d, s) => d.sp === 'volley' && qDeep(s, d.f), t: q => 'Weather ' + q.n + ' Arrow Volleys from alliance elites' });
+  Q({ id: 'shuffles', c: 'tricks', ev: 'shuffle', n: 3, w: 5, g: qAt(SHUFFLE_EVERY + 1), t: q => 'Fight through ' + q.n + ' formation shuffles' });
+  Q({ id: 'shufblock', c: 'tricks', ev: 'shufblock', n: 2, w: 6, g: s => qTop(s) > SHUFFLE_EVERY && qHas(s, 'tank'), t: q => 'Block ' + q.n + ' formation shuffles with Shield Wall' });
+
+  // -- Guardians --
+  Q({ id: 'farm', c: 'guard', ev: 'kill', n: 3, w: 5, g: qAt(BOSS_EVERY + 1), mk: (s, r) => { const top = qTop(s), bf = Math.max(BOSS_EVERY, Math.floor(top / BOSS_EVERY) * BOSS_EVERY - BOSS_EVERY * Math.floor(r() * 3)); return { a: Math.min(bf, top), b: Math.min(bf, top) }; },
+    m: (d, s, q) => qFoe(d) && d.foe.boss && d.f === q.a, t: q => 'Defeat the floor ' + q.a + ' guardian ' + q.n + ' times' });
+  Q({ id: 'guard6', c: 'guard', ev: 'kill', n: 6, w: 6, g: qAt(11), m: qKill(f => f.boss), t: q => 'Defeat ' + q.n + ' guardians near your deepest floor' });
+  Q({ id: 'guard_rogue', c: 'guard', ev: 'kill', n: 4, w: 6, g: s => qTop(s) >= 11 && qHas(s, 'rogue'), m: qKill((f, s) => f.boss && qSeated(s, 'rogue')), t: q => 'Defeat ' + q.n + ' guardians with a Rogue at your side' });
+  Q({ id: 'guard_tank', c: 'guard', ev: 'kill', n: 4, w: 6, g: s => qTop(s) >= 11 && qHas(s, 'tank'), m: qKill((f, s) => f.boss && qSeated(s, 'tank')), t: q => 'Defeat ' + q.n + ' guardians with a Tank holding the line' });
+  Q({ id: 'guard_trio', c: 'guard', ev: 'kill', n: 3, w: 6, g: qAt(16), m: qKill((f, s) => f.boss && s.party.filter(Boolean).length <= 3), t: q => 'Defeat ' + q.n + ' guardians with three heroes or fewer' });
+  Q({ id: 'guard_mod', c: 'guard', ev: 'kill', n: 3, w: 5, g: qAt(25), m: qKill(f => f.boss && (f.mods || []).length >= 1), t: q => 'Defeat ' + q.n + ' guardians that carry a monster trick' });
+  Q({ id: 'oil', c: 'guard', ev: 'oil', n: 1, w: 4, g: qAt(11), t: () => 'Pour a Flask of Lantern Oil in a guardian fight', go: 'store' });
+  Q({ id: 'mastery', c: 'guard', ev: 'mastery', n: 1, w: 6, g: s => { const t = regionNo(qTop(s)); for (let r = 0; r <= t; r++) if (((s.mast || {})[r] || 0) !== 7) return true; return false; }, t: () => 'Earn a region mastery star' });
+
+  // -- The regions of Act One: each has its own guardian and its own alliance warband --
+  BIOMES.forEach((bi, rn) => {
+    const gf = (rn + 1) * 10;
+    Q({ id: 'rg_' + rn, c: 'region', ev: 'kill', n: 2, w: 5, g: qAt(gf + 1), m: (d, s) => qFoe(d) && d.foe.boss && d.f === gf, a: gf, t: q => 'Defeat ' + bi.boss + ', guardian of ' + bi.name + ', ' + q.n + ' times', mk: () => ({ a: gf, b: gf }) });
+    Q({ id: 're_' + rn, c: 'region', ev: 'kill', n: 5, w: 5, g: qAt(rn * 10 + 5), m: (d, s) => qFoe(d) && d.foe.elite && regionNo(d.f) === rn, t: q => 'Rout ' + q.n + ' ' + qPl(bi.war.units[0]) + ' and ' + qPl(bi.war.units[1]) + ' in ' + bi.name, mk: s => { const [a, b] = regSpan(s, rn); return { a, b }; } });
+  });
+
+  // -- The Grand War: alliance elites --
+  Q({ id: 'elite6', c: 'war', ev: 'kill', n: 6, w: 5, g: qAt(20), m: qKill(f => f.elite), t: q => 'Defeat ' + q.n + ' alliance elites' });
+  Q({ id: 'elite15', c: 'war', ev: 'kill', n: 15, w: 7, g: qAt(30), m: qKill(f => f.elite), t: q => 'Defeat ' + q.n + ' alliance elites' });
+  const WARQ = { tide: ['Devouring Tide', 4], radiant: ['Ascendancy', 21], covenant: ['Lost Covenant', 31] };
+  for (const k in WARQ) Q({ id: 'war_' + k, c: 'war', ev: 'kill', n: 5, w: 5, g: s => qTop(s) >= WARQ[k][1], m: (d, s) => qFoe(d) && d.foe.elite && d.foe.side === k, t: q => 'Defeat ' + q.n + ' soldiers of the ' + WARQ[k][0] });
+  Q({ id: 'rivals', c: 'war', ev: 'kill', n: 8, w: 5, g: s => qTop(s) >= 21 && qSide(s), m: (d, s) => qFoe(d) && d.foe.elite && d.foe.side && d.foe.side !== s.hero.side && qDeep(s, d.f), t: q => 'Defeat ' + q.n + ' soldiers of rival alliances' });
+
+  // -- Strange things in the deep --
+  Q({ id: 'chests', c: 'odd', ev: 'kill', n: 3, w: 5, g: qAt(5), m: d => d.foe && d.foe.chest, t: q => 'Open ' + q.n + ' treasure chests' });
+  Q({ id: 'ghost', c: 'odd', ev: 'ghost', n: 2, w: 5, g: qAt(GHOST_FLOOR + 1), t: q => 'Shatter ' + q.n + ' Ghost Lanterns' });
+  Q({ id: 'merchant', c: 'odd', ev: 'merchant', n: 1, w: 5, g: qAt(MERCH_FLOOR + 1), t: () => 'Strike a deal with the wandering merchant' });
+  Q({ id: 'goblin', c: 'odd', ev: 'kill', n: 1, w: 5, g: qAt(GOBLIN_FLOOR + 1), m: d => d.foe && d.foe.goblin && !d.foe.world, t: () => 'Catch a Loot Goblin before it flees' });
+  Q({ id: 'rescue', c: 'odd', ev: 'kill', n: 1, w: 6, g: qAt(MERCY_FLOOR + 1), m: d => d.foe && d.foe.rescue, t: () => 'Free a captured Mercy Corps companion' });
+  Q({ id: 'aid', c: 'odd', ev: 'aid', n: 1, w: 6, g: qAt(MERCY_FLOOR + 1), t: () => 'Heal a wounded Mercy Corps companion' });
+  Q({ id: 'locks', c: 'odd', ev: 'lockopen', n: 3, w: 6, g: s => qTop(s) > LOCK_FLOOR && qHas(s, 'rogue'), t: q => 'Pick ' + q.n + ' locks with a Rogue' });
+  Q({ id: 'doors', c: 'odd', ev: 'lockopen', n: 2, w: 6, g: s => qTop(s) > LOCK_FLOOR && qHas(s, 'rogue'), m: d => d.k === 'door', t: q => 'Pick open ' + q.n + ' locked doors' });
+  Q({ id: 'lockbox', c: 'odd', ev: 'lockopen', n: 2, w: 6, g: s => qTop(s) > LOCK_FLOOR && qHas(s, 'rogue'), m: d => d.k === 'chest', t: q => 'Pick open ' + q.n + ' locked chests' });
+  Q({ id: 'revive', c: 'odd', ev: 'revive', n: 3, w: 4, g: s => qTop(s) >= 6 && qHas(s, 'healer'), t: q => 'Lift ' + q.n + ' fallen heroes back up with Lantern Hymn' });
+
+  // -- Heroes' abilities --
+  const ABQ = { tank: ['wall', 15], healer: ['hymn', 15], rogue: ['stab', 25], mage: ['storm', 15], necro: ['raise', 12] };
+  for (const c in ABQ) Q({ id: 'cast_' + c, c: 'skill', ev: 'cast', n: ABQ[c][1], w: 4, g: s => qTop(s) >= 3 && qHas(s, c), m: d => d.cls === c, t: q => 'Use ' + CLASSES[c].ability.name + ' ' + q.n + ' times' });
+  Q({ id: 'cast_any', c: 'skill', ev: 'cast', n: 40, w: 4, g: qAt(3), t: q => 'Use hero abilities ' + q.n + ' times' });
+  Q({ id: 'spec', c: 'skill', ev: 'spec', n: 5, w: 4, g: s => Object.keys(s.skills || {}).length > 0, t: q => 'Use your hero’s learned skills ' + q.n + ' times' });
+  Q({ id: 'learn', c: 'skill', ev: 'learn', n: 1, w: 5, g: s => { const c = heroCls(s); return (SKILL_TREES[c] || []).some((br, b) => br.s.some((k, t) => canLearn(s, c + '.' + b + '.' + t) === 'ok')); }, t: () => 'Learn a new rank on your skill tree' });
+  Q({ id: 'kup', c: 'skill', ev: 'kup', n: 1, w: 5, g: s => KINDLE_UPS.some(u => { const c = kupCost(s, u.id); return c && (s.kindling || 0) >= c; }), t: () => 'Spend Kindling on a Kindling upgrade' });
+  Q({ id: 'rekindle', c: 'skill', ev: 'rekindle', n: 1, w: 7, g: s => canUse(s, 'rekindle') && qTop(s) >= REKINDLE_FLOOR + 10, t: () => 'Rekindle for Embers and Kindling' });
+
+  // -- Store and supplies --
+  Q({ id: 'tonic', c: 'store', ev: 'tonic', n: 2, w: 4, g: qAt(3), t: q => 'Drink ' + q.n + ' tonics', go: 'store' });
+  Q({ id: 'tonic_war', c: 'store', ev: 'tonic', n: 2, w: 4, g: qAt(8), m: d => ['t_fury', 't_bark', 't_mend', 't_keen'].includes(d.id), t: q => 'Drink ' + q.n + ' battle tonics (Fury, Ironbark, Mender’s or Keen-Eye)', go: 'store' });
+  Q({ id: 'tonic_ink', c: 'store', ev: 'tonic', n: 1, w: 4, g: qAt(8), m: d => d.id === 't_xp', t: () => 'Drink a Scholar’s Ink and learn from the fights', go: 'store' });
+  Q({ id: 'draught', c: 'store', ev: 'draught', n: 1, w: 4, g: qAt(6), t: () => 'Drink a Campfire Draught to make a field camp', go: 'store' });
+  Q({ id: 'storespend', c: 'store', ev: 'spend', n: 0, sp: 20, w: 4, g: qAt(3), m: d => d.k === 'store', add: d => d.g, t: q => 'Spend ' + fmtQ(q.n) + ' gold at Old Thessaly’s Store', go: 'store' });
+
+  // -- The Armorer --
+  Q({ id: 'upgrade', c: 'armor', ev: 'upgrade', n: 5, w: 5, g: qUse('gear'), m: (d, s) => !d.wb && qFresh(s, d.it), t: q => 'Upgrade gear from the deep ' + q.n + ' times', go: 'armor' });
+  Q({ id: 'upspend', c: 'armor', ev: 'spend', n: 0, sp: 30, w: 5, g: qUse('gear'), m: d => d.k === 'armor', add: d => d.g, t: q => 'Spend ' + fmtQ(q.n) + ' gold upgrading gear', go: 'armor' });
+  Q({ id: 'merge', c: 'armor', ev: 'merge', n: 3, w: 5, g: qUse('gear'), m: (d, s) => qFresh(s, d.a), t: q => 'Merge gear from the deep ' + q.n + ' times', go: 'armor' });
+  Q({ id: 'mergeok', c: 'armor', ev: 'merge', n: 2, w: 6, g: qUse('gear'), m: (d, s) => d.ok && qFresh(s, d.a), t: q => 'Merge gear successfully ' + q.n + ' times', go: 'armor' });
+  Q({ id: 'mergerare', c: 'armor', ev: 'merge', n: 2, w: 6, g: qAt(12), m: (d, s) => qRare(d.a) && qFresh(s, d.a), t: q => 'Merge ' + q.n + ' pairs of Rare or better gear', go: 'armor' });
+  Q({ id: 'merge3', c: 'armor', ev: 'merge', n: 1, w: 6, g: qAt(15), m: (d, s) => d.ok && d.to >= 3 && qFresh(s, d.a), t: () => 'Merge a piece up to +3 or higher', go: 'armor' });
+  Q({ id: 'shopmerge', c: 'armor', ev: 'merge', n: 2, w: 5, g: qUse('gear'), m: (d, s) => d.shop && qFresh(s, d.a), t: q => 'Merge gear ' + q.n + ' times at the Armorer’s counter', go: 'armor' });
+  Q({ id: 'smelt', c: 'armor', ev: 'smelt', n: 10, w: 4, g: qUse('gear'), m: (d, s) => qFresh(s, d.it), t: q => 'Scrap ' + q.n + ' pieces of deep gear for gold at the Armorer', go: 'armor' });
+  Q({ id: 'reforge', c: 'armor', ev: 'reforge', n: 2, w: 5, g: qNP, t: q => 'Reforge ' + q.n + ' pieces at the Armorer', go: 'armor' });
+  Q({ id: 'mythicup', c: 'armor', ev: 'upgrade', n: 1, w: 6, g: s => s.bag.some(it => it.wb != null && it.up < UP_MAX && (shardsOf(s)[it.wb] || 0) >= wbUpCost(it)), m: d => d.wb, t: () => 'Upgrade a Mythic boss piece with its shards', go: 'armor' });
+
+  // -- The Enchanter --
+  Q({ id: 'salvage', c: 'ench', ev: 'salvage', n: 10, w: 4, g: qUse('gear'), m: (d, s) => qFresh(s, d.it), t: q => 'Scrap ' + q.n + ' pieces of deep gear for Dust', go: 'ench' });
+  Q({ id: 'salvrare', c: 'ench', ev: 'salvage', n: 3, w: 4, g: qAt(10), m: (d, s) => qRare(d.it) && qFresh(s, d.it), t: q => 'Scrap ' + q.n + ' Rare or better pieces for Dust', go: 'ench' });
+  Q({ id: 'ench', c: 'ench', ev: 'ench', n: 2, w: 5, g: qAt(8), t: q => 'Move ' + q.n + ' enchants onto other gear', go: 'ench' });
+  Q({ id: 'enchshop', c: 'ench', ev: 'ench', n: 2, w: 5, g: qAt(8), m: d => !d.field, t: q => 'Move ' + q.n + ' enchants at the Enchanter’s counter', go: 'ench' });
+  Q({ id: 'enchhi', c: 'ench', ev: 'ench', n: 1, w: 6, g: qAt(25), m: d => d.t >= 3, t: () => 'Move an enchant of tier III or higher', go: 'ench' });
+  Q({ id: 'enchlucky', c: 'ench', ev: 'ench', n: 1, w: 6, g: qAt(15), m: d => d.boost, t: () => 'Win a lucky tier boost at the Enchanter', go: 'ench' });
+  Q({ id: 'enchfield', c: 'ench', ev: 'ench', n: 1, w: 5, g: qAt(8), m: d => d.field, t: () => 'Move an enchant in the field, away from the Enchanter' });
+  Q({ id: 'press', c: 'ench', ev: 'press', n: 50, w: 5, g: qNP, t: q => 'Press ' + q.n + ' Dust at the Dust Press', go: 'ench' });
+
+  // -- Training --
+  Q({ id: 'trainspend', c: 'train', ev: 'spend', n: 0, sp: 30, w: 5, g: qAt(2), m: d => d.k === 'train', add: d => d.g, t: q => 'Spend ' + fmtQ(q.n) + ' gold training your party' });
+  Q({ id: 'trainyou', c: 'train', ev: 'train', n: 10, w: 5, g: qAt(2), m: d => d.id === 'you', add: d => d.n, t: q => 'Raise your own hero ' + q.n + ' power levels' });
+  Q({ id: 'traintop', c: 'train', ev: 'train', n: 20, w: 5, g: qAt(4), m: d => d.top, add: d => d.n, t: q => 'Raise your strongest heroes ' + q.n + ' power levels in all' });
+  Q({ id: 'traindust', c: 'train', ev: 'train', n: 1, w: 5, g: s => npTier(s) >= 2 && ['mage', 'necro', 'healer'].some(c => qHas(s, c)), m: d => d.dust > 0, t: () => 'Train a spellcaster past power level 100 (Dust training)' });
+  Q({ id: 'dummy', c: 'train', ev: 'dummy', n: 1, w: 3, g: qAt(3), t: () => 'Test your party on the Training Grounds dummy', go: 'dummy' });
+
+  // -- The Guild Hall and the Players Guild --
+  Q({ id: 'hire', c: 'guild', ev: 'hire', n: 1, w: 5, g: qUse('guild'), t: () => 'Hire a companion at the Guild Hall', go: 'guild' });
+  Q({ id: 'hireshort', c: 'guild', ev: 'hire', n: 1, w: 5, g: qUse('guild'), m: d => d.kind === 'short', t: () => 'Take a hire on a short contract', go: 'guild' });
+  Q({ id: 'hirerare', c: 'guild', ev: 'hire', n: 1, w: 5, g: qUse('guild'), m: d => ['rare', 'epic', 'legendary'].includes(d.rar), t: () => 'Hire a Rare or better companion', go: 'guild' });
+  Q({ id: 'reroll', c: 'guild', ev: 'reroll', n: 1, w: 4, g: qUse('guild'), t: () => 'Call new faces to the Guild Hall (reroll the offers)', go: 'guild' });
+  Q({ id: 'hirespend', c: 'guild', ev: 'spend', n: 0, sp: 40, w: 5, g: qUse('guild'), m: d => d.k === 'guild', add: d => d.g, t: q => 'Spend ' + fmtQ(q.n) + ' gold on Guild Hall hires', go: 'guild' });
+  Q({ id: 'guest', c: 'guild', ev: 'guest', n: 2, w: 5, g: qOn('guild'), u: d => d.id, t: q => 'Recruit ' + q.n + ' other players’ heroes from the Players Guild', go: 'guild' });
+
+  // -- The Ember Ring (PvP) --
+  Q({ id: 'duel3', c: 'ring', ev: 'duel', n: 3, w: 6, g: qOn('ring'), u: d => d.id, t: q => 'Battle ' + q.n + ' different players in the Ember Ring', go: 'ring' });
+  Q({ id: 'duel5', c: 'ring', ev: 'duel', n: 5, w: 5, g: qOn('ring'), t: q => 'Fight ' + q.n + ' duels in the Ember Ring', go: 'ring' });
+  Q({ id: 'win2', c: 'ring', ev: 'duel', n: 2, w: 6, g: qOn('ring'), m: d => d.win, t: q => 'Win ' + q.n + ' duels in the Ember Ring', go: 'ring' });
+  Q({ id: 'winup', c: 'ring', ev: 'duel', n: 1, w: 6, g: qOn('ring'), m: d => d.win && d.up, t: () => 'Beat a hero rated higher than you in the Ring', go: 'ring' });
+  Q({ id: 'winedge', c: 'ring', ev: 'duel', n: 1, w: 6, g: qOn('ring'), m: d => d.win && d.edge > 0, t: () => 'Win a duel where your class has the edge', go: 'ring' });
+  Q({ id: 'wincounter', c: 'ring', ev: 'duel', n: 1, w: 7, g: qOn('ring'), m: d => d.win && d.edge < 0, t: () => 'Win a duel against a class that counters yours', go: 'ring' });
+  Q({ id: 'duelcls', c: 'ring', ev: 'duel', n: 3, w: 5, g: qOn('ring'), u: d => d.cls, t: q => 'Duel heroes of ' + q.n + ' different classes', go: 'ring' });
+  Q({ id: 'wineven', c: 'ring', ev: 'duel', n: 1, w: 5, g: qOn('ring'), m: d => d.win && d.even, t: () => 'Win an Even match in the Ring', go: 'ring' });
+  Q({ id: 'ringskill', c: 'ring', ev: 'ringskill', n: 1, w: 5, g: qOn('ring'), t: () => 'Learn or rank up a Ring skill with Laurels', go: 'ring' });
+  Q({ id: 'ringkit', c: 'ring', ev: 'ringkit', n: 1, w: 5, g: qOn('ring'), t: () => 'Claim or upgrade a piece of Ringwarden kit', go: 'ring' });
+  Q({ id: 'ringdef', c: 'ring', ev: 'ringdef', n: 2, w: 5, g: qOn('ring'), t: q => 'Have your hero beat ' + q.n + ' challengers while it guards the Ring', go: 'ring' });
+
+  // -- The Trading Post --
+  Q({ id: 'mbuy', c: 'market', ev: 'mbuy', n: 1, w: 5, g: qOn('buy'), m: (d, s) => d.g >= pipRate(s) * 60, t: () => 'Buy a piece of gear on the Market', go: 'market' });
+  Q({ id: 'msold', c: 'market', ev: 'msold', n: 1, w: 6, g: qOn('sell'), t: () => 'Make a sale on the Market (gear, boss shards or Sigils)', go: 'market' });
+
+  // -- World boss weekends and the Rift Gate --
+  const wbOpen = s => { const now = s.clock || Date.now(), w = wbWindow(now); return QCTX.on && canUse(s, 'boss') && now >= w.start && w.end - now > 3 * 3600e3; };
+  Q({ id: 'wb2', c: 'boss', ev: 'assault', n: 2, w: 6, g: wbOpen, m: d => !d.gob, t: q => 'Join ' + q.n + ' assaults on the world boss', go: 'boss' });
+  Q({ id: 'wb4', c: 'boss', ev: 'assault', n: 4, w: 7, g: wbOpen, m: d => !d.gob, t: q => 'Join ' + q.n + ' assaults on the world boss', go: 'boss' });
+  Q({ id: 'rift', c: 'boss', ev: 'legend', n: 1, w: 6, g: s => (s.wbTok || 0) >= WB_TOKEN_COST, t: () => 'Trade Rift tokens for a Mythic piece at the Rift Gate', go: 'rift' });
+
+  // -- NP+ only: Pip the Dicer, Gulp the Hoard Mimic, the Golden Loot Goblin, Hold works --
+  Q({ id: 'pip_pouch', c: 'pip', ev: 'crate', n: 2, w: 5, g: qNP, m: d => d.id === 'pouch', t: q => 'Open ' + q.n + ' Cloth Pouches at Pip’s wagon', go: 'pip' });
+  Q({ id: 'pip_coffer', c: 'pip', ev: 'crate', n: 1, w: 5, g: qNP, m: d => d.id === 'coffer', t: () => 'Gamble on an Iron Coffer with Pip', go: 'pip' });
+  Q({ id: 'pip_casket', c: 'pip', ev: 'crate', n: 1, w: 6, g: qNP, m: d => d.id === 'casket', t: () => 'Roll the dice on a Gilded Casket with Pip', go: 'pip' });
+  Q({ id: 'pip_any', c: 'pip', ev: 'crate', n: 3, w: 5, g: qNP, t: q => 'Open ' + q.n + ' of Pip’s crates', go: 'pip' });
+  Q({ id: 'pip_spend', c: 'pip', ev: 'spend', n: 0, sp: 60, w: 6, g: qNP, m: d => d.k === 'pip', add: d => d.g, t: q => 'Spend ' + fmtQ(q.n) + ' gold at Pip’s wagon', go: 'pip' });
+  Q({ id: 'gulp3', c: 'gulp', ev: 'morsel', n: 3, w: 5, g: s => qNP(s) && QCTX.on, add: d => d.n, t: q => 'Feed Gulp the Hoard Mimic ' + q.n + ' morsels', go: 'gulp' });
+  Q({ id: 'gulp6', c: 'gulp', ev: 'morsel', n: 6, w: 6, g: s => qNP(s) && QCTX.on, add: d => d.n, t: q => 'Feed Gulp ' + q.n + ' morsels', go: 'gulp' });
+  Q({ id: 'gulpburp', c: 'gulp', ev: 'burp', n: 1, w: 6, g: s => qNP(s) && QCTX.on, t: () => 'Feed Gulp until it coughs something up', go: 'gulp' });
+  Q({ id: 'goldgob', c: 'gulp', ev: 'assault', n: 1, w: 6, g: s => qNP(s) && QCTX.on && QCTX.gob, m: d => d.gob, t: () => 'Join an assault on the Golden Loot Goblin' });
+  Q({ id: 'works', c: 'pip', ev: 'reno', n: 1, w: 6, g: s => qNP(s) && RENOS.some(x => !(s.reno || {})[x.id] && renoCost(s, x.id) <= s.gold * 2), t: () => 'Build a new work in the Hold', go: 'works' });
+
+
+  // -- Fighting well: no falls, dodges, staying power --
+  Q({ id: 'clean5', c: 'tactics', ev: 'floor', n: 5, w: 6, g: qAt(10), m: (d, s) => d.clean && qDeep(s, d.f), t: q => 'Clear ' + q.n + ' floors near your deepest without a hero falling' });
+  Q({ id: 'cleanboss', c: 'tactics', ev: 'kill', n: 3, w: 6, g: qAt(16), m: (d, s) => qFoe(d) && d.foe.boss && d.clean && qDeep(s, d.f), t: q => 'Defeat ' + q.n + ' guardians without a hero falling' });
+  Q({ id: 'lantern', c: 'tactics', ev: 'kill', n: 3, w: 6, g: qAt(16), m: (d, s) => qFoe(d) && d.foe.boss && d.spare >= 10 && qDeep(s, d.f), t: q => 'Defeat ' + q.n + ' guardians with 10 or more seconds of lantern to spare' });
+  Q({ id: 'dodge', c: 'tactics', ev: 'dodge', n: 30, w: 4, g: qAt(6), t: q => 'Have your heroes dodge or block ' + q.n + ' blows' });
+  Q({ id: 'minion', c: 'tactics', ev: 'minionhit', n: 30, w: 4, g: s => qTop(s) >= 6 && qHas(s, 'necro'), t: q => 'Let raised skeletons take ' + q.n + ' blows for the party' });
+  Q({ id: 'cc', c: 'tactics', ev: 'cc', n: 10, w: 4, g: qAt(SPECIAL_FLOOR + 6), t: q => 'Fight on through ' + q.n + ' stuns or disarms' });
+  Q({ id: 'dots', c: 'tactics', ev: 'dot', n: 15, w: 4, g: qAt(SPECIAL_FLOOR + 6), t: q => 'Fight on through ' + q.n + ' burns or poisonings' });
+  Q({ id: 'cleanse', c: 'tactics', ev: 'cleanse', n: 4, w: 4, g: s => qTop(s) >= SPECIAL_FLOOR + 6 && qHas(s, 'healer'), t: q => 'Wash away burns and poison with Lantern Hymn ' + q.n + ' times' });
+  Q({ id: 'sneak', c: 'tactics', ev: 'kill', n: 10, w: 4, g: qAt(8), m: qKill(f => f.ambush > 0 && !f.pack), t: q => 'Defeat ' + q.n + ' monsters that sneak up on your back line' });
+  Q({ id: 'storm', c: 'tactics', ev: 'kill', n: 30, w: 5, g: s => qTop(s) >= 6 && qHas(s, 'mage'), add: packN, m: qKill((f, s) => !f.chest && s.party.some(id => id && memberById(id).cls === 'mage' && abilityActive(s, id, s.clock))), t: q => 'Defeat ' + q.n + ' monsters while Ember Storm burns' });
+  Q({ id: 'bones', c: 'tactics', ev: 'kill', n: 30, w: 5, g: s => qTop(s) >= 6 && qHas(s, 'necro'), add: packN, m: qKill((f, s) => !f.chest && s.minions.some(x => x.hp > 0)), t: q => 'Defeat ' + q.n + ' monsters while skeletons fight beside you' });
+  // -- More from the deep and the war --
+  Q({ id: 'trial', c: 'war', ev: 'kill', n: 10, w: 6, g: qAt(20), m: (d, s) => qFoe(d) && d.foe.elite && regionNo(d.f) === regionNo(qTop(s)), t: q => 'Defeat ' + q.n + ' alliance elites in your deepest region' });
+  Q({ id: 'elitemod', c: 'war', ev: 'kill', n: 3, w: 6, g: qAt(32), m: qKill(f => f.elite && (f.mods || []).length > 0), t: q => 'Defeat ' + q.n + ' alliance elites that carry a monster trick' });
+  Q({ id: 'shieldboss', c: 'guard', ev: 'kill', n: 2, w: 5, g: qAt(16), m: qKill(f => f.boss && (f.mods || []).includes('shield')), t: q => 'Defeat ' + q.n + ' shielded guardians' });
+  Q({ id: 'elitepack', c: 'war', ev: 'kill', n: 1, w: 6, g: qAt(20), m: qKill(f => f.pack > 0 && f.elite), t: () => 'Beat an ambush led by an alliance elite' });
+  Q({ id: 'oldguard', c: 'guard', ev: 'kill', n: 3, w: 5, g: qAt(41), m: (d, s) => qFoe(d) && d.foe.boss && d.f <= qTop(s) - 30, t: q => 'Defeat ' + q.n + ' guardians at least 30 floors above your deepest' });
+  Q({ id: 'guestwin', c: 'guild', ev: 'kill', n: 3, w: 5, g: qOn('guild'), m: qKill((f, s) => f.boss && s.party.some(id => id && isGuest(s, id))), t: q => 'Defeat ' + q.n + ' guardians with another player’s hero in your party', go: 'guild' });
+  Q({ id: 'npmark', c: 'tricks', ev: 'kill', n: 10, w: 6, g: s => npTier(s) >= NP_MARK_TIER, m: qKill(f => (f.mods || []).some(k => NP_MOD_KEYS.includes(k))), t: q => 'Defeat ' + q.n + ' foes that carry NP+ marks' });
+  Q({ id: 'ringtop', c: 'ring', ev: 'duel', n: 1, w: 5, g: qOn('ring'), m: d => d.top10, t: () => 'Duel a hero from the top ten of the Ring standings', go: 'ring' });
+  Q({ id: 'bagup', c: 'skill', ev: 'bag', n: 1, w: 5, g: s => (s.bagUps || 0) < BAG_UPS_MAX && (s.kindling || 0) >= bagUpCost(s), t: () => 'Spend Kindling to make your pack bigger' });
+  Q({ id: 'dustspend', c: 'ench', ev: 'dustspend', n: 0, ds: 1, w: 5, g: qAt(10), add: d => d.n, t: q => 'Spend ' + fmtQ(q.n) + ' Dust moving enchants', go: 'ench' });
+  Q({ id: 'tonic_luck', c: 'store', ev: 'tonic', n: 1, w: 4, g: qAt(5), m: d => d.id === 't_gold' || d.id === 't_loot', t: () => 'Drink a Prospector’s Luck or a Seeker’s Charm', go: 'store' });
+  Q({ id: 'deco', c: 'pip', ev: 'deco', n: 1, w: 5, g: s => qNP(s) && DECOS.some(x => !(s.reno || {})[x.id] && renoCost(s, x.id) <= s.gold * 2), t: () => 'Add a decoration to the Hold', go: 'works' });
+
+  // -- Daily only: the old quick ones (Sigil rewards, so a fast tap counts the same as a slow one) --
+  Q({ id: 'd_kills', c: 'deep', ev: 'kill', n: 400, only: 'd', g: () => true, add: packN, m: d => qFoe(d) && !d.foe.chest, t: q => 'Defeat ' + q.n + ' monsters' });
+  Q({ id: 'd_boss', c: 'guard', ev: 'kill', n: 12, only: 'd', g: qAt(5), m: d => qFoe(d) && d.foe.boss, t: q => 'Defeat ' + q.n + ' guardians' });
+  Q({ id: 'd_crits', c: 'skill', ev: 'crit', n: 150, only: 'd', g: () => true, t: q => 'Land ' + q.n + ' critical hits' });
+  Q({ id: 'd_chests', c: 'odd', ev: 'kill', n: 5, only: 'd', g: qAt(5), m: d => d.foe && d.foe.chest, t: q => 'Open ' + q.n + ' treasure chests' });
+  Q({ id: 'd_tapboss', c: 'skill', ev: 'click', n: 60, only: 'd', g: qAt(5), m: d => d.boss, t: q => 'Strike guardians ' + q.n + ' times with your lantern' });
+  Q({ id: 'd_clicks', c: 'skill', ev: 'click', n: 250, only: 'd', g: () => true, t: q => 'Strike ' + q.n + ' times with your lantern' });
+
+  const QBY = {}; for (const d of QDEFS) QBY[d.id] = d;
+  const fmtQ = n => Math.round(n).toLocaleString('en-US');
+  const qText = q => { const d = QBY[q.id]; return d ? (typeof d.t === 'function' ? d.t(q) : d.t) : 'A bounty'; };
+  const qGate = (s, d) => { try { return !!d.g(s); } catch (e) { return false; } };
+  // Gold-sized quests: 'sp' = spend that many minutes of steady income, 'gm' = earn that many minutes of it.
+  const qSize = (s, d, kind) => {
+    const k = kind === 'd' && !d.only && typeof d.n === 'number' && d.n >= 10 ? QDAILY_X : 1;
+    if (d.ds) return Math.max(10, Math.round((20 + qTop(s) * 0.6) * (kind === 'd' ? QDAILY_X : 1)));
+    if (d.sp || d.gm) return Math.max(10, Math.round(pipRate(s) * 60 * (d.sp || d.gm) * (kind === 'd' ? QDAILY_X : 1)));
+    return Math.max(1, Math.round((typeof d.n === 'function' ? d.n(s) : d.n) * k));
+  };
+  // Picks k quests: a category not already on show, then a kind in it the hero has not seen lately.
+  function pickQuests(s, kind, k, seed, avoid) {
+    const r = bountyRng(seed), hist = s.qh || [], seen = id => { const i = hist.lastIndexOf(id); return i < 0 ? -1 : i; };
+    const usedC = new Set(), usedI = new Set(avoid || []), out = [];
+    let pool = QDEFS.filter(d => (kind === 'd' ? d.only !== 'b' : !d.only) && !usedI.has(d.id) && qGate(s, d));
+    if (kind === 'd') { const dl = pool.filter(d => d.only === 'd'); if (dl.length) pool = pool.filter(d => d.only !== 'd').concat(dl); }
+    for (const a of avoid || []) { const d = QBY[a]; if (d) usedC.add(d.c); }
+    while (out.length < k && pool.length) {
+      let cats = [...new Set(pool.map(d => d.c))].filter(c => !usedC.has(c));
+      if (!cats.length) cats = [...new Set(pool.map(d => d.c))];
+      const c = cats[Math.floor(r() * cats.length)];
+      const inC = pool.filter(d => d.c === c), fresh = inC.filter(d => seen(d.id) < 0);
+      // never seen first; otherwise the one seen longest ago
+      const d = fresh.length ? fresh[Math.floor(r() * fresh.length)] : inC.slice().sort((x, y) => seen(x.id) - seen(y.id))[0];
+      pool = pool.filter(x => x !== d); usedC.add(c);
+      const p = d.mk ? d.mk(s, r) : {};
+      if (!p) continue;
+      out.push(Object.assign({ id: d.id, n: qSize(s, d, kind), have: 0 }, p));
+    }
+    s.qh = hist.concat(out.map(q => q.id)).slice(-QH_MAX);
+    return out;
+  }
+  // Every live quest: this window's bounties and today's quests.
+  function qLive(s) {
+    const out = [];
+    if (s.bounty && Array.isArray(s.bounty.list) && s.bounty.w === bountyWin()) out.push(...s.bounty.list);
+    if (s.daily && Array.isArray(s.daily.q) && s.daily.day === questDay()) out.push(...s.daily.q);
+    return out;
+  }
+  function qEv(s, ev, d) {
+    if (!s || !s.stats) return;
+    d = d || {};
+    for (const q of qLive(s)) {
+      if (q.got || q.have >= q.n) continue;
+      const def = QBY[q.id]; if (!def || def.ev !== ev) continue;
+      try { if (def.m && !def.m(d, s, q)) continue; } catch (e) { continue; }
+      let add = def.add ? def.add(d, s, q) : (d.n || 1);
+      if (def.u) { const key = String(def.u(d)); q.ids = q.ids || []; if (q.ids.includes(key)) continue; q.ids.push(key); add = 1; }
+      if (add > 0) q.have = Math.min(q.n, q.have + add);
+    }
+  }
+  const qSpend = (s, k, g) => { if (g > 0) qEv(s, 'spend', { k, g }); };
+
+  // Daily quests: three a day, picked for your hero, Sigil rewards through the server (POST /sigils/earn).
+  function questState(s) {
+    const day = questDay();
+    if (!s.daily || s.daily.day !== day) {
+      const avoid = s.bounty && Array.isArray(s.bounty.list) ? s.bounty.list.map(b => b.id).filter(Boolean) : [];
+      s.daily = { day, got: 0, q: s.hero ? pickQuests(s, 'd', 3, 'd:' + day + ':' + ((s.hero && s.hero.name) || '') + ':' + (s.created || 0), avoid) : [] };
+    }
+    if (!Array.isArray(s.daily.q)) // a day that began on an older build
+      return dailyQuests(day).map((q, i) => { const have = Math.max(0, (s.stats[q.stat] || 0) - ((s.daily.base || {})[q.stat] || 0)); return { i, id: q.id, text: q.text.replace('{n}', q.n.toLocaleString('en-US')), have: Math.min(have, q.n), n: q.n, done: have >= q.n, got: !!(s.daily.got & (1 << i)) }; });
+    return s.daily.q.map((q, i) => ({ i, id: q.id, c: (QBY[q.id] || {}).c, go: (QBY[q.id] || {}).go, text: qText(q), have: Math.min(q.have, q.n), n: q.n, done: q.have >= q.n, got: !!(s.daily.got & (1 << i)) }));
+  }
+
+  // ---------- Bounty board (John, 2026-11-24; quest book 26 Nov 2026) ----------
+  // Three bounties at a time, fresh every BOUNTY_HOURS, built for your hero. Finished bounties left unclaimed are paid
+  // out when the board turns over.
+  const LEGACY_B = { hunt: b => 'hunt_' + b.sp, region: () => 'sweep', guardian: () => 'farm', chest: () => 'chests', elite: () => 'elite6', shield: () => 'shields' };
+  function makeBounties(s, w) {
+    const avoid = s.daily && Array.isArray(s.daily.q) && s.daily.day === questDay() ? s.daily.q.map(q => q.id) : [];
+    return pickQuests(s, 'b', 3, w + ':' + ((s.hero && s.hero.name) || '') + ':' + (s.created || 0), avoid);
+  }
+  function bountyReward(s, b) {
+    const def = QBY[b.id] || {}, mins = def.w || 4;
+    // Hotfix (Kyvia, Discord 26 Nov 2026): the gold used live away income, so swapping a Gold Find hero in just before
+    // claiming raised it by about a billion. It now uses the same slow dive-income average as Pip's prices (pipRate).
+    return { gold: Math.max(50, Math.round(pipRate(s) * 60 * mins)), dust: Math.round(3 + (s.maxFloor || 1) * 0.3) };
+  }
+  // Rolls the board over when the window changes (paying out finished, unclaimed bounties) and returns it.
+  function bountyState(s, now) {
+    const w = bountyWin(now);
+    if ((s.maxFloor || 1) < BOUNTY_FLOOR) return { w, list: [], locked: true };
+    if (s.bounty && Array.isArray(s.bounty.list)) for (const b of s.bounty.list) if (!b.id && b.k && LEGACY_B[b.k]) { b.id = LEGACY_B[b.k](b); if (!QBY[b.id]) b.id = 'sweep'; }
+    if (!s.bounty || s.bounty.w !== w) {
+      const paid = [];
+      if (s.bounty && Array.isArray(s.bounty.list)) for (const b of s.bounty.list) if (b.have >= b.n && !b.got) paid.push(claimBounty(s, b));
+      s.bounty = { w, list: makeBounties(s, w) };
+      if (paid.length) s.bounty.paid = paid;
+    }
+    return s.bounty;
+  }
+  function claimBounty(s, b, rng) {
+    const rw = bountyReward(s, b); b.got = 1;
+    s.gold += rw.gold; s.dust = (s.dust || 0) + rw.dust; s.stats.bounties = (s.stats.bounties || 0) + 1;
+    s.stats.bountyGold = (s.stats.bountyGold || 0) + rw.gold;
+    if ((rng || Math.random)() < 0.25) { const t = TONICS[Math.floor((rng || Math.random)() * TONICS.length)]; s.items[t.id] = (s.items[t.id] || 0) + 1; rw.tonic = t.name; }
+    return rw;
+  }
+  function claimBountyAt(s, i, now) { const st = bountyState(s, now), b = st.list[i]; if (!b || b.got || b.have < b.n) return null; return claimBounty(s, b); }
+  const bountyText = b => qText(b);
+  const bountyGo = b => (QBY[b.id] || {}).go || '';
+  const bountyCat = b => (QBY[b.id] || {}).c || '';
+
   const api = {
     npPlus, incomeHour, priceH, steadyPartyDps, pipRate, samplePipIncome, acctGoldPerSec, CRATES, CURIOS, CURIO_PITY, CURIO_PER, CURIO_ALL, curioById, crateById, crateCost, curiosOf, curioCount, curioColl, fxOnW, makeCurio, openCrate, curioHeld, retakeCurio, REFORGE_H, REFORGE_MAX, canReforge, reforgeCost, reforge, RENOS, DECOS, renoCost, renoVal, buildReno, PRESS_H, PRESS_DAY, pressLeft, pressCost, pressDust, MORSEL_H, GULP_DAY, GULP_BURP, morselCost, feedGulp, GOB_TIME, GOB_COOL, GOB_DASH, GOB_DASH_LEN, startGoblinAssault, gobDash, gobRogue, makeGilded, ggOwned, lootGoblin, GG, WB_BOSSES, GG_RINGS, GG_DUP, GG_TWO, GG_THREE, GG_FIVE,
-    steadyDps, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npIlvl, npOld, npReady, startNP,
-    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
+    steadyDps, damageMeter, meterReset, METER_TAU, NP_MAX, NP_HP, NP_HP_DEPTH, NP_ATK, NP_ATK_DEPTH, npFoeHp, npFoeAtk, NP_MODS, NP_MOD_KEYS, NP_MARK_TIER, NP_RESIST, NP_PLAGUE, NP_IRON, ROGUE_PIERCE, npMark, npMarkMult, npHealCut, pierceOf, NP_ILVL, NP_PER, NP_SIGILS, NP_GAP, NP_LOCK, NP_KEEP, npTier, npFoe, npBonus, npGold, npIlvl, npOld, npReady, startNP,
+    NPC_RAR, NPC_ROTATE, NPC_SHORT_MS, NPC_SHORT_MAX, NPC_BENCH_MS, LEGENDS, LORE_LEGENDS, LORE_COUNT, UNIQ, UNIQ_IDS, UNIQ_QUESTS, UNIQ_GUILD, UNIQ_OFFER_MS, UNIQ_DRILL_SEC, CAGE_FLOOR, CAGE_BASE, CAGE_GROW, CAGE_MAX, CAGE_TIME, postOn, uniqArrive, uniqQuest, uniqDrill, uniqTick, cageChance, cageMult, thistleFoe, npcRar, npcRarOf, shortHire, hallState, npcCost, npcPrice, NPC_CASTER, NPC_CASTER_DUST, npcReq, npcHire, npcRelease, npcReroll, npcRerollCost, wagePerHour, wagesPerHour, npcOfferWage, npcWageParts, NPC_FEE, WAGE_CAP, WAGE_RELIEF_MAST, WAGE_RELIEF_CHA, WAGE_RELIEF_MAX, wageRelief, wageOf, wageCapAt, npcIncomeMin, payWages, NPC_AWAY_WAGE,
     UNLOCKS, JOB_SLOT_LV, REGIONS, TRIAL_ELITES, trialOf, ROSTER_BASE, ROSTER_LV, ROSTER_BUY_MAX, ROSTER_COST, ROSTER_ITEMS, MASTERY, MASTERY_ELITES, MASTERY_PER, MASTERY_XP, MASTERY_FULL_XP, masteryXp, heroLv, unlockOf, canUse, nextUnlock, newUnlocks, jobSlots, regionNo, regionNeed, companions, rosterCap, fireCap, PARTY_SEATS, dismissCompanion, acceptRecruit, declineRecruit, masteryStars, masteryVal, paceMigrate,
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
     STATS, STAT_CLASS, STAT_BASE, STAT_AFFINITY, STAT_MAX, RESPEC_COST, statSpent, xpNeed, heroLevel, pointsFor, heroPoints, statScore, addStat, resetStats, statVal, PACK_CHANCE, PACK_GOLD,
     VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
-    newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec,
-    clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
-    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
+    CREATURES, ROSTERS, FAMILY, LORE_AT, REVEAL, SPECIAL_CHANCE, SPECIAL_FLOOR, RAR_W, RAR_NAME, SIZE_X, ROSTER_HOME, creatureById, creatureHue, creatureRegions, creatureOdds, pickCreature, famsIn, newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, GUEST_REFRESH, GUEST_DROP_HOLD, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec, steadyHeal, steadyClick,
+    questCtx, qEv, QDEFS, pickQuests, bountyGo, bountyCat, clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
+    offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_BEST, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.LH = api;

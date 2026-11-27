@@ -1,4 +1,4 @@
-/* lh-build 202611260519 */
+/* lh-build 202611270233 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -1166,7 +1166,7 @@ body.resting .arena{cursor:default}
 .renewnote{margin:10px 0 0}.renewnote b{color:var(--text)}
 @media (max-width:560px){.packs{grid-template-columns:repeat(2,1fr);row-gap:16px}}
 .storelink+.note{margin-top:10px}
-.mercygive .row{margin:10px 0 6px}.mercygive .note{margin:0}
+.mercygive .row{margin:10px 0 12px}.mercygive .note{margin:0}
 /* Mercy's Blessing pill */
 .stat.mercy{color:#8fcf6a;cursor:pointer;font:inherit;font-weight:800;font-size:15px;animation:mercyglow 3s ease-in-out infinite}
 .stat.mercy:hover{border-color:#8fcf6a}
@@ -1201,6 +1201,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center}
 .quest>div{flex:1;min-width:0}.quest b{display:block}.quest small{color:var(--muted);font-size:12px}
 .quest.done{border-color:var(--gold)}.quest.got{opacity:.7}
 .quest .sigil{width:14px;height:14px;vertical-align:-2px;margin-right:2px}
+.quest .qgorow{margin-top:6px}
 .qbar{height:6px;border-radius:6px;background:var(--line);margin:6px 0 3px;overflow:hidden}.qbar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#ffd970)}
 .qok{color:var(--violet);font-weight:800;white-space:nowrap}
 .quest.bonus{background:linear-gradient(180deg,rgba(232,121,249,.08),var(--panel))}
@@ -2466,8 +2467,9 @@ body.atench .achips{display:none}
 .dummy{flex:none;width:92px;height:92px;border-radius:14px;border:2px solid #8a6a3a;background:radial-gradient(circle at 50% 40%,#5a4328,#2a1f14);color:#e9c98a;display:grid;place-items:center;cursor:pointer;font-weight:700}
 .dummy svg{width:34px;height:34px}.dummy:active{transform:scale(.95)}
 .tbig{font-size:26px;font-weight:700;color:var(--ember);margin:2px 0}.tbig small{font-size:13px;color:var(--muted)}
+.tdown{color:var(--bad,#ff6b5a);font-size:11px;font-weight:600}.tnote{font-size:12px;margin:-4px 0 10px}.ttaps{color:var(--muted);font-size:13px;margin:2px 0 6px}.ttaps b{color:var(--text,#e8e6e3)}
 #tr-rows{overflow-x:auto}
-@media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6){display:none}}
+@media (max-width:520px){.ttab th:nth-child(3),.ttab td:nth-child(3),.ttab th:nth-child(6),.ttab td:nth-child(6),.ttab .tbar{display:none}.ttab th,.ttab td{padding-left:4px;padding-right:4px}}
 /* v125 NP+ gold sinks: Pip's crates and Curio shelf, Gulp's sign, the goblin bar, Hold works */
 .holdtents.n7{grid-template-columns:repeat(7,1fr)}
 .holdtents.n7 button{padding:8px 2px;font-size:12px}
@@ -2545,3 +2547,206 @@ body.atench.shopmin .stage .arena{display:none!important}
 .sethead{margin:18px 0 0;font-size:15px}
 .setnotif span{display:flex;flex-direction:column;gap:2px;padding-right:12px}
 .setnotif small{color:var(--muted);font-size:12px}
+
+/* v132 hero profile: My hero / Public profile tabs (John, 26 Nov 2026) */
+.prof.v2 .profhead{gap:14px}
+.prof.v2 .profspr{width:76px;height:94px}
+.prof.v2 .phid{min-width:0}
+.prof.v2 .phid h2{font-size:22px;line-height:1.15;overflow-wrap:anywhere}
+.prof.v2 .bio{margin:12px 0 10px;color:var(--muted);font-size:14px}
+.ptabs{margin:14px 0 2px;width:100%}
+.ptabs button{flex:1;padding:8px 10px;font-size:14px}
+.pkpi{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0 8px}
+.pkpi div{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 9%,var(--bg2)),var(--bg2));border:1px solid var(--line2);border-radius:10px;padding:8px 10px;min-width:0}
+.pkpi span{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pkpi b{display:block;font-size:19px;line-height:1.25;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pxp{margin:4px 0 12px}
+.pxprow{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:4px}
+.pxprow span{color:var(--dim);font-variant-numeric:tabular-nums}
+.pxp small{display:block;color:var(--accent);font-size:12.5px;margin-top:4px}
+.psec{border-top:1px solid var(--line);padding:2px 0}
+.psec>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;padding:10px 2px;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.psec>summary::-webkit-details-marker{display:none}
+.psec>summary::after{content:'+';color:var(--dim);font-size:18px;font-weight:400;letter-spacing:0}
+.psec[open]>summary::after{content:'\2212'}
+.psec .pstats{margin:0 0 10px}
+.psec .ability{margin-bottom:6px}
+.prof.v2 .pstats b{font-variant-numeric:tabular-nums}
+.pstats.attr{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+.pgear.two{grid-template-columns:1fr 1fr;column-gap:16px;margin-bottom:10px}
+.pgear.two li{min-width:0;font-size:13.5px}
+.pgear.two b{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pgear b[data-info]{cursor:pointer}
+.pgear b[data-info]:hover{text-decoration:underline}
+.pgear .r-common{color:var(--text)}
+.pubsec{margin-top:10px}
+.pubsec h4{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.pubsec .pstats{margin:0}
+.pparty{display:flex;flex-wrap:wrap;gap:6px}
+.pparty span{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;font-weight:700}
+.pvlist{display:grid;grid-template-columns:1fr 1fr;column-gap:18px}
+.pvrow{gap:12px;cursor:pointer;padding:8px 0}
+.pvrow span{font-weight:700;font-size:14px}
+.pvrow small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.pvrow input{flex:none}
+#pv-st{min-height:1.2em;margin:6px 0 4px;font-size:13px}
+#pv-st:empty{display:none}
+.pftags .online{font-size:12.5px}
+@media (max-width:560px){
+  .pkpi{grid-template-columns:1fr 1fr}
+  .pgear.two,.pvlist{grid-template-columns:1fr}
+  .prof.v2 .profspr{width:64px;height:80px}
+}
+.modal .sheet.profsheet{max-width:640px}
+.pvbox{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:12px 0 4px}
+.pvbox>b{display:block;font-size:14px}
+.pvbox>small{display:block;color:var(--muted);font-size:12.5px;margin:2px 0 8px}
+.pvchips{display:flex;flex-wrap:wrap;gap:6px}
+.pvchip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--dim);font:700 13px var(--body);cursor:pointer;text-decoration:line-through;text-decoration-color:color-mix(in srgb,currentColor 50%,transparent)}
+.pvchip svg{width:14px;height:14px}
+.pvchip.on{color:var(--text);text-decoration:none;border-color:color-mix(in srgb,var(--good) 55%,transparent);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.pvchip.on svg{color:var(--good)}
+/* party rows: player banners (v132) */
+.seat.sbn{border-color:color-mix(in srgb,var(--line2) 70%,#f2c14e 30%)}
+.seat.sbn .lv{color:color-mix(in srgb,var(--text) 82%,transparent)}
+.sban{display:inline-block;width:16px;height:24px;flex:none;margin-left:2px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.sban svg{width:100%;height:100%;display:block}
+/* Damage meter (v132) */
+#meter{padding:4px 10px 8px}
+.mtab td:nth-child(2){text-align:right;font-variant-numeric:tabular-nums}
+.mtab td:first-child{white-space:normal}
+#meter .tsum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+#meter .tsum .btn{margin-left:auto}
+.mtab{table-layout:auto}
+.mtab td:last-child{text-align:right;width:1%}
+@media (max-width:520px){.mtab .tbar{display:none}.mtab td{padding:5px 4px}}
+.mtab td{display:table-cell!important}
+/* v132 Support the game: one-time Sigil tasks */
+.supts{display:grid;gap:10px;margin:8px 0 12px}
+.supt{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;border:1px solid var(--line2);background:var(--panel)}
+.supt small{color:var(--muted);font-size:13px;line-height:1.4}
+.supth{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.supth svg{width:18px;height:18px;color:var(--gold);flex:none}
+.supsig{display:inline-flex;align-items:center;gap:3px;margin-left:auto;font-weight:700;color:var(--gold)}.supsig .sigil{width:16px;height:16px}
+.supform{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:2px}
+.supform input{flex:1 1 140px;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--line2);background:var(--bg2);color:var(--text);font:inherit}
+.supnote{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:12px;border:1px dashed var(--line2);margin-bottom:8px}
+.supnote small{color:var(--muted);font-size:13px;line-height:1.4}.supnote a{color:var(--gold)}
+.supt small a{color:var(--gold)}
+/* unique Legendaries: camp post bonus tags and Guild Hall side quests */
+.uqp{font-style:normal;font-size:11px;font-weight:800;color:var(--ember);white-space:nowrap;cursor:help}
+.job .uqp{display:block;margin-top:2px}
+.uqhint{font-size:11px;color:var(--muted);cursor:help}
+.uqt{display:block;color:var(--ember);font-weight:700;margin-top:2px}
+.uqlist{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.uqrow{display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line2);border-radius:10px;background:var(--panel2)}
+.uqrow img{width:32px;height:32px;image-rendering:pixelated;flex:none}
+.uqrow b{font-size:13px}.uqrow small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.jobline{flex-wrap:wrap}.jobline .uqhint,.jobline > .uqp{flex-basis:100%}
+.uqline > .uqp{flex-basis:auto}
+.modal .btn.wide{display:block;width:100%;margin-top:10px}
+.dc-code{font:700 40px/1.2 "Chakra Petch",monospace;letter-spacing:.25em;color:#f0b452;margin:14px 0 4px;user-select:all}
+
+/* creature home zones (27 Nov 2026) */
+.tag.rare-r{background:#3a2c10;color:#ffd36b}.tag.rare-v{background:#2b1a3a;color:#e2b8ff}
+.bcount{font-weight:600;color:var(--dim);font-size:13px;margin-left:6px}
+.beasts .bsub{font-weight:500;color:var(--dim);font-size:13px}
+.blist{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.bst{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)}
+.bst img{width:56px;height:56px;flex:none;transform:scaleX(-1)}
+.bst.unk img{filter:brightness(0) opacity(.55)}
+.bst p{margin:4px 0;font-size:14px}
+.bst small{color:var(--dim);font-size:12px;line-height:1.4}
+.brar{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:999px;background:var(--bg3,#22283a);color:var(--muted)}
+.brar.r-u{color:#9fe0b0}.brar.r-r{color:#ffd36b;background:#3a2c10}.brar.r-v{color:#e2b8ff;background:#2b1a3a}
+.bst .bnote{color:var(--text,#e8e2d4);border-left:2px solid var(--gold,#f2c14e);padding-left:8px}
+.bst .bnext{color:var(--gold,#f2c14e)}
+/* Ember Ring team battles (27 Nov 2026) */
+.tmnote{margin:0 2px 10px}
+.tmhead{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 2px 10px;font-size:13px;color:var(--muted)}
+.tmhead svg{width:14px;height:14px;color:var(--gold);vertical-align:-2px}
+.tmhead>span{display:inline-flex;align-items:center;gap:4px}
+.tmhead b{color:var(--text);font-family:var(--title);font-size:16px}
+.tmline{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 12px}
+.tmslot{position:relative;display:grid;gap:4px;justify-items:center;text-align:center;padding:10px 8px 9px;border:1px solid var(--line2);border-radius:12px;background:radial-gradient(circle at 50% 30%,#3a1e0e 0,var(--bg2) 70%)}
+.tmslot.tmfront{border-color:#7a4a20}
+.tmslot .tmposl{position:absolute;top:6px;left:8px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);font-weight:700}
+.tmslot .tmposl.tmyou{color:var(--sky)}
+.tmslot .ringspr{width:64px;height:64px;margin-top:8px}
+.tmslot .nm{font-weight:700;font-size:14px;line-height:1.2}
+.tmslot small{font-size:11.5px;color:var(--muted);line-height:1.3}
+.tmslot .tmtags{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.tmslot .tmbtn{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:4px}
+.tmslot .tmkit{display:flex;gap:3px;justify-content:center;margin-top:2px}
+.tmslot .tmkit i{width:18px;height:18px;border-radius:5px;border:1px solid var(--line2);background:#0c1018;display:block}
+.tmslot .tmkit i.on{border-color:#6cc4e8;background:linear-gradient(180deg,#16324a,#0c1018)}
+.tmslot .tmkit i.ep{border-color:#c78bff;background:linear-gradient(180deg,#2e1a4a,#0c1018)}
+.tmslot.empty{border-style:dashed;opacity:.8}
+.tmroster{display:grid;gap:6px;margin:0 0 12px}
+.tmrow{display:grid;grid-template-columns:40px 1fr auto;gap:10px;align-items:center;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg2)}
+.tmrow .ringspr{width:38px;height:38px}
+.tmrow .nm{font-weight:700}
+.tmrow small{display:block;color:var(--muted);font-size:12px}
+.tmrow.in{border-color:var(--gold2);background:linear-gradient(90deg,#22190a,var(--bg2))}
+.tmrow .inl{font-size:11px;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+details.tmfold{margin:0 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:0 10px}
+details.tmfold>summary{cursor:pointer;padding:9px 0;font-weight:700;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.tmfold>summary small{color:var(--muted);font-weight:500}
+details.tmfold[open]>summary{border-bottom:1px solid var(--line);margin-bottom:8px}
+.tmfoes{display:grid;gap:8px}
+.tmfoe{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
+.tmtrio{display:flex;gap:0}
+.tmtrio .ringspr{width:40px;height:40px;margin-right:-8px}
+.tmfoe .nm{font-weight:700}
+.tmfoe small{display:block;color:var(--muted);font-size:12px}
+.tmrule{font-size:12.5px;color:var(--muted);margin:0 0 6px;padding-left:18px}
+.tmrule li{margin:2px 0}
+.tmgear-who{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.tmgear-who button{white-space:nowrap;display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:999px;border:1px solid var(--line2);background:var(--bg2);color:var(--text);font:inherit;font-size:13px}
+.tmgear-who button.on{border-color:var(--gold2);background:#2a1d06}
+.tmgear-who .ringspr{width:28px;height:28px}
+.tmgearhead{display:grid;grid-template-columns:80px 1fr;gap:12px;align-items:center;padding:10px 12px;margin:0 0 10px;border:1px solid #5a3418;border-radius:14px;background:radial-gradient(circle at 12% 60%,#4a2410 0,#1a0e08 45%,var(--panel) 100%)}
+.tmgearhead .ringspr{width:76px;height:76px}
+.tmgearhead h3{margin:0;font-family:var(--title);font-size:18px}
+.tmgearhead small{display:block;color:var(--muted);font-size:12.5px}
+/* team match */
+.tmarena{padding:12px 8px 10px;border-radius:14px;border:1px solid #5a3418;background:radial-gradient(ellipse at 50% 100%,#5a2a10 0,#1a0e08 55%,#06080e 100%)}
+.tmside{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tmf{display:grid;gap:3px;justify-items:center;text-align:center;position:relative}
+.tmf .fig{position:relative;height:92px;display:grid;place-items:end center}
+.tmf .fig img{width:92px;height:92px;object-fit:contain;filter:drop-shadow(0 6px 6px #000c)}
+.tmside.them .fig img{transform:scaleX(-1)}
+.tmf b{font-size:12.5px;font-family:var(--title)}
+.tmf small{font-size:10.5px;color:var(--muted)}
+.tmf .bar{width:100%;max-width:150px;height:12px}
+.tmf .bar i{background:linear-gradient(90deg,#c0392b,#ff6a3d)}
+.tmside.us .bar i{background:linear-gradient(90deg,#2f8f5b,#8fcf6a)}
+.tmf .bar span{font-size:10px;line-height:11px}
+.tmf.fallen{opacity:.4;filter:grayscale(.85)}
+.tmf.act .fig::after{content:'';position:absolute;bottom:-4px;left:15%;right:15%;height:8px;border-radius:50%;background:radial-gradient(#ffb06088,transparent 70%)}
+.tmmid{display:flex;justify-content:space-between;align-items:center;margin:8px 4px}
+.tmmid .rdvs{font-size:18px}
+.tmmid small{color:var(--muted);font-size:12px}
+.tmpos{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+@media (max-width:560px){.tmslot .tmbtn{flex-direction:column;width:100%}.tmslot .tmbtn .btn{width:100%;padding:5px 4px}.tmslot .rartag{font-size:10px}.tmslot .ctag{font-size:10px}.tmslot .ringspr{width:50px;height:50px}.tmslot small.st{display:none}.tmf .fig,.tmf .fig img{height:72px;width:72px}.tmline{gap:6px}.tmslot{padding:8px 4px}}
+.tmempty{height:64px;display:grid;place-items:center;margin-top:8px;color:var(--dim)}.tmempty svg{width:28px;height:28px}
+.tmslot.empty small{margin-top:4px}
+.tmgear-who button.tmback{padding:6px 12px}
+.tmf .rdpop span{font-size:17px}.tmf .rdpop .crit{font-size:21px}.tmf .rdpop .abil{top:0;font-size:12px;color:var(--sky)}.tmf .rdpop .dot{color:#9fd36a}
+@keyframes tmup{40%{transform:translateY(-14px)}}@keyframes tmdn{40%{transform:translateY(14px)}}.tmside.us .fig.lunge{animation:tmup .32s ease-out}.tmside.them .fig.lunge{animation:tmdn .32s ease-out}.tmf .fig.struck img{animation:rdhit .3s}
+.tmtopseg{margin-top:-2px}
+.ringtop.tmtop li{grid-template-columns:26px 62px 1fr auto 56px 52px}
+.ringtop.tmtop .tmtrio .ringspr{width:24px;height:24px;margin-right:-4px}
+@media (max-width:560px){.ringtop.tmtop li{grid-template-columns:22px 56px 1fr 50px 44px}}
+.tmx{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:8px;border:1px solid var(--line2);background:var(--bg2);color:var(--muted);font-size:17px;line-height:1;padding:0;cursor:pointer}.tmx:hover{color:var(--text);border-color:var(--bad)}
+/* creature details pop-out */
+.bdet{font-size:12px;padding:2px 10px;min-height:0;margin-left:4px;vertical-align:middle}
+.bdtop{display:flex;gap:14px;align-items:flex-start;margin:6px 0}
+.bdpic{width:120px;height:120px;flex:none;transform:scaleX(-1);background:radial-gradient(circle,rgba(255,255,255,.06),transparent 70%);border-radius:12px}
+.bdfacts{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.bdrow{display:flex;justify-content:space-between;gap:10px;font-size:14px;border-bottom:1px solid var(--line);padding:3px 0}
+.bdrow span{color:var(--dim)}.bdrow b{text-align:right;font-weight:600}
+.bdtext{color:var(--muted);line-height:1.5;margin:8px 0}
+.bdlock{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:14px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px}
+.bdlock svg{width:16px;height:16px}
+.bdprog{margin-top:12px}
+@media (max-width:520px){.bdtop{flex-direction:column;align-items:center}.bdfacts{width:100%}}
