@@ -1,4 +1,4 @@
-// NODE_PATH=infra/test/mock/node_modules node infra/test/save.handler.test.js
+// NODE_PATH=infra/test/mock node infra/test/save.handler.test.js
 // Runs save.js, admin.js and mail.js against an in-memory DynamoDB: held saves, snapshots, restore, sale credits.
 const assert = require('assert'), crypto = require('crypto'), path = require('path');
 global.__DDB = {}; global.__KEYS = { saves: ['userId'], trade: ['pk', 'sk'], heroes: ['pid'], wallets: ['userId'] };
