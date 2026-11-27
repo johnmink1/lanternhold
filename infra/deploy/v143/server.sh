@@ -8,12 +8,16 @@
 #   exchange  shut to Hardcore heroes; a buy is checked against the gold the server trusts (like Market and Mail).
 #             Gets env SAVES (+ TRUSTCHECK copied from lanternhold-market) and read access to the saves table.
 #   market, mail   Hardcore NP+ markets (mkt#<cls>#hc#<tier>); no item above deepest floor + 10 (raised by NP+)
+#   worldboss Hardcore heroes fight the weekend boss on the same bar (own row, HC tag); world boss Sigils once per account
+#   loot      Hardcore heroes roll their own boss loot; Hardcore-only shard market
+#   hof       a Hardcore Hall of Fame next to the main one (skipped if the Hall of Fame function isn't there)
+#   arena     Hardcore heroes enter the Ember Ring with their own row (HC tag), one shared Ring
 #   saves table    point-in-time recovery switched on (35 days of rolling backups; a few cents a month)
-# Code comes from GitHub at commit a49c7ffc55397da2af419a3dcb7f4c9747a24581 and is checked by md5. Each live function is checked to be the
+# Code comes from GitHub at commit COMMIT and is checked by md5. Each live function is checked to be the
 # version we expect BEFORE anything changes and backed up to ~/lhbak. Safe to run twice. Prints the undo commands.
 set -e
 TS=$(date -u +%Y%m%d%H%M); mkdir -p ~/lhbak ~/lhv143 && cd ~/lhv143
-RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/a49c7ffc55397da2af419a3dcb7f4c9747a24581/infra/deploy/v143/dist/
+RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/COMMIT/infra/deploy/v143/dist/
 echo "1/4 fetching the new code"
 curl -sf -o lanternhold-np.js "${RAW}lanternhold-np.js" && [ "$(md5sum < lanternhold-np.js | cut -c1-32)" = "9cd44e79b52788854869e7d43e75a3db" ] || { echo "lanternhold-np: download failed or changed. Stopping; nothing changed."; exit 1; }
 curl -sf -o lanternhold-save.js "${RAW}lanternhold-save.js" && [ "$(md5sum < lanternhold-save.js | cut -c1-32)" = "f2fca1c06fb6513e007f0db5af574597" ] || { echo "lanternhold-save: download failed or changed. Stopping; nothing changed."; exit 1; }
@@ -23,14 +27,19 @@ curl -sf -o lanternhold-goblin.js "${RAW}lanternhold-goblin.js" && [ "$(md5sum <
 curl -sf -o lanternhold-exchange.js "${RAW}lanternhold-exchange.js" && [ "$(md5sum < lanternhold-exchange.js | cut -c1-32)" = "5d12513b79458f5c57735334a680e105" ] || { echo "lanternhold-exchange: download failed or changed. Stopping; nothing changed."; exit 1; }
 curl -sf -o lanternhold-market.js "${RAW}lanternhold-market.js" && [ "$(md5sum < lanternhold-market.js | cut -c1-32)" = "fe897df0371ef3a41848d151be2e93f4" ] || { echo "lanternhold-market: download failed or changed. Stopping; nothing changed."; exit 1; }
 curl -sf -o lanternhold-mail.js "${RAW}lanternhold-mail.js" && [ "$(md5sum < lanternhold-mail.js | cut -c1-32)" = "0904fdf1af80472ed01324ddea8f9594" ] || { echo "lanternhold-mail: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-worldboss.js "${RAW}lanternhold-worldboss.js" && [ "$(md5sum < lanternhold-worldboss.js | cut -c1-32)" = "5a21129c83ff42e54365653ebe98cd02" ] || { echo "lanternhold-worldboss: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-loot.js "${RAW}lanternhold-loot.js" && [ "$(md5sum < lanternhold-loot.js | cut -c1-32)" = "337c587c620f85d9f0e8c0afac50cf3b" ] || { echo "lanternhold-loot: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-hof.js "${RAW}lanternhold-hof.js" && [ "$(md5sum < lanternhold-hof.js | cut -c1-32)" = "3c7a16f16ae066401728bce54bfad7db" ] || { echo "lanternhold-hof: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-arena.js "${RAW}lanternhold-arena.js" && [ "$(md5sum < lanternhold-arena.js | cut -c1-32)" = "caeeaffdd2b05906a46cc9f080d0b8c1" ] || { echo "lanternhold-arena: download failed or changed. Stopping; nothing changed."; exit 1; }
 echo "2/4 checking the live code"
-for F in lanternhold-np lanternhold-save lanternhold-perks lanternhold-gulp lanternhold-goblin lanternhold-exchange lanternhold-market lanternhold-mail; do
-  aws lambda get-function --function-name $F >/dev/null 2>&1 || { echo "$F missing. Stopping; nothing changed."; exit 1; }
+SKIP=""
+for F in lanternhold-np lanternhold-save lanternhold-perks lanternhold-gulp lanternhold-goblin lanternhold-exchange lanternhold-market lanternhold-mail lanternhold-worldboss lanternhold-loot lanternhold-hof lanternhold-arena; do
+  if ! aws lambda get-function --function-name $F >/dev/null 2>&1; then case " lanternhold-hof " in *" $F "*) SKIP="$SKIP $F"; echo "$F: not there, skipped"; continue;; esac; echo "$F missing. Stopping; nothing changed."; exit 1; fi
   curl -s -o ~/lhbak/$F-$TS.zip "$(aws lambda get-function --function-name $F --query Code.Location --output text)"
   rm -rf live-$F && mkdir live-$F && unzip -q -o ~/lhbak/$F-$TS.zip -d live-$F
 done
 chk() { # chk <function> <strings...>: live code must contain each string, or already be this version
-  F=$1; shift
+  F=$1; shift; case " $SKIP " in *" $F "*) return;; esac
   [ "$(md5sum < live-$F/index.js | cut -c1-32)" = "$(md5sum < $F.js | cut -c1-32)" ] && { echo "$F: already v143"; return; }
   for s in "$@"; do grep -qF -- "$s" live-$F/index.js || { echo "$F: live code is not the version this script expects (no '$s'). Stopping; nothing changed. Ask Claude."; exit 1; }; done
 }
@@ -42,6 +51,10 @@ chk lanternhold-goblin 'gob#' claimed
 chk lanternhold-exchange 'sigsell#'
 chk lanternhold-market 'mkt#' '#hc'
 chk lanternhold-mail payment hc
+chk lanternhold-worldboss 'POST /boss/claim' 'POST /boss/hit'
+chk lanternhold-loot 'POST /shards/buy' 'sh#'
+chk lanternhold-hof admins hf
+chk lanternhold-arena 'season#' 'POST /arena/fight'
 echo "3/4 exchange settings"
 ST=$(aws dynamodb describe-table --table-name lanternhold-saves --query Table.TableArn --output text)
 TC=$(aws lambda get-function-configuration --function-name lanternhold-market --query Environment.Variables.TRUSTCHECK --output text)
@@ -56,7 +69,8 @@ aws lambda wait function-updated --function-name lanternhold-exchange
 echo "exchange: SAVES set, TRUSTCHECK=$TC"
 echo "4/4 updating code"
 UNDO="\naws lambda update-function-configuration --function-name lanternhold-exchange --environment file://$HOME/lhbak/lanternhold-exchange-env-$TS.json"
-for F in lanternhold-np lanternhold-save lanternhold-perks lanternhold-gulp lanternhold-goblin lanternhold-exchange lanternhold-market lanternhold-mail; do
+for F in lanternhold-np lanternhold-save lanternhold-perks lanternhold-gulp lanternhold-goblin lanternhold-exchange lanternhold-market lanternhold-mail lanternhold-worldboss lanternhold-loot lanternhold-hof lanternhold-arena; do
+  case " $SKIP " in *" $F "*) continue;; esac
   rm -f $F.zip index.js && cp $F.js index.js && zip -qj $F.zip index.js
   aws lambda update-function-code --function-name $F --zip-file fileb://$F.zip >/dev/null
   aws lambda wait function-updated --function-name $F
