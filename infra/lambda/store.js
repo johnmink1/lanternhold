@@ -2,8 +2,11 @@
 // token; we ask Wix who that member is and which plans they paid for, so nothing the client says is trusted.
 // Each store account links to one game account (wix#<member>), and each paid order is credited once
 // (wixord#<order>). No admin key is needed: a member token can read that member's own orders.
-const D = require('@aws-sdk/client-dynamodb');
-const db = new D.DynamoDBClient({}), { TABLE: T, WALLETS: W, PACKS, SUB } = process.env;
+const D = require('@aws-sdk/client-dynamodb'), crypto = require('crypto');
+const db = new D.DynamoDBClient({}), { TABLE: T, WALLETS: W, PACKS, SUB, HEROES: H } = process.env;
+// v139: the account's first pack ever pays 50% more Sigils, once. Players who bought before this went live do not get it.
+const FP_BONUS = 0.5;
+const pidOf = s => crypto.createHash('sha256').update('lh:' + s).digest('hex').slice(0, 16);
 const PACK = Object.fromEntries(PACKS.split(',').map(p => p.split(':')).map(([k, n]) => [k, +n]));
 const res = (c, b) => ({ statusCode: c, body: JSON.stringify(b) });
 const S = v => ({ S: String(v) }), N = v => ({ N: String(v) });
@@ -18,7 +21,7 @@ const SK = { userId: S('#surge') };
 exports.handler = async (e) => {
   if (e.routeKey === 'GET /surge') {
     const r = (await db.send(new D.GetItemCommand({ TableName: W, Key: SK }))).Item;
-    return Object.assign(res(200, { until: r ? +r.until.N : 0, at: r ? +r.at.N : 0 }), { headers: { 'cache-control': 'public, max-age=30' } });
+    return Object.assign(res(200, { until: r ? +r.until.N : 0, at: r ? +r.at.N : 0, by: r && r.by ? r.by.S : '' }), { headers: { 'cache-control': 'public, max-age=30' } });
   }
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, { error: 1 });
@@ -44,7 +47,7 @@ exports.handler = async (e) => {
     }
   } catch (x) { console.log('orders', x.st || x.message); return res(502, { error: 'orders' }); }
   console.log('sync', mid, orders.length, orders.map(o => o.planId.slice(0, 8) + ':' + o.lastPaymentStatus + ':' + (o.buyer && o.buyer.memberId === mid)).join(' '));
-  let added = 0;
+  let added = 0, first = 0, old = 0;
   for (const o of orders) {
     const n = PACK[o.planId];
     if (!n || o.lastPaymentStatus !== 'PAID' || (o.buyer && o.buyer.memberId !== mid)) continue;
@@ -53,13 +56,25 @@ exports.handler = async (e) => {
         { Put: { TableName: T, Item: { pk: S('wixord#' + o.id), sk: S('-'), u: S(cl.sub), m: S(mid), n: N(n), at: N(Date.now()) }, ConditionExpression: 'attribute_not_exists(pk)' } },
         { Update: { TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET bal = if_not_exists(bal, :g) + :n, own = if_not_exists(own, :o)',
           ExpressionAttributeValues: { ':g': N(100), ':n': N(n), ':o': { SS: ['f.plain'] } } } }] }));
-      added += n;
-    } catch (x) { if (x.name !== 'TransactionCanceledException') throw x; }
+      added += n; if (!first) first = n;
+    } catch (x) { if (x.name !== 'TransactionCanceledException') throw x; old++; }
+  }
+  // First purchase bonus: only when no earlier order of this store account was ever credited, and only once per game account.
+  let bonus = 0;
+  if (added && !old) {
+    bonus = Math.round(first * FP_BONUS);
+    try { await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET fp = :t ADD bal :b', ConditionExpression: 'attribute_not_exists(fp)', ExpressionAttributeValues: { ':t': N(Date.now()), ':b': N(bonus) } })); }
+    catch (x) { if (x.name !== 'ConditionalCheckFailedException') throw x; bonus = 0; }
+  } else if (added || old) {
+    try { await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: S(cl.sub) }, UpdateExpression: 'SET fp = :t', ConditionExpression: 'attribute_not_exists(fp)', ExpressionAttributeValues: { ':t': N(Date.now()) } })); } catch (x) { if (x.name !== 'ConditionalCheckFailedException') throw x; }
   }
   if (added) {
     const now = Date.now(), r = (await db.send(new D.GetItemCommand({ TableName: W, Key: SK }))).Item;
     const until = Math.min(Math.max(now, r ? +r.until.N : 0) + added * 3600, now + 864e5);
-    await db.send(new D.PutItemCommand({ TableName: W, Item: { userId: S('#surge'), until: N(until), at: N(now) } }));
+    // v139 Surge shout-out: the buyer's hero name, only if they ticked it in the shop (b.shout). Names are already filtered by heroes.js.
+    let by = '';
+    if (b.shout === true && H) { try { const h = (await db.send(new D.GetItemCommand({ TableName: H, Key: { pid: S(pidOf(cl.sub)) }, ProjectionExpression: '#n, ban', ExpressionAttributeNames: { '#n': 'name' } }))).Item; if (h && h.name && !h.ban) by = h.name.S.slice(0, 20); } catch (x) {} }
+    await db.send(new D.PutItemCommand({ TableName: W, Item: Object.assign({ userId: S('#surge'), until: N(until), at: N(now) }, by ? { by: S(by) } : {}) }));
   }
   // Lanternholder: the recurring monthly plan. Its perks last to the end of the paid cycle plus a day of grace,
   // and each sync (the game runs one on every load) moves that date with the renewals.
@@ -71,5 +86,5 @@ exports.handler = async (e) => {
   }
   const w = (await db.send(new D.UpdateItemCommand({ TableName: W, Key: { userId: S(cl.sub) }, ReturnValues: 'ALL_NEW',
     UpdateExpression: 'SET bal = if_not_exists(bal, :g), #s = :s', ExpressionAttributeNames: { '#s': 'sub' }, ExpressionAttributeValues: { ':g': N(100), ':s': N(sub) } }))).Attributes;
-  return res(200, { ok: true, name, added, bal: +w.bal.N, sub });
+  return res(200, { ok: true, name, added: added + bonus, bonus, bal: +w.bal.N, sub });
 };

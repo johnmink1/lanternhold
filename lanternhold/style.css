@@ -2828,3 +2828,6 @@ details.tmfold[open]>summary{border-bottom:1px solid var(--line);margin-bottom:8
 .respecs .paytag{margin-left:6px}
 .clsbuy .clsart{width:96px;height:128px;object-fit:contain;image-rendering:auto;margin:0 auto 4px;display:block}
 @media (max-width:560px){.classes{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.fpnote{display:flex;align-items:center;gap:8px;margin:8px 0;padding:8px 12px;border-radius:12px;background:rgba(245,194,66,.12);border:1px solid rgba(245,194,66,.35);font-size:13px}
+.fpnote .sigil{width:16px;height:16px;fill:var(--gold);flex:none}
+.shoutchk{margin:8px 0 0;font-size:13px}

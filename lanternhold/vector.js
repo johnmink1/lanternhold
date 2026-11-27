@@ -1124,6 +1124,9 @@
     gilded:   { m: [44, 0.75, 1, 0.02], g: [0, 0, 1.12, 0.1], p: [44, 0.2, 1.3, 0.12], a: [200, 0.55, 1, 0.02], aura: 'gold' },
     rift:     { m: [268, 0.3, 0.75, 0], g: [178, 0.8, 1, 0.06], p: [272, 0.62, 0.85, 0], a: [180, 0.7, 0.95, 0.04], aura: 'rift' },
     sworn:    { m: [40, 0.28, 1.1, 0.1], g: [46, 1, 1.05, 0.06], p: [28, 0.82, 1, 0.04], a: [10, 0.8, 1, 0.02], aura: 'lantern' },
+    // v139 cosmetics
+    verdant:  { m: [120, 0.12, 1.02, 0.04], g: [40, 0.7, 1, 0.04], p: [140, 0.5, 1.05, 0.04], a: [340, 0.6, 1.05, 0.06] },
+    dawn:     { m: [42, 0.12, 1.15, 0.12], g: [44, 0.9, 1.08, 0.06], p: [200, 0.45, 1.2, 0.1], a: [32, 0.85, 1.05, 0.04], aura: 'gold' },
   };
   function recolor(svg, o) {
     const memo = {};
@@ -1165,6 +1168,8 @@
     sun:   { flame: ['#ffffff', '#fff1a0', '#f5c242'], glow: [255, 236, 160], metal: '#c99a3a', name: 'Sunforged' },
     soul:  { flame: ['#eafffb', '#7affe0', '#2aa89a'], glow: [120, 255, 225], metal: '#3a5a5a', name: 'Soulflame' },
     void:  { flame: ['#ffffff', '#9aa6ff', '#2a2266'], glow: [140, 150, 255], metal: '#2a2a3a', name: 'Starless' },
+    hearth: { flame: ['#fffbe8', '#ffd47a', '#d98a2a'], glow: [255, 210, 130], metal: '#6a4a2a', name: 'Hearthstar' },
+    aurora: { flame: ['#ffffff', '#9affe6', '#ff7ac8'], glow: [200, 170, 255], metal: '#5a6a8a', name: 'Aurora' },
   };
   ART.lantern = { w: 40, h: 60, draw(c) {
     const L0 = LANTERNS[c.lant] || LANTERNS.ember, mt = c.lg([lit(L0.metal, 0.25), L0.metal, lit(L0.metal, -0.2)], 0, 0, 1, 1);
