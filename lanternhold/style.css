@@ -2436,6 +2436,7 @@ body.atench .achips{display:none}
 .rmtag{color:#f5c242;font:600 12px Inter,sans-serif;letter-spacing:.06em;text-transform:uppercase}
 .rmst{font-style:normal;margin-left:8px;padding:2px 8px;border-radius:99px;font-size:10.5px;background:#1a2438;color:#9fb0c8;letter-spacing:.04em}
 .rmst.now{background:rgba(245,194,66,.18);color:#f5c242}.rmst.done{background:rgba(143,207,106,.16);color:#8fcf6a}
+.rmearly{font-style:normal;margin-left:8px;padding:1px 7px;border-radius:99px;font-size:10.5px;font-weight:600;background:rgba(143,207,106,.16);color:#8fcf6a;letter-spacing:.03em;vertical-align:1px;white-space:nowrap}
 .rmlist{display:flex;flex-direction:column;gap:6px}
 .rmitem{border:1px solid #1f2a3d;border-radius:10px;background:#0e1628}
 .rmitem[open]{border-color:rgba(245,194,66,.35)}

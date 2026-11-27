@@ -142,6 +142,7 @@ const ROADMAP = uiConst('ROADMAP') || [];
 const SIDES_W = (L && L.SIDES) || {};
 if (ROADMAP.length) {
   const ST = { done: 'Done', now: 'Now', next: 'Planned' };
+  const EARLY = { early: 'Built early', part: 'Part built early' };
   const short = x => x.id === 'start' ? 'Start' : x.tag.split(' · ')[0];
   pages.push({
     slug: 'roadmap', title: 'Roadmap', nav: 'Roadmap', group: 'Guide', icon: 'map',
@@ -150,7 +151,7 @@ if (ROADMAP.length) {
     body: () => '<nav class="rmtrack">' + ROADMAP.map(x => '<a class="rmstop ' + x.st + '" href="#rm-' + x.id + '"><span class="rmdot"></span><b>' + esc(short(x)) + '</b><small>' + esc(x.name) + '</small></a>').join('') + '</nav>' +
       ROADMAP.map(x => '<section class="rmpanel" id="rm-' + x.id + '"><div class="rmhead">' + guidePic(x.pic) + '<div><small class="rmtag">' + x.tag + ' · ' + x.when + ' <i class="rmst ' + x.st + '">' + ST[x.st] + '</i></small><h2>' + x.name + '</h2><p>' + x.story + '</p></div></div>' +
         (x.ends ? '<div class="rmends">' + x.ends.map(([k, t, d, y]) => { const sd = SIDES_W[k] || { name: k, color: '#f5c242' }; return '<div class="rmend" style="--c:' + sd.color + '"><small>' + (k === 'unsworn' ? 'A secret ending' : sd.name) + '</small><b>' + t + '</b><p>' + d + '</p>' + (y ? '<em>Year Two: ' + y + '</em>' : '') + '</div>'; }).join('') + '</div>' : '') +
-        '<div class="rmlist">' + x.items.map(([ic, t, sm, d]) => '<details class="rmitem"><summary>' + icon(ic) + '<span><b>' + t + '</b><small>' + sm + '</small></span></summary><ul>' + d.map(z => '<li>' + z + '</li>').join('') + '</ul></details>').join('') + '</div></section>').join('') +
+        '<div class="rmlist">' + x.items.map(([ic, t, sm, d, e]) => '<details class="rmitem"><summary>' + icon(ic) + '<span><b>' + t + (EARLY[e] ? '<i class="rmearly">' + EARLY[e] + '</i>' : '') + '</b><small>' + sm + '</small></span></summary><ul>' + d.map(z => '<li>' + z + '</li>').join('') + '</ul></details>').join('') + '</div></section>').join('') +
       '<p class="rmfine">This is our plan, not a promise. Dates follow the Grand War’s seasons, and player feedback will move things around.</p>',
   });
   for (const x of ROADMAP) addSearch('roadmap', x.tag + ': ' + x.name, 'rm-' + x.id, x.story + ' ' + x.items.map(i => i[1] + ' ' + i[2] + ' ' + i[3].join(' ')).join(' '), 'Roadmap');
