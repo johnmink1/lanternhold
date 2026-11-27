@@ -9,11 +9,11 @@
 #   chat     Hardcore tab (anyone reads, only Hardcore heroes post); the Hardcore hero chats as itself
 #   admin    GET /leaderboard?hc=1 = Hardcore board; the plain board leaves Hardcore heroes out
 #   hof      the Hall of Fame leaves Hardcore heroes out (skipped if the Hall of Fame function isn't there)
-# Code comes from GitHub at commit COMMIT and is checked by md5. Each live function is checked to be the
+# Code comes from GitHub at commit c347948060543ebbf2827a203d94923d959872ff and is checked by md5. Each live function is checked to be the
 # version we expect BEFORE anything changes and backed up to ~/lhbak. Safe to run twice. Prints the undo commands.
 set -e
 TS=$(date -u +%Y%m%d%H%M); mkdir -p ~/lhbak ~/lhv142 && cd ~/lhv142
-RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/COMMIT/infra/deploy/v142/dist/
+RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/c347948060543ebbf2827a203d94923d959872ff/infra/deploy/v142/dist/
 echo "1/3 fetching the new code"
 curl -sf -o lanternhold-save.js "$RAWlanternhold-save.js" && [ "$(md5sum < lanternhold-save.js | cut -c1-32)" = "caec3676f48ffcc8260595952e2baaec" ] || { echo "lanternhold-save: download failed or changed. Stopping; nothing changed."; exit 1; }
 curl -sf -o lanternhold-heroes.js "$RAWlanternhold-heroes.js" && [ "$(md5sum < lanternhold-heroes.js | cut -c1-32)" = "00c3ed6fc55f18abecb8d8a5e7820973" ] || { echo "lanternhold-heroes: download failed or changed. Stopping; nothing changed."; exit 1; }
