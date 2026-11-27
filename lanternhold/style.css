@@ -1,4 +1,4 @@
-/* lh-build 202611270233 */
+/* lh-build 202611270349 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -974,6 +974,33 @@ body.resting .arena{cursor:default}
 .lboard .lbn{flex:1;min-width:0}
 .lboard .lbn small,.lboard .lbf small{display:block;color:var(--muted);font-size:12px}
 .lboard .lbf{text-align:right}
+.lbseg{margin:0 0 10px;width:max-content;max-width:100%}
+.hof{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.hofd{background:var(--bg2);border:1px solid var(--line);border-radius:10px}
+.hofd.me{border-color:var(--accent)}
+.hofd summary{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;list-style:none;min-width:0}
+.hofd summary::-webkit-details-marker{display:none}
+.hofd summary svg{width:16px;height:16px;flex:none;color:var(--accent)}
+.hofd summary::after{content:'\25B8';color:var(--muted);font-size:11px;flex:none;transition:transform .15s}
+.hofd[open] summary::after{transform:rotate(90deg)}
+.hofn{flex:none;font-weight:800;font-size:13px}
+.hofl1{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;font-size:13px}
+.hofv{flex:none;font-weight:800;font-size:13px;white-space:nowrap;color:var(--text)}
+.hofd>small{display:block;color:var(--muted);font-size:12px;padding:0 10px 4px}
+.hofd ol{list-style:none;margin:0;padding:0 10px 8px;display:flex;flex-direction:column;gap:4px}
+.hofd li{display:flex;align-items:center;gap:6px;font-size:13px;min-width:0}
+.hofd .hofr{color:var(--muted);width:16px;flex:none}
+.hofd li .ctag{flex:none}
+.hofd li>.ctag:first-child{width:118px;text-align:center}
+.hofb{min-width:0;display:flex;flex-direction:column}
+.hofb small{color:var(--muted);font-size:12px}
+@media (max-width:600px){.hofd li>.ctag:first-child{width:auto;min-width:112px}}
+.hofd li b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hofd li em{margin-left:auto;font-style:normal;font-weight:700;white-space:nowrap;padding-left:6px}
+.hofd li.me b{color:var(--accent)}
+.hofd>small:last-child{padding-bottom:8px}
+@media (max-width:600px){.hofl1{font-size:12px}}
+.hofnone{color:var(--muted)}
 /* specialization abilities */
 .knode.t3{border-color:#8a6524;background:linear-gradient(180deg,#111a29,#0e121a)}
 .knode.t3 .kic{color:#f2c14e}
