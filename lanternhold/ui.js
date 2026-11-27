@@ -1,4 +1,4 @@
-/* lh-build 202611270608 */
+/* lh-build 202611270623 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -9,6 +9,7 @@
 
   // ---------- state ----------
   let S = load() || L.newState();
+  const LOADED_SEEN = S.lastSeen || 0; // time away is measured from here: init code may save (and move lastSeen) before the offline grant
   const events = [];
 
   function load() {
@@ -1474,10 +1475,12 @@
     t.innerHTML = icon(ic) + '<div><b></b><small></small></div>';
     t.querySelector('b').textContent = title; t.querySelector('small').textContent = sub || '';
     const box = $('toasts'); box.appendChild(t);
-    while (box.children.length > (innerWidth < 560 ? 2 : 3)) box.firstChild.remove();
+    // Phones: at most 2 at once, and only 1 in the first 10 s after loading (the welcome-back burst); the rest wait in the bell.
+    const small = innerWidth <= 720, cap = small ? (performance.now() < 10000 ? 1 : 2) : 3;
+    while (box.children.length > cap) box.firstChild.remove();
     t.onclick = () => t.remove();
     // Stays up longer, and waits while the pointer rests on it. Every pop-up is kept in the bell too.
-    let left = 7000, at = Date.now(), timer = 0;
+    let left = small ? 5000 : 7000, at = Date.now(), timer = 0;
     const go = () => { timer = setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, left); at = Date.now(); };
     t.onmouseenter = () => { clearTimeout(timer); left = Math.max(1500, left - (Date.now() - at)); };
     t.onmouseleave = go; go();
@@ -4059,6 +4062,19 @@
   const passLink = '<button class="linkbtn" data-openpass>Lanternholder</button>';
   document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-openpass]'); if (b) { e.preventDefault(); shopTrack('nudge', b.dataset.openpass || 'link'); openPass(); } });
   // ---------- offline ----------
+  // v140 (John 27 Nov): time away is measured with the server's clock for signed-in players, so moving the device
+  // clock forward no longer pays an offline window. Away time waits in S.awayQ until the next cloud save; the reply's
+  // server time (`updated`) minus the last one, less the time the game actually ran in between (playTime), is the most
+  // that can be paid. Signed-out players keep the device clock (they cannot trade or show on boards).
+  function clockSafe() { return !!(CL && signedIn() && S.srvAt); }
+  function awaySettle(now, pt) {
+    const at = S.srvAt, ap = S.srvPt || 0; S.srvAt = now; S.srvPt = pt;
+    const q = S.awayQ || 0; if (!(q > 0)) return;
+    const fromLoad = !!S.awayLoad; S.awayQ = 0; S.awayLoad = 0;
+    const real = at ? (now - at) / 1000 - Math.max(0, pt - ap) + 60 : q, sec = Math.max(0, Math.min(q, real));
+    if (q - sec > 600) actPush([Date.now(), 'clock', Math.round(q), Math.round(sec)]);
+    grantOffline(sec, fromLoad); save();
+  }
   function grantOffline(sec, fromLoad) {
     const away = sec, win = L.offlineWindow(S);
     sec = Math.min(win, sec);
@@ -4085,7 +4101,7 @@
     const now = Date.now();
     let dt = (now - lastLogic) / 1000; lastLogic = now;
     if (S.hero) {
-      if (dt > 5) grantOffline(dt, false);
+      if (dt > 5) { if (clockSafe()) { S.awayQ = (S.awayQ || 0) + dt; if (dt > 60) pushCloud(true); } else grantOffline(dt, false); }
       else if (dt > 0) L.tick(S, dt, now, null, events);
     }
     handleEvents();
@@ -4185,6 +4201,7 @@
       const o = saveObj(), sent = acts.slice();
       const r = await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId(), claim: claim ? 1 : 0 });
       lastCloud = Date.now(); cloudReady = true; syncMark(o.stats.playTime, r && r.updated);
+      if (r && r.updated) awaySettle(r.updated, o.stats.playTime);
       acts = acts.filter(a => !sent.includes(a)); try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
       if (S.mode === 'multi' && S.hero) publishHero();
       if (!quiet) toast('star', 'Progress synced', 'Your save is stored with your account.', 'feat');
@@ -4630,7 +4647,7 @@
   function giftPass(g, back) {
     const bal = prof ? prof.bal : null, short = bal != null && bal < L.PASS_COST;
     shopTrack('open', 'gift');
-    modal('<div class="center"><div class="cosbuy">' + sigil + '</div><h2>Gift Lanternholder</h2><p>Give <b>' + esc(g.name) + '</b> 30 days of Lanternholder (auto-train, more bag room, more time away, auto-claim and gear loadouts) for <b>' + L.PASS_COST + ' ' + TOKEN + '</b> from your wallet. It adds to any time they already have, and they see your hero’s name.</p>' +
+    modal('<div class="center"><div class="cosbuy">' + sigil + '</div><h2>Gift Lanternholder</h2><p>Give <b>' + esc(g.name) + '</b> 30 days of Lanternholder (auto-train, more bag room, more time away, auto-claim and gear loadouts) for <b>' + L.PASS_COST + ' ' + TOKEN + '</b> from your wallet. Gifts are paid with ' + TOKEN + ' you bought, not ones earned in play. It adds to any time they already have, and they see your hero’s name.</p>' +
       (short ? '<p class="note">You have ' + fmt(bal) + ' ' + TOKEN + '.</p>' : '') +
       '<div class="row" style="justify-content:center"><button class="btn ghost" id="gf-no">Back</button>' + (short ? '<button class="btn" id="gf-get">Get ' + TOKEN + '</button>' : '<button class="btn" id="gf-go">Gift for ' + L.PASS_COST + ' ' + TOKEN + '</button>') + '</div></div>', md => {
         md.querySelector('#gf-no').onclick = () => back();
@@ -4641,7 +4658,7 @@
             const r = await papi('POST', '/store/pass', { what: 'gift', to: g.id });
             if (prof) prof.bal = r.bal; actPush([Date.now(), 'shop', 'gift']); sfx.buy(); updatePanel(true); closeModal();
             toast('star', 'Gift sent', esc(r.name || g.name) + ' has 30 more days of Lanternholder. That was kind of you!', 'feat');
-          } catch (e) { go.disabled = false; toast('lock', 'The gift did not go through', e.code === 'funds' ? 'Not enough ' + TOKEN + '.' : e.code === 'to' ? 'That hero cannot get gifts right now.' : e.code === 'hero' ? 'Your hero needs a name on the server first. Try again after the next sync.' : 'Try again in a moment.', 'warn'); }
+          } catch (e) { go.disabled = false; toast('lock', 'The gift did not go through', e.code === 'funds' ? 'Not enough ' + TOKEN + '.' : e.code === 'bought' ? 'Gifts are paid with bought ' + TOKEN + ' only, and you do not have ' + L.PASS_COST + ' of those left.' : e.code === 'to' ? 'That hero cannot get gifts right now.' : e.code === 'hero' ? 'Your hero needs a name on the server first. Try again after the next sync.' : 'Try again in a moment.', 'warn'); }
         };
       });
   }
@@ -5094,18 +5111,21 @@
   // re-toasted "Daily find limit reached" every time. Now the capped UTC day is remembered (lh_sigcap): no more
   // claims or toasts until the next UTC day, when the saved Sigils bank as usual.
   function sigUtcDay() { return new Date().toISOString().slice(0, 10); }
-  var sigCap; // set lazily: sigCapped() can run from the event handler before this line has run
+  var sigWait = 0, sigCap; // set lazily: sigCapped() can run from the event handler before this line has run
   function sigCapped() {
     if (sigCap === undefined) { sigCap = ''; try { sigCap = localStorage.getItem('lh_sigcap') || ''; } catch (e) {} }
     return sigCap === sigUtcDay();
   }
   async function claimFound() {
-    if (claiming || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped()) return;
+    if (claiming || !(S.sigPend > 0) || !CL || !signedIn() || sigCapped() || Date.now() < sigWait) return;
     claiming = true;
     try {
       const n = S.sigPend, r = await papi('POST', '/sigils/earn', { kind: 'drop', n });
       S.sigPend = Math.max(0, (S.sigPend || 0) - n) + (n - r.add); if (prof) prof.bal = r.bal; save();
-      if (r.add < n) {
+      // v140: the server banks found Sigils only while you are really playing (a cloud save in the last 10 minutes),
+      // at most one per 5 minutes. `wait` means try again later, not the daily cap.
+      if (r.wait) sigWait = Date.now() + 3e5;
+      else if (r.add < n) {
         sigCap = sigUtcDay(); try { localStorage.setItem('lh_sigcap', sigCap); } catch (e) {}
         toast('star', 'Daily find limit reached', 'You can bank up to ' + L.SIGIL_DROP_DAY + ' found Sigils a day. The rest are saved for tomorrow.', '');
       }
@@ -7255,6 +7275,12 @@
       'Settings has Replay the tutorial and Open the wiki buttons, and shows your version.',
       'The chapter goal wraps to two lines instead of being cut off. Hover it to read it all.',
       'A lighter download: the game keeps the newest patch notes, and the full history is on the wiki.',
+      'Phones: at most two pop-ups at once, and only one while the game loads. The rest wait in the bell.',
+      'Small phones: the floor header no longer overlaps the region name.',
+      'Signed in, time away is measured by the server clock, so changing your device clock no longer pays extra.',
+      'Paladin heroes must be unlocked to show in the Guild and the Ember Ring.',
+      'Gift Lanternholder is paid with bought Sigils only.',
+      'Found Sigils bank while you play, at most one every 5 minutes.',
     ] },
     { v: 139, date: 'November 2026', title: 'The Paladin', items: [
       'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
@@ -8778,7 +8804,7 @@
   if (window.ResizeObserver) { let aw = 0, ah = 0; new ResizeObserver(es => { const r = es[0].contentRect, w = Math.round(r.width), h = Math.round(r.height); if (w && h && (w !== aw || h !== ah)) { aw = w; ah = h; resize(); } }).observe(arena); }
   syncBuySeg();
   if (!S.hero) setup(S.migratedFromV1 ? 'Lanternhold has grown. You now lead a party of five, the story has begun, and monsters fight back. Your Embers and relics carried over.' : '');
-  else grantOffline((Date.now() - (S.lastSeen || Date.now())) / 1000, true);
+  else { const away = Math.max(0, (Date.now() - (LOADED_SEEN || Date.now())) / 1000); if (clockSafe()) { S.awayQ = (S.awayQ || 0) + away; S.awayLoad = 1; } else grantOffline(away, true); }
   updateStage(); updatePanel(true); updateAbilities(true);
   setInterval(logic, 100);
   requestAnimationFrame(render);

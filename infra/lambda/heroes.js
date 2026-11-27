@@ -1,7 +1,7 @@
 const { DynamoDBClient, UpdateItemCommand, ScanCommand, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
 const crypto = require('crypto');
 const db = new DynamoDBClient({});
-const T = process.env.TABLE, CH = process.env.CHAT;
+const T = process.env.TABLE, CH = process.env.CHAT, W = process.env.WALLETS;
 const SIDE_NAME = { covenant: 'the Iron Covenant', radiant: 'the Radiant Ascendancy', tide: 'the Devouring Tide', mercy: 'the Mercy Corps', unsworn: 'the Unsworn' };
 const CLS_NAME = { tank: 'tank', healer: 'healer', rogue: 'rogue', mage: 'mage', necro: 'necromancer', paladin: 'paladin' };
 const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'];
@@ -64,6 +64,8 @@ exports.handler = async (e) => {
     const name = String(b.name || '').trim();
     if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name) || BAD.test(name.replace(/[^a-z]/gi, '')) || BADW.test(name)) return res(400, { error: 'name' });
     if (!CLS.includes(b.cls)) return res(400, { error: 'class' });
+    // v140 (John 27 Nov): the Paladin is bought once per account with Sigils; a hero shows as one only if the wallet owns it.
+    if (b.cls === 'paladin' && W) { const w = (await db.send(new GetItemCommand({ TableName: W, Key: { userId: { S: cl.sub } }, ProjectionExpression: '#o', ExpressionAttributeNames: { '#o': 'own' } }))).Item; if (!(w && w.own && w.own.SS.includes('c.paladin'))) return res(403, { error: 'paladin' }); }
     const cur = (await db.send(new GetItemCommand({ TableName: T, Key: { pid: { S: me } }, ProjectionExpression: '#n', ExpressionAttributeNames: { '#n': 'name' } }))).Item;
     if (!(cur && cur.name && nkey(cur.name.S) === nkey(name)) && await nameTaken(name, me)) return res(409, { error: 'taken' });
     const floor = Math.max(1, Math.min(100000, Math.floor(Number(b.floor) || 1)));

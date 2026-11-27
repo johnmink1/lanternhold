@@ -1,4 +1,4 @@
-/* lh-build 202611270608 */
+/* lh-build 202611270623 */
 /* Lanternhold: An Idle Descent — game rules and state (no DOM). v2: party of five, foes strike back, story. */
 (function (root) {
   'use strict';
@@ -3795,7 +3795,7 @@
   // Everything else (gold, Dust, floors, levels, XP, stat points, skills, Kindling, gear, Embers, relics, companions,
   // hires, story) starts fresh.
   const NP_KEEP = ['hero', 'mode', 'lore', 'feats', 'settings', 'stats', 'boh', 'rosterUps', 'pass', 'passTrial', 'passTrialGiven', 'sub', 'keeper', 'created', 'econ', 'wd', 'ref', 'npLog',
-    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'notesShown', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv', 'curios', 'reno', 'pip', 'gulpLoot'];
+    'tonic', 'fx', 'items', 'tut', 'seenNotes', 'notesShown', 'war', 'warLive', 'warWin', 'mercy', 'mercyAt', 'surge', 'surgeAt', 'sigPend', 'wbTok', 'wbLoot', 'sentInv', 'curios', 'reno', 'pip', 'gulpLoot', 'srvAt', 'srvPt', 'awayQ', 'awayLoad'];
   // Applies the reset in place once the server has granted tier `tier` at time `at`. Returns false if not allowed.
   // force: the server says this account is already on `tier` (another device started it), so reset to it anyway.
   function startNP(s, tier, at, force) {

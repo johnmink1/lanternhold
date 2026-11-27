@@ -1,4 +1,4 @@
-/* lh-build 202611270608 */
+/* lh-build 202611270623 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -2851,3 +2851,13 @@ details.howto p{margin:6px 0 0}
 .setver{color:var(--muted);font-size:12px;text-align:center;margin:6px 0 0}
 /* v140: the chapter goal wraps to a second line instead of being cut off; hover shows it in full. */
 .stagehead .goal b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2;max-width:260px}
+/* v140: very small phones (320 px): the floor header keeps the region name on its own space */
+@media (max-width:380px){
+  .stagehead .floorinfo{gap:6px;min-width:0}
+  .stagehead .floorname{font-size:10px;letter-spacing:.06em}
+  .stagehead .floorname b{font-size:20px}
+  .stagehead .flsub{min-width:0;flex:1 1 0}
+  .stagehead .flsub{align-items:flex-start}
+  .stagehead .pips{gap:3px;max-width:100%;overflow:hidden}.stagehead .pips i{width:10px}
+  .stagehead .flsub .biome{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+}
