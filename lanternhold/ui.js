@@ -6526,6 +6526,7 @@
         'Slow down for about three seconds and it withdraws. You lose nothing but the time.']],
       ['World boss weekends', 's:colossus', 'One giant Rift boss every weekend that all signed-in players fight together.', [
         'Runs Friday to Sunday (UTC). A purple bar on the stage shows it; tap it to join a <b>two-minute assault</b>, once every 15 minutes.',
+        'Every assault chips the shared health bar, but only your <b>best ' + L.WB_BEST + ' assaults</b> count toward your rank, Sigils and Mythic roll.',
         'Every point of <b>real damage</b> counts, so the stronger your party, the more you chip off. Going deeper never lowers it.',
         'Each boss resists two classes (−30%) and is weak to one (+30%); the boss window shows which. It hits hard and uses a special attack.',
         'Hired and story companions deal half damage to the boss. Your hero and other players\' heroes deal full damage, so party up with real delvers.',
@@ -7894,14 +7895,14 @@
       '<p>A giant of void crystal has torn through the Nyx Rift beneath the Hold. Every delver fights the same monster: each assault you make chips at one shared health bar.</p>' +
       '<div class="wbphase"><div class="wbph"><b>Phase ' + (ph.broken + 1) + '</b><span>' + pct + '%</span></div><div class="bar wbbar2"><i style="width:' + pct + '%"></i></div><small>' + ph.broken + (ph.broken === 1 ? ' phase' : ' phases') + ' broken so far · ' + (st ? st.n : 0) + (st && st.n === 1 ? ' delver has' : ' delvers have') + ' joined</small></div></div></div>' +
       '<ul class="passfx">' + (old ? '<li><b>Assaults</b><span>Two minutes against the boss at the strength of your deepest floor. One every 15 minutes. Strike and use your abilities for more damage.</span></li>' :
-        '<li><b>Assaults</b><span>Two minutes against the boss. One every 15 minutes. Every point of real damage you deal chips the shared health bar, so the stronger your party, the more you deal. It hits hard and uses ' + esc(L.SPECIALS[tr.sp].name) + ': if your party falls, the assault ends.</span></li>' +
+        '<li><b>Assaults</b><span>Two minutes against the boss. One every 15 minutes. Every point of real damage you deal chips the shared health bar, so the stronger your party, the more you deal. Your best ' + L.WB_BEST + ' assaults count toward your rank, Sigils and Mythic roll. It hits hard and uses ' + esc(L.SPECIALS[tr.sp].name) + ': if your party falls, the assault ends.</span></li>' +
         '<li><b>' + esc(tr.trait) + '</b><span>' + esc(tr.line) + ' Weak to ' + cn(tr.weak) + ' (+' + Math.round(L.WB_WEAK * 100) + '% damage), resists ' + tr.resist.map(cn).join(' and ') + ' (−' + Math.round(L.WB_RESIST * 100) + '%).</span></li>' +
         '<li><b>Fight beside players</b><span>Hired and story companions deal half damage to the boss. Your hero and other players\' heroes in your party deal full damage.</span></li>') +
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
       '<li><b>Mythic loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a Mythic piece of <b>' + esc(s2.name) + '</b>. Mythic gear is above Legendary and very rare: under 3% even for the strongest delvers, higher the more damage you dealt, and full odds only once the server breaks 3 phases. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set from Warden Sable at the Rift Gate, just outside the Hold.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
       (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
-      (x.me && x.me.score > 0 ? '<p class="passstate">Your damage this event: <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
+      (x.me && x.me.score > 0 ? '<p class="passstate">' + (old ? 'Your damage this event' : 'Your best ' + L.WB_BEST + ' assaults') + ': <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
       '<div class="row">' + (x.claim ? '<button class="btn" id="wb-claim">Claim your reward</button>' : !CL || !signedIn() ? '<button class="btn" id="wb-in">Sign in to fight</button>' : x.live ? (x.ready > 0 ? '<button class="btn" disabled>Next assault in ' + wbDur(x.ready) + '</button>' : '<button class="btn" id="wb-go">Join the assault</button>') : '') + '<button class="btn ghost" id="wb-no">Close</button></div>', md => {
       md.querySelector('#wb-x').onclick = closeModal; md.querySelector('#wb-no').onclick = closeModal;
       const go = md.querySelector('#wb-go'); if (go) go.onclick = () => { closeModal(); joinAssault(); };
@@ -7925,8 +7926,8 @@
     if (!(score > 0)) { toast('skull', 'Assault over', fell ? 'Your party fell before landing a blow.' : 'No damage this time.', ''); return; }
     try {
       const r = await api('POST', { score, ck: ck || 0, iv: iv || [] }, '/boss/hit');
-      if (wb.st && r) { wb.st.total = r.total; wb.st.me.score += r.add; wb.st.me.last = Date.now(); }
-      toast('skull', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + wbNum(score, wbOld()) + ' damage to ' + wbState().name + '. Every assault counts toward the next phase.', 'feat');
+      if (wb.st && r) { wb.st.total = r.total; wb.st.me.score = r.score != null ? r.score : wb.st.me.score + r.add; wb.st.me.last = Date.now(); }
+      toast('skull', fell ? 'Your party fell back' : 'Assault over', 'You dealt ' + wbNum(score, wbOld()) + ' damage to ' + wbState().name + '. Every assault counts toward the next phase; your best ' + L.WB_BEST + ' count toward your rank.', 'feat');
     } catch (e) { toast('lock', 'The assault did not count', 'The server could not record it. Try again in a moment.', 'warn'); }
     loadBoss().then(paintBoss);
   }
