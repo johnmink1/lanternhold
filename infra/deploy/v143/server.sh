@@ -13,11 +13,11 @@
 #   hof       a Hardcore Hall of Fame next to the main one (skipped if the Hall of Fame function isn't there)
 #   arena     Hardcore heroes enter the Ember Ring with their own row (HC tag), one shared Ring
 #   saves table    point-in-time recovery switched on (35 days of rolling backups; a few cents a month)
-# Code comes from GitHub at commit COMMIT and is checked by md5. Each live function is checked to be the
+# Code comes from GitHub at commit a451c6a15b23c25c7738e84bbcf5aee199921e47 and is checked by md5. Each live function is checked to be the
 # version we expect BEFORE anything changes and backed up to ~/lhbak. Safe to run twice. Prints the undo commands.
 set -e
 TS=$(date -u +%Y%m%d%H%M); mkdir -p ~/lhbak ~/lhv143 && cd ~/lhv143
-RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/COMMIT/infra/deploy/v143/dist/
+RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/a451c6a15b23c25c7738e84bbcf5aee199921e47/infra/deploy/v143/dist/
 echo "1/4 fetching the new code"
 curl -sf -o lanternhold-np.js "${RAW}lanternhold-np.js" && [ "$(md5sum < lanternhold-np.js | cut -c1-32)" = "9cd44e79b52788854869e7d43e75a3db" ] || { echo "lanternhold-np: download failed or changed. Stopping; nothing changed."; exit 1; }
 curl -sf -o lanternhold-save.js "${RAW}lanternhold-save.js" && [ "$(md5sum < lanternhold-save.js | cut -c1-32)" = "f2fca1c06fb6513e007f0db5af574597" ] || { echo "lanternhold-save: download failed or changed. Stopping; nothing changed."; exit 1; }
