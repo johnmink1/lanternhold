@@ -216,3 +216,12 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
   Party rows (same release, John): `seatLooks(id)` gives your own `prof.pf.g` / `S.wd.b` or a borrowed guest's `pf.g` / `wd.b` (refreshed in `applyGuestCards`); the profile banner tints the row (`.seat.sbn bn-*`), the war banner shows as a small pennant by the name (`seatBanner` caches the SVG so the seat list doesn't repaint each tick).
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
+
+## Creature home zones (v133 bundle, 27 Nov 2026)
+
+John picked "120 now, about 200 by Act III". `ROSTERS` in core.js lists 8 creatures per region (`[id, name, fam, rarity, size, overlay, hue, fluff]`).
+- `pickCreature` takes 80% of normal spawns from the region's own roster and 20% from the regions next door, weighted by `RAR_W` (common 30, uncommon 14, rare 4, very rare 1). Elites, chests and events are unchanged, and so are HP, gold and loot.
+- `fam` is the drawn body (`foe.sprite`). Bestiary mastery (`s.bk`), special attacks (`FOE_SPECIAL`) and the family lore pages follow it. Per-creature kills live in `s.bx`; old saves seed it from `s.bk` for the original 14.
+- Art: each kind is a body + tint + size (`SIZE_X`) + one overlay from `OVL` in vector.js (crown, moss, crystal, plate, spots, chain, barnacle, ember, leaf). The hue string is `hue~~overlay`. New bodies: beetle, moth, crab.
+- Hunt bounties name one common creature in a region where it lives; special-attack bounties are only offered when the family lives near your deepest floor (`famsIn`).
+- To add Act II creatures later, add rows to `ROSTERS` for the new regions. The Journal and wiki build from it.

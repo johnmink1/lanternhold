@@ -72,19 +72,19 @@ const CLS = L.CLASSES, CO = L.CLASS_ORDER;
 const clsName = c => (CLS[c] || {}).name || c;
 
 const written = new Set();
-function sprite(name, hue) {
+function sprite(name, hue, ov) {
   if (!SP) return '';
   hue = Math.round(hue || 0);
-  const file = name + (hue ? '-h' + (hue < 0 ? 'm' + -hue : hue) : '') + '.svg';
+  const file = name + (hue ? '-h' + (hue < 0 ? 'm' + -hue : hue) : '') + (ov ? '-' + ov : '') + '.svg';
   if (!written.has(file)) {
-    let svg; try { svg = SP.svgOf(name, hue); } catch (e) { svg = null; }
+    let svg; try { svg = SP.svgOf(name, ov ? hue + '~~' + ov : hue); } catch (e) { svg = null; }
     if (!svg) return '';
     fs.mkdirSync(path.join(OUT, 'img'), { recursive: true });
     fs.writeFileSync(path.join(OUT, 'img', file), svg); written.add(file);
   }
   return '/wiki/img/' + file;
 }
-const pic = (name, hue, alt, cls) => { const u = sprite(name, hue); return u ? '<img class="spr' + (cls ? ' ' + cls : '') + '" src="' + u + '" alt="' + esc(alt || '') + '" loading="lazy" width="96" height="96">' : ''; };
+const pic = (name, hue, alt, cls, ov) => { const u = sprite(name, hue, ov); return u ? '<img class="spr' + (cls ? ' ' + cls : '') + '" src="' + u + '" alt="' + esc(alt || '') + '" loading="lazy" width="96" height="96">' : ''; };
 
 // ---------- page registry ----------
 // Every page: { slug, title, nav, group, icon, desc, body(), search: [{t, a, x}] }
@@ -264,7 +264,7 @@ ref({
       '<div class="rcell"><div class="facts">' + kv([
         ['Warband', side ? '<span style="color:' + side.color + '">' + esc(side.name) + '</span>' : ''],
         ['Soldiers', b.war.units.map(esc).join(', ')],
-        b.foe ? ['Native monster', '<a href="/wiki/bestiary/#' + b.foe.id + '">' + esc(b.foe.name) + '</a>'] : null,
+        L.ROSTERS && L.ROSTERS[i] ? ['Home creatures', '<a href="/wiki/bestiary/#' + slug(b.name) + '-creatures">' + L.CREATURES.filter(c => c.r === i).map(c => esc(c.name)).join(', ') + '</a>'] : null,
         b.mod ? ['Signature trick', esc(L.MODS[b.mod].name) + ' <small>' + esc(L.MODS[b.mod].desc) + '</small>'] : null,
         L.BOSS_SPECIAL && L.SPECIALS[L.BOSS_SPECIAL[i]] ? ['Guardian attack', esc(L.SPECIALS[L.BOSS_SPECIAL[i]].name) + ' <small>' + esc(L.SPECIALS[L.BOSS_SPECIAL[i]].desc) + '</small>'] : null,
         (L.REGION_SETS || [])[i] ? ['Region set', '<a href="/wiki/sets/#rset-' + i + '">' + esc(L.REGION_SETS[i].name) + '</a>'] : null,
@@ -280,10 +280,12 @@ ref({
   lede: 'Monsters hit back. Each floor holds ' + L.FOES_PER_FLOOR + ', every ' + L.BOSS_EVERY + 'th floor has a guardian, and ' + pct(L.ELITE_CHANCE) + ' of foes are Grand War warband soldiers.',
   body: () => {
     const foe = (id, name, hue, extra) => { const lo = loreBy('foe_' + id); return card(id, esc(name), { pic: pic(id, hue || 0, name), body: (lo ? '<p>' + esc(lo.text) + '</p>' : '') + (extra || '') }); };
-    const regional = L.BIOMES.map((b, i) => b.foe ? foe(b.foe.id, b.foe.name, b.hue, kv([['Found in', '<a href="/wiki/regions/#' + slug(b.name) + '">' + esc(b.name) + '</a> (floors ' + regionFloors(i).join('–') + ')'], b.mod ? ['Trick', esc(L.MODS[b.mod].name)] : null])) : '').join('');
     const bl = loreBy('boss'), cl = loreBy('foe_chest');
-    return '<h2>Common foes</h2><p class="note">Found everywhere, tinted by the region they live in.</p><div class="grid3">' + L.FOES.map(f => foe(f.id, f.name)).join('') + '</div>' +
-      '<h2>Region monsters</h2><div class="grid3">' + regional + '</div>' +
+    const RN = L.RAR_NAME, cpct = v => (Math.round(v * 1000) / 10) + '%';
+    const creatures = L.ROSTERS.map((list, rn) => { const b = L.BIOMES[rn], cs = L.CREATURES.filter(c => c.r === rn);
+      return '<h3 id="' + slug(b.name) + '-creatures">' + esc(b.name) + ' <small>floors ' + regionFloors(rn).join('–') + '</small></h3><div class="grid3">' + cs.map(c => { const w = L.creatureRegions(c).map(x => '<a href="/wiki/regions/#' + slug(L.BIOMES[x].name) + '">' + esc(L.BIOMES[x].name) + '</a>');
+        return card(c.id, esc(c.name), { pic: pic(c.fam, L.creatureHue(c), c.name, '', c.ov), body: '<p>' + esc(c.text) + '</p>' + kv([['Rarity', RN[c.rar]], ['Family', esc(L.FAMILY[c.fam])], ['Home', '<a href="/wiki/regions/#' + slug(b.name) + '">' + esc(b.name) + '</a> (about ' + cpct(L.creatureOdds(c, rn)) + ' of fights)'], w.length ? ['Wanders into', w.join(', ')] : null]) }); }).join('') + '</div>'; }).join('');
+    return '<h2 id="creatures">Creatures</h2><p class="note">' + L.CREATURES.length + ' creatures, each with a home region where most of them spawn. About ' + Math.round((1 - L.ROSTER_HOME) * 100) + '% of fights are wanderers from the regions next door. Rare and very rare kinds glow. Every kind in a family shares its special attack and its Bestiary mastery.</p>' + creatures +
       '<h2 id="guardians">Guardians</h2>' + (bl ? '<p>' + esc(bl.text) + '</p>' : '') + '<div class="grid3">' + ['golem', 'wyrm', 'lich'].map(s => '<div class="mini center">' + pic(s, 0, s) + '</div>').join('') + '</div>' +
       '<p>Beat a guardian before the lantern runs out (' + 30 + ' seconds to start). Each region guardian is listed on <a href="/wiki/regions/">Regions</a>.</p>' +
       '<h2 id="tricks">Monster tricks</h2>' + table(['Trick', 'What it does'], Object.values(L.MODS).map(m => ['<b>' + esc(m.name) + '</b>', esc(m.desc)])) +
@@ -297,7 +299,7 @@ ref({
         table(['Attack', 'Used by', 'What it does'], Object.entries(L.SPECIALS).map(([id, sp]) => { const by = [];
           L.BOSS_SPECIAL.forEach((x, i) => { if (x === id) by.push(L.BIOMES[i].boss); });
           for (const [b, x] of Object.entries(L.BODY_SPECIAL)) if (x === id) by.push({ golem: 'Stone Sentinel', wyrm: 'Tunnel Wyrm', lich: 'Bone Hierarch' }[b]);
-          for (const [f, x] of Object.entries(L.FOE_SPECIAL)) if (x === id) { const fo = L.FOES.find(q => q.id === f) || (L.BIOMES.find(q => q.foe && q.foe.id === f) || {}).foe; if (fo) by.push(fo.name); }
+          for (const [f, x] of Object.entries(L.FOE_SPECIAL)) if (x === id) { const fo = L.FOES.find(q => q.id === f) || (L.BIOMES.find(q => q.foe && q.foe.id === f) || {}).foe; if (fo) by.push(fo.name); else if (L.FAMILY[f]) by.push(L.FAMILY[f] + 's'); }
           if (id === 'volley') by.push('Grand War soldiers');
           return ['<b>' + esc(sp.name) + '</b>', esc([...new Set(by)].join(', ')), esc(sp.desc) + (sp.dot ? ' (' + (sp.dot === 'burn' ? 'burn' : 'poison') + ', ' + L.DOT_FIGHTS + ' fights)' : '')]; })) +
       '<h2 id="ambush">Ambushes</h2><p>From floor ' + L.PACK_FLOOR + ', ' + pct(L.PACK_CHANCE) + ' of fights are ambush packs of 2 to 4 monsters. They hit the rear of your marching order first and pay ' + L.PACK_GOLD + '× gold and ' + L.PACK_XP + '× hero XP for each monster in the pack, so a pack of 3 gives ' + 3 * L.PACK_XP + '× XP.</p>' +
@@ -307,7 +309,7 @@ ref({
         [['chest', 'treasure chests'], ['pack', 'ambushes'], ['lock', 'locked doors and chests'], ['goblin', 'Loot Goblins'], ['ghost', 'Ghost Lanterns'], ['merchant', 'merchants'], ['mercy', 'Mercy Corps encounters']].map(([k, n]) => L.EV_DAY[k] + ' ' + n).join(', ') +
         '. Alliance elites have no limit.</p>' : '') + related(['regions', 'world-boss']);
   },
-  index: () => { for (const f of L.FOES) addSearch('bestiary', f.name, f.id, (loreBy('foe_' + f.id) || {}).text, 'Monster'); for (const b of L.BIOMES) if (b.foe) addSearch('bestiary', b.foe.name, b.foe.id, 'Native to ' + b.name + '. ' + ((loreBy('foe_' + b.foe.id) || {}).text || ''), 'Monster');
+  index: () => { for (const c of L.CREATURES) addSearch('bestiary', c.name, c.id, L.RAR_NAME[c.rar] + '. Home: ' + L.BIOMES[c.r].name + '. ' + c.text, 'Monster');
     for (const m of Object.values(L.MODS)) addSearch('bestiary', m.name, 'tricks', 'Monster trick: ' + m.desc, 'Trick'); for (const sp of Object.values(L.SPECIALS || {})) addSearch('bestiary', sp.name, 'specials', 'Special attack: ' + sp.desc, 'Attack'); addSearch('bestiary', 'Loot Goblin', 'loot-goblin', 'A rare thief from floor ' + L.GOBLIN_FLOOR + '. Kill it within ' + L.GOBLIN_TIME + ' seconds.', 'Monster'); addSearch('bestiary', 'Ambushes', 'ambush', 'Packs of 2 to 4 monsters', 'Combat'); },
 });
 
@@ -515,7 +517,7 @@ function shell(p, inner) {
 function homeBody() {
   const guide = pages.filter(p => p.group === 'Guide');
   const heroes = CO.map(c => pic(c, 0, clsName(c))).join('');
-  const counts = [[L.BIOMES.length, 'regions'], [L.FOES.length + L.BIOMES.filter(b => b.foe).length, 'monsters'], [L.SETS.length + Object.keys(L.JOB_SETS).length, 'item sets'], [L.RELICS.length, 'relics'], [L.LORE.length, 'lore entries']];
+  const counts = [[L.BIOMES.length, 'regions'], [L.CREATURES.length, 'monsters'], [L.SETS.length + Object.keys(L.JOB_SETS).length, 'item sets'], [L.RELICS.length, 'relics'], [L.LORE.length, 'lore entries']];
   return '<section class="hero"><div class="htext"><p class="eyebrow">The Lantern Deep · A Grand War front</p><h1>Lanternhold Wiki</h1>' +
     '<p class="lede">Everything you need to carry the lantern down to the Nyx Rift: classes and skill trees, companions, gear and sets, every region and monster, and how each system works.</p>' +
     '<div class="hbtns"><a class="btn gold" href="/wiki/getting-started/">New here? Start with the basics</a><a class="btn" href="/?ref=wiki">Play Lanternhold free</a></div>' +

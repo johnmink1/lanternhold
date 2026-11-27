@@ -232,6 +232,8 @@
     x.fillStyle = g2; x.beginPath(); x.moveTo(fx, fy - h * 0.6); x.bezierCurveTo(fx + w * 0.55, fy - h * 0.3, fx + w * 0.5, fy, fx, fy); x.bezierCurveTo(fx - w * 0.5, fy, fx - w * 0.55, fy - h * 0.3, fx, fy - h * 0.6); x.fill();
   }
 
+  // A creature's tint plus its overlay (home-zone variants), as the vector sprites read it.
+  const foeHue = f => f.ov ? (f.hue || 0) + '~~' + f.ov : f.hue;
   function sprite(name, hue, flash) {
     const k = name + '|' + hue + '|' + (flash ? 1 : 0);
     if (!spriteCache[k]) {
@@ -911,11 +913,11 @@
     if (foe && !nxUp) {
       const fk = foe.name + foe.max + S.floor + S.foeIdx;
       if (foeAnim.key !== fk) { foeAnim.key = fk; foeAnim.born = tAnim; }
-      const spr = sprite(foe.sprite, foe.chest ? 0 : foe.hue, tAnim < foeAnim.flash);
-      const sw = spr.lw * 3, sh = spr.lh * 3;
+      const spr = sprite(foe.sprite, foe.chest ? 0 : foeHue(foe), tAnim < foeAnim.flash);
+      const sw = Math.round(spr.lw * 3 * (foe.sc || 1)), sh = Math.round(spr.lh * 3 * (foe.sc || 1));
       const age = tAnim - foeAnim.born;
       const drop = age < 0.25 ? (1 - age / 0.25) * -12 : 0;
-      const flier = foe.sprite === 'bat' || foe.sprite === 'ghost';
+      const flier = foe.sprite === 'bat' || foe.sprite === 'ghost' || foe.sprite === 'moth';
       const bob = Math.sin(tAnim * 2.4) * (flier ? 2.2 : 0.6);
       const shake = tAnim < foeAnim.shake ? (Math.random() < 0.5 ? -1 : 1) : 0;
       const lungeF = tAnim < foeAnim.lunge ? -4 : 0;
@@ -924,6 +926,13 @@
       if (foe.boss || foe.world) {
         const gg = ctx.createRadialGradient(fxC, fy + sh / 2, 4, fxC, fy + sh / 2, sw), gc = foe.world ? '170,90,255,' : '255,80,40,';
         gg.addColorStop(0, 'rgba(' + gc + (foe.world ? '0.3)' : '0.18)')); gg.addColorStop(1, 'rgba(' + gc + '0)');
+        ctx.fillStyle = gg; ctx.fillRect(fxC - sw, fy - 10, sw * 2, sh + 20);
+      }
+      // rare and very rare creatures shine a little so you notice them
+      if (foe.rk === 'r' || foe.rk === 'v') {
+        const gc = foe.rk === 'v' ? '200,140,255,' : '255,214,110,', pulse = 0.22 + Math.sin(tAnim * 3) * 0.06;
+        const gg = ctx.createRadialGradient(fxC, fy + sh / 2, 4, fxC, fy + sh / 2, sw * 0.75);
+        gg.addColorStop(0, 'rgba(' + gc + pulse + ')'); gg.addColorStop(1, 'rgba(' + gc + '0)');
         ctx.fillStyle = gg; ctx.fillRect(fxC - sw, fy - 10, sw * 2, sh + 20);
       }
       ctx.globalAlpha = Math.min(1, age / 0.15);
@@ -1244,7 +1253,7 @@
         tone(440, 0.12, 'triangle', 0.035, 880);
       } else if (e.type === 'kill') {
         kills++; gold += e.gold;
-        const f = e.foe, spr = sprite(f.sprite, f.chest ? 0 : f.hue, true);
+        const f = e.foe, spr = sprite(f.sprite, f.chest ? 0 : foeHue(f), true);
         foeAnim.dying = { spr, t: tAnim, x: foeAnim.cx - foeAnim.w / 2, y: foeAnim.cy - foeAnim.h / 2, w: foeAnim.w, h: foeAnim.h };
         burst(foeAnim.cx, foeAnim.cy, f.boss ? 50 : f.chest ? 40 : 14, f.chest || f.boss ? ['#f2c14e', '#fff0a0', '#c8952a'] : ['#f2c14e', '#fff0a0', '#9b8a70'], f.boss ? 70 : 45);
         if (f.boss) { sfx.boss(); if (e.first && !(S.maxFloor % 10 === 0 && L.regionNeed(S, S.maxFloor + 1))) toast('crown', f.name + ' defeated', 'The way down is open.', ''); }
@@ -1309,6 +1318,10 @@
       } else if (e.type === 'pack') {
         floatText('Ambush!', 'crit', 0.5, 0.3);
         if (!(S.stats.packs > 0)) toast('sword', 'Ambush!', e.n + ' monsters have teamed up to jump your party. They hit harder and strike the back first, but they pay ' + (e.n * L.PACK_GOLD) + ' times the gold, ' + (e.n * L.PACK_XP) + ' times the hero XP and often drop gear.', 'feat');
+      } else if (e.type === 'newbeast') {
+        const c = L.creatureById(e.cid);
+        if (c && (c.rar === 'r' || c.rar === 'v')) { sfx.relic(); toast('skull', 'New in the Bestiary: ' + c.name, L.RAR_NAME[c.rar] + ' find. Its page is in the Journal.', 'feat'); }
+        else if (c) floatText('New: ' + c.name, 'skill', FOE_X, 0.3);
       } else if (e.type === 'beast') {
         const lo = L.LORE.find(x => x.id === e.key), nm2 = lo ? lo.title : 'this foe';
         toast('skull', 'Bestiary mastery: ' + nm2 + ' ' + e.tier + '/' + L.BEAST_MAX, '+' + e.tier + '% damage and hero XP against ' + nm2 + '. ' + (e.tier < L.BEAST_MAX ? 'Next step at ' + fmt((e.tier + 1) * L.BEAST_STEP) + ' kills.' : 'Fully mastered.'), 'feat');
@@ -3034,6 +3047,30 @@
     return '<div class="bmast"><div class="bmrow"><b>Mastery ' + t + '/' + L.BEAST_MAX + '</b><span>' + fmt(n) + ' defeated' + (max ? ' · fully mastered' : ' · next +1% at ' + fmt(nx)) + '</span></div>' +
       '<div class="bmbar"><i style="width:' + pc + '%"></i></div><small>' + (t ? '+' + t + '% damage and hero XP against them.' : 'Every ' + fmt(L.BEAST_STEP) + ' defeated adds +1% damage and hero XP against them, up to +' + L.BEAST_MAX + '%.') + '</small></div>';
   }
+  // Creatures by home region (27 Nov 2026): found ones show their page, the rest a silhouette and where to look.
+  const beastPic = c => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent((SP.svgOf && SP.svgOf(c.fam, c.ov ? L.creatureHue(c) + '~~' + c.ov : L.creatureHue(c))) || '');
+  const regFloors = rn => (rn * 10 + 1) + '–' + (rn * 10 + 10);
+  function creaturesHtml() {
+    const bx = S.bx || {}, all = L.CREATURES, found = all.filter(c => bx[c.id]).length;
+    let h = '<h3 class="sub">Creatures <small class="bcount">' + found + '/' + all.length + ' found</small></h3><div class="lore beasts">';
+    L.ROSTERS.forEach((list, rn) => {
+      const b = L.BIOMES[rn];
+      if ((S.maxFloorEver || 1) < rn * 10 + 1) { h += '<div class="lorelock">' + icon('lock') + ' A region you have not reached</div>'; return; }
+      const cs = all.filter(c => c.r === rn), nf = cs.filter(c => bx[c.id]).length;
+      h += '<details data-breg="' + rn + '"><summary>' + esc(b.name) + ' <span class="bsub">floors ' + regFloors(rn) + ' · ' + nf + '/' + cs.length + '</span></summary><div class="blist">' + cs.map(c => {
+        const got = bx[c.id], wand = L.creatureRegions(c).map(r => L.BIOMES[r].name);
+        return '<div class="bst' + (got ? '' : ' unk') + '"><img alt="" data-bpic="' + c.id + '" width="56" height="56"><div><b>' + (got ? esc(c.name) : '???') + '</b> <span class="brar r-' + c.rar + '">' + L.RAR_NAME[c.rar] + '</span>' +
+          (got ? '<p>' + esc(c.text) + '</p>' : '') +
+          '<small>Found in: ' + esc(b.name) + ' (home)' + (wand.length ? ' · wanders into ' + esc(wand.join(' and ')) : '') + (got ? ' · ' + fmt(got) + ' defeated' : '') + '</small></div></div>';
+      }).join('') + '</div></details>';
+    });
+    return h + '</div>';
+  }
+  // Pictures load only when a region is opened, so the Journal stays quick.
+  $('journal').addEventListener('toggle', e => {
+    const d = e.target; if (!d.open || !d.dataset || d.dataset.breg == null) return;
+    d.querySelectorAll('img[data-bpic]').forEach(im => { if (!im.src) { const c = L.creatureById(im.dataset.bpic); if (c) im.src = beastPic(c); } });
+  }, true);
   function updateJournal() {
     const seen = L.STORY.filter(b => S.story.seen[b.id]);
     let h = '<h3 class="sub">The story so far</h3><div class="scenes">' +
@@ -3046,6 +3083,7 @@
         ? '<details><summary>' + esc(lo.title) + (g === 'Bestiary' ? beastTag(lo.id) : '') + '</summary><p>' + esc(lo.text) + '</p>' + (g === 'Bestiary' ? beastBar(lo.id) : '') + '</details>'
         : '<div class="lorelock">' + icon('lock') + ' Not yet discovered</div>').join('') + '</div>';
     }
+    h += creaturesHtml();
     $('journal').innerHTML = h;
     $('lorecount').textContent = Object.keys(S.lore).filter(k => L.LORE.find(l => l.id === k)).length + '/' + L.LORE.length;
   }
@@ -3470,7 +3508,7 @@
     if (f) {
       $('foename').textContent = f.pack ? f.name + ' and ' + (f.pack - 1) + ' more' : f.rescue ? f.name + ', holding ' + f.rescue : f.name;
       if (f.goblin && !f.seen) { f.seen = 1; goblinArrives(f); }
-      const tag = $('foetag'); tag.textContent = f.wounded || f.rescue ? 'Mercy Corps' : f.world ? (f.gob ? 'Golden goblin' : 'World boss') : f.goblin ? 'Thief' : f.pack ? 'Ambush ×' + f.pack + ' · XP ×' + f.pack * L.PACK_XP : f.boss ? 'Guardian' : f.chest ? 'Treasure' : f.elite ? L.SIDES[f.side].name : ''; if (f.pack) tag.dataset.tip = f.pack + ' foes at once: ' + f.pack * L.PACK_XP + '× hero XP and ' + f.pack * L.PACK_GOLD + '× gold.'; else if (f.wounded) tag.dataset.tip = 'A wounded Mercy Corps companion. Nobody fights: your healers mend them, Lantern Hymn helps a lot, and every tap is a bandage. Heal them to full for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.'; else if (f.rescue) tag.dataset.tip = 'This monster holds ' + f.rescue + ' of the Mercy Corps captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.'; else delete tag.dataset.tip; tag.className = 'tag' + (f.wounded || f.rescue ? ' mercy' : '') + (f.world ? ' world' : '') + (f.goblin ? ' thief' : '') + (f.chest ? ' chest' : '') + (f.pack ? ' ambush' : f.elite ? ' war w-' + f.side : '');
+      const tag = $('foetag'); tag.textContent = f.wounded || f.rescue ? 'Mercy Corps' : f.world ? (f.gob ? 'Golden goblin' : 'World boss') : f.goblin ? 'Thief' : f.pack ? 'Ambush ×' + f.pack + ' · XP ×' + f.pack * L.PACK_XP : f.boss ? 'Guardian' : f.chest ? 'Treasure' : f.elite ? L.SIDES[f.side].name : f.rk === 'v' ? 'Very rare' : f.rk === 'r' ? 'Rare' : ''; if (f.pack) tag.dataset.tip = f.pack + ' foes at once: ' + f.pack * L.PACK_XP + '× hero XP and ' + f.pack * L.PACK_GOLD + '× gold.'; else if (f.wounded) tag.dataset.tip = 'A wounded Mercy Corps companion. Nobody fights: your healers mend them, Lantern Hymn helps a lot, and every tap is a bandage. Heal them to full for +' + L.AID_FX.pdps * 100 + '% damage and healing for ' + L.MERCY_MIN + ' minutes.'; else if (f.rescue) tag.dataset.tip = 'This monster holds ' + f.rescue + ' of the Mercy Corps captive. Defeat it to free them: +' + L.RESCUE_FX.xp * 100 + '% hero XP for ' + L.MERCY_MIN + ' minutes.'; else delete tag.dataset.tip; tag.className = 'tag' + (f.wounded || f.rescue ? ' mercy' : '') + (f.world ? ' world' : '') + (f.goblin ? ' thief' : '') + (f.chest ? ' chest' : '') + (f.pack ? ' ambush' : f.elite ? ' war w-' + f.side : '') + (!f.pack && !f.elite && (f.rk === 'r' || f.rk === 'v') ? ' rare-' + f.rk : '');
       { const sp = f.sp && L.SPECIALS[f.sp], mk = (f.mods || []).join(',') + '|' + (f.sp || ''); if (mk !== lastModKey) { lastModKey = mk; $('foemods').innerHTML = (sp ? '<span class="mod m-sp' + (sp.dot ? ' m-' + sp.dot : '') + '" title="' + esc(sp.desc + (sp.dot ? '. ' + (sp.dot === 'burn' ? 'Burns' : 'Poison') + ' last ' + L.DOT_FIGHTS + ' fights.' : '.')) + '">' + esc(sp.name) + '</span>' : '') + (f.mods || []).map(m => '<span class="mod m-' + m + '" title="' + esc(L.MODS[m].desc) + '">' + esc(L.MODS[m].name) + '</span>').join(''); } }
       if (f.world && S.wb && S.wb.gob) {
         const g = gp.st && gp.st.gob, hp = g ? g.hp : 1, left = Math.max(0, 1 - ((g ? g.total : 0) + S.wb.score) / hp);
@@ -6722,6 +6760,11 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 133, date: 'November 2026', title: 'Creatures find their homes', items: [
+      'Creatures now have home regions: 120 kinds, 8 per region, and each spawns most in its home.',
+      'New Creatures section in the Journal: every kind’s page, where it lives and how many you defeated. Unmet ones show as silhouettes.',
+      'Rare and very rare creatures glow in the fight. Bestiary mastery still counts per family, so your progress carries over.',
+    ] },
     { v: 132, date: 'November 2026', title: 'Quests, profiles and one name each', items: [
       'Hero names are now one per player. If yours is taken, the game asks you to pick a new one.',
       'Quests: the Bounty Board and daily quests now draw from 200 kinds across the game, picked for your hero. Many have a button that takes you there.',
