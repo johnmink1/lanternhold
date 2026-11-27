@@ -3495,7 +3495,7 @@
       L.KINDLE_UPS.map(u => { const r = (S.kup || {})[u.id] || 0, c = L.kupCost(S, u.id);
         return '<div class="kitem"><div class="kic">' + icon(u.icon) + '</div><div><b>' + u.name + ' <span class="kp">' + Array.from({ length: u.max }, (_, i) => '<i class="' + (i < r ? 'on' : '') + '"></i>').join('') + '</span></b><small>' + u.desc + '.' + (r ? ' Rank ' + r + ' of ' + u.max + '.' : '') + '</small></div>' +
           (c ? '<button class="btn small" data-kup="' + u.id + '"' + (k >= c ? '' : ' disabled') + '>' + c + ' Kindling</button>' : '<em class="kmax">Maxed</em>') + '</div>'; }).join('') +
-      '</div><h3 class="sub">Change class</h3><div class="kshop"><div class="kitem respec"><div class="kic">' + icon('refresh') + '</div><div><b>Take up a new class</b><small>Your hero becomes another class. Every Kindling spent on the skill tree comes back, then the change costs ' + L.CLASS_CHANGE_COST + '. Pack size, gear slots and upgrades stay as they are. Done at camp.</small></div><button class="btn small ghost" id="k-respec"' + (k + L.skillSpent(S) >= L.CLASS_CHANGE_COST ? '' : ' disabled title="Needs ' + L.CLASS_CHANGE_COST + ' Kindling, counting what your tree would refund"') + '>' + L.CLASS_CHANGE_COST + ' Kindling</button></div></div>';
+      '</div><h3 class="sub">Change class</h3><div class="kshop"><div class="kitem respec"><div class="kic">' + icon('refresh') + '</div><div><b>Take up a new class</b><small>Your hero becomes another class. Every Kindling spent on the skill tree comes back, then the change costs ' + L.CLASS_CHANGE_COST + '. Pack size, gear slots and upgrades stay as they are. Done at camp.</small></div><button class="btn small ghost" id="k-respec"' + (k + L.skillSpent(S) >= L.CLASS_CHANGE_COST || L.HERO_CLASSES.some(c => c !== cls && clsOwned(c) && L.freeClassChange(S, c)) ? '' : ' disabled title="Needs ' + L.CLASS_CHANGE_COST + ' Kindling, counting what your tree would refund"') + '>' + L.CLASS_CHANGE_COST + ' Kindling</button></div></div>';
   }
   $('skills') && $('skills').addEventListener('click', e => {
     const b = e.target.closest('[data-learn]');
@@ -3507,12 +3507,13 @@
       if (!campGate(true)) return;
       const cur = L.heroCls(S), back = L.skillSpent(S), left = (S.kindling || 0) + back - L.CLASS_CHANGE_COST;
       modal('<div class="center"><h2>Change your class</h2><p>Pick a new class for ' + esc(L.memberById('you').name) + '. Your ' + back + ' tree Kindling comes back, the change costs ' + L.CLASS_CHANGE_COST + ', and you keep ' + left + ' to spend on the new tree. Gear your hero is wearing goes back to the pack. Pack size, gear slots and Kindling upgrades stay.</p>' +
-        '<div class="respecs">' + L.CLASS_ORDER.filter(c => c !== cur).map(c => '<button class="btn ghost" data-newcls="' + c + '">' + icon(CLASS_ICON[c]) + '<span>' + L.CLASSES[c].name + '</span></button>').join('') + '</div><div class="row"><button class="btn ghost" id="r-no">Cancel</button></div></div>', md => {
+        '<div class="respecs">' + L.HERO_CLASSES.filter(c => c !== cur).map(c => '<button class="btn ghost' + (clsOwned(c) ? '' : ' paid') + '" data-newcls="' + c + '">' + icon(clsOwned(c) ? CLASS_ICON[c] : 'lock') + '<span>' + L.CLASSES[c].name + '</span>' + (clsOwned(c) ? (L.freeClassChange(S, c) ? '<em class="paytag">Free</em>' : '') : '<em class="paytag">' + sigil + fmt(L.PAID_CLASS[c]) + '</em>') + '</button>').join('') + '</div><div class="row"><button class="btn ghost" id="r-no">Cancel</button></div></div>', md => {
         md.querySelector('#r-no').onclick = closeModal;
         md.querySelectorAll('[data-newcls]').forEach(btn => btn.onclick = () => {
           const c = btn.dataset.newcls;
+          if (!clsOwned(c)) return openClassUnlock(c, becomeClass);
           if (!btn.classList.contains('confirm')) { md.querySelectorAll('[data-newcls]').forEach(x => { x.classList.remove('confirm'); x.querySelector('span').textContent = L.CLASSES[x.dataset.newcls].name; }); btn.classList.add('confirm'); btn.querySelector('span').textContent = 'Tap again: become a ' + L.CLASSES[c].name; return; }
-          if (L.changeClass(S, c)) { sfx.relic(); save(); closeModal(); toast('refresh', 'A new path', L.memberById('you').name + ' is now a ' + L.CLASSES[c].name + '. ' + S.kindling + ' Kindling is ready for the new tree.', 'feat'); updatePanel(true); updateAbilities(true); updateSkills(); try { if (typeof publishHero === 'function' && signedIn()) publishHero(); } catch (x) {} }
+          becomeClass(c);
         });
       });
       return;
@@ -3910,7 +3911,7 @@
     $('modal').dataset.lock = '1';
     const draw = () => modal((CL && !signedIn() ? '<div class="haveacct"><span>Already have a hero?</span><button type="button" class="btn ghost small" id="h-signin">Sign in</button></div>' : '') + '<div class="center"><svg class="lantern-hero" viewBox="0 0 32 32"><use href="#i-lantern"/></svg><h2>Lanternhold</h2></div>' +
       (note ? '<p class="center">' + note + '</p>' : '<p class="center">The Grand War burns across the Shattered Reach. Beneath a forgotten Hold, a single lantern keeps a tear in the Nyx Rift shut, and every alliance wants what lies under it. Take the lantern down.</p>') +
-      '<h3 class="sub">Choose your class</h3><div class="classes">' + L.CLASS_ORDER.map(c => '<button class="pick cls' + (cls === c ? ' on' : '') + '" data-cls="' + c + '"><span class="ic c-' + c + '">' + icon(CLASS_ICON[c]) + '</span><b>' + L.CLASSES[c].name + '</b><small>' + CLASS_BLURB[c] + '</small></button>').join('') + '</div>' +
+      '<h3 class="sub">Choose your class</h3><div class="classes">' + L.HERO_CLASSES.map(c => '<button class="pick cls' + (cls === c ? ' on' : '') + (clsOwned(c) ? '' : ' paid') + '" data-cls="' + c + '">' + (clsOwned(c) ? '' : '<em class="paytag">' + sigil + fmt(L.PAID_CLASS[c]) + '</em>') + '<span class="ic c-' + c + '">' + icon(CLASS_ICON[c]) + '</span><b>' + L.CLASSES[c].name + '</b><small>' + CLASS_BLURB[c] + '</small></button>').join('') + '</div>' +
       '<h3 class="sub">Pledge your banner</h3><div class="sides">' + L.SIDE_ORDER.map(k => { const d = L.SIDES[k]; return '<button class="pick side' + (side === k ? ' on' : '') + (WAR_ART[k] ? ' art' : '') + '" data-side="' + k + '" style="--side:' + d.color + (WAR_ART[k] ? ';--art:url(' + WAR_ART[k] + ')' : '') + '">' + (k === 'covenant' ? '<span class="newtag">Good for new players</span>' : '') + '<b>' + d.name + '</b><i>\u201c' + d.motto + '\u201d</i><small>' + d.desc + '</small><em>' + d.perk + '</em></button>'; }).join('') + '</div>' +
       '<h3 class="sub">Name your hero</h3><div class="namerow"><input id="h-name" maxlength="16" placeholder="2 to 16 letters" autocomplete="off"><button type="button" class="btn ghost small" id="h-suggest">Suggest</button></div><div class="err" id="h-err"></div>' +
       '<div class="row" style="justify-content:center"><button class="btn big" id="h-go">Begin the descent</button></div>', md => {
@@ -3919,11 +3920,12 @@
         const nm = md.querySelector('#h-name'); nm.value = setup.heroName || '';
         nm.oninput = () => { setup.heroName = nm.value; };
         md.querySelector('#h-suggest').onclick = () => { nm.value = setup.heroName = heroNameIdea(); nm.focus(); };
-        md.querySelectorAll('[data-cls]').forEach(b => b.onclick = () => { cls = b.dataset.cls; draw(); });
+        md.querySelectorAll('[data-cls]').forEach(b => b.onclick = () => { const c = b.dataset.cls; if (!clsOwned(c)) return openClassUnlock(c, c2 => { cls = c2; draw(); }, draw); cls = c; draw(); });
         md.querySelectorAll('[data-side]').forEach(b => b.onclick = () => { side = b.dataset.side; draw(); });
         md.querySelector('#h-go').onclick = () => {
           const name = nm.value.trim().replace(/\s+/g, ' ');
           if (!/^[A-Za-z][A-Za-z '\-]{1,15}$/.test(name)) { md.querySelector('#h-err').textContent = 'Use 2 to 16 letters. Spaces, hyphens and apostrophes are fine.'; return; }
+          if (!clsOwned(cls)) cls = 'rogue';
           L.startGame(S, 'multi', cls, name, side);
           delete $('modal').dataset.lock; closeModal(); audio(); save();
           updateSeats(true); updateAbilities(true); updatePanel(true);
@@ -4819,6 +4821,7 @@
       // 1. what Sigils are for
       '<div class="shopsec"><h3>Spend ' + TOKEN + '</h3></div><div class="shopuses">' +
         use('gs-pass', 'star', 'Lanternholder', member ? 'Member, renews ' + subDate() : left ? left + ' left' : L.PASS_COST + ' ' + TOKEN + ' for 30 days', member ? 'Perks' : left ? 'Extend' : 'Get') +
+        use('gs-cls', 'hammer', 'Paladin class', clsOwned('paladin') ? (L.heroCls(S) === 'paladin' ? 'Your hero is a Paladin' : 'Unlocked. Switch at camp') : fmt(L.PAID_CLASS.paladin) + ' ' + TOKEN + ', once for your account', clsOwned('paladin') ? 'See' : 'New') +
         use('gs-boh', 'bag', 'Bag of Holding', S.boh ? 'Owned' : fmt(L.BOH_COST) + ' ' + TOKEN + ', once', S.boh ? 'Details' : 'See') +
         (wardOn() ? use('gs-ward', 'user', 'Wardrobe', 'Outfits and lantern styles', 'Open') : '') +
         use('gs-look', 'crown', 'Profile looks', 'Frames, titles, banners, emblems', 'Open') +
@@ -4860,6 +4863,7 @@
         md.querySelector('#gs-pass').onclick = () => openPass(reopen);
         const p2 = md.querySelector('#gs-pass2'); if (p2) p2.onclick = () => openPass(reopen);
         md.querySelector('#gs-boh').onclick = () => openBoh(reopen);
+        md.querySelector('#gs-cls').onclick = () => openClassUnlock('paladin', L.heroCls(S) === 'paladin' ? null : becomeClass, reopen);
         const wd = md.querySelector('#gs-ward'); if (wd) wd.onclick = () => openWardrobe('k');
         md.querySelector('#gs-look').onclick = () => openProfileEditor();
         const mk = md.querySelector('#gs-mkt'); if (mk) mk.onclick = () => { closeModal(); openTrade('sigils'); };
@@ -4892,6 +4896,56 @@
     modal('<div class="center"><div class="cosbuy">' + sigil + '</div><h2>' + TOKEN + ' need an account</h2><p>' + TOKEN + ' are kept on your free game account, so they are safe on every device and after a server reset. New accounts start with <b>100</b>.</p>' +
       '<div class="row" style="justify-content:center"><button class="btn" id="su-up">Make a free account</button><button class="btn ghost" id="su-in">Sign in</button><button class="btn ghost" id="su-no">Not now</button></div></div>', md => {
         md.querySelector('#su-up').onclick = () => authForm('up'); md.querySelector('#su-in').onclick = () => authForm('in'); md.querySelector('#su-no').onclick = closeModal; });
+  }
+  // ---------- v139 Sigil classes (John, 27 Nov 2026) ----------
+  // A class unlocked once for the whole account with Sigils (wallet item 'c.<id>' on POST /wardrobe, like campfire spots).
+  // Sidegrades only: tuned in the sim to the other classes' pace, no edge or counter in the Ember Ring.
+  const clsOwned = c => !L.PAID_CLASS[c] || !!(prof && prof.own && prof.own.includes('c.' + c)) || (!!S.hero && S.hero.cls === c);
+  const CLASS_PITCH = { paladin: ['A holy knight in white and gold plate.', [
+    'Plate armour, a solid hammer and a small steady heal for the whole party.',
+    'Oath of Dawn: heals the party for 25% and the party takes 30% less damage for 6s.',
+    'Its own skill tree (Dawn, Aegis, Crusade), class gear set and Grand War aura.',
+    'Ember Ring: no class edge and no counter, and for its first two weeks its duels and team battles move no rating.']] };
+  // after(c): what to do once the class is yours (pick it at setup, or change class). back: where Back goes.
+  function openClassUnlock(c, after, back) {
+    const d = L.CLASSES[c], price = L.PAID_CLASS[c], own = clsOwned(c), bal = prof ? prof.bal : null, pitch = CLASS_PITCH[c] || ['', []];
+    back = back || closeModal; shopTrack('open', 'cls:' + c);
+    modal('<div class="center clsbuy"><img class="clsart" src="' + SP.spriteURL(c, 3) + '" alt=""><h2>' + d.name + ' <span class="tag">' + TOKEN + ' class</span></h2><p>' + pitch[0] + '</p></div>' +
+      '<ul class="passfx tight">' + pitch[1].map(t => '<li><span>' + t + '</span></li>').join('') + '</ul>' +
+      '<p class="note small">A different way to play, not a stronger one: in our tests it keeps pace with the Tank and the Healer. Unlocked once for every hero on your account. The first change into it is free.</p>' +
+      (own ? '<p class="passstate">Unlocked on your account.</p>' : !CL || !signedIn() ? '<p class="note">Classes are kept on your free game account. ' + (S.hero ? 'Sign in or make an account first.' : 'Start with any class now: once you have an account, unlock the ' + d.name + ' from the ' + TOKEN + ' shop and switch with Change class on the Skills tab.') + '</p>'
+        : bal != null && bal < price ? '<p class="note">You have ' + fmt(bal) + ' ' + TOKEN + '. The 1,100 pack covers it with 100 to spare.</p>' : '') +
+      '<div class="row"><button class="btn ghost" id="cu-no">Back</button>' +
+      (own ? (after ? '<button class="btn" id="cu-go">Play as ' + d.name + '</button>' : '') :
+        !CL || !signedIn() ? (S.hero ? '<button class="btn" id="cu-acct">Make a free account</button>' : '') :
+        bal != null && bal < price ? '<button class="btn" id="cu-get">Get ' + TOKEN + '</button>' :
+        '<button class="btn" id="cu-buy">Unlock for ' + fmt(price) + ' ' + TOKEN + '</button>') + '</div>', md => {
+        md.className = 'sheet';
+        md.querySelector('#cu-no').onclick = () => back();
+        const go = md.querySelector('#cu-go'); if (go) go.onclick = () => after(c);
+        const ac = md.querySelector('#cu-acct'); if (ac) ac.onclick = () => authForm('up');
+        const gt = md.querySelector('#cu-get'); if (gt) gt.onclick = () => { shopTrack('nudge', 'cls'); getSigils(() => openClassUnlock(c, after, back)); };
+        const by = md.querySelector('#cu-buy'); if (by) by.onclick = async () => {
+          by.disabled = true;
+          try {
+            const r = await papi('POST', '/wardrobe', { buy: 'c.' + c });
+            if (prof) { prof.bal = r.bal; prof.own = r.own; } try { localStorage.setItem('lh_bal', String(r.bal)); } catch (x) {}
+            actPush([Date.now(), 'shop', 'class:' + c]); sfx.relic(); updatePanel(true); updateSkills();
+            toast(CLASS_ICON[c] || 'star', d.name + ' unlocked', 'Every hero on your account can now be a ' + d.name + '.', 'feat');
+            if (after) after(c); else openClassUnlock(c, after, back);
+          } catch (e) { by.disabled = false; if (e.code === 'funds') getSigils(() => openClassUnlock(c, after, back)); else toast('lock', 'That did not go through', e.code === 'owned' ? 'It is already yours. Try again in a moment.' : 'Try again in a moment.', 'warn'); }
+        };
+      });
+  }
+  // Switch your hero into a class (from Skills > Change class or the shop). Done at camp.
+  function becomeClass(c) {
+    if (!campGate(true)) return;
+    const free = L.freeClassChange(S, c);
+    if (L.changeClass(S, c)) {
+      sfx.relic(); save(); closeModal();
+      toast('refresh', 'A new path', L.memberById('you').name + ' is now a ' + L.CLASSES[c].name + (free ? ' (free first change)' : '') + '. ' + S.kindling + ' Kindling is ready for the new tree.', 'feat');
+      updatePanel(true); updateAbilities(true); updateSkills(); try { if (typeof publishHero === 'function' && signedIn()) publishHero(); } catch (x) {}
+    } else toast('flame', 'Not enough Kindling', 'Changing class costs ' + L.CLASS_CHANGE_COST + ' Kindling, counting what your tree gives back.', 'warn');
   }
   // ---------- Mercy's Blessing: real donations to the Grand War's Mercy Corps buff every player ----------
   const mercyLeft = () => { const ms = (S.mercy || 0) - Date.now(); if (ms <= 0) return ''; const h = Math.floor(ms / 36e5); return h >= 48 ? Math.floor(h / 24) + 'd' : h >= 1 ? h + 'h' : Math.max(1, Math.ceil(ms / 6e4)) + 'm'; };
@@ -6734,12 +6788,13 @@
         '<b>Arrows by the floor number</b>: move between floors you have reached']],
     ] },
     { id: 'party', name: 'Your party', icon: 'users', topics: [
-      ['The five classes', 's:tank,healer,rogue,mage,necro', 'Five seats, five roles. Every class has its own ability.', [
+      ['The classes', 's:tank,healer,rogue,mage,necro,paladin', 'Five seats, five roles, and a sixth class for your hero. Every class has its own ability.', [
         '<b>Tank</b>: takes the hits. Shield Wall cuts damage by 70%.',
         '<b>Healer</b>: keeps everyone up. Lantern Hymn heals and lifts a fallen ally.',
         '<b>Rogue</b>: most damage, dodges a quarter of attacks. Backstab hits hard.',
         '<b>Mage</b>: Ember Storm quadruples damage for a few seconds.',
-        '<b>Necromancer</b>: raises skeletons that fight and soak blows.']],
+        '<b>Necromancer</b>: raises skeletons that fight and soak blows.',
+        '<b>Paladin</b> (a ' + TOKEN + ' class, your hero only): plate and a small steady party heal. Oath of Dawn heals the party and shields it for a few seconds. A sidegrade, never stronger.']],
       ['Marching order', 's:tank,rogue,healer,mage,necro', 'The top of the Party list stands in front, nearest the monster.', [
         'A <b>tank</b> in the front two draws attacks.',
         'Heals get <b>15% weaker per step</b> of distance, so healers go in the middle.',
@@ -6776,7 +6831,7 @@
       ['Monsters', 's:slime,rat,skeleton', 'Monsters hit back. If the whole party falls, it retreats a floor and tries again.', [
         'Retreats last about a minute. Use it to train and check gear.',
         '<b>Grand War soldiers</b> (with a banner) are tougher and drop more.']],
-      ['Mana and stamina', 'i:flare', 'Healers, mages and necromancers use mana. Rogues and tanks use stamina.', [
+      ['Mana and stamina', 'i:flare', 'Healers, mages and necromancers use mana. Rogues, tanks and paladins use stamina.', [
         'The blue bar under a hero is <b>mana</b>, the gold bar is <b>stamina</b>. Both hold ' + L.RES_MAX + ' and refill on their own: mana at ' + L.RES_REGEN.mana + ' a second, stamina at ' + L.RES_REGEN.stamina + ' a second.',
         'Abilities cost ' + L.AB_COST + ' and class specials cost ' + L.SPEC_COST + '. If a hero is short, the ability waits until the bar refills.',
         'Healing costs mana. A healer that runs <b>out of mana</b> stops healing and only swings basic attacks until its mana is back to ' + L.RES_WAKE + '. Its bar blinks while it is empty.',
@@ -7114,6 +7169,11 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 139, date: 'November 2026', title: 'The Paladin', items: [
+      'New class: the Paladin, a knight in white and gold plate with a small steady heal for the whole party. Oath of Dawn heals the party and cuts the damage it takes for 6 seconds.',
+      'The Paladin is a Sigil class: unlock it once for 1,000 Sigils and every hero on your account can be one. The first change into it is free. It keeps pace with the other classes and never outclasses them.',
+      'Paladins have their own skill tree, class gear set (Oath of the First Dawn), Grand War aura and Ember Ring skills. In the Ring it has no class edge or counter, and its first two weeks move no rating.',
+    ] },
     { v: 138, date: 'November 2026', title: 'Easier shop, loadouts and a smoother start', items: [
       'Sigil shop: Give $1 or any amount to our Extra Life team for children’s hospitals. Add your #WarName to credit your alliance.',
       'The Sigil counter at the top now opens the Sigil shop. Signed-out players see a Get button that helps them make an account.',

@@ -241,7 +241,7 @@ svg{display:block}
 }
 
 /* ---------- v0.2: party, story, gear ---------- */
-.c-tank{--cc:#9fb6c8}.c-healer{--cc:#8fcf6a}.c-rogue{--cc:#e2c36a}.c-mage{--cc:#ff8a5a}.c-necro{--cc:#b58cff}
+.c-tank{--cc:#9fb6c8}.c-healer{--cc:#8fcf6a}.c-rogue{--cc:#e2c36a}.c-mage{--cc:#ff8a5a}.c-necro{--cc:#b58cff}.c-paladin{--cc:#f3ead0}
 .goal{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;text-align:center;font-size:14px;color:var(--muted)}
 .goal span{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:999px;padding:1px 9px}
 .goal b{color:var(--text);font-weight:700}
@@ -269,7 +269,7 @@ svg{display:block}
 .mini{position:absolute;top:4px;right:6px;background:none;border:0;color:var(--dim);font-size:16px;line-height:1;padding:2px 4px}
 .mini:hover{color:var(--text)}
 .seat .buy{min-width:96px}
-.skill.c-tank svg,.skill.c-healer svg,.skill.c-rogue svg,.skill.c-mage svg,.skill.c-necro svg{color:var(--cc)}
+.skill.c-tank svg,.skill.c-healer svg,.skill.c-rogue svg,.skill.c-mage svg,.skill.c-necro svg,.skill.c-paladin svg{color:var(--cc)}
 .skills{grid-template-columns:repeat(5,minmax(0,1fr))}
 .skill{padding:9px 10px;gap:8px}
 .skill small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -323,7 +323,7 @@ button.scene:hover{border-color:var(--accent)}
 .joined{display:flex;gap:10px;align-items:center;background:#111a29;border:1px solid #263b5e;border-radius:10px;padding:10px 12px;color:#f6dca0;margin-bottom:6px}
 .joined svg{width:22px;height:22px;color:var(--gold);flex:none}
 .modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.classes{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.classes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
 .pick.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:color-mix(in srgb,var(--accent) 10%,var(--bg2))}
 .pick.cls{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:12px 8px}
 .pick.cls .ic{width:40px;height:40px}
@@ -2818,3 +2818,13 @@ details.tmfold[open]>summary{border-bottom:1px solid var(--line);margin-bottom:8
 .loadouts .lo-lock{color:var(--dim);cursor:pointer;font:inherit;font-size:13px;padding:6px 10px}
 .loadouts .lo-lock svg{width:13px;height:13px}
 .nextrow{display:flex;justify-content:center;width:100%}.nextrow .nextstep{margin:6px 0 2px;max-width:calc(100% - 24px);white-space:normal;flex:0 0 auto}
+
+/* v139 Sigil classes */
+.pick.cls{position:relative}
+.paytag{display:inline-flex;align-items:center;gap:3px;font-style:normal;font-size:11px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--gold);color:#1a1205}
+.paytag .sigil{width:11px;height:11px;fill:currentColor}
+.pick.cls .paytag{position:absolute;top:6px;right:6px}
+.pick.cls.paid{border-style:dashed}
+.respecs .paytag{margin-left:6px}
+.clsbuy .clsart{width:96px;height:128px;object-fit:contain;image-rendering:auto;margin:0 auto 4px;display:block}
+@media (max-width:560px){.classes{grid-template-columns:repeat(3,minmax(0,1fr))}}
