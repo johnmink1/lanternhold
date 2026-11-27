@@ -55,6 +55,8 @@
       if (s.cr && p.cr && s.cr !== p.cr) { add('info', 'A different game was saved (new game, reset, or an older save picked).', 'newgame'); continue; }
       if ((s.np || 0) > (p.np || 0)) { add('info', 'Started New Playthrough NP+' + s.np + '.', 'np'); continue; }
       if (d.x < -1 || d.f < 0) { add(r.flags.some(x => x.k === 'device') ? 'info' : 'warn', 'Progress went backward (' + (d.f < 0 ? 'deepest floor ' + p.f + ' to ' + s.f : 'hero XP down ' + big(-d.x)) + '). Usually an older save from another device.', 'back'); continue; }
+      if (r.a.some(a => a && a[1] === 'import')) add('warn', 'Loaded a backup code on this sync.', 'import');
+      if (d.pt < -5 && d.g > 1e6 && d.g > 10 * Math.max(1, p.g || 0)) add('bad', 'Play time went back ' + span(-d.pt) + ' while gold rose ' + big(d.g) + '. A changed backup or save was loaded.', 'edit');
       if (d.pt > dt * R.speed + R.speedPad) add('bad', 'Played ' + span(d.pt) + ' of game time in ' + span(dt) + ' of real time. The game was sped up or the clock changed.', 'speed');
       const extra = d.g - Math.max(0, d.ge);
       if (extra > R.goldMin && extra > R.goldX * ((p.g || 0) + Math.max(0, d.ge)))
@@ -62,7 +64,7 @@
       if (dt > 20 && d.ge > 0) {
         const rate = d.ge / dt, m = med(rates);
         if (rates.length >= R.rateMin && m > 0 && rate > R.rateX * m && d.ge > (p.g || 0) + 1000 && !r.a.some(a => a && a[1] === 'away'))
-          add('warn', 'Earned gold ' + Math.round(rate / m) + 'x faster than usual for this player (' + big(d.ge) + ' in ' + span(dt) + ').', 'rate');
+          add(rate > 1e4 * m ? 'bad' : 'warn', 'Earned gold ' + Math.round(rate / m) + 'x faster than usual for this player (' + big(d.ge) + ' in ' + span(dt) + ').', 'rate');
         rates.push(rate); if (rates.length > 60) rates.shift();
       }
       if (p.f >= R.floorFrom && d.f >= R.floorWarn) add(d.f >= R.floorBad ? 'bad' : 'warn', 'Deepest floor jumped ' + p.f + ' to ' + s.f + ' in ' + span(dt) + '.', 'floor');

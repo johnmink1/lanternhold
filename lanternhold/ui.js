@@ -1,4 +1,4 @@
-/* lh-build 202611270017 */
+/* lh-build 202611270038 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -1390,6 +1390,16 @@
   // next cloud sync (pushCloud) and is stored with it on the server for 30 days. Only admins can read it.
   var ACT_KEY = 'lh_acts', acts = [];
   try { acts = JSON.parse(localStorage.getItem(ACT_KEY) || '[]'); if (!Array.isArray(acts)) acts = []; } catch (e) {}
+  // Backup codes (hotfix, 27 Nov 2026): a plain base64 save could be edited by hand (gold set to 999T) and loaded back.
+  // Codes now carry a check value over the save text; codes without a matching one are refused.
+  const BK_SALT = 'lh-bk-2026-11';
+  function bkHash(t) { let a = 0x811c9dc5 ^ t.length, b = 0x9e3779b9; for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = Math.imul(b ^ c, 2246822507) ^ (a >>> 13); } return ((a >>> 0).toString(36) + (b >>> 0).toString(36)); }
+  function backupCode(json) { return 'LH2.' + btoa(unescape(encodeURIComponent(json))) + '.' + bkHash(BK_SALT + json); }
+  function readBackup(code) {
+    const m = /^LH2\.([A-Za-z0-9+/=]+)\.([0-9a-z]+)$/.exec(String(code || '').replace(/\s+/g, ''));
+    if (!m) return null;
+    try { const json = decodeURIComponent(escape(atob(m[1]))); if (bkHash(BK_SALT + json) !== m[2]) return null; const o = JSON.parse(json); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+  }
   function actPush(a) {
     if (!acts) acts = [];
     const cut = l => Array.isArray(l) && l.length ? l.slice(0, 4).map(v => String(v).slice(0, 90)) : undefined;
@@ -3761,7 +3771,7 @@
         m.querySelector('#s-full') && (m.querySelector('#s-full').onclick = () => { save(); closeModal(); toggleFull(); });
         m.querySelector('#s-intro').onclick = () => { save(); closeModal(); if (window.LHIntro) LHIntro.play(); };
         m.querySelector('#s-export').onclick = () => {
-          save(); const code = btoa(unescape(encodeURIComponent(localStorage.getItem(SAVE_KEY) || '')));
+          save(); const code = backupCode(localStorage.getItem(SAVE_KEY) || '');
           m.querySelector('#s-extra').innerHTML = '<p>Your backup code:</p><textarea readonly></textarea>';
           const ta = m.querySelector('textarea'); ta.value = code; ta.select();
           try { navigator.clipboard.writeText(code).then(() => toast('star', 'Backup copied', 'Paste it somewhere safe.', 'feat')).catch(() => {}); } catch (e) {}
@@ -3769,8 +3779,10 @@
         m.querySelector('#s-import').onclick = () => {
           m.querySelector('#s-extra').innerHTML = '<p>Paste a backup code:</p><textarea></textarea><div class="row"><button class="btn" id="s-doimport">Load it</button></div>';
           m.querySelector('#s-doimport').onclick = () => {
-            try { const o = JSON.parse(decodeURIComponent(escape(atob(m.querySelector('textarea').value.trim())))); S = L.migrate(o); save(); closeModal(); location.reload(); }
-            catch (e) { toast('lock', 'That code did not work', 'Check that you copied all of it.', 'warn'); }
+            const o = readBackup(m.querySelector('textarea').value);
+            if (!o) { toast('lock', 'That code did not work', 'Check that you copied all of it. Codes from before this update, or changed by hand, no longer load.', 'warn'); return; }
+            actPush([Date.now(), 'import', 'Loaded a backup code (' + Math.round(((o.stats && o.stats.playTime) || 0) / 60) + ' min played, ' + Math.round(o.gold || 0) + ' gold).']);
+            S = L.migrate(o); save(); closeModal(); location.reload();
           };
         };
         m.querySelector('#s-reset').onclick = () => {
