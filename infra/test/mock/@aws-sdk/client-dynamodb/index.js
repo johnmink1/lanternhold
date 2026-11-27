@@ -36,7 +36,8 @@ function update(item, expr, vals, names) {
     const kind = secs[i], body = secs[i + 1];
     for (const c of body.split(/,(?![^(]*\))/).map(s => s.trim())) {
       if (kind === 'SET') { const [a, b] = c.split('=').map(s => s.trim()); let m;
-        if ((m = b.match(/^if_not_exists\((\S+),\s*(\S+)\)$/))) { if (!(nm(a, names) in item)) item[nm(a, names)] = vals[m[2]]; }
+        if ((m = b.match(/^if_not_exists\((\S+),\s*(\S+)\)\s*\+\s*(\S+)$/))) { const k = nm(a, names), base = k in item ? +item[k].N : +vals[m[2]].N; item[k] = { N: String(base + +vals[m[3]].N) }; }
+        else if ((m = b.match(/^if_not_exists\((\S+),\s*(\S+)\)$/))) { if (!(nm(a, names) in item)) item[nm(a, names)] = vals[m[2]]; }
         else item[nm(a, names)] = vals[b]; }
       if (kind === 'ADD') { const [a, b] = c.split(/\s+/); const k = nm(a, names), v = vals[b]; if (v.SS) item[k] = { SS: [...new Set([...(item[k] ? item[k].SS : []), ...v.SS])] }; else item[k] = { N: String((item[k] ? +item[k].N : 0) + +v.N) }; }
       if (kind === 'REMOVE') delete item[nm(c, names)];
@@ -54,7 +55,7 @@ class DynamoDBClient {
       if (!cond(i.ConditionExpression, old || {}, i.ExpressionAttributeValues || {}, i.ExpressionAttributeNames || {})) { const e = new Error('cond'); e.name = 'ConditionalCheckFailedException'; throw e; }
       update(it, i.UpdateExpression, i.ExpressionAttributeValues || {}, i.ExpressionAttributeNames || {}); t.set(kk, it); return { Attributes: it }; }
     if (c.op === 'del') { t.delete(keyOf(i.TableName, i.Key)); return {}; }
-    if (c.op === 'query') { const pk = i.ExpressionAttributeValues[':p'].S; let it = [...t.values()].filter(x => x.pk && x.pk.S === pk).sort((a, b) => a.sk.S < b.sk.S ? -1 : 1);
+    if (c.op === 'query') { const km = (i.KeyConditionExpression || 'pk = :p').match(/^(\w+)\s*=\s*(:\w+)$/), kn = km ? km[1] : 'pk', pk = i.ExpressionAttributeValues[km ? km[2] : ':p'].S; let it = [...t.values()].filter(x => x[kn] && x[kn].S === pk).sort((a, b) => (a.sk || a.s || {}).S < (b.sk || b.s || {}).S ? -1 : 1);
       if (i.ScanIndexForward === false) it.reverse(); if (i.Limit) it = it.slice(0, i.Limit); return { Items: JSON.parse(JSON.stringify(it)), Count: it.length }; }
     if (c.op === 'scan') return { Items: [...t.values()] };
     if (c.op === 'tx') { for (const x of i.TransactItems) { const [k, v] = Object.entries(x)[0]; await this.send(k === 'Put' ? new E.PutItemCommand(v) : k === 'Delete' ? new E.DeleteItemCommand(v) : new E.UpdateItemCommand(v)); } return {}; }

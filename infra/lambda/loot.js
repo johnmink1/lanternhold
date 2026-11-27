@@ -17,6 +17,8 @@ const phases = (t, id) => { let k = 0, n = pre(id) ? 1e3 : 1e9; while (t >= n &&
 const end = id => Date.parse(id + 'T00:00:00Z') + (pre(id) ? 4 : 3) * 864e5;
 const boss = id => Math.floor(Date.parse(id + 'T00:00:00Z') / WEEK) % 4;
 const ok = n => /^[A-Za-z][A-Za-z '-]{1,15}$/.test(n);
+// v143 Hardcore (?hc=1): the Hardcore hero rolls on its own world boss row, and its shards trade on a Hardcore-only
+// shard market (pk shh#), so nothing crosses between Normal and Hardcore.
 const nid = () => Date.now().toString(36).padStart(9, '0') + crypto.randomBytes(3).toString('hex');
 const q = async (t, k, v) => (await db.send(new D.QueryCommand({ TableName: t, KeyConditionExpression: k + '=:p', ExpressionAttributeValues: { ':p': S(v) } }))).Items || [];
 const row = i => ({ id: i.sk.S, seller: i.seller.S, name: i.name.S, k: +i.k.N, n: +i.n.N, price: +i.price.N, at: +i.at.N });
@@ -30,7 +32,7 @@ function roll(id, rows, me) {
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401);
-  const me = pid(cl.sub), now = Date.now(), rk = e.routeKey;
+  const hc = (e.queryStringParameters || {}).hc === '1', me = pid(hc ? cl.sub + '#hc' : cl.sub), now = Date.now(), rk = e.routeKey, SH = hc ? 'shh#' : 'sh#';
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400); }
   if (rk === 'POST /boss/loot') {
     const id = String(b.id || '');
@@ -43,7 +45,7 @@ exports.handler = async (e) => {
     return res(200, { ok: true, boss: boss(id), leg: d.leg, sh: d.tok, tok: d.tok, p: d.p, ph: d.ph });
   }
   if (rk === 'GET /shards') {
-    const l = (await q(T, 'pk', (e.queryStringParameters || {}).mine ? 'ss#' + me : 'sh#')).map(row);
+    const l = (await q(T, 'pk', (e.queryStringParameters || {}).mine ? 'ss#' + me : SH)).map(row);
     return res(200, { me, l });
   }
   if (rk === 'POST /shards/list') {
@@ -51,17 +53,17 @@ exports.handler = async (e) => {
     if (!(k >= 0 && k < 4 && n >= 1 && n <= 99 && p >= 1 && p < 1e60) || !ok(String(b.name || ''))) return res(400);
     if ((await q(T, 'pk', 'ss#' + me)).length >= 10) return res(400, { error: 'full' });
     const id = nid(), it = { seller: S(me), name: S(b.name), k: N(k), n: N(n), price: N(p), at: N(now) };
-    await db.send(new D.TransactWriteItemsCommand({ TransactItems: [{ Put: { TableName: T, Item: Object.assign({ pk: S('sh#'), sk: S(id) }, it) } }, { Put: { TableName: T, Item: Object.assign({ pk: S('ss#' + me), sk: S(id) }, it) } }] }));
+    await db.send(new D.TransactWriteItemsCommand({ TransactItems: [{ Put: { TableName: T, Item: Object.assign({ pk: S(SH), sk: S(id) }, it) } }, { Put: { TableName: T, Item: Object.assign({ pk: S('ss#' + me), sk: S(id) }, it) } }] }));
     return res(200, { ok: true, id });
   }
   if (rk === 'POST /shards/buy' || rk === 'POST /shards/cancel') {
     const id = String(b.id || ''), buy = rk === 'POST /shards/buy';
     if (!/^[0-9a-z]{15}$/.test(id)) return res(400);
-    const g = (await db.send(new D.GetItemCommand({ TableName: T, Key: { pk: S('sh#'), sk: S(id) } }))).Item;
+    const g = (await db.send(new D.GetItemCommand({ TableName: T, Key: { pk: S(SH), sk: S(id) } }))).Item;
     if (!g) return res(404, { error: 'gone' });
     const L = row(g);
     if (buy ? L.seller === me || !ok(String(b.name || '')) : L.seller !== me) return res(403);
-    const ops = [{ Delete: { TableName: T, Key: { pk: S('sh#'), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } }, { Delete: { TableName: T, Key: { pk: S('ss#' + L.seller), sk: S(id) } } }];
+    const ops = [{ Delete: { TableName: T, Key: { pk: S(SH), sk: S(id) }, ConditionExpression: 'attribute_exists(sk)' } }, { Delete: { TableName: T, Key: { pk: S('ss#' + L.seller), sk: S(id) } } }];
     if (buy) ops.push({ Put: { TableName: T, Item: { pk: S('inbox#' + L.seller), sk: S(nid()), type: S('sale'), from: S(me), fromName: S(b.name), item: S(JSON.stringify({ shard: L.k, n: L.n })), gold: S(L.price), at: N(now) } } });
     try { await db.send(new D.TransactWriteItemsCommand({ TransactItems: ops })); } catch (x) { if (x.name === 'TransactionCanceledException') return res(404, { error: 'gone' }); throw x; }
     return res(200, { ok: true, k: L.k, n: L.n, price: L.price });

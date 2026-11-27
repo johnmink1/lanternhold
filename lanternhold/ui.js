@@ -4110,7 +4110,7 @@
       '<li>' + icon('users') + '<span>Companions working or resting at the <b>Campfire</b> are safe. Only a monster can kill a companion.</span></li>' +
       '<li>' + icon('lock') + '<span>Hardcore gold, gear and items <b>never leave Hardcore</b>: no Market, Mail, gifts or borrowed heroes with Normal.</span></li>' +
       '<li>' + icon('crown') + '<span>You get your own <b>Hardcore leaderboard</b> and a <b>Hardcore chat</b> tab.</span></li></ul>' +
-      '<details><summary>Full rules</summary><p>Your bag is safe: only what the party wears is at risk. Gold is kept. While you are away, your party earns at its floor but never goes deeper, so nobody dies while you sleep. Cautious descent (on by default) stops going deeper the moment anyone falls. Your Normal hero is never touched. Sigils stay on your account: you can spend them in Hardcore, but daily Sigils and found Sigils are for your Normal hero. The Ember Ring, the world boss and New Playthrough are not open to Hardcore heroes yet. Backups can\'t be loaded into or out of Hardcore, and the server checks every Hardcore save.</p></details>' +
+      '<details><summary>Full rules</summary><p>Your bag is safe: only what the party wears is at risk. Gold is kept. While you are away, your party earns at its floor but never goes deeper, so nobody dies while you sleep. Cautious descent (on by default) stops going deeper the moment anyone falls. Your Normal hero is never touched. Sigils stay on your account: you can spend them in Hardcore, but daily Sigils and found Sigils are for your Normal hero. World bosses hit as hard as any monster down here: check the threat level first, and escape before your party falls. New Playthrough is not open to Hardcore heroes yet. Backups can\'t be loaded into or out of Hardcore, and the server checks every Hardcore save.</p></details>' +
       '<div class="ty"><span>Type <b>HARDCORE</b> to begin</span><input id="hc-ty" spellcheck="false" autocomplete="off"></div>' +
       '<div class="row"><button class="btn ghost" id="hc-no">Back to Normal</button><button class="btn hcgo" id="hc-go" disabled>Begin Hardcore</button></div></div>', md => {
         md.className = 'sheet hcsheet';
@@ -6177,7 +6177,7 @@
     if (!box.innerHTML) box.innerHTML = '<p class="note">Opening the Hall of Fame…</p>';
     try {
       const r = await fetch(CL.api.replace(/\/$/, '') + '/hof'); if (!r.ok) throw r.status;
-      const j = await r.json(), me = S.hero && S.hero.name, medal = ['top1', 'top2', 'top3'];
+      const j0 = await r.json(), j = HCS ? j0.hc || {} : j0, me = S.hero && S.hero.name, medal = ['top1', 'top2', 'top3'];
       // v131: compact. Each record is one line showing its leader; tap to open the top 3 (John: "collapse things").
       const who = p => '<b>' + esc(p.name) + '</b>' + (L.CLASSES[p.cls] ? ' ' + classTag(p.cls) : '');
       const line = (ic, name, lead, val, body, mine) => '<details class="hofd' + (mine ? ' me' : '') + '"><summary>' + icon(ic) + '<span class="hofn">' + name + '</span><span class="hofl1">' + lead + '</span><span class="hofv">' + val + '</span></summary>' + body + '</details>';
@@ -6191,7 +6191,7 @@
       const best = line('shield', 'Best in class', '', cls.filter(c => cb[c]).length + ' of 5',
         '<small>Highest power level, then gear rating</small><ol>' + cls.map(c => { const b = cb[c]; return '<li' + (b && b.name === me ? ' class="me"' : '') + '>' + classTag(c) + (b ? '<span class="hofb"><b>' + esc(b.name) + '</b><small>power level ' + b.lv + ' · gear rating ' + fmt(b.gr) + '</small></span>' : '<i class="hofnone">No one yet</i>') + '</li>'; }).join('') + '</ol>' +
         (S.hero ? '<small>You: power level ' + L.lvl(S, 'you') + ' · gear rating ' + fmt(L.gearRating(S, 'you')) + '</small>' : ''), cls.some(c => cb[c] && cb[c].name === me));
-      box.innerHTML = '<p class="note small">Tap a record for the top 3. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(rec).join('') + best + HOF.slice(2).map(rec).join('') + '</div>';
+      box.innerHTML = '<p class="note small">' + (HCS ? '<b class="hcred">Hardcore Hall of Fame.</b> Only Hardcore heroes are listed here. ' : '') + 'Tap a record for the top 3. Updates every few minutes.</p><div class="hof">' + HOF.slice(0, 2).map(rec).join('') + best + HOF.slice(2).map(rec).join('') + '</div>';
     } catch (e) { box.innerHTML = '<p class="note">' + (e === 404 ? 'The Hall of Fame opens soon.' : 'The Hall of Fame could not load right now. Try again in a minute.') + '</p>'; hofAt = 0; }
   }
   if (HCS) document.querySelectorAll('#lbseg button').forEach(x => x.classList.toggle('on', x.dataset.lb === 'hc'));
@@ -8428,7 +8428,7 @@
   function paintBoss() {
     const el = $('wbbar'), x = wbState(), inA = S.wb && S.wb.until > x.now;
     let h = '';
-    if (inA) h = icon('skull') + '<span><b>Assault on ' + esc(S.wb.name) + '</b> · ' + wbDur(S.wb.until - x.now) + ' left · your damage <b>' + wbNum(S.wb.score, S.wb.old) + '</b></span>';
+    if (inA) h = icon('skull') + '<span><b>Assault on ' + esc(S.wb.name) + '</b> · ' + wbDur(S.wb.until - x.now) + ' left · your damage <b>' + wbNum(S.wb.score, S.wb.old) + '</b></span><em>Escape</em>';
     else if (x.claim) h = icon('crown') + '<span><b>The world boss has fallen back.</b> Your reward is waiting.</span><em>Claim</em>';
     else if (x.live) {
       const ph = L.wbPhase(x.total, x.w.id);
@@ -8455,15 +8455,72 @@
       '<li><b>Rewards</b><span>After the weekend: 3 Sigils for taking part, 1 more for every phase the server breaks (up to 5), and 5 more for the top three. Plus a big purse of gold.</span></li>' +
       '<li><b>Mythic loot</b><span>' + (() => { const s2 = L.WB_SETS[L.wbBoss(x.w.id)]; return 'When the event ends, everyone who fought rolls their own chance at a Mythic piece of <b>' + esc(s2.name) + '</b>. Mythic gear is above Legendary and very rare: under 3% even for the strongest delvers, higher the more damage you dealt, and full odds only once the server breaks 3 phases. You also get ' + esc(s2.word) + ' shards and Rift tokens for your damage and the phases broken. Shards upgrade the set; ' + L.WB_TOKEN_COST + ' tokens buy a piece of any boss set from Warden Sable at the Rift Gate, just outside the Hold.'; })() + '</span></li>' +
       '<li><b>When</b><span>Every weekend, Friday to Sunday (all times UTC).' + (x.w.id === '2026-11-23' ? ' This first one is a preview and runs until Friday.' : '') + '</span></li></ul>' +
-      (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
+      (top.length ? '<h3 class="sub">Top delvers</h3><ol class="wbtop">' + top.map(t => '<li><span class="c-' + esc(t.cls) + '">' + esc(t.name) + (t.hc ? hcTag() : '') + '</span><b>' + wbNum(t.score, old) + '</b></li>').join('') + '</ol>' : '') +
       (x.me && x.me.score > 0 ? '<p class="passstate">' + (old ? 'Your damage this event' : 'Your best ' + L.WB_BEST + ' assaults') + ': <b>' + wbNum(x.me.score, old) + '</b>' + (rank ? ', rank ' + rank : '') + '.</p>' : '') +
       '<div class="row">' + (x.claim ? '<button class="btn" id="wb-claim">Claim your reward</button>' : !CL || !signedIn() ? '<button class="btn" id="wb-in">Sign in to fight</button>' : x.live ? (x.ready > 0 ? '<button class="btn" disabled>Next assault in ' + wbDur(x.ready) + '</button>' : '<button class="btn" id="wb-go">Join the assault</button>') : '') + '<button class="btn ghost" id="wb-no">Close</button></div>', md => {
       md.querySelector('#wb-x').onclick = closeModal; md.querySelector('#wb-no').onclick = closeModal;
       const go = md.querySelector('#wb-go'); if (go) go.onclick = () => { closeModal(); joinAssault(); };
+      // v143 Hardcore: the threat level of an assault, before the player commits to it. Deadly asks twice.
+      if (HCS && S.hero && x.live && !S.wb) setTimeout(() => {
+        let t = null; try { t = L.threatOf(S, 'wb', 0, Date.now(), 3); } catch (e) {}
+        if (!t || $('modal').hidden || !md.querySelector('#wb-x') || md.querySelector('.threatbox')) return;
+        const row = md.querySelector('.row:last-of-type'); if (!row) return;
+        row.insertAdjacentHTML('beforebegin', threatBox(t, 'wb'));
+        if (go && t.lv >= 2) { let sure = false; go.onclick = () => { if (!sure) { sure = true; go.textContent = 'Fight anyway'; go.classList.add('hcgo'); return; } closeModal(); joinAssault(); }; }
+      }, 30);
       const cl = md.querySelector('#wb-claim'); if (cl) cl.onclick = () => { const st2 = wb.st, done = st2 && ((st2.w.id === x.claim && st2.me.cl) || (st2.prev && st2.prev.id === x.claim && st2.prev.cl)); if (done) { closeModal(); lootBoss(x.claim).then(() => { loadBoss().then(paintBoss); }); } else claimBoss(x.claim, cl); };
       const si = md.querySelector('#wb-in'); if (si) si.onclick = () => { closeModal(); authForm('in'); };
     });
   }
+  // v143 (John, 27 Nov 2026): world bosses can kill, so the party can always get out. The damage dealt still counts.
+  function escapeBoss() {
+    if (!S.wb || S.wb.gob) return;
+    const dn = S.party.filter(id => id && S.down[id]).length;
+    modal('<div class="center"><h2 class="hch">' + icon('skull') + 'Escape the assault?</h2><p>Your party pulls back from ' + esc(S.wb.name) + '. The damage you dealt still counts' + (HCS ? (dn ? ', and your healer can still raise anyone who is down before time runs out' : '') + '. In Hardcore, staying until the whole party falls loses everything they wear.' : '.') + '</p></div>' +
+      '<div class="row" style="justify-content:center"><button class="btn ghost" id="es-no">Keep fighting</button><button class="btn" id="es-go">Escape</button></div>', md => {
+        md.querySelector('#es-no').onclick = closeModal;
+        md.querySelector('#es-go').onclick = () => { closeModal(); if (L.fleeAssault(S, events)) { save(); toast('skull', 'You escaped', 'The party pulled back from the world boss.', ''); paintBoss(); } };
+      });
+  }
+  // v143 threat level (John, 27 Nov 2026): before a boss fight that could kill the party, say how dangerous it is,
+  // from a few quick trial fights with the party's real gear, skills and damage (L.threatOf).
+  const THREAT = ['Low', 'Risky', 'High', 'Deadly'];
+  function threatText(t, kind) {
+    const tries = t.runs === 1 ? 'one trial fight' : t.runs + ' trial fights';
+    if (t.lv === 3) return 'In ' + tries + ' with your party\'s gear and damage, ' + (t.wipes === t.runs ? 'every one' : t.wipes + ' of them') + ' ended with your ' + (kind === 'wb' ? 'party' : 'party or hero') + ' falling. In Hardcore that means losing the gear they wear.';
+    if (t.lv === 2) return 'In ' + tries + ', companions died. Train, upgrade gear or bring a healer before you fight it.';
+    if (t.lv === 1) return 'In ' + tries + ', someone went down but got back up. Watch your healer\'s mana.';
+    return 'In ' + tries + ', nobody went down.' + (kind === 'guard' && !t.won ? ' Your party could not beat it in 90 seconds, though.' : '');
+  }
+  function threatBox(t, kind) {
+    if (!t) return '';
+    return '<div class="threatbox threat t' + t.lv + '"><h3>' + icon('skull') + 'Threat: ' + THREAT[t.lv] + '</h3><p>' + threatText(t, kind) + (kind === 'guard' && t.won ? ' It fell ' + (t.secs < 2 ? 'in moments.' : 'in about ' + Math.round(t.secs) + ' seconds.') : '') + '</p></div>';
+  }
+  // The guardian ahead (Hardcore): the chip in the scene's corner, refreshed when the floor or the party changes.
+  let thr = { key: '', t: null, f: 0, at: 0 };
+  function guardAhead() { const f = Math.ceil(Math.max(1, S.floor) / L.BOSS_EVERY) * L.BOSS_EVERY; return f <= S.maxFloor + L.BOSS_EVERY ? f : 0; }
+  function paintThreat() {
+    const el = $('threatchip'); if (!el) return;
+    if (!HCS || !S.hero || !S.hc || S.wb || L.atMainCamp(S)) { if (!el.hidden) el.hidden = true; return; }
+    const f = guardAhead(); if (!f) { el.hidden = true; return; }
+    const key = f + ':' + S.party.join(',') + ':' + Object.keys(S.gear || {}).map(k => Object.values(S.gear[k] || {}).join('.')).join('|') + ':' + (S.levels && S.levels.you);
+    if (key !== thr.key && Date.now() - thr.at > 4000) {
+      thr.key = key; thr.at = Date.now(); thr.f = f;
+      setTimeout(() => { try { thr.t = L.threatOf(S, 'guard', f, Date.now(), 3); } catch (e) { thr.t = null; } paintThreat(); }, 50);
+    }
+    const t = thr.f === f ? thr.t : null; if (!t) { el.hidden = true; return; }
+    const h = icon('skull') + '<i class="cb">' + THREAT[t.lv] + '</i><span><b>Guardian of floor ' + f + '</b> · threat ' + THREAT[t.lv] + '</span><em>Details</em>';
+    if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; el.className = 'achip threatchip t' + t.lv; }
+    el.hidden = false;
+  }
+  function openThreat() {
+    const f = thr.f, t = thr.t; if (!t) return;
+    modal('<div class="center"><h2 class="hch">' + icon('skull') + 'The guardian of floor ' + f + '</h2></div>' + threatBox(t, 'guard') +
+      '<p class="note small">The threat level comes from quick trial fights with your party as it is right now: gear, levels, skills and line-up. Change any of them and it updates.</p>' +
+      '<div class="row" style="justify-content:center"><button class="btn" id="th-x">Got it</button></div>', md => { md.querySelector('#th-x').onclick = closeModal; });
+  }
+  $('threatchip') && $('threatchip').addEventListener('click', openThreat);
+  setInterval(() => { if (!document.hidden) paintThreat(); }, 2000);
   function joinAssault() {
     if (!gateUse('boss')) return;
     const x = wbState();
@@ -8493,7 +8550,7 @@
       const g = Math.max(2000, L.pipRate(S) * 1800 * (1 + r.phases));
       S.gold += g; S.stats.goldEarned += g; if (typeof prof !== 'undefined' && prof) prof.bal = r.bal; save();
       closeModal(); sfx.relic();
-      toast('crown', 'World boss reward', '+' + r.sig + ' Sigils and ' + fmt(g) + ' gold. You ranked ' + r.rank + ' of ' + r.n + '.', 'feat');
+      toast('crown', 'World boss reward', (r.sig ? '+' + r.sig + ' Sigils and ' : 'Your account already got this event\'s Sigils, so this hero gets ') + fmt(g) + ' gold. You ranked ' + r.rank + ' of ' + r.n + '.', 'feat');
     } catch (e) { if (btn) btn.disabled = false; toast('lock', 'Could not claim yet', 'Try again in a moment.', 'warn'); }
     wb.busy = false; await lootBoss(id); loadBoss().then(paintBoss); updatePanel(true);
   }
@@ -8513,8 +8570,8 @@
   }
   $('wbbar').addEventListener('click', () => {
     const x = wbState();
-    if (S.wb && S.wb.until > x.now) return;
-    if (x.live && !x.claim && x.ready <= 0 && signedIn()) joinAssault(); else openBoss();
+    if (S.wb && S.wb.until > x.now) { if (!S.wb.gob) escapeBoss(); return; }
+    if (x.live && !x.claim && x.ready <= 0 && signedIn() && !HCS) joinAssault(); else openBoss();
   });
   setTimeout(() => loadBoss().then(paintBoss), 3000);
   setInterval(() => { if (!document.hidden) loadBoss().then(paintBoss); }, 120000);
@@ -8800,7 +8857,7 @@
         const rc = me.rc && me.rc[f.id], rq = rc ? (me.rep || [1, .5, .25, 0])[Math.min(rc[0], 3)] : 1;
         const rm = !rc ? '' : rq > 0 ? '<span class="mu rep">' + icon('refresh') + 'Rematch: ' + Math.round(rq * 100) + '% rating and Laurels</span>' : '<span class="mu bad">' + icon('refresh') + 'Rematch pays nothing for ' + ringIn(rc[1] - Date.now()) + '</span>';
         const brings = (f.lo ? f.lo.a.concat(f.lo.p) : []).map(id => { const k = ringSkill(id); return k ? k.n : ''; }).filter(Boolean);
-        return '<div class="ringfoe"><div class="rffig">' + (theirBanner(f.id) ? bannerSVG(theirBanner(f.id), 'rfban') : '') + ringFig(f.c, outfitHue((looksCache[f.id] || {}).k), 2) + '</div><div class="rfinfo"><div class="nm">' + esc(f.n) + ' ' + classTag(f.c) + '</div><small><span class="rtitle sm rt-' + ringTitle(f.r).toLowerCase() + '">' + ringTitle(f.r) + '</span> ' + f.r.toLocaleString('en-US') + ' &middot; ' + f.w + '&ndash;' + f.l + ' &middot; <i class="odds ' + odd[0] + '">' + odd[1] + '</i></small>' + (mu ? '<small>' + mu + '</small>' : '') + (rm ? '<small>' + rm + '</small>' : '') + (brings.length ? '<small class="brings">Brings ' + brings.map(esc).join(' &middot; ') + '</small>' : '') + '<small class="dim">' + ringStatLine(f.s) + '</small></div>' +
+        return '<div class="ringfoe"><div class="rffig">' + (theirBanner(f.id) ? bannerSVG(theirBanner(f.id), 'rfban') : '') + ringFig(f.c, outfitHue((looksCache[f.id] || {}).k), 2) + '</div><div class="rfinfo"><div class="nm">' + esc(f.n) + (f.hc ? hcTag() : '') + ' ' + classTag(f.c) + '</div><small><span class="rtitle sm rt-' + ringTitle(f.r).toLowerCase() + '">' + ringTitle(f.r) + '</span> ' + f.r.toLocaleString('en-US') + ' &middot; ' + f.w + '&ndash;' + f.l + ' &middot; <i class="odds ' + odd[0] + '">' + odd[1] + '</i></small>' + (mu ? '<small>' + mu + '</small>' : '') + (rm ? '<small>' + rm + '</small>' : '') + (brings.length ? '<small class="brings">Brings ' + brings.map(esc).join(' &middot; ') + '</small>' : '') + '<small class="dim">' + ringStatLine(f.s) + '</small></div>' +
           '<button class="btn small" data-duel="' + f.id + '"' + (en ? '' : ' disabled title="No challenges left. One returns every 30 minutes."') + '>Duel</button></div>';
       }).join('') + '</div>' : '<p class="note">No other heroes have entered the Ring yet. Check back soon, or tell a friend to bring their hero.</p>';
       h += '<div class="row"><button class="btn ghost small" id="ring-ref">' + icon('refresh') + ' New challengers</button></div>';
@@ -8832,7 +8889,7 @@
         h += '<p class="note small">Every team starts at 1,000 team rating. Beating a higher-rated team is worth more.</p>';
         box.innerHTML = h; return;
       }
-      h += st.top.length ? '<ol class="ringtop">' + st.top.map((t, i) => '<li class="' + (t.id === me.id ? 'me' : '') + '"><span class="rk">' + (i + 1) + '</span>' + ((t.id === me.id ? myBanner() : theirBanner(t.id)) ? bannerSVG(t.id === me.id ? myBanner() : theirBanner(t.id), 'tban') : '') + ringFig(t.c, outfitHue((looksCache[t.id] || {}).k), 1) + '<span class="nm c-' + esc(t.c) + '">' + esc(t.n) + '</span><span class="rtitle sm rt-' + ringTitle(t.r).toLowerCase() + '">' + ringTitle(t.r) + '</span><b>' + t.r.toLocaleString('en-US') + '</b><small>' + t.w + '&ndash;' + t.l + '</small></li>').join('') + '</ol>' : '<p class="note">Nobody has fought yet. The first win puts you on top.</p>';
+      h += st.top.length ? '<ol class="ringtop">' + st.top.map((t, i) => '<li class="' + (t.id === me.id ? 'me' : '') + '"><span class="rk">' + (i + 1) + '</span>' + ((t.id === me.id ? myBanner() : theirBanner(t.id)) ? bannerSVG(t.id === me.id ? myBanner() : theirBanner(t.id), 'tban') : '') + ringFig(t.c, outfitHue((looksCache[t.id] || {}).k), 1) + '<span class="nm c-' + esc(t.c) + '">' + esc(t.n) + (t.hc ? hcTag() : '') + '</span><span class="rtitle sm rt-' + ringTitle(t.r).toLowerCase() + '">' + ringTitle(t.r) + '</span><b>' + t.r.toLocaleString('en-US') + '</b><small>' + t.w + '&ndash;' + t.l + '</small></li>').join('') + '</ol>' : '<p class="note">Nobody has fought yet. The first win puts you on top.</p>';
       h += '<p class="note small">Everyone starts at 1,000. Beating a higher-rated hero is worth more. Heroes that defend well while their owner is away climb too.</p>';
     }
     box.innerHTML = h;

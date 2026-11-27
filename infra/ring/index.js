@@ -342,7 +342,7 @@ function teamFight(A, B, rowA, rowB, rnd) {
 // ---- storage ----
 const n = (i, k, d) => i && i[k] ? +i[k].N : d;
 const js = (i, k) => { try { return i && i[k] ? JSON.parse(i[k].S) : null; } catch (e) { return null; } };
-const row0 = i => ({ id: i.pid.S, n: i.n.S, c: i.c.S, sd: i.sd.S, lv: n(i, 'lv', 1), m: n(i, 'm', 0), v: n(i, 'v', 0), k: (i.k ? i.k.S : '0.0.0.0.0').split('.').map(Number),
+const row0 = i => ({ hc: i.hc ? 1 : 0, id: i.pid.S, n: i.n.S, c: i.c.S, sd: i.sd.S, lv: n(i, 'lv', 1), m: n(i, 'm', 0), v: n(i, 'v', 0), k: (i.k ? i.k.S : '0.0.0.0.0').split('.').map(Number),
   r: n(i, 'r', START), pk: n(i, 'pk', START), w: n(i, 'w', 0), l: n(i, 'l', 0), dw: n(i, 'dw', 0), dl: n(i, 'dl', 0), ll: n(i, 'll', 0), et: n(i, 'et', 0), fd: i.fd ? i.fd.S : '',
   sk: js(i, 'sk') || {}, lo: js(i, 'lo'), rp: js(i, 'rp') || {},
   // team battles: lineup, companion kits, team rating, best, wins, losses, defense wins/losses, first team win day, repeats
@@ -364,9 +364,9 @@ const sv = (x, k) => { const o = k === 'r' ? 'tr' : 'r'; return [', sn = :sn, ps
 // rc (per foe, for the client): [duels in the last day, when a rematch pays something again].
 const REP = [1, .5, .25, 0], REPW = 864e5;
 const reps = (x, now, key) => { const o = {}, src = x[key || 'rp'] || {}; for (const k in src) { const t = src[k].filter(v => now - v < REPW); if (t.length) o[k] = t; } return o; };
-const pub = x => ({ id: x.id, n: x.n, c: x.c, sd: x.sd, lv: x.lv, r: x.r, w: x.w, l: x.l, k: x.k, s: stats(x), lo: loadout(x), sk: owned(x) });
+const pub = x => ({ ...(x.hc ? { hc: 1 } : {}), id: x.id, n: x.n, c: x.c, sd: x.sd, lv: x.lv, r: x.r, w: x.w, l: x.l, k: x.k, s: stats(x), lo: loadout(x), sk: owned(x) });
 // A team as others see it: the three fighters with their Ring stats, plus team rating and record.
-const tpub = x => ({ id: x.id, n: x.n, c: x.c, sd: x.sd, tr: x.tr, tw: x.tw, tx: x.tx, t: team(x).map(t => ({ id: t.id, n: t.n, c: t.c, s: t.s, k: t.k, lo: t.lo, hero: t.hero || 0 })) });
+const tpub = x => ({ ...(x.hc ? { hc: 1 } : {}), id: x.id, n: x.n, c: x.c, sd: x.sd, tr: x.tr, tw: x.tw, tx: x.tx, t: team(x).map(t => ({ id: t.id, n: t.n, c: t.c, s: t.s, k: t.k, lo: t.lo, hero: t.hero || 0 })) });
 const TEAM = { kit: CKIT, max: CMAX, gate: 1300, pos: TPOS };
 const MATCH = { beats: BEATS, adv: ADV, why: WHY, nature: NATURE };
 const SKILLS = SK.map(s => ({ id: s.id, c: s.c, k: s.k, n: s.n, fx: s.fx, v: s.v, cd: s.cd || 0 }));
@@ -374,7 +374,10 @@ const SKILLS = SK.map(s => ({ id: s.id, c: s.c, k: s.k, n: s.n, fx: s.fx, v: s.v
 exports.handler = async (e) => {
   const cl = e.requestContext.authorizer && e.requestContext.authorizer.jwt && e.requestContext.authorizer.jwt.claims;
   if (!cl || !cl.sub) return res(401, { error: 1 });
-  const me = pidOf(cl.sub), now = Date.now(), rk = e.routeKey, K = p => ({ pid: S(p) });
+  // v143 Hardcore (John, 27 Nov 2026: Hardcore gets everything Normal has): ?hc=1 is the account's Hardcore hero, its
+  // own Ring row (flag hc, shown with a Hardcore tag). Ring strength never comes from dungeon power, so both modes
+  // share one Ring; nothing but Laurels and Ring standing is earned here.
+  const hc = (e.queryStringParameters || {}).hc === '1', me = pidOf(hc ? cl.sub + '#hc' : cl.sub), now = Date.now(), rk = e.routeKey, K = p => ({ pid: S(p) });
   let b = {}; try { b = JSON.parse(e.isBase64Encoded ? Buffer.from(e.body || '', 'base64').toString() : e.body || '{}'); } catch (x) { return res(400, { error: 1 }); }
   const get = async (t, p) => (await db.send(new D.GetItemCommand({ TableName: t, Key: K(p), ConsistentRead: true }))).Item;
   const up = (p, x, v, c) => db.send(new D.UpdateItemCommand(Object.assign({ TableName: T, Key: K(p), UpdateExpression: x, ExpressionAttributeValues: v, ReturnValues: 'ALL_NEW' }, c ? { ConditionExpression: c } : {})));
@@ -421,7 +424,7 @@ exports.handler = async (e) => {
       // The build: the hero's name, class and banner come from the hero board. m and v (the log of dungeon damage
       // and health) are still stored for old clients but no longer count in any fight (v141).
       const h = await get(H, me), c = x => Math.max(0, Math.min(60, Math.round((+x || 0) * 10) / 10));
-      if (!h || !h.name || h.ban) return res(403, { error: 'hero' });
+      if (!h || !h.name || h.ban || !!h.hc !== hc) return res(403, { error: 'hero' });
       // The team lineup (optional): exactly the hero ('you') once and two different companions of the player's own,
       // each with class, name and the log of its own damage and health. Player heroes (16 hex ids) can never join.
       let tl = null;
@@ -432,8 +435,8 @@ exports.handler = async (e) => {
         if (!ok) return res(400, { error: 'team' });
         tl = b.tl.map(e => e.id === 'you' ? { id: 'you' } : { id: String(e.id), n: cname(e.n), c: e.c, m: c(e.m), v: c(e.v) });
       }
-      const r = await up(me, 'SET n = :n, c = :c, sd = :s, lv = :l, m = :m, v = :v, t = :t, r = if_not_exists(r, :r), pk = if_not_exists(pk, :r)' + (tl ? ', tl = :tl, tr = if_not_exists(tr, :r), tp = if_not_exists(tp, :r)' : ''),
-        Object.assign({ ':n': h.name, ':c': h.cls, ':s': h.sd || S('unsworn'), ':l': h.lv, ':m': N(c(b.m)), ':v': N(c(b.v)), ':t': N(now), ':r': N(START) }, tl ? { ':tl': S(JSON.stringify(tl)) } : {}));
+      const r = await up(me, 'SET n = :n, c = :c, sd = :s, lv = :l, m = :m, v = :v, t = :t, r = if_not_exists(r, :r), pk = if_not_exists(pk, :r)' + (hc ? ', hc = :hc' : '') + (tl ? ', tl = :tl, tr = if_not_exists(tr, :r), tp = if_not_exists(tp, :r)' : ''),
+        Object.assign(hc ? { ':hc': N(1) } : {}, { ':n': h.name, ':c': h.cls, ':s': h.sd || S('unsworn'), ':l': h.lv, ':m': N(c(b.m)), ':v': N(c(b.v)), ':t': N(now), ':r': N(START) }, tl ? { ':tl': S(JSON.stringify(tl)) } : {}));
       return res(200, { me: mine(row(r.Attributes)) });
     }
     const x = await get(T, me), my = x && row(x);

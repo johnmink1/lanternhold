@@ -1174,7 +1174,7 @@
   const heroLv = s => s.hero ? heroLevel(s).lv : 1;
   const unlockOf = id => UNLOCKS.find(u => u.id === id);
   // Hardcore heroes skip the Ember Ring and the world boss at launch (John 27 Nov 2026, plan question 5).
-  const HC_OFF = ['ring', 'boss'];
+  const HC_OFF = []; // v143 (John, 27 Nov 2026): Hardcore gets everything Normal has, the Ember Ring and world bosses too
   function canUse(s, id) { if (s && s.hc && HC_OFF.includes(id)) return false; const u = unlockOf(id); return !u || !!(s.grand && s.grand[id]) || heroLv(s) >= u.lv; }
   const nextUnlock = s => UNLOCKS.find(u => !canUse(s, u.id) && !(s.hc && HC_OFF.includes(u.id))) || null;
   function newUnlocks(s, before, after) { return UNLOCKS.filter(u => u.lv > before && u.lv <= after && !(s.grand && s.grand[u.id]) && !(s.hc && HC_OFF.includes(u.id))); }
@@ -3110,7 +3110,6 @@
   // Which phase the server's total has reached, and how far into it (id: the event, for its phase size).
   function wbPhase(total, id) { let k = 0, need = id && !wbOld(id) ? WB_HP1R : WB_HP1, t = total; while (t >= need && k < 30) { t -= need; need *= 2; k++; } return { broken: k, into: t, need }; }
   function startAssault(s, now, name) {
-    if (s.hc) return false; // Hardcore heroes skip the world boss at launch
     if (resting(s, now) || !alive(s).length || (s.wb && s.wb.until > now)) return false;
     const id = wbWindow(now).id, old = wbOld(id), unit = foeHp(Math.max(1, s.maxFloorEver), false);
     s.wb = old ? { until: now + WB_TIME * 1000, score: 0, unit, name, old: true } : { until: now + WB_TIME * 1000, score: 0, name, id, k: wbBoss(id), cap: WB_CEIL * unit };
@@ -3125,6 +3124,47 @@
     // ck = the part of the score from the player's own strikes, iv = gaps between those strikes (ms). The server
     // re-runs the rhythm check on iv and drops ck from a machine-even assault (worldboss.js).
     events && events.push({ type: 'wbend', score, fell: !!fell, ck: Math.min(score, cut(wb.ck || 0)), iv: (wb.iv || []).slice(0, 3000), gob: wb.gob ? wb.id : null });
+  }
+  // v143 (John, 27 Nov 2026): leave a world boss assault before it kills the party. The damage dealt still counts.
+  function fleeAssault(s, events) { if (!s.wb) return false; endAssault(s, events, false); s.foeGap = (s.clock || Date.now()) + 900; return true; }
+  // v143 threat level (John, 27 Nov 2026: "a threat level for entering a boss fight that could kill you based on their
+  // gear/dps setup"). Fights the boss a few times on copies of the save with the real combat rules and reports what
+  // happened: 0 low (nobody fell), 1 risky (someone fell and got back up), 2 high (a companion died), 3 deadly (the
+  // party or the hero fell). kind 'wb' = a world boss assault, 'guard' = the guardian of floor f.
+  function threatOf(s0, kind, f, now, runs) {
+    runs = runs || 3; now = now || Date.now();
+    const out = { lv: 0, runs, falls: 0, deaths: 0, wipes: 0, won: 0, secs: 0, dps: 0 };
+    let base; try { base = JSON.stringify(Object.assign({}, s0, { foe: null })); } catch (e) { return null; }
+    for (let r = 0; r < runs; r++) {
+      const s = JSON.parse(base); let t = now; const ev = [];
+      if (s.hc) { s.hc.flee = 0; s.hc.caution = 0; s.hc.pack = null; }
+      s.autoAdvance = false; s.retryAt = 0; s.campUntil = 0; s.campReturn = 0; s.wb = null; s.foeGap = 0; s.shuf = null; s.enchAt = 0; s.shopK = null;
+      for (const id of s.party) if (id) { delete s.down[id]; s.hp[id] = maxHpOf(s, id); }
+      if (kind === 'wb') { s.wbAt = 0; if (!startAssault(s, t, 'boss')) return null; }
+      else { s.floor = f; s.maxFloor = Math.max(s.maxFloor || 1, f); s.foeIdx = 0; s.foe = makeFoe(s, null); if (!s.foe || !s.foe.boss) return null; }
+      const hp0 = s.foe ? s.foe.max : 0, end = t + (kind === 'wb' ? WB_TIME : 90) * 1000;
+      let dealt = 0;
+      while (t < end) {
+        t += 100; ev.length = 0;
+        const fh = s.foe ? s.foe.hp : 0;
+        tick(s, 0.1, t, null, ev);
+        for (const e of ev) {
+          if (e.type === 'down' || e.type === 'fall') out.falls++;
+          if (e.type === 'hcdie') out.deaths++;
+          if (e.type === 'hcwipe' || e.type === 'hcherofall') { out.wipes++; t = end; }
+        }
+        if (kind === 'wb') { if (!s.wb) break; dealt = s.wb.score; }
+        else if (!s.foe || !s.foe.boss || s.floor !== f) { if (s.floor === f && (!s.foe || !s.foe.boss)) { out.won++; out.secs += (t - now) / 1000; } break; }
+        else if (s.foe.hp < fh) dealt += fh - s.foe.hp;
+      }
+      out.dps += dealt / Math.max(1, Math.min(t, end) - now) * 1000 / runs;
+      // still lying down when the fight ends: they would die or the party would soon fall
+      const dn = s.party.filter(id => id && s.down[id]).length, n = s.party.filter(Boolean).length;
+      out.downs = Math.max(out.downs || 0, dn); if (n && dn * 2 >= n) out.wipes++;
+    }
+    out.lv = out.wipes ? 3 : out.deaths || out.downs ? 2 : out.falls ? 1 : 0;
+    if (out.won) out.secs /= out.won;
+    return out;
   }
   function wbFoe(s) {
     const f = Math.max(1, s.maxFloorEver);
@@ -3576,6 +3616,8 @@
 
   function wipe(s, now, events) {
     // Falling to the world boss just ends the assault; the damage dealt still counts.
+    // v143 Hardcore: a world boss kills like any monster, so the whole party falling is a Hardcore wipe.
+    if (s.foe && s.foe.world && s.hc) { endAssault(s, events, true); return hcWipe(s, now, events); }
     if (s.foe && s.foe.world) { for (const id of s.party) if (id) { delete s.down[id]; s.hp[id] = maxHpOf(s, id) * 0.6; } s.minions = []; endAssault(s, events, true); return; }
     if (s.hc) return hcWipe(s, now, events);
     s.stats.wipes++; s.dots = {};
@@ -4686,7 +4728,7 @@
     VERSION, CLASSES, CLASS_ORDER, HERO_CLASSES, PAID_CLASS, freeClassChange, OATH_HEAL, OATH_SHIELD, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
     CREATURES, ROSTERS, FAMILY, LORE_AT, REVEAL, SPECIAL_CHANCE, SPECIAL_FLOOR, RAR_W, RAR_NAME, SIZE_X, ROSTER_HOME, creatureById, creatureHue, creatureRegions, creatureOdds, pickCreature, famsIn, newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, GUEST_REFRESH, GUEST_DROP_HOLD, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec, steadyHeal, steadyClick,
     questCtx, qEv, QDEFS, pickQuests, bountyGo, bountyCat, clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
-    HC_DYING, HC_RAISE, HC_PACK, HC_PACK_DAYS, HC_OFF, hcOn, hcNorm, startHardcore, hcPackLive, hcHome, hcDie, hcRecover, wipe,
+    HC_DYING, HC_RAISE, HC_PACK, HC_PACK_DAYS, HC_OFF, fleeAssault, threatOf, hcOn, hcNorm, startHardcore, hcPackLive, hcHome, hcDie, hcRecover, wipe,
     WIPE_HOLD, LOADOUT_FREE, LOADOUT_PASS, loadoutSlots, saveLoadout, wearLoadout, offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_BEST, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, dayLimits, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive, gearRating,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -2391,6 +2391,16 @@ body.hasdock #toasts{bottom:calc(var(--dockh) + 16px)}
 .achips .wbbar .cb{background:#c58bff;color:#1a0d2e}
 .achips .gobhunt{display:flex;align-items:center;border:1px solid #3f6b3a;background:linear-gradient(90deg,#10200f,#18301a);color:#d6f5c8;box-shadow:0 0 10px rgba(126,224,165,.35)}
 .achips .wbbar{box-shadow:0 0 10px rgba(155,77,255,.45)}
+/* v143 threat level (Hardcore): the guardian ahead, coloured by how the trial fights went */
+.achips .threatchip{display:flex;align-items:center;border:1px solid var(--tc);background:#120d0d;color:#f3e3e0;box-shadow:0 0 10px color-mix(in srgb,var(--tc) 45%,transparent)}
+.achips .threatchip>svg{color:var(--tc)}
+.achips .threatchip .cb{background:var(--tc);color:#140a08}
+.threat{--tc:#7ee0a5}.threat.t1{--tc:#f0c879}.threat.t2{--tc:#ff9a5a}.threat.t3{--tc:#ff5a5a}
+.threatchip.t0{--tc:#7ee0a5}.threatchip.t1{--tc:#f0c879}.threatchip.t2{--tc:#ff9a5a}.threatchip.t3{--tc:#ff5a5a}
+.threatbox{margin:10px 0;padding:10px 12px;border:1px solid var(--tc);border-radius:12px;background:color-mix(in srgb,var(--tc) 9%,transparent)}
+.threatbox h3{margin:0 0 4px;font-size:15px;color:var(--tc);display:flex;align-items:center;gap:6px}
+.threatbox h3 svg{width:16px;height:16px}
+.threatbox p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
 body.atench .achips{display:none}
 /* NPC Guild (v118) */
 .rartag{display:inline-block;margin-left:4px;padding:0 6px;border:1px solid var(--rc);border-radius:9px;color:var(--rc);font-size:10.5px;font-weight:700;line-height:16px;vertical-align:1px;white-space:nowrap}

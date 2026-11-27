@@ -70,10 +70,25 @@ const now0 = 1.8e12;
   const m = L.migrate(o); ev = []; L.tick(m, 0.1, now0, r, ev);
   assert.ok(!m.unlocked.includes(v2) && ev.some(e => e.type === 'hcdie'), 'dying on close = died');
   console.log('ok  closing the game while someone lies dying does not save them');
-  // 7. NP+, world boss, Ring and Sigil finds are off
-  assert.ok(!L.npReady(Object.assign(party(), { maxFloorEver: 999 })) && !L.canUse(s, 'ring') && !L.canUse(s, 'boss') && L.sigilChance(s, 'chest') === 0);
-  assert.equal(L.startAssault(s, now0, 'x'), false);
-  console.log('ok  NP+, world boss, Ember Ring and Sigil finds are closed to Hardcore');
+  // 7. NP+ and Sigil finds are off
+  assert.ok(!L.npReady(Object.assign(party(), { maxFloorEver: 999 })) && L.sigilChance(s, 'chest') === 0);
+  console.log('ok  NP+ and Sigil finds are closed to Hardcore');
+  // 7b. v143: the world boss and the Ember Ring are open; a world boss can wipe a Hardcore party; Escape works
+  { const w = party(); w.hc.flee = 0; w.hc.caution = 0; for (const id of w.party) if (id) w.gear[id] = {}; // no gear: the boss wins
+    assert.ok(!L.HC_OFF.includes('ring') && !L.HC_OFF.includes('boss'), 'Ring and world boss open');
+    assert.ok(L.startAssault(w, now0, 'Boss'), 'assault starts');
+    let t = now0, e2 = [], wiped = false;
+    for (let i = 0; i < 1300 && !wiped; i++) { t += 100; e2.length = 0; L.tick(w, 0.1, t, r, e2); wiped = e2.some(e => e.type === 'hcwipe' || e.type === 'hcherofall') || !w.wb; }
+    L.tick(w, 0.1, t + 100, r, []); L.tick(w, 0.1, t + 200, r, []);
+    assert.ok(!w.wb, 'assault ended');
+    const lost = (w.hc.w || 0) + (w.hc.hf || 0) + (w.hc.n || 0); assert.ok(lost > 0, 'the boss killed in Hardcore: ' + JSON.stringify({ w: w.hc.w, hf: w.hc.hf, n: w.hc.n }));
+    const f2 = party(); assert.ok(L.startAssault(f2, now0, 'Boss')); f2.wb.score = 1234; const e3 = [];
+    assert.ok(L.fleeAssault(f2, e3) && !f2.wb && e3.some(e => e.type === 'wbend' && e.score === 1234 && !e.fell), 'Escape keeps the damage');
+    const th = L.threatOf(party(), 'wb', 0, now0, 2), tg = L.threatOf(party(), 'guard', 55, now0, 2);
+    assert.ok(th && tg && th.lv >= 0 && th.lv <= 3 && tg.lv >= 0 && tg.lv <= 3, 'threat levels: wb ' + (th && th.lv) + ', guard ' + (tg && tg.lv));
+    const weak = party(); for (const id of weak.party) if (id) { weak.levels[id] = 1; weak.gear[id] = {}; }
+    assert.equal(L.threatOf(weak, 'guard', 60, now0, 2).lv, 3, 'an undergeared party is told the guardian is deadly');
+    console.log('ok  world boss and Ring open; the boss can kill; Escape keeps damage; threat wb', th.lv, 'guard F55', tg.lv); }
   // 8. Normal play is unchanged: a fallen Normal member stands up on the timer
   const n = L.newState(); L.startGame(n, 'multi', 'tank', 'N', 'mercy'); L.recruit(n, 'ashe'); n.hp.ashe = 0; n.down.ashe = now0; L.gotoFloor(n, 1); n.maxFloor = 5; L.gotoFloor(n, 3);
   L.tick(n, 0.1, now0 + 1, r, []); assert.ok(!n.down.ashe && n.unlocked.includes('ashe'), 'normal revive');
@@ -149,4 +164,39 @@ const now0 = 1.8e12;
   const nl = JSON.parse((await market.handler(Object.assign(mev(false, 'GET /market', {}), { queryStringParameters: { cls: 'tank' } }))).body).listings;
   assert.equal(nl.length, 0, 'Normal market does not show it');
   console.log('ok  market: Hardcore has its own market');
+
+  // ---------- v143: world boss, boss loot, Hall of Fame and Ring for Hardcore heroes ----------
+  global.__KEYS.boss = ['w', 's']; global.__KEYS.arena = ['pid'];
+  Object.assign(process.env, { BOSS: 'boss', ARENA: 'arena' });
+  const realNow = Date.now, at = iso => { Date.now = () => Date.parse(iso); };
+  const wbs = Lm('worldboss.js'), wbev = (hc, rk, body) => ({ routeKey: rk, queryStringParameters: hc ? { hc: '1' } : {}, requestContext: { authorizer: { jwt: { claims: { sub } } } }, body: JSON.stringify(body || {}) });
+  try {
+    at('2026-12-05T12:00:00Z');
+    assert.equal((await wbs.handler(wbev(true, 'POST /boss/hit', { score: 5000 }))).statusCode, 200, 'Hardcore hero hits the boss');
+    assert.equal((await wbs.handler(wbev(false, 'POST /boss/hit', { score: 7000 }))).statusCode, 200, 'Normal hero hits the boss');
+    const g = JSON.parse((await wbs.handler(wbev(true, 'GET /boss'))).body);
+    assert.equal(g.total, 12000, 'one shared bar'); assert.equal(g.me.score, 5000, 'the Hardcore hero has its own score');
+    assert.ok(g.top.some(t => t.hc === 1 && t.score === 5000) && g.top.some(t => !t.hc && t.score === 7000), 'Hardcore row tagged');
+    at('2026-12-08T01:00:00Z');
+    const c1 = JSON.parse((await wbs.handler(wbev(false, 'POST /boss/claim', { id: '2026-12-04' }))).body), c2 = JSON.parse((await wbs.handler(wbev(true, 'POST /boss/claim', { id: '2026-12-04' }))).body);
+    assert.ok(c1.sig > 0 && c2.ok && c2.sig === 0, 'Sigils once per account per event: ' + c1.sig + ' then ' + c2.sig);
+    assert.equal((await wbs.handler(wbev(true, 'POST /boss/claim', { id: '2026-12-04' }))).statusCode, 409, 'each hero claims once');
+    console.log('ok  world boss: Hardcore hero on the shared bar, own row, Sigils once per account');
+    const loot = Lm('loot.js');
+    const lh = JSON.parse((await loot.handler(wbev(true, 'POST /boss/loot', { id: '2026-12-04' }))).body); assert.ok(lh.ok && lh.sh >= 1, 'Hardcore hero rolls its own loot');
+    assert.equal((await loot.handler(wbev(true, 'POST /shards/list', { k: 1, n: 1, price: 10, name: 'Embera' }))).statusCode, 200);
+    const shN = JSON.parse((await loot.handler(wbev(false, 'GET /shards'))).body).l, shH = JSON.parse((await loot.handler(wbev(true, 'GET /shards'))).body).l;
+    assert.ok(shN.length === 0 && shH.length === 1, 'Hardcore shards trade on their own market');
+    console.log('ok  boss loot: own roll, Hardcore-only shard market');
+  } finally { Date.now = realNow; }
+  global.__DDB.heroes.forEach(v => { v.hf = { S: JSON.stringify({ g: 10, ge: 10, bk: 1, ki: 5, pt: 9, gr: 1, ft: 1 }) }; v.seen = { N: String(Date.now()) }; });
+  process.env.POOL = 'pool'; const hof = JSON.parse((await Lm('hof.js').handler()).body);
+  assert.ok(hof.hc && hof.hc.n === 1 && hof.n === 1 && hof.hc.kills.length === 1, 'Hardcore Hall of Fame apart: ' + hof.n + ' + ' + (hof.hc && hof.hc.n));
+  console.log('ok  Hall of Fame: Hardcore heroes have their own');
+  const ring = Lm('../ring/index.js');
+  assert.equal((await ring.handler(wbev(true, 'PUT /arena', {}))).statusCode, 200, 'Hardcore hero enters the Ring');
+  assert.equal((await ring.handler(wbev(false, 'PUT /arena', {}))).statusCode, 200, 'Normal hero enters the Ring');
+  const ra = JSON.parse((await ring.handler(wbev(true, 'GET /arena'))).body);
+  assert.ok(ra.me && ra.me.hc === 1, 'the Hardcore hero has its own Ring row'); assert.ok(ra.foes.length === 1 && !ra.foes[0].hc, 'one shared Ring');
+  console.log('ok  Ember Ring: Hardcore hero has its own row, tagged, in the shared Ring');
 })().catch(e => { console.error(e); process.exit(1); });
