@@ -265,12 +265,12 @@
   let tAnim = 0, lastFrame = performance.now(), slashTimer = 0;
   // ---------- party in the arena ----------
   const FOE_X = 0.72;
-  const CLASS_ICON = { tank: 'shield', healer: 'cross', rogue: 'dagger', mage: 'flare', necro: 'skull' };
+  const CLASS_ICON = { tank: 'shield', healer: 'cross', rogue: 'dagger', mage: 'flare', necro: 'skull', paladin: 'hammer' };
   const memberAnim = {}, minionSwing = [], leavers = [];
   // a companion sent back to camp walks off toward the stair and fades
   function leaveArena(id) { const a = memberAnim[id], m = L.memberById(id); if (a && m) leavers.push({ cls: m.cls, hue: lookHue(m), x: a.x - 12, y: a.y - 8, t: tAnim }); }
   const mAnim = id => (memberAnim[id] = memberAnim[id] || { hit: 0, lunge: 0, x: 0, y: 0 });
-  const FRONT = { tank: 0, rogue: 1, mage: 2, necro: 3, healer: 4 };
+  const FRONT = { tank: 0, paladin: 0.5, rogue: 1, mage: 2, necro: 3, healer: 4 };
   // who a marked-position special will land on (the same spot in the line the core picked)
   function spTarget() { const w = S.foe && S.foe.spWind; if (!w || w.pos < 0) return null; const live = S.party.filter(id => id && !S.down[id]); return live[Math.min(w.pos, live.length - 1)] || null; }
   // the wind-up warning across the top of the arena
@@ -2310,7 +2310,7 @@
       (o.noSort ? '' : '<label><span>Sort</span><select data-sfs="sort">' + [['best', 'Suggested']].concat(INV_SORTS.slice(1), o.ench ? [['ench', 'Enchant name']] : []).map(([k, n]) => opt('sort', k, n)).join('') + '</select></label>') +
       (o.noRar ? '' : '<label><span>Rarity</span><select data-sfs="rar">' + opt('rar', 'all', 'Any') + L.RARITY.filter(r => items.some(it => it.rar === r.id) || SF.rar === r.id).map(r => opt('rar', r.id, r.name)).join('') + '</select></label>') +
       '<label title="Show only the gear this hero is wearing"><span>Who</span><select data-sfs="who">' + opt('who', 'all', 'Anyone') + whoOpts(SF.who) + '</select></label>' +
-      '<label title="Show gear this class can use"><span>Class</span><select data-sfs="cls">' + opt('cls', 'all', 'Any') + L.CLASS_ORDER.map(c => opt('cls', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
+      '<label title="Show gear this class can use"><span>Class</span><select data-sfs="cls">' + opt('cls', 'all', 'Any') + L.HERO_CLASSES.map(c => opt('cls', c, L.CLASSES[c].name)).join('') + '</select></label></div></div>';
   }
   const sfList = (items, rows, empty, o) => sfBar(items, o) + ewList(rows, items.length && !rows.length ? 'Nothing here matches these filters. Try All or Anyone.' : empty);
   document.addEventListener('click', e => { const k = e.target.closest('[data-sfk]'); if (k) { e.stopPropagation(); SF.kind = k.dataset.sfk; sfSave(); paintEnchPanel(true); } }, true);
@@ -2318,7 +2318,7 @@
   $('bag').addEventListener('click', e => { const k = e.target.closest('[data-invk]'); if (k) { e.stopPropagation(); INV.kind = k.dataset.invk; invSave(); updateGear(true); } });
   $('bag').addEventListener('change', e => { const c = e.target.closest('[data-invs]'); if (c) { INV[c.dataset.invs] = c.value; invSave(); c.blur(); updateGear(true); } });
   // Item type and who can use it, shown on every item (v117).
-  const CLS_SHORT = { tank: 'Tank', healer: 'Healer', rogue: 'Rogue', mage: 'Mage', necro: 'Necro' };
+  const CLS_SHORT = { tank: 'Tank', healer: 'Healer', rogue: 'Rogue', mage: 'Mage', necro: 'Necro', paladin: 'Paladin' };
   function usersText(it) { const u = L.usersOf(it); return u ? u.map(c => CLS_SHORT[c]).join(', ') : 'Any class'; }
   function typeLine(it) { const t = L.ITYPES[L.tyOf(it)], kind = it.slot === 'main' || it.slot === 'off' ? t.name : it.slot === 'ring' || it.slot === 'neck' ? L.SLOT_NAME[it.slot] : t.name + ' ' + L.SLOT_NAME[it.slot].toLowerCase(); return kind + ' · ' + usersText(it); }
   const clsDots = it => { const u = L.usersOf(it); return '<i class="clsd" title="' + esc(usersText(it)) + '">' + (u ? u.map(c => '<b style="background:' + L.CLASSES[c].color + '"></b>').join('') : '<b class="any"></b>') + '</i>'; };
@@ -2429,7 +2429,7 @@
     let bh = '<div class="invbar"><div class="invkinds" role="tablist">' + INV_KINDS.map(([k, n]) => { const c = k === 'all' ? pack.length : pack.filter(it => invKind(it) === k).length; return '<button class="' + (INV.kind === k ? 'on' : '') + '" data-invk="' + k + '">' + n + ' <em>' + c + '</em></button>'; }).join('') + '</div>' +
       '<div class="invsel"><label><span>Sort</span><select data-invs="sort">' + INV_SORTS.map(([k, n]) => '<option value="' + k + '"' + (INV.sort === k ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>' +
       '<label><span>Rarity</span><select data-invs="rar"><option value="all">Any</option>' + L.RARITY.filter(r => pack.some(it => it.rar === r.id)).map(r => '<option value="' + r.id + '"' + (INV.rar === r.id ? ' selected' : '') + '>' + r.name + '</option>').join('') + '</select></label>' +
-      '<label><span>Who</span><select data-invs="who"><option value="all">Anyone</option><option value="me"' + (INV.who === 'me' ? ' selected' : '') + '>' + esc(m.name) + ' can use</option>' + L.CLASS_ORDER.map(c => '<option value="' + c + '"' + (INV.who === c ? ' selected' : '') + '>' + L.CLASSES[c].name + '</option>').join('') + '</select></label></div></div>';
+      '<label><span>Who</span><select data-invs="who"><option value="all">Anyone</option><option value="me"' + (INV.who === 'me' ? ' selected' : '') + '>' + esc(m.name) + ' can use</option>' + L.HERO_CLASSES.map(c => '<option value="' + c + '"' + (INV.who === c ? ' selected' : '') + '>' + L.CLASSES[c].name + '</option>').join('') + '</select></label></div></div>';
     bh += list.length ? '<div class="grid">' + list.map(it => tile(it, !L.usable(m.cls, it))).join('') + '</div>' : '<p class="note">Nothing in your pack matches. Try another filter.</p>';
     if (!pack.length) bh = '<p class="note">Your pack is empty. Gear your party wears shows on each character above. New gear drops from foes, chests and guardians.</p>';
     $('bag').innerHTML = bh;
@@ -3862,7 +3862,7 @@
   });
 
   // ---------- story scenes ----------
-  const SPEAKER_ICON = { tank: 'shield', healer: 'cross', rogue: 'dagger', mage: 'flare', necro: 'skull', lamp: 'lamp', boss: 'crown' };
+  const SPEAKER_ICON = { tank: 'shield', healer: 'cross', rogue: 'dagger', mage: 'flare', necro: 'skull', paladin: 'hammer', lamp: 'lamp', boss: 'crown' };
   let sceneOpen = false;
   function playScene(b, replay) {
     sceneOpen = true; let i = 0;
@@ -3903,6 +3903,7 @@
     rogue: 'Hits hardest and dodges a quarter of all attacks.',
     mage: 'Calls down fire for huge bursts against guardians.',
     necro: 'Raises skeletons that fight and soak up hits.',
+    paladin: 'Plate, a steady party heal and a shield of light. A Sigil class.',
   };
   function setup(note) {
     let cls = 'rogue', side = 'covenant';
@@ -5533,7 +5534,7 @@
           '<small>' + sub + '</small>' + (t.length ? '<ol>' + t.map((p, i) => '<li' + (p.name === me ? ' class="me"' : '') + '><span class="hofr">' + (i + 1) + '.</span>' + who(p) + '<em>' + f(p.v) + '</em></li>').join('') + '</ol>' : ''),
           t.some(p => p.name === me));
       };
-      const cls = ['tank', 'healer', 'rogue', 'mage', 'necro'], cb = j.cls || {};
+      const cls = L.HERO_CLASSES, cb = j.cls || {};
       const best = line('shield', 'Best in class', '', cls.filter(c => cb[c]).length + ' of 5',
         '<small>Highest power level, then gear rating</small><ol>' + cls.map(c => { const b = cb[c]; return '<li' + (b && b.name === me ? ' class="me"' : '') + '>' + classTag(c) + (b ? '<span class="hofb"><b>' + esc(b.name) + '</b><small>power level ' + b.lv + ' · gear rating ' + fmt(b.gr) + '</small></span>' : '<i class="hofnone">No one yet</i>') + '</li>'; }).join('') + '</ol>' +
         (S.hero ? '<small>You: power level ' + L.lvl(S, 'you') + ' · gear rating ' + fmt(L.gearRating(S, 'you')) + '</small>' : ''), cls.some(c => cb[c] && cb[c].name === me));
@@ -5649,7 +5650,7 @@
   }
   function chatNote(t, warn) { const n = $('chatnote'); n.textContent = t || 'Be kind. No web links. Ctrl+click an item to link it. Tap a name to whisper, mute or report.'; n.classList.toggle('warn', !!warn); }
   // Item links: Ctrl/Cmd+click an item (or use Link in chat) to drop it into the message.
-  const ITEM_TOKEN = /\[\[i:(tank|healer|rogue|mage|necro),(weapon|armor|trinket|main|off|head|neck|chest|robe|legs|feet|ring),(common|fine|rare|epic|set|goblin),([a-z]{0,8}),(\d{1,6}),(\d{1,2})\]\]/g;
+  const ITEM_TOKEN = /\[\[i:(tank|healer|rogue|mage|necro|paladin),(weapon|armor|trinket|main|off|head|neck|chest|robe|legs|feet|ring),(common|fine|rare|epic|set|goblin),([a-z]{0,8}),(\d{1,6}),(\d{1,2})\]\]/g;
   // Region set pieces ride in the set field as r plus a letter (ra = the first region).
   const tokenOf = it => '[[i:' + it.cls + ',' + it.slot + ',' + it.rar + ',' + (it.set || (it.rset != null ? 'r' + String.fromCharCode(97 + it.rset) : '')) + ',' + it.ilvl + ',' + (it.up || 0) + ']]';
   const itemLabel = it => L.gearName(it) + (it.up ? ' +' + it.up : '');
@@ -7940,7 +7941,7 @@
     else if (trade.view === 'sigils') h += sigilsView();
     else if (trade.view === 'shards') h += shardsView();
     else if (trade.view === 'market') {
-      h += '<div class="whoseg tradecls">' + L.CLASS_ORDER.map(c => '<button class="whochip c-' + c + (!trade.mine && trade.cls === c ? ' on' : '') + '" data-tc="' + c + '"><img src="' + SP.spriteURL(c, 2) + '" alt=""><span>' + L.CLASSES[c].name + '</span></button>').join('') +
+      h += '<div class="whoseg tradecls">' + L.HERO_CLASSES.map(c => '<button class="whochip c-' + c + (!trade.mine && trade.cls === c ? ' on' : '') + '" data-tc="' + c + '"><img src="' + SP.spriteURL(c, 2) + '" alt=""><span>' + L.CLASSES[c].name + '</span></button>').join('') +
         '<button class="whochip' + (trade.mine ? ' on' : '') + '" data-tc="mine"><span>My listings</span></button></div>';
       const sel = (id, opts, v) => '<select id="' + id + '">' + opts.map(([k, t]) => '<option value="' + k + '"' + (k === v ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
       h += '<div class="mkfilters">' + sel('tf-slot', SLOT_FILTER, trade.slot) + sel('tf-rar', RAR_FILTER, trade.rar) + sel('tf-sort', [['cheap', 'Cheapest first'], ['new', 'Newest first'], ['power', 'Strongest first'], ['level', 'Lowest level first']], trade.sort) + '</div>';
@@ -8455,7 +8456,7 @@
     { id: 'greaves', name: 'Greaves', slot: 'legs', R: 3, E: 3, hp: .01, at: .01 },
     { id: 'arms', name: 'Arms', slot: 'main', R: 0, E: 7, hp: 0, at: .02 },
   ];
-  const RING_ARMS = { tank: 'Warhammer', healer: 'Censer', rogue: 'Twin Fangs', mage: 'Focus Rod', necro: 'Grave Scythe' };
+  const RING_ARMS = { tank: 'Warhammer', healer: 'Censer', rogue: 'Twin Fangs', mage: 'Focus Rod', necro: 'Grave Scythe', paladin: 'Dawn Maul' };
   const RING_MAX = 15, RING_EMAX = 10, RING_EINT = 30 * 6e4;
   const ringGate = r => r >= 10 ? 1600 : r >= 5 ? 1300 : 0, ringCost = r => 60 + 30 * r;
   const RING_TIER = r => r <= 0 ? ['Plain', 'common'] : r <= 5 ? ['Ironbound', 'rare'] : r <= 10 ? ['Emberforged', 'epic'] : ['Starwrought', 'set'];
@@ -8481,7 +8482,7 @@
       leech: 'Heal ' + ringPc(v) + ' of the damage you deal.', undying: 'Once per duel, survive a killing blow with ' + ringPc(v) + ' health.', execute: '+' + ringPc(v) + ' damage to foes under 30% health.',
     })[s.fx] + (s.cd ? ' Every ' + s.cd + ' turns.' : '');
   }
-  const NATURE_TEXT = { tank: 'Sturdy: takes 10% less damage.', healer: 'Blessed: heals 1% each turn and takes 6% less damage.', rogue: 'Deadly: +8% critical chance, and crits hit harder.', mage: 'Arcane: abilities hit 10% harder.', necro: 'Hungry: heals 12% of the damage it deals.' };
+  const NATURE_TEXT = { tank: 'Sturdy: takes 10% less damage.', healer: 'Blessed: heals 1% each turn and takes 6% less damage.', rogue: 'Deadly: +8% critical chance, and crits hit harder.', mage: 'Arcane: abilities hit 10% harder.', necro: 'Hungry: heals 12% of the damage it deals.', paladin: 'Devoted: heals 0.5% each turn and takes 5% less damage. No class edge or counter.' };
   // 1 if a has the edge on b, -1 if b counters a, 0 otherwise.
   const ringEdge = (a, b) => { const m = rg.st && rg.st.match; if (!m) return 0; return m.beats[a].includes(b) ? 1 : m.beats[b].includes(a) ? -1 : 0; };
   const ringWhy = (a, b) => (rg.st && rg.st.match.why[a + '>' + b]) || '';
@@ -8661,7 +8662,7 @@
   const TEAM_MAX = 10, teamGate = r => r >= 5 ? 1300 : 0, teamCost = r => 40 + 20 * r;
   const TEAM_TIER = r => r <= 0 ? ['Plain', 'common'] : r <= 5 ? ['Ironbound', 'rare'] : ['Emberforged', 'epic'];
   const TEAM_POS = ['Front', 'Middle', 'Back'];
-  const ringFree = c => ({ tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain' })[c];
+  const ringFree = c => ({ tank: 'bash', healer: 'mend', rogue: 'backstab', mage: 'fireball', necro: 'drain', paladin: 'judgment' })[c];
   // Companions that can fight: your own, not borrowed players and not two-hour contracts.
   function teamPool() {
     return (S.unlocked || []).filter(id => id !== 'you' && L.memberById(id) && !L.isGuest(S, id) && L.lvl(S, id) > 0 && !(S.hires && S.hires[id] && S.hires[id].kind === 'short'));
@@ -9118,9 +9119,9 @@
   let wdBuyArgs = null;
   function wardBuy(k, it) {
     wdBuyArgs = [k, it];
-    if (k === 'k') ['tank', 'healer', 'rogue', 'mage', 'necro'].forEach(c => { try { SP.render(c, 1, outfitHue(it[0])); } catch (e) {} });
+    if (k === 'k') L.HERO_CLASSES.forEach(c => { try { SP.render(c, 1, outfitHue(it[0])); } catch (e) {} });
     const [id, name, price, desc] = it, can = wd.bal >= price, m = L.memberById(wdWho);
-    const pic = k === 'k' ? '<div class="wdbuy">' + ['tank', 'healer', 'rogue', 'mage', 'necro'].map(c => '<img src="' + SP.spriteURL(c, 3, outfitHue(id)) + '" alt="">').join('') + '</div>'
+    const pic = k === 'k' ? '<div class="wdbuy">' + L.HERO_CLASSES.map(c => '<img src="' + SP.spriteURL(c, 3, outfitHue(id)) + '" alt="">').join('') + '</div>'
       : k === 'b' ? '<div class="wdbuy banner">' + bannerSVG(id) + '</div>'
       : '<div class="wdbuy lamp"><img src="' + SP.spriteURL('lantern', 4, '0~' + id) + '" alt=""></div>';
     modal('<div class="center">' + pic + '<h2>' + esc(name) + '</h2><p>' + esc(desc) + '</p><p class="note">' + (k === 'k' ? 'An outfit for every hero in your company, owned forever.' : k === 'b' ? 'A war banner for your hero, owned forever.' : 'A lantern for your party, owned forever.') + ' Looks only. ' + sigil + '<b>' + price + '</b> ' + TOKEN + '. You have ' + fmt(wd.bal) + '.</p>' +

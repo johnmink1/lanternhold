@@ -3,8 +3,8 @@ const crypto = require('crypto');
 const db = new DynamoDBClient({});
 const T = process.env.TABLE, CH = process.env.CHAT;
 const SIDE_NAME = { covenant: 'the Iron Covenant', radiant: 'the Radiant Ascendancy', tide: 'the Devouring Tide', mercy: 'the Mercy Corps', unsworn: 'the Unsworn' };
-const CLS_NAME = { tank: 'tank', healer: 'healer', rogue: 'rogue', mage: 'mage', necro: 'necromancer' };
-const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'];
+const CLS_NAME = { tank: 'tank', healer: 'healer', rogue: 'rogue', mage: 'mage', necro: 'necromancer', paladin: 'paladin' };
+const CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'];
 const SIDES = ['covenant', 'radiant', 'tide', 'mercy', 'unsworn'];
 const BAD = /(fuck|shit|cunt|nigg|fag|rape|nazi|hitler|bitch|whore|dick|cock|puss|slut|porn|retard|jizz|dildo|penis|vagin|cumsh|cumsl)/i;
 // Short words that are rude alone but sit inside real names (Cumberland), so only whole words count (v125).

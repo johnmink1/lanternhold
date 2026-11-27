@@ -7,7 +7,7 @@ const db = new D.DynamoDBClient({}), { HEROES: H, WALLETS: W } = process.env;
 // Keep in step with WARDROBE in the game's ui (u_looks part). Price 0 means everyone owns it.
 // r.a, r.b and r.c are the three extra campfire spots (L.ROSTER_ITEMS, L.ROSTER_COST in core.js), bought once each.
 const CAT = Object.fromEntries(('k.none0 k.ember250 k.frost250 k.wild250 k.dusk250 k.ivory300 k.obsidian400 k.gilded600 k.rift800 k.sworn1200 ' +
-  'l.ember0 l.moon150 l.wisp150 l.rose150 l.rift300 l.sun400 l.soul500 l.void600 r.a300 r.b300 r.c300 ' +
+  'l.ember0 l.moon150 l.wisp150 l.rose150 l.rift300 l.sun400 l.soul500 l.void600 r.a300 r.b300 r.c300 c.paladin1000 ' +
   'b.none0 b.delver0 b.covenant200 b.radiant200 b.tide200 b.mercy200 b.unsworn200 b.ember350 b.frost350 b.rift500 b.crown750 b.lantern1000').split(' ').map(x => { const m = x.match(/^(.+?)(\d+)$/); return [m[1], +m[2]]; }));
 const res = (c, b) => ({ statusCode: c, headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
 const S = v => ({ S: String(v) }), PID = /^[0-9a-f]{16}$/, MID = /^([a-z]{2,10}|[0-9a-f]{16})$/;

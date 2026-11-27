@@ -8,7 +8,7 @@
 const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');
 const { CognitoIdentityProviderClient, ListUsersInGroupCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const db = new DynamoDBClient({}), idp = new CognitoIdentityProviderClient({});
-const T = process.env.HEROES, POOL = process.env.POOL, CLS = ['tank', 'healer', 'rogue', 'mage', 'necro'];
+const T = process.env.HEROES, POOL = process.env.POOL, CLS = ['tank', 'healer', 'rogue', 'mage', 'necro', 'paladin'];
 let body = '', at = 0;
 const top = (rows, val, asc) => rows.map(r => [r, val(r)]).filter(x => x[1] > 0)
   .sort((a, b) => (asc ? a[1] - b[1] : b[1] - a[1]) || a[0].ts - b[0].ts).slice(0, 3).map(([r, v]) => ({ name: r.name, cls: r.cls, v }));

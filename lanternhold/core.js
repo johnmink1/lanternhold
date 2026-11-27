@@ -26,8 +26,17 @@
               ability: { id: 'storm', name: 'Ember Storm',  cd: 22, dur: 6,  desc: 'Calls down fire: the Mage deals 4x damage for 6s.' } },
     necro:  { name: 'Necromancer', hp: 20, dps: 1.0, drain: 0.12, color: '#b58cff',
               ability: { id: 'raise', name: 'Raise Dead',   cd: 30, dur: 20, desc: 'Raises 3 skeletons for 20s. They fight and soak up blows.' } },
+    // v139 (John, 27 Nov 2026): the first Sigil class. A sidegrade, not an upgrade: a little of tank, healer and fighter,
+    // tuned in the sim to reach floor 75 within 5% of the other classes. Your own hero only; companions never roll it.
+    paladin: { name: 'Paladin',    hp: 30, dps: 0.9, armor: 0.2, heal: 0.35, color: '#f3ead0',
+              ability: { id: 'oath',  name: 'Oath of Dawn', cd: 30, dur: 6,  desc: 'Heals the party for 25% and the party takes 30% less damage for 6s.' } },
   };
+  // CLASS_ORDER: the classes companions, kin, NPC hires and random loot roll from. HERO_CLASSES adds the Sigil classes,
+  // which only your own hero can be. PAID_CLASS: Sigil price to unlock each one for the account (wallet item 'cls_<id>').
   const CLASS_ORDER = ['tank', 'healer', 'rogue', 'mage', 'necro'];
+  const HERO_CLASSES = CLASS_ORDER.concat(['paladin']);
+  const PAID_CLASS = { paladin: 1000 };
+  const OATH_HEAL = 0.25, OATH_SHIELD = 0.3, OATH_SET = 0.45;
 
   // ---------- recruits ----------
   // tier scales stats and cost; later recruits are stronger alternatives.
@@ -163,7 +172,7 @@
   };
   Object.assign(MODS, NP_MODS);
   const NP_MOD_KEYS = Object.keys(NP_MODS), NP_MARK_TIER = 2, NP_RESIST = 0.6, NP_PLAGUE = 0.6, NP_IRON = 0.1, ROGUE_PIERCE = 0.25;
-  const PHYS_CLS = { tank: 1, rogue: 1 }, MAGIC_CLS = { mage: 1, necro: 1, healer: 1 };
+  const PHYS_CLS = { tank: 1, rogue: 1, paladin: 1 }, MAGIC_CLS = { mage: 1, necro: 1, healer: 1 };
   // Shielded foes (John, 2026-11-24): while the shield is up the party deals SHIELD_CUT less damage. Every tap knocks
   // SHIELD_TAP off it (a critical tap twice that), and it wears away by itself in SHIELD_DECAY seconds so idle players
   // are never stuck. Guardians raise it once more at half health.
@@ -202,7 +211,7 @@
   const DOTS = { burn: { name: 'Burning', dps: 0.05 }, poison: { name: 'Poisoned', dps: 0.035 } };
   // Who a burn or poison hurts most (John, 2026-11-24): fire eats cloth, plate shrugs some of it off;
   // poison bites everyone harder, except necromancers, who live with rot and mostly ignore it.
-  const DOT_VS = { burn: { healer: 2, mage: 2, necro: 2, tank: 0.75 }, poison: { necro: 0.25, tank: 1.25, rogue: 1.25, healer: 1.25, mage: 1.25 } };
+  const DOT_VS = { burn: { healer: 2, mage: 2, necro: 2, tank: 0.75 }, poison: { necro: 0.25, tank: 1.25, rogue: 1.25, healer: 1.25, mage: 1.25, paladin: 1.25 } };
   const dotMult = (id, k) => { const m = memberById(id); return (m && DOT_VS[k] && DOT_VS[k][m.cls]) || 1; };
   // Stun: the hero cannot attack, heal or use abilities for a few seconds. Disarm: the hero fights with bare hands
   // (35% damage, half healing, no abilities) until it picks its weapon back up. Tanks shake both off twice as fast.
@@ -889,7 +898,7 @@
   const keeperMult = s => keeperOn(s) ? 1 + KEEPER : 1;
   function partyMult(s) { return friendMult(s) * keeperMult(s) * emberMult(s) * npBonus(s) * (1 + masteryVal(s, 'dps')) * (1 + kup(s, 'edge')) * (1 + FEAT_PER * featCount(s)) * (1 + relicVal(s, 'crown')) * sidePerk(s, 'dps') * (1 + campBonus(s, 'dps')) * (1 + sk(s, 'pdps')) * (1 + curioColl(s) + renoVal(s, 'dps') + (fxOnW(s, 'g0') ? 0.05 : 0)); }
   // Your own hero hits harder as a tank or healer, so every class can carry a run at a similar pace.
-  const HERO_DPS = { tank: 3, healer: 5 };
+  const HERO_DPS = { tank: 3, healer: 5, paladin: 2 };
   function memberDps(s, id, now) {
     if (!id || s.down[id] || !lvl(s, id)) return 0;
     const bp = cardOf(s, id);
@@ -949,14 +958,14 @@
   // v132: the Training Grounds table uses this, so a healer who was down or stunned when it opened no longer shows "-".
   function steadyHeal(s, id) {
     if (!id || !lvl(s, id)) return 0;
-    const bp = cardOf(s, id); if (bp) return memberById(id).cls === 'healer' ? (bp.hl || 0) * guestK(s, id) : 0;
-    const m = memberById(id); if (!m || m.cls !== 'healer') return 0;
-    return (CLASSES.healer.heal * scale(s, id) * gearMult(s, id, 'heal') * (1 + wearVal(s, id, 'heal')) * (1 + relicVal(s, 'censer')) * (1 + EMBER_HP * s.embers) * (1 + FEAT_PER * featCount(s)) * sidePerk(s, 'heal') * (1 + campBonus(s, 'heal')) * (1 + sk(s, 'pheal') + (id === 'you' ? sk(s, 'heal') : 0))) * keeperMult(s);
+    const bp = cardOf(s, id); if (bp) return CLASSES[memberById(id).cls].heal ? (bp.hl || 0) * guestK(s, id) : 0;
+    const m = memberById(id), hb = m && CLASSES[m.cls].heal; if (!hb) return 0;
+    return (hb * scale(s, id) * gearMult(s, id, 'heal') * (1 + wearVal(s, id, 'heal')) * (1 + relicVal(s, 'censer')) * (1 + EMBER_HP * s.embers) * (1 + FEAT_PER * featCount(s)) * sidePerk(s, 'heal') * (1 + campBonus(s, 'heal')) * (1 + sk(s, 'pheal') + (id === 'you' ? sk(s, 'heal') : 0))) * keeperMult(s);
   }
   // Mana and stamina (John, 2026-11-24). Healers, mages and necromancers run on mana; rogues and tanks on stamina.
   // Every ability costs some. A healer also spends mana to heal: run dry and it stops healing and only attacks
   // until it has regained RES_WAKE, then heals again. Regen comes from the class, the hero's cooldown skills and gear.
-  const RES_KIND = { healer: 'mana', mage: 'mana', necro: 'mana', rogue: 'stamina', tank: 'stamina' };
+  const RES_KIND = { healer: 'mana', mage: 'mana', necro: 'mana', rogue: 'stamina', tank: 'stamina', paladin: 'stamina' };
   const RES_MAX = 100, RES_REGEN = { mana: 3.5, stamina: 5 }, AB_COST = 30, SPEC_COST = 25, HEAL_DRAIN = 4.5, RES_WAKE = 30;
   const resKind = id => { const m = memberById(id); return m ? RES_KIND[m.cls] : null; };
   function resOf(s, id) { s.res = s.res || {}; const v = s.res[id]; return v == null || !(v >= 0) ? RES_MAX : Math.min(RES_MAX, v); }
@@ -1020,6 +1029,11 @@
       { b: 'Blight', s: [SK('Rot', 'dps', 0.15, 3, '+{v} damage for your hero'), SK('Withering Curse', 'pdps', 0.05, 3, '+{v} party damage'), SK('Soul Harvest', 'cd', 0.3, 1, 'Raise Dead comes back 30% sooner')] },
       { b: 'Pact', s: [SK('Grave Gold', 'gold', 0.08, 3, '+{v} gold'), SK('Death’s Ledger', 'loot', 0.06, 3, '+{v} gear drop chance'), SK('Deathless', 'php', 0.10, 1, '+10% party health')] },
     ],
+    paladin: [
+      { b: 'Dawn', s: [SK('Dawnlight', 'heal', 0.10, 3, '+{v} healing from your hero'), SK('Shared Light', 'pheal', 0.05, 3, '+{v} party healing'), SK('Radiant Oath', 'power', 0.5, 1, 'Oath of Dawn heals 50% more')] },
+      { b: 'Aegis', s: [SK('Blessed Plate', 'hp', 0.10, 3, '+{v} health for your hero'), SK('Shelter', 'guard', 0.03, 3, 'Party takes {v} less damage'), SK('Long Vow', 'dur', 0.5, 1, 'Oath of Dawn lasts 50% longer')] },
+      { b: 'Crusade', s: [SK('Hammer of Dawn', 'dps', 0.15, 3, '+{v} damage for your hero'), SK('Banner of Light', 'pdps', 0.04, 3, '+{v} party damage'), SK('Swift Oath', 'cd', 0.3, 1, 'Oath of Dawn comes back 30% sooner')] },
+    ],
   };
   // Specializations: the fourth skill of each branch teaches your hero a new active ability.
   // fx: burst (seconds of the hero's damage at once), shield (party takes less damage), vuln (foe takes more damage),
@@ -1041,6 +1055,9 @@
     necro: [AB('bonewall', 'Bone Wall', 35, 10, 'The party takes 35% less damage for 10s.', { shield: 0.35 }),
       AB('harvest', 'Soul Reap', 30, 0, 'Strikes for 6 seconds of damage and heals the party for 20%.', { burst: 6, heal: 0.2 }),
       AB('curse', 'Grave Curse', 30, 8, 'The foe takes 30% more damage for 8s.', { vuln: 0.3 })],
+    paladin: [AB('consecrate', 'Consecrate', 20, 0, 'Cures all poison and burns and heals the party for 20%.', { cleanse: 1, heal: 0.2 }),
+      AB('aegis', 'Aegis of Dawn', 45, 10, 'The party takes 35% less damage for 10s.', { shield: 0.35 }),
+      AB('judgment', 'Judgment', 22, 0, 'Strikes for 8 seconds of damage and shatters any ward.', { burst: 8, strip: 1 })],
   };
   for (const c in SKILL_TREES) SKILL_TREES[c].forEach((br, bi) => { const a = SPECS[c][bi]; br.s.push(Object.assign(SK(a.name, 'abil', 0, 1, 'New ability: ' + a.desc), { ab: a })); });
   // Give every skill a stable id like 'tank.1.2' (branch 1, tier 2).
@@ -1062,6 +1079,7 @@
     rogue:  { name: 'Shadow Aura',   fx: [['gold', 1.5, 'gold'], ['crit', 0.25, 'critical strike chance']] },
     mage:   { name: 'Ember Aura',    fx: [['pdps', 1, 'party damage'], ['crit', 0.25, 'critical strike chance']] },
     necro:  { name: 'Grave Aura',    fx: [['pdps', 0.75, 'party damage'], ['loot', 1, 'gear drop chance']] },
+    paladin: { name: 'Dawn Aura',    fx: [['guard', 0.25, 'less damage taken by the party'], ['pheal', 1, 'party healing']] },
   };
   const HONOR_FX = [
     ['Grand Marshal', 'Marshal’s Banner', 'pdps', 0.05, 'party damage'],
@@ -1094,7 +1112,7 @@
     { id: 'cha', name: 'Charisma',     short: 'CHA', desc: 'gold from every fight and lower hire wages', fx: { gold: 0.008 } },
     { id: 'lck', name: 'Luck',         short: 'LCK', desc: 'a little of everything: loot, chests, crits, gold, Sigils and ambush spoils', fx: { loot: 0.005, chest: 0.0002, crit: 0.0005, gold: 0.003, sig: 0.000002, spoils: 0.01 } },
   ];
-  const STAT_CLASS = { tank: ['str', 'con'], healer: ['wis', 'cha'], rogue: ['dex', 'lck'], mage: ['int', 'wis'], necro: ['int', 'con'] };
+  const STAT_CLASS = { tank: ['str', 'con'], healer: ['wis', 'cha'], rogue: ['dex', 'lck'], mage: ['int', 'wis'], necro: ['int', 'con'], paladin: ['str', 'wis'] };
   const STAT_BASE = 10, STAT_AFFINITY = 1.5, STAT_MAX = 99;
   // Hero XP (pacing v2, John 2026-11-23): steeper, so hero level paces the unlock ladder over weeks, not hours.
   // v3 fit: a steady player reaches level 10 in about 2 hours of play, 15 in about 6, 20 in about 11 and 40 in about 40.
@@ -1329,7 +1347,7 @@
   }
   const NPC_ROTATE = 4 * 3600e3, NPC_OFFERS = 6, NPC_SHORT_MS = 2 * 3600e3, NPC_SHORT_MAX = 2, NPC_BENCH_MS = 3 * 86400e3, NPC_SHORT_PART = 0.25, NPC_REHIRE = 0.5;
   const NPC_NAMES = ['Tamsin', 'Odile', 'Corwin', 'Ysolde', 'Garrick', 'Petra', 'Jory', 'Mirela', 'Halden', 'Sable', 'Fenna', 'Rook', 'Isolt', 'Dacey', 'Orrin', 'Liesl', 'Tobin', 'Maren', 'Cass', 'Ulric', 'Nell', 'Aldous', 'Briar', 'Quill', 'Hesper', 'Joss', 'Wynn', 'Edda', 'Lorcan', 'Merrit', 'Saoirse', 'Dunstan', 'Ilse', 'Torvald', 'Junia', 'Cael'];
-  const NPC_JOB = { tank: 'Shieldhand', healer: 'Field Medic', rogue: 'Sellsword', mage: 'Hedge Mage', necro: 'Bonecaller' };
+  const NPC_JOB = { tank: 'Shieldhand', healer: 'Field Medic', rogue: 'Sellsword', mage: 'Hedge Mage', necro: 'Bonecaller', paladin: 'Dawnsworn' };
   const NPC_SIDE = { covenant: 'Covenant', radiant: 'Ascendancy', tide: 'Tide', mercy: 'Mercy Corps', unsworn: 'Unsworn' };
   function npcMember(m) {
     const r = npcRar(m.rar);
@@ -1693,7 +1711,7 @@
   };
   const TRAIT_GRADE = ['Common', 'Fine', 'Rare'];
   const POS_TRAIT_NAME = ['Vanguard', 'Shieldmate', 'Anchor', 'Flanker', 'Rearguard'];
-  const KIN_TRAIT_NAME = { tank: 'Shield-sworn', healer: 'Mercy-bound', rogue: 'Knife-friend', mage: 'Spell-touched', necro: 'Bone-kin' };
+  const KIN_TRAIT_NAME = { tank: 'Shield-sworn', healer: 'Mercy-bound', rogue: 'Knife-friend', mage: 'Spell-touched', necro: 'Bone-kin', paladin: 'Dawn-sworn' };
   const CAMP_TRAIT_NAME = { job: 'Hard worker', train: 'Drillmaster', gold: 'Haggler', rest: 'Fire-tender' };
   function rollTrait(table, keys, r) {
     const k = keys[Math.floor(r() * keys.length)], g = r() < 0.6 ? 0 : r() < 0.75 ? 1 : 2, t = table[k];
@@ -1826,6 +1844,7 @@
     healer: { main: 'Willow Staff',   off: 'Tome of Light',    head: 'Wayfarer Circlet', neck: 'Censer Charm',       chest: 'Linen Vestment',    robe: 'Mossweave Robe',     legs: 'Linen Leggings',    feet: 'Wayfarer Sandals',   ring: 'Mossstone Ring' },
     rogue:  { main: 'Twin Fangs',     off: 'Parrying Dagger', head: 'Shadow Hood',      neck: 'Lucky Coin Chain',   chest: 'Shadowhide Jerkin', legs: 'Quiet Breeches',     feet: 'Soft Boots',        ring: 'Cutpurse Ring' },
     mage:   { main: 'Emberwood Wand', off: 'Focus Orb',     head: 'Scholar Circlet',    neck: 'Focus Prism',        chest: 'Cinder Vest',       robe: 'Cinderweave Robe',   legs: 'Ashen Leggings',    feet: 'Ember-step Slippers', ring: 'Spark Ring' },
+    paladin: { main: 'Dawn Hammer',   off: 'Sunburst Shield', head: 'Gilded Helm',      neck: 'Dawn Medallion',     chest: 'Gilded Breastplate', legs: 'Gilded Greaves',    feet: 'Pilgrim Sabatons',  ring: 'Oathband' },
     necro:  { main: 'Bone Scepter',   off: 'Grim Tome',     head: 'Skull Cowl',         neck: 'Cracked Phylactery', chest: 'Grave Harness',     robe: 'Gravecloth Shroud',  legs: 'Bone-laced Leggings', feet: 'Grave Walkers',   ring: 'Bone Ring' },
   };
   // How much of an item's power goes to damage and to health. Healers turn their damage share into healing too.
@@ -1837,25 +1856,25 @@
   // heal the wearer's healing, then the old per-wearer keys leech, block, def, regen, dodge). Class sets, Legendary sets
   // and the Goblin's sack stay tied to the class they were made for.
   const ITYPES = {
-    sword:       { name: 'Sword',           slot: 'main', cls: ['tank', 'rogue'],            fx: { leech: 0.02 },               txt: '+2% life steal' },
+    sword:       { name: 'Sword',           slot: 'main', cls: ['tank', 'rogue', 'paladin'], fx: { leech: 0.02 },               txt: '+2% life steal' },
     dagger:      { name: 'Dagger',          slot: 'main', cls: ['rogue'],                    fx: { crit: 0.05 },                txt: '+5% critical hits' },
-    mace:        { name: 'Mace',            slot: 'main', cls: ['tank', 'healer'],           fx: { boss: 0.08 },                txt: '+8% damage to bosses and guardians' },
+    mace:        { name: 'Mace',            slot: 'main', cls: ['tank', 'healer', 'paladin'], fx: { boss: 0.08 },                txt: '+8% damage to bosses and guardians' },
     morningstar: { name: 'Morningstar',     slot: 'main', cls: ['tank'],                     fx: { power: 0.15 },               txt: 'Hardest hitter: +15% damage' },
     staff:       { name: 'Staff',           slot: 'main', cls: ['healer', 'mage'],           fx: { power: 0.1, heal: 0.1 },     txt: '+10% healing or spell power' },
     wand:        { name: 'Wand',            slot: 'main', cls: ['mage', 'necro'],            fx: { regen: 0.1, crit: 0.03 },    txt: '+10% mana regen, +3% critical hits' },
     scepter:     { name: 'Scepter',         slot: 'main', cls: ['necro', 'healer'],          fx: { power: 0.1, heal: 0.1 },     txt: '+10% ability power' },
-    shield:      { name: 'Shield',          slot: 'off',  cls: ['tank'],                     fx: { block: 0.04 },               txt: '+4% block' },
+    shield:      { name: 'Shield',          slot: 'off',  cls: ['tank', 'paladin'],          fx: { block: 0.04 },               txt: '+4% block' },
     parry:       { name: 'Parrying dagger', slot: 'off',  cls: ['rogue'],                    fx: { dodge: 0.03 },               txt: '+3% dodge' },
     tome:        { name: 'Tome',            slot: 'off',  cls: ['healer', 'necro'],          fx: { heal: 0.08, leech: 0.02 },   txt: '+8% healing and life drain' },
     orb:         { name: 'Orb',             slot: 'off',  cls: ['mage'],                     fx: { crit: 0.04 },                txt: '+4% critical hits' },
-    plate:       { name: 'Plate',           slot: 'armor', cls: ['tank'],                    fx: { def: 0.01 },                 txt: '+1% defense' },
+    plate:       { name: 'Plate',           slot: 'armor', cls: ['tank', 'paladin'],         fx: { def: 0.01 },                 txt: '+1% defense' },
     leather:     { name: 'Leather',         slot: 'armor', cls: ['rogue'],                   fx: { dodge: 0.01 },               txt: '+1% dodge' },
     cloth:       { name: 'Cloth',           slot: 'armor', cls: ['healer', 'mage', 'necro'], fx: { regen: 0.03 },               txt: '+3% mana regen' },
     jewel:       { name: 'Jewellery',       slot: 'jewel', cls: null,                        fx: {},                            txt: '' },
   };
-  const TY_MAIN = { tank: ['mace', 'sword', 'morningstar'], healer: ['staff', 'mace', 'scepter'], rogue: ['dagger', 'sword'], mage: ['wand', 'staff'], necro: ['scepter', 'wand'] };
-  const TY_OFF = { tank: ['shield'], healer: ['tome'], rogue: ['parry'], mage: ['orb'], necro: ['tome'] };
-  const TY_ARMOR = { tank: 'plate', rogue: 'leather', healer: 'cloth', mage: 'cloth', necro: 'cloth' };
+  const TY_MAIN = { tank: ['mace', 'sword', 'morningstar'], healer: ['staff', 'mace', 'scepter'], rogue: ['dagger', 'sword'], mage: ['wand', 'staff'], necro: ['scepter', 'wand'], paladin: ['mace', 'sword'] };
+  const TY_OFF = { tank: ['shield'], healer: ['tome'], rogue: ['parry'], mage: ['orb'], necro: ['tome'], paladin: ['shield'] };
+  const TY_ARMOR = { tank: 'plate', rogue: 'leather', healer: 'cloth', mage: 'cloth', necro: 'cloth', paladin: 'plate' };
   function tyOf(it) {
     if (!it) return null;
     if (it.ty && ITYPES[it.ty]) return it.ty;
@@ -1945,7 +1964,7 @@
     leather: { head: 'Hood', chest: 'Jerkin',   legs: 'Breeches',  feet: 'Boots' },
     cloth:   { head: 'Cowl', chest: 'Vestment', legs: 'Leggings',  feet: 'Slippers' },
   };
-  const rsetPiece = it => RSET_PIECE[it.cls === 'tank' ? 'plate' : it.cls === 'rogue' ? 'leather' : 'cloth'][it.slot];
+  const rsetPiece = it => RSET_PIECE[it.cls === 'tank' || it.cls === 'paladin' ? 'plate' : it.cls === 'rogue' ? 'leather' : 'cloth'][it.slot];
   // Two-piece and four-piece bonuses grow with the region's depth. They multiply the wearer's gear bonus.
   const rsetTwo = i => Math.round((REGION_SETS[i].k === 'gold' ? 15 : 8) + i) / 100;
   const rsetFour = i => Math.round(15 + 2 * i) / 100;
@@ -1965,6 +1984,8 @@
       two: '+25% damage', three: 'Ember Storm burns at 6x instead of 4x', lore: 'The robes of the Ashcombe line of fire-scholars. Wren’s master wore them last.' },
     { id: 'crown',  cls: 'necro',  name: 'The Hollow Crown', pieces: { main: 'Hollow Scepter', chest: 'Hollow Regalia', neck: 'Hollow Crown' },
       two: '+30% skeleton damage', three: 'Raise Dead calls 5 skeletons', lore: 'A king’s regalia, left in the Vault when its owner was fed to the lantern.' },
+    { id: 'dawn',   cls: 'paladin', name: 'Oath of the First Dawn', pieces: { main: 'Dawnbreaker', chest: 'Dawnplate', neck: 'Dawn Reliquary' },
+      two: '+20% healing', three: 'Oath of Dawn shields 45% instead of 30%', lore: 'Worn by the knights who carried the first lantern down, before anyone knew what it was for.' },
   ];
   // Job sets help a companion's camp job. They drop rarely from guardians and chests from floor 20.
   const JOB_SETS = {
@@ -2000,7 +2021,7 @@
     return RARITY.find(r => r.id === it.rar).prefix + baseName(it);
   }
   // A weapon whose type is not its class's usual one gets that type's own name (a tank's Morningstar, a rogue's Sword).
-  const TY_BASE = { sword: { tank: 'Knight’s Longsword', rogue: 'Duelist’s Sabre' }, mace: { healer: 'Pilgrim’s Mace' }, morningstar: { tank: 'Iron Morningstar' }, staff: { mage: 'Ashwood Staff' }, wand: { necro: 'Bone Wand' }, scepter: { healer: 'Sunlit Scepter' } };
+  const TY_BASE = { sword: { tank: 'Knight’s Longsword', rogue: 'Duelist’s Sabre', paladin: 'Oathsworn Blade' }, mace: { healer: 'Pilgrim’s Mace' }, morningstar: { tank: 'Iron Morningstar' }, staff: { mage: 'Ashwood Staff' }, wand: { necro: 'Bone Wand' }, scepter: { healer: 'Sunlit Scepter' } };
   const baseName = it => (TY_BASE[it.ty] && TY_BASE[it.ty][it.cls]) || BASES[it.cls][it.slot];
   const DROP_W = [['main', 2], ['off', 1.5], ['head', 1.5], ['neck', 1], ['chest', 1.5], ['legs', 1.5], ['feet', 1.5], ['ring', 1.5]];
   function rollSlot(cls, r) {
@@ -2523,6 +2544,7 @@
       if (kind === 'hp' && cls === 'tank') pct += 0.2;
       if (kind === 'heal' && cls === 'healer') pct += 0.25;
       if (kind === 'dps' && cls === 'mage') pct += 0.25;
+      if (kind === 'heal' && cls === 'paladin') pct += 0.2;
     }
     // Region set bonuses multiply the whole gear bonus, so they keep their worth at any depth.
     return (1 + pct) * (1 + rsetBonus(s, id, kind)) * (1 + wbBonus(s, id, kind));
@@ -2551,11 +2573,14 @@
   }
   // Class change: a costly respec. Kindling spent on the skill tree comes back; everything else stays spent.
   const CLASS_CHANGE_COST = 15;
+  // v139: the first change into a Sigil class (PAID_CLASS) you just unlocked is free; the tree Kindling still comes back.
+  const freeClassChange = (s, cls) => !!PAID_CLASS[cls] && !(s.clsFree && s.clsFree[cls]);
   function changeClass(s, cls) {
     if (!s.hero || !CLASSES[cls] || cls === s.hero.cls) return false;
-    const pool = (s.kindling || 0) + skillSpent(s);
-    if (pool < CLASS_CHANGE_COST) return false;
-    s.kindling = pool - CLASS_CHANGE_COST; s.skills = {};
+    const pool = (s.kindling || 0) + skillSpent(s), cost = freeClassChange(s, cls) ? 0 : CLASS_CHANGE_COST;
+    if (pool < cost) return false;
+    if (PAID_CLASS[cls]) s.clsFree = Object.assign({}, s.clsFree, { [cls]: Date.now() });
+    s.kindling = pool - cost; s.skills = {};
     s.gear.you = {}; // old-class gear goes back to the pack
     for (const k in s.abil) if (k === 'you' || k.startsWith('you:')) delete s.abil[k];
     s.hero.cls = cls; registerHero(s);
@@ -2670,7 +2695,7 @@
   function unseat(s, slot) { if (s.party[slot] !== 'you') s.party[slot] = null; }
   // ---------- formation ----------
   // Seat order is the marching order: slot 0 stands at the front, nearest the foe; slot 4 is the rear.
-  const FORMATION = { tank: 0, rogue: 1, healer: 2, mage: 3, necro: 4 };
+  const FORMATION = { tank: 0, paladin: 0.5, rogue: 1, healer: 2, mage: 3, necro: 4 };
   const POS_NAME = ['Front', 'Second', 'Middle', 'Fourth', 'Rear'];
   function moveMember(s, from, to) {
     if (to < 0 || to >= PARTY_SIZE || from === to) return false;
@@ -2802,7 +2827,7 @@
   function buildCard(s) {
     if (!s.hero || !lvl(s, 'you')) return null;
     const f = friendMult(s) * keeperMult(s);
-    return { d: steadyDps(s, 'you') / f, h: maxHpOf(s, 'you'), hl: heroCls(s) === 'healer' ? healPerSec0(s, 'you') / f : 0, pc: pierceOf(s, 'you'), t: npTier(s) };
+    return { d: steadyDps(s, 'you') / f, h: maxHpOf(s, 'you'), hl: CLASSES[heroCls(s)] && CLASSES[heroCls(s)].heal ? healPerSec0(s, 'you') / f : 0, pc: pierceOf(s, 'you'), t: npTier(s) };
   }
   // A newer card or level for a hero already in your party (from the Players Guild). The game asks for fresh cards
   // every GUEST_REFRESH and on each camp return (John, 26 Nov 2026: no more dismiss and re-invite to update them).
@@ -3442,6 +3467,10 @@
       const each = c.dps * scale(s, id) * partyMult(s) * gearMult(s, id, 'dps') * 0.6 * (sb >= 2 ? 1.3 : 1) * pw * wbMult(s, id);
       const hp = maxHpOf(s, id) * 0.5;
       s.minions = Array.from({ length: (sb >= 3 ? 5 : 3) + (me ? sk(s, 'minion') : 0) }, () => ({ dps: each, hp, max: hp, until: st.until }));
+    } else if (m.cls === 'paladin') {
+      healParty(s, OATH_HEAL * pw, true);
+      s.fx = s.fx || {}; const v = sb >= 3 ? OATH_SET : OATH_SHIELD, cur = s.fx.shield;
+      if (!cur || cur.until <= now || cur.v <= v) s.fx.shield = { v, until: st.until };
     }
     events && events.push({ type: 'ability', id, cls: m.cls });
     if (m.cls === 'healer' && s.foe && s.foe.wounded) mercyAided(s, now, events);
@@ -3460,6 +3489,7 @@
       case 'rogue': return true;
       case 'mage': return foe.boss || foe.hp > totalDps(s, now) * 3;
       case 'necro': return !foe.chest;
+      case 'paladin': return !foe.chest && (foe.boss || s.party.some(x => x && (s.down[x] || (s.hp[x] || 0) < maxHpOf(s, x) * 0.6)));
     }
     return false;
   }
@@ -3653,7 +3683,7 @@
       if (s.foe && s.foe.wounded && need > 1e-9) { s.foe.hp = Math.min(s.foe.max, s.foe.hp + need); need = 0; }
       // healing costs mana in proportion to how hard the healer worked this tick
       const used = cap > 0 ? (cap - Math.max(0, need)) / cap : 0;
-      if (used > 0) { s.res[hid] = Math.max(0, resOf(s, hid) - HEAL_DRAIN * used * dt); if (s.res[hid] <= 0) { s.oom[hid] = 1; events && events.push({ type: 'oom', id: hid }); } }
+      if (used > 0 && resKind(hid) === 'mana') { s.res[hid] = Math.max(0, resOf(s, hid) - HEAL_DRAIN * used * dt); if (s.res[hid] <= 0) { s.oom[hid] = 1; events && events.push({ type: 'oom', id: hid }); } }
     }
     if (s.foe && s.foe.wounded && mercyAided(s, now, events)) return;
     // life steal: a share of each hero's own damage heals that hero
@@ -4250,7 +4280,7 @@
   Q({ id: 'revive', c: 'odd', ev: 'revive', n: 3, w: 4, g: s => qTop(s) >= 6 && qHas(s, 'healer'), t: q => 'Lift ' + q.n + ' fallen heroes back up with Lantern Hymn' });
 
   // -- Heroes' abilities --
-  const ABQ = { tank: ['wall', 15], healer: ['hymn', 15], rogue: ['stab', 25], mage: ['storm', 15], necro: ['raise', 12] };
+  const ABQ = { tank: ['wall', 15], healer: ['hymn', 15], rogue: ['stab', 25], mage: ['storm', 15], necro: ['raise', 12], paladin: ['oath', 15] };
   for (const c in ABQ) Q({ id: 'cast_' + c, c: 'skill', ev: 'cast', n: ABQ[c][1], w: 4, g: s => qTop(s) >= 3 && qHas(s, c), m: d => d.cls === c, t: q => 'Use ' + CLASSES[c].ability.name + ' ' + q.n + ' times' });
   Q({ id: 'cast_any', c: 'skill', ev: 'cast', n: 40, w: 4, g: qAt(3), t: q => 'Use hero abilities ' + q.n + ' times' });
   Q({ id: 'spec', c: 'skill', ev: 'spec', n: 5, w: 4, g: s => Object.keys(s.skills || {}).length > 0, t: q => 'Use your hero’s learned skills ' + q.n + ' times' });
@@ -4485,7 +4515,7 @@
     reqLevel, canWear, JOBS, jobValue, jobFree, campBonus, jobOf, assignJob, jobText,
     CAMP_FLOOR, atCamp, atMainCamp, regionTop, campLeft, SHOP, shopPrice, buyShop, useDraught, useOil, TONICS, TONIC_CAP, ITEM_SIGILS, TRAIT_FX, CAMP_TRAITS, traitsOf, traitState, traitVal, traitText, campTrait, tonicById, tonicLeft, tonicVal, drinkTonic,
     STATS, STAT_CLASS, STAT_BASE, STAT_AFFINITY, STAT_MAX, RESPEC_COST, statSpent, xpNeed, heroLevel, pointsFor, heroPoints, statScore, addStat, resetStats, statVal, PACK_CHANCE, PACK_GOLD,
-    VERSION, CLASSES, CLASS_ORDER, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
+    VERSION, CLASSES, CLASS_ORDER, HERO_CLASSES, PAID_CLASS, freeClassChange, OATH_HEAL, OATH_SHIELD, MEMBERS, SIDES, FORMATION, POS_NAME, moveMember, autoFormation, formationNotes, healReach, betterFor, equipBest, slotLocked, lockedSlots, SIDE_ORDER, sideOf, BIOMES, FOES, RELICS, FEATS, STORY, FOES_PER_FLOOR, BOSS_EVERY, REKINDLE_FLOOR, MILESTONES, PARTY_SIZE, REVIVE_TIME,
     CREATURES, ROSTERS, FAMILY, LORE_AT, REVEAL, SPECIAL_CHANCE, SPECIAL_FLOOR, RAR_W, RAR_NAME, SIZE_X, ROSTER_HOME, creatureById, creatureHue, creatureRegions, creatureOdds, pickCreature, famsIn, newState, migrate, isBossFloor, biomeOf, depthCycle, foeHp, foeGold, foeDps, GOLD_SOFT_FLOOR, GOLD_SOFT_RATE, GOLD_RATE, memberById, GUEST_CAP, FRIEND_PER, FRIEND_MAX, guestK, buildCard, refreshGuest, cleanCard, GUEST_REFRESH, GUEST_DROP_HOLD, friendMult, trainCost, trainDust, NP_TRAIN, NP_TDUST, NP_TDUST_TIER, NP_TDUST_LV, maxAffordable, memberDps, totalDps, maxHpOf, healPerSec, steadyHeal, steadyClick,
     questCtx, qEv, QDEFS, pickQuests, bountyGo, bountyCat, clickDamage, xpBonus, CRAFT_XP, craftXp, MERCY_FLOOR, MERCY_COOL, RESCUE_CHANCE, WOUNDED_CHANCE, MERCY_MIN, RESCUE_FX, AID_FX, AID_TIME, AID_SEC, AID_TAP, AID_HYMN, mercyFoe, mercyXpOn, mercyAidOn, WB_SETS, WB_SLOTS, WB_PCT, WB_TWO, WB_FOUR, wbUpCost, wbCounts, wbBonus, shardsOf, makeLegend, WB_TOKEN_COST, buyLegend, SPAWN_EVENTS, spawnEvent, visiting, visitEnchanter, leaveEnchanter, SMELT_MULT, smeltValue, smelt, PACK_XP, NX_WIN, NX_RATE, NX_REG_RATE, NX_CV, NX_BUILD, NX_CALM, NX_LEAVE, nxRead, nxTick, nexusOn, relicVal, lanternTime, embersFor, SPECS, heroSpecs, castSpec, fxOn, packCount, OFFLINE_BASE, OFFLINE_MAX, offlineWindow, offlineEarnPerSec, autoTrain, KINDLE_UPS, kup, kupCost, buyKup, CLASS_CHANGE_COST, changeClass, SKILL_TREES, skillById, skillCost, skillText, sk, AURAS, AURA_TIER, HONOR_FX, warAura, BEAST_STEP, BEAST_PER, BEAST_MAX, beastKey, beastTier, beastBonus, MERCY_FX, mercyOn, WARWIN_FX, WARWIN_REVIVE, WAR_KEY, warWinOn, TERR_PER, TERR_MAX, terrHeld, terrBonus, reviveMs, SURGE_FX, surgeOn, KIN_AMP, bannerKin, SIGIL_CHEST, SIGIL_BOSS, SIGIL_DROP_DAY, sigilLuck, sigilChance, QUESTS, QUEST_REWARD, QUEST_BONUS, questDay, dailyQuests, questState, PASS_COST, PASS_DAYS, PASS_BAG, BOH_COST, PASS_OFFLINE, passOn, skillSpent, canLearn, learnSkill, resetSkills, skillPointsFor, heroCls, tick, strike, train, recruit, seat, unseat, castAbility, rekindle, checkFeats, gotoFloor, nextStory, currentGoal, chapterOf,
     WIPE_HOLD, LOADOUT_FREE, LOADOUT_PASS, loadoutSlots, saveLoadout, wearLoadout, offlineGoldPerSec, regold, WB_TIME, WB_COOL, WB_HP1, WB_CAP, WB_HP1R, WB_BEST, WB_CEIL, WB_NPC, WB_WEAK, WB_RESIST, WB_TRAITS, wbOld, wbBoss, wbMult, wbWindow, wbName, wbPhase, startAssault, endAssault, GOBLIN_FLOOR, GOBLIN_CHANCE, GOBLIN_TIME, GOBLIN_GOLD, ECON_AT, campCost, CAMP_FREE_FLOOR, resting, KEEPER, keeperOn, keeperMult, BOUNTY_FLOOR, BOUNTY_HOURS, BOUNTY_MS, bountyWin, bountyState, bountyReward, claimBountyAt, bountyText, MERCH_FLOOR, MERCH_LIFE, MERCH_OFF, merchantTick, merchantBuy, SHIELD_FLOOR, SHIELD_CUT, SHIELD_TAP, SHIELD_DECAY, DOT_VS, dotMult, CC, ccOf, stunned, disarmed, addCC, GHOST_FLOOR, GHOST_LIFE, GHOST_MAX, GHOST_STATS, ghostSap, ghostTick, ghostBreak, HERO_DPS, RES_KIND, RES_MAX, RES_REGEN, AB_COST, SPEC_COST, HEAL_DRAIN, RES_WAKE, resKind, resOf, resRegen, oom, wearTotals, wearVal, MODS, SPECIALS, SPECIAL_WARN, SPECIAL_FLOOR, SPECIAL_CHANCE, DOTS, DOT_FIGHTS, BOSS_SPECIAL, BODY_SPECIAL, FOE_SPECIAL, specialTick, LOCK_FLOOR, LOCK_CHANCE, LOCK_TIME, LOCK_TAP, LOCK_SKIP, LOCK_SIGIL, LOCK_GOLD, lockGold, lockDust, lockRogue, SHUFFLE_EVERY, SHUFFLE_WARN, SHUFFLE_TIME, SHUFFLE_GAP, shuffler, shuffleTime, shufBase, shufRestore, shuffleTick, ACT_ONE_END, ACT_TWO_AT, actTwoOpen, CHEST_BASE, MOTH_MAX, CHEST_MAX, EV_DAY, evOk, chestChance, JOB_SETS, JOB_SET_TWO, JOB_SET_THREE, jobGear, jobSetCount, rollJobSet, rollGear, SLOTS, POS, SLOT_NAME, posType, fitsPos, normItem, itemStats, itemScore, weightOf, wornAt, wornPos, openPos, replaces, robeOn, bestKit, gearPctOf, bagCap, BAG_STEP, BAG_UPS_MAX, bagUpCost, buyBag, unlockCost, unlockSlot, unlocksOf, CLOTH, RARITY, SETS, LORE, GEAR_CAP, UP_MAX, gearName, gearPct, equip, unequip, upgrade, upgradeCost, salvage, salvageValue, toggleLock, mergeable, mergeRisk, mergeItems, massMergePlan, isUpgrade, autoScrapHit, autoScrapPack, REGION_SETS, RSET_SLOTS, rsetTwo, rsetFour, rsetCounts, rsetBonus, gearGold, regionSetAt, rollRegionSet, rollGoblinSack, GOBLIN_SACK_CHANCE, GOBLIN_SACK_GOLD, RSET_DROP, lootBonus, rarOdds, regionLoot, dustValue, enchCost, ENCH, sockets, enchList, enchText, enchTotals, disenchant, enchDirty, ITYPES, tyOf, usersOf, usable, classLocked, SHOP_FX, FIELD_FX, atShop, enchCostAt, fieldTier, wearer, itemOf, setCount, setBonus, gearMult, startGame, addGuest, dismissGuest, registerHero, isGuest, NPC_POWER, milestoneMult, nextMilestone, abilityActive, abilityDuration, featCount, critChance, partyMult, lvl, alive, gearRating,
