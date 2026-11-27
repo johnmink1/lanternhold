@@ -41,7 +41,7 @@ TS=$(date -u +%Y%m%d%H%M); mkdir -p ~/lhbak ~/lhv142 && cd ~/lhv142
 RAW=''' + raw + '''
 echo "1/3 fetching the new code"''']
 for fn, md5, fp, n in rows:
-    out.append('curl -sf -o ' + fn + '.js "$RAW' + fn + '.js" && [ "$(md5sum < ' + fn + '.js | cut -c1-32)" = "' + md5 + '" ] || { echo "' + fn + ': download failed or changed. Stopping; nothing changed."; exit 1; }')
+    out.append('curl -sf -o ' + fn + '.js "${RAW}' + fn + '.js" && [ "$(md5sum < ' + fn + '.js | cut -c1-32)" = "' + md5 + '" ] || { echo "' + fn + ': download failed or changed. Stopping; nothing changed."; exit 1; }')
 out.append('''echo "2/3 checking the live code"
 SKIP=""
 for F in ''' + ' '.join(r[0] for r in rows) + '''; do

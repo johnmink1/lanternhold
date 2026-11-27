@@ -15,15 +15,15 @@ set -e
 TS=$(date -u +%Y%m%d%H%M); mkdir -p ~/lhbak ~/lhv142 && cd ~/lhv142
 RAW=https://raw.githubusercontent.com/johnmink1/lanternhold/c347948060543ebbf2827a203d94923d959872ff/infra/deploy/v142/dist/
 echo "1/3 fetching the new code"
-curl -sf -o lanternhold-save.js "$RAWlanternhold-save.js" && [ "$(md5sum < lanternhold-save.js | cut -c1-32)" = "caec3676f48ffcc8260595952e2baaec" ] || { echo "lanternhold-save: download failed or changed. Stopping; nothing changed."; exit 1; }
-curl -sf -o lanternhold-heroes.js "$RAWlanternhold-heroes.js" && [ "$(md5sum < lanternhold-heroes.js | cut -c1-32)" = "00c3ed6fc55f18abecb8d8a5e7820973" ] || { echo "lanternhold-heroes: download failed or changed. Stopping; nothing changed."; exit 1; }
-curl -sf -o lanternhold-profile.js "$RAWlanternhold-profile.js" && [ "$(md5sum < lanternhold-profile.js | cut -c1-32)" = "dc726ea6e6d8dd0bbee3ddb43c3d3ba5" ] || { echo "lanternhold-profile: download failed or changed. Stopping; nothing changed."; exit 1; }
-curl -sf -o lanternhold-invite.js "$RAWlanternhold-invite.js" && [ "$(md5sum < lanternhold-invite.js | cut -c1-32)" = "88a67091c9102a35d8d86636f11044a1" ] || { echo "lanternhold-invite: download failed or changed. Stopping; nothing changed."; exit 1; }
-curl -sf -o lanternhold-market.js "$RAWlanternhold-market.js" && [ "$(md5sum < lanternhold-market.js | cut -c1-32)" = "712cd43e1f73fbc858e1ae2f754b3d2f" ] || { echo "lanternhold-market: download failed or changed. Stopping; nothing changed."; exit 1; }
-curl -sf -o lanternhold-mail.js "$RAWlanternhold-mail.js" && [ "$(md5sum < lanternhold-mail.js | cut -c1-32)" = "18935ceea0ecd9d76a75c6a89e8df20e" ] || { echo "lanternhold-mail: download failed or changed. Stopping; nothing changed."; exit 1; }
-curl -sf -o lanternhold-chat.js "$RAWlanternhold-chat.js" && [ "$(md5sum < lanternhold-chat.js | cut -c1-32)" = "e4986763f0a8aead4a227cd7134c608f" ] || { echo "lanternhold-chat: download failed or changed. Stopping; nothing changed."; exit 1; }
-curl -sf -o lanternhold-admin.js "$RAWlanternhold-admin.js" && [ "$(md5sum < lanternhold-admin.js | cut -c1-32)" = "0f05762f020ad97283eb71776c4d3b36" ] || { echo "lanternhold-admin: download failed or changed. Stopping; nothing changed."; exit 1; }
-curl -sf -o lanternhold-hof.js "$RAWlanternhold-hof.js" && [ "$(md5sum < lanternhold-hof.js | cut -c1-32)" = "680f07d6ef09e707f992c0c13a3b6117" ] || { echo "lanternhold-hof: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-save.js "${RAW}lanternhold-save.js" && [ "$(md5sum < lanternhold-save.js | cut -c1-32)" = "caec3676f48ffcc8260595952e2baaec" ] || { echo "lanternhold-save: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-heroes.js "${RAW}lanternhold-heroes.js" && [ "$(md5sum < lanternhold-heroes.js | cut -c1-32)" = "00c3ed6fc55f18abecb8d8a5e7820973" ] || { echo "lanternhold-heroes: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-profile.js "${RAW}lanternhold-profile.js" && [ "$(md5sum < lanternhold-profile.js | cut -c1-32)" = "dc726ea6e6d8dd0bbee3ddb43c3d3ba5" ] || { echo "lanternhold-profile: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-invite.js "${RAW}lanternhold-invite.js" && [ "$(md5sum < lanternhold-invite.js | cut -c1-32)" = "88a67091c9102a35d8d86636f11044a1" ] || { echo "lanternhold-invite: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-market.js "${RAW}lanternhold-market.js" && [ "$(md5sum < lanternhold-market.js | cut -c1-32)" = "712cd43e1f73fbc858e1ae2f754b3d2f" ] || { echo "lanternhold-market: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-mail.js "${RAW}lanternhold-mail.js" && [ "$(md5sum < lanternhold-mail.js | cut -c1-32)" = "18935ceea0ecd9d76a75c6a89e8df20e" ] || { echo "lanternhold-mail: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-chat.js "${RAW}lanternhold-chat.js" && [ "$(md5sum < lanternhold-chat.js | cut -c1-32)" = "e4986763f0a8aead4a227cd7134c608f" ] || { echo "lanternhold-chat: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-admin.js "${RAW}lanternhold-admin.js" && [ "$(md5sum < lanternhold-admin.js | cut -c1-32)" = "0f05762f020ad97283eb71776c4d3b36" ] || { echo "lanternhold-admin: download failed or changed. Stopping; nothing changed."; exit 1; }
+curl -sf -o lanternhold-hof.js "${RAW}lanternhold-hof.js" && [ "$(md5sum < lanternhold-hof.js | cut -c1-32)" = "680f07d6ef09e707f992c0c13a3b6117" ] || { echo "lanternhold-hof: download failed or changed. Stopping; nothing changed."; exit 1; }
 echo "2/3 checking the live code"
 SKIP=""
 for F in lanternhold-save lanternhold-heroes lanternhold-profile lanternhold-invite lanternhold-market lanternhold-mail lanternhold-chat lanternhold-admin lanternhold-hof; do
