@@ -1583,6 +1583,53 @@
     if (acts.length > 30) acts = acts.slice(-30);
     try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
   }
+  // v144 rhythm watch (John, 27 Nov 2026: "keep track if any clicks are repetitive or timed... people setting up
+  // scripts... every 15 min to join the boss fight"). The game only counts how input arrives and sends a small summary
+  // with each cloud sync; the server (infra/lambda/rhythm.js) looks for fixed timers, button routines, auto-clicker taps,
+  // script-made clicks and play without sleep, and lists the player on the Admin tab's Watch list for a person to
+  // review. It never changes play. Kept: tap counts, which buttons and when, the hours with input. Never kept: what is
+  // typed, or anything outside the game.
+  const RH = (function () {
+    const KEY = HCS ? 'lh_rh_hc' : 'lh_rh', H = 36e5;
+    const fresh = () => ({ tp: 0, ss: 0, tw: 0, ew: 0, kr: 0, ut: 0, uk: '', btn: [], hr: [] });
+    let c = fresh(), lx = null, ly = null, tt = [], dirty = false;
+    try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o && Array.isArray(o.btn)) c = Object.assign(fresh(), o); } catch (e) {}
+    const keyOf = el => {
+      if (!el || !el.getAttribute) return '?';
+      if (el.id) return '#' + el.id;
+      for (const a of el.attributes) if (/^data-/.test(a.name) && !/^data-(tip|confirm)$/.test(a.name)) return a.name.slice(5) + (a.value && a.value.length < 14 ? ':' + a.value : '');
+      return (el.tagName || '').toLowerCase() + ':' + String(el.textContent || '').trim().slice(0, 14);
+    };
+    const hour = t => { const h = Math.floor(t / H); if (c.hr[c.hr.length - 1] !== h) { c.hr.push(h); if (c.hr.length > 48) c.hr.shift(); dirty = true; } };
+    ['pointerdown', 'click', 'keydown'].forEach(ev => window.addEventListener(ev, e => {
+      const now = Date.now(); hour(now);
+      if (!e.isTrusted) { c.ut++; c.uk = keyOf(e.target && e.target.closest ? e.target.closest('button,[role=button],a,[data-dt]') || e.target : e.target); dirty = true; }
+      if (ev !== 'click') return;
+      const b = e.target && e.target.closest ? e.target.closest('button,[role=button],a,[data-dt]') : null;
+      if (b && b.id !== 'arena') { c.btn.push([keyOf(b), now, e.isTrusted ? 1 : 0]); if (c.btn.length > 150) c.btn.shift(); dirty = true; }
+    }, { passive: true, capture: true }));
+    function tap(ev) {
+      const now = Date.now(); c.tp++; dirty = true;
+      if (ev && ev.repeat) { c.kr++; return; } // a held key repeats on the browser's own timer: not a script
+      if (ev && ev.clientX != null) { if (lx != null && Math.abs(ev.clientX - lx) <= 1 && Math.abs(ev.clientY - ly) <= 1) c.ss++; lx = ev.clientX; ly = ev.clientY; }
+      tt.push(now);
+      if (tt.length >= 21) {
+        const g = []; for (let i = 1; i < tt.length; i++) if (tt[i] - tt[i - 1] < 1000) g.push(tt[i] - tt[i - 1]);
+        if (g.length >= 15) { const m = g.reduce((a, x) => a + x, 0) / g.length, sd = Math.sqrt(g.reduce((a, x) => a + (x - m) * (x - m), 0) / g.length); c.tw++; if (m > 0 && sd / m < 0.05) c.ew++; }
+        tt = [];
+      }
+    }
+    // take() hands the summary to a sync; back() puts it back if the sync failed.
+    function take() { const o = Object.assign({}, c, { cn: Date.now() }); c = fresh(); dirty = true; return o; }
+    function back(o) {
+      if (!o) return;
+      ['tp', 'ss', 'tw', 'ew', 'kr', 'ut'].forEach(k => { c[k] += o[k] || 0; });
+      c.btn = o.btn.concat(c.btn).slice(-150); c.hr = Array.from(new Set(o.hr.concat(c.hr))).slice(-48); c.uk = c.uk || o.uk; dirty = true;
+    }
+    const keep = () => { if (!dirty) return; dirty = false; try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) {} };
+    setInterval(keep, 30000); window.addEventListener('pagehide', keep); document.addEventListener('visibilitychange', () => { if (document.hidden) keep(); });
+    return { tap, take, back };
+  })();
   // v138 shop funnel: shop opened, checkout started, purchase credited. Rides to the admin log like bell entries,
   // so we can see where buyers drop off (before v138 only finished store orders were visible).
   function shopTrack(step, what) {
@@ -3881,6 +3928,7 @@
   let strikesThisSession = 0;
   function doStrike(ev) {
     if (!S.hero || !$('modal').hidden) return;
+    RH.tap(ev);
     L.strike(S, Date.now(), null, events);
     strikesThisSession++;
     if (strikesThisSession === 8) $('hint').style.opacity = 0;
@@ -3980,7 +4028,7 @@
     paintGhost(); paintMerchant();
   }, 500);
   arena.addEventListener('pointerdown', e => { e.preventDefault(); doStrike(e); });
-  arena.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); doStrike(); } });
+  arena.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); doStrike(e); } });
   window.addEventListener('keydown', e => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || !$('modal').hidden) return;
     const i = +e.key; if (i >= 1 && i <= 5 && S.party[i - 1]) { if (L.castAbility(S, S.party[i - 1], Date.now(), events)) handleEvents(); }
@@ -4649,8 +4697,8 @@
     if (HCS && !S.hc) return; // v142 hotfix: never send a non-Hardcore save from the Hardcore slot
     if (!claim && !cloudReady) return; // not before this device has checked the account save and claimed it
     try {
-      const o = saveObj(), sent = acts.slice();
-      const r = await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId(), claim: claim ? 1 : 0 });
+      const o = saveObj(), sent = acts.slice(), bh = RH.take();
+      let r; try { r = await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId(), claim: claim ? 1 : 0, bh }); } catch (e) { RH.back(bh); throw e; }
       lastCloud = Date.now(); cloudReady = true; syncMark(o.stats.playTime, r && r.updated);
       if (r && r.updated) awaySettle(r.updated, o.stats.playTime);
       acts = acts.filter(a => !sent.includes(a)); try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
@@ -5904,7 +5952,7 @@
     if (!r.ok) throw new Error(r.status === 403 ? 'This account is not an admin.' : j.error === 'self' ? 'You cannot ban yourself.' : j.error === 'player' ? 'That player has not played since bans were added, so their account cannot be found yet.' : j.error === 'name' ? 'The name you typed does not match the hero.' : 'The server said no (' + r.status + ').');
     return j;
   }
-  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [], adminHeld = [];
+  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [], adminHeld = [], adminFlags = [];
   function paintAdminTab() { const t = $('tabadmin'); if (t) t.hidden = !isAdmin(); }
   async function loadAdmin() {
     $('adminbox').innerHTML = '<p class="note">Loading players…</p>';
@@ -5912,6 +5960,7 @@
     try { adminLinks = (await adminApi('GET', '/admin/links')).links || []; await loadWar(); } catch (e) { adminLinks = []; }
     try { adminLog = (await adminApi('GET', '/admin/audit')).log || []; } catch (e) { adminLog = []; }
     try { adminHeld = (await adminApi('GET', '/admin/held')).held || []; } catch (e) { adminHeld = []; }
+    try { adminFlags = (await adminApi('GET', '/admin/flags')).flags || []; } catch (e) { adminFlags = []; }
     paintAdmin();
   }
   // Where players came from: the first ?ref= tag (or referring site) each signed-in hero arrived with (server field rf).
@@ -5924,6 +5973,20 @@
     const rows = Object.keys(t).sort((a, c) => t[c].n - t[a].n);
     return '<h3 class="sub">Where players came from</h3><p class="note">Each signed-in hero, by the link or site they first arrived from. Active = seen in the last 7 days.</p>' +
       '<div class="adm-list adm-refs">' + rows.map(k => '<div class="adm-row"><span class="adm-n"><b>' + esc(REF_NAME[k] || k) + '</b><small>' + esc(k) + '</small></span><span class="adm-rc"><b>' + t[k].n + '</b> hero' + (t[k].n === 1 ? '' : 'es') + ' &middot; ' + t[k].wk + ' active</span></div>').join('') + '</div>';
+  }
+  // v144 Watch list (rhythm.js): players whose input looks scripted (fixed timers, button routines, auto-clicker taps,
+  // script-made clicks, no sleep, world boss on the cooldown's beat, edited boss scores). Flag only: nothing happens to
+  // them. Collapsed to one line per player; "Reviewed" clears them until the pattern shows up again.
+  function watchList() {
+    if (!adminFlags.length) return '';
+    const by = {}; adminFlags.forEach(f => { (by[f.id] = by[f.id] || []).push(f); });
+    const nm = id => { const p = adminList.players.find(x => x.id === id); return p ? p.name : id; };
+    const worst = l => l.some(f => f.flags.some(x => x.lv === 'bad')) ? 'bad' : 'warn';
+    const ids = Object.keys(by).sort((a, c) => (worst(by[c]) === 'bad') - (worst(by[a]) === 'bad') || Math.max(...by[c].map(f => f.at)) - Math.max(...by[a].map(f => f.at)));
+    return '<h3 class="sub">Watch list</h3><p class="note">Play that looks scripted. Nothing has been done to these players: read the reason, open their log, then decide.</p><div class="adm-list">' +
+      ids.map(id => { const l = by[id], fl = [].concat(...l.map(f => f.flags)), at = Math.max(...l.map(f => f.at));
+        return '<details class="adm-row adm-watch ' + worst(l) + '"><summary><span class="adm-n"><b>' + esc(nm(id)) + (l.some(f => f.hc) ? ' (Hardcore)' : '') + '</b><small>' + (worst(l) === 'bad' ? 'Likely scripted' : 'Worth a look') + ' &middot; ' + fl.length + ' reason' + (fl.length === 1 ? '' : 's') + ' &middot; ' + new Date(at).toLocaleString() + '</small></span></summary>' +
+          '<p class="note">' + fl.map(x => esc(x.t)).join('<br>') + '</p><div class="row"><button class="btn small ghost" data-log="' + id + '">View Log</button><button class="btn small ghost" data-flagok="' + id + '">Reviewed</button></div></details>'; }).join('') + '</div>';
   }
   // v140 held saves (the server's save check) and snapshots: one row per held player; "Saves" opens a player's copies.
   const flagText = f => esc(f.t || f.k);
@@ -5958,7 +6021,7 @@
     const on = adminList.players.filter(p => p.on).length, banned = adminList.players.filter(p => p.banned).length;
     $('adminbox').innerHTML =
       '<div class="adm-stats"><div><small>Players</small><b>' + adminList.players.length + '</b></div><div><small>Online now</small><b>' + on + '</b></div><div><small>Banned</small><b>' + banned + '</b></div><div><small>Last wipe</small><b>' + (adminList.epoch ? new Date(adminList.epoch).toLocaleDateString() : 'never') + '</b></div></div>' +
-      heldList() + refTally(adminList.players) +
+      watchList() + heldList() + refTally(adminList.players) +
       '<div class="adm-bar"><input id="adm-q" type="search" placeholder="Find a player by name" value="' + esc(adminQ) + '"><button class="btn small ghost" id="adm-re">Refresh</button></div>' +
       '<div class="adm-list">' + (list.length ? list.map(p => '<div class="adm-row' + (p.banned ? ' banned' : '') + '"><span class="adm-n"><b>' + esc(p.name || 'Unnamed') + '</b>' + (p.cls ? ' ' + classTag(p.cls) : '') + '<small>' + (p.banned ? 'Banned' : (p.on ? '<span class="online">Online now</span> &middot; ' : 'Seen ' + ago(p.seen) + ' &middot; ') + 'power level ' + p.level + ', floor ' + p.floor) + '</small></span>' +
         '<button class="btn small ghost" data-log="' + p.id + '">View Log</button><button class="btn small ghost" data-saves="' + p.id + '">Saves</button>' +
@@ -5982,6 +6045,13 @@
     if (sv) { const p = adminList.players.find(x => x.id === sv.dataset.saves); if (p) openSaves(p); return; }
     const lg = e.target.closest('[data-log]');
     if (lg) { const p = adminList.players.find(x => x.id === lg.dataset.log); if (p) openPlayerLog(p); return; }
+    const fo = e.target.closest('[data-flagok]');
+    if (fo) {
+      adminBusy = true;
+      try { await adminApi('POST', '/admin/flags/clear', { id: fo.dataset.flagok }); toast('star', 'Marked reviewed', 'They leave the Watch list, and come back only if the pattern shows up again.', 'feat'); }
+      catch (x) { toast('lock', 'That did not work', x.message, 'warn'); }
+      adminBusy = false; loadAdmin(); return;
+    }
     const gr = e.target.closest('[data-grant]');
     if (gr) {
       const p = adminList.players.find(x => x.id === gr.dataset.grant); if (!p) return;
@@ -9516,5 +9586,7 @@
   requestAnimationFrame(render);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   window.addEventListener('pagehide', save);
-  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch, openProfile: id => profileModal(id), boardProfile: g => boardProfile(g), openSupport, getSigils };
+  // v144: the debug handle (the live game state) only exists on a local test server. On the live site it let anyone set
+  // their gold or script strikes from the browser console.
+  if (/^(localhost|127\.0\.0\.1|)$/.test(location.hostname)) window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch, openProfile: id => profileModal(id), boardProfile: g => boardProfile(g), openSupport, getSigils };
 })();

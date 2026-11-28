@@ -940,6 +940,10 @@ body.resting .arena{cursor:default}
 .adm-list{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto}
 .adm-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:#0e121a;border:1px solid var(--line)}
 .adm-row.banned{opacity:.65}
+/* v143 Watch list: one collapsed line per player, reasons on tap */
+.adm-row.adm-watch{display:block}.adm-watch summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none}.adm-watch summary::-webkit-details-marker{display:none}
+.adm-watch summary::before{content:'';flex:none;width:9px;height:9px;border-radius:50%;background:var(--gold,#e9b44c)}.adm-watch.bad summary::before{background:#e0533d}
+.adm-watch .note{margin:8px 0}.adm-watch .row{gap:8px}
 .adm-n{flex:1;min-width:0}
 .adm-n small{display:block;color:var(--muted);font-size:12px}
 .adm-rc{flex:none;font-size:13px;color:var(--muted)}
