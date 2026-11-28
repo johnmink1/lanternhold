@@ -1,4 +1,4 @@
-/* lh-build 202611272300 */
+/* lh-build 202611280240 */
 :root{
   --bg:#04070d; --bg2:#080d17; --panel:#0b1220; --panel2:#111a2c; --line:#1f2a3d; --line2:#2a3650;
   --text:#e8eef8; --muted:#8b98ad; --dim:#5f6b80;
@@ -425,7 +425,7 @@ button.scene:hover{border-color:var(--accent)}
 .fnotes{list-style:none;padding:0;margin:8px 0 4px;display:grid;gap:4px}
 .fnotes li{font-size:13px;padding:6px 10px;border-radius:8px;background:var(--bg2);border-left:3px solid #3d8a3a;color:var(--muted)}
 .fnotes li.warn{border-left-color:#e8604a;color:var(--text)}
-.fnotes li.tip{border-left-color:var(--line2)}
+.fnotes li.fhint{border-left-color:var(--line2)}
 @media (max-width:720px){.seat .pos{width:24px;font-size:15px}.seat .pos small{display:none}}
 #seats .seat{grid-template-columns:34px 24px 44px minmax(0,1fr) auto;gap:10px}
 #seats .seat.empty{grid-template-columns:34px 44px minmax(0,1fr)}
@@ -940,6 +940,10 @@ body.resting .arena{cursor:default}
 .adm-list{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto}
 .adm-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:#0e121a;border:1px solid var(--line)}
 .adm-row.banned{opacity:.65}
+/* v143 Watch list: one collapsed line per player, reasons on tap */
+.adm-row.adm-watch{display:block}.adm-watch summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none}.adm-watch summary::-webkit-details-marker{display:none}
+.adm-watch summary::before{content:'';flex:none;width:9px;height:9px;border-radius:50%;background:var(--gold,#e9b44c)}.adm-watch.bad summary::before{background:#e0533d}
+.adm-watch .note{margin:8px 0}.adm-watch .row{gap:8px}
 .adm-n{flex:1;min-width:0}
 .adm-n small{display:block;color:var(--muted);font-size:12px}
 .adm-rc{flex:none;font-size:13px;color:var(--muted)}
@@ -2985,3 +2989,35 @@ body.hcmode .brand b{color:#ff8a7a}
 .hch{display:flex;align-items:center;justify-content:center;gap:8px;color:#ff6b5a}.hch svg{width:22px;height:22px;flex:0 0 22px}
 .hcnote svg{width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:#ff8a7a}
 .hcb{display:inline-block;margin:0 4px;padding:0 6px;border-radius:9px;font:700 11px/17px var(--ui,inherit);letter-spacing:.3px;color:#fff;background:#8f2318;border:1px solid #ff6b5a;vertical-align:middle;white-space:nowrap}
+/* v144 (John): tidy camp companion cards. One row of small buttons, Let go behind "...", no overlapping "At camp" tags. */
+.seat.bench{grid-template-columns:40px minmax(0,1fr) 188px}
+.seat.bench .minis .autot{letter-spacing:.02em;gap:3px;margin-top:0;width:auto;border-radius:8px}
+.seat.bench .traits{gap:3px}
+.seat.bench .trait{padding:0 5px;font-size:10px;line-height:1.5}
+.seat.bench .minis{display:flex;gap:4px}
+.seat.bench .minis>button{flex:1 1 0}
+.seat.bench .minis .more{position:relative;flex:none}
+.seat.bench .minis .more>summary{list-style:none;display:flex;align-items:center;justify-content:center;width:28px;height:100%;padding:5px 0;font-size:12px;letter-spacing:.04em;box-sizing:border-box}
+.seat.bench .minis .more>summary::-webkit-details-marker{display:none}
+.seat.bench .minis .more[open]>summary{color:var(--text);border-color:var(--ember)}
+.seat.bench .morepop{position:absolute;right:calc(100% + 4px);top:50%;transform:translateY(-50%);z-index:20;background:var(--panel2,#121821);border:1px solid var(--line2);border-radius:9px;padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.seat.bench .morepop button{width:100%;padding:6px 12px}
+.awaynote{display:none;align-items:center;gap:6px;font-size:12.5px;margin:4px 4px 8px}
+.awaynote svg{width:14px;height:14px;color:var(--ember);flex:none}
+body:not(.incamp) .awaynote{display:flex}
+body:not(.incamp) .seat.bench [data-train],body:not(.incamp) .seat.bench [data-seat],body:not(.incamp) .seat.bench [data-jobfor]{display:none}
+@media (max-width:520px){.seat.bench{grid-template-columns:40px minmax(0,1fr)}.seat.bench .minis .more>summary{width:40px}}
+.seat.bench .minis .autot svg{flex:none}
+/* v144 fix (John: "still having to slide this"): the desktop tab bar tightens one step at a time until every tab fits
+   (fitTabs in ui.js). These rules first came in v141 (#93) and were lost in the v142 merge.
+   fit0 drops the icons, fit1 Dashboard becomes an icon, fit2 smaller text, fit3 town tabs become icons,
+   fit4 every tab an icon, fit5 (last resort) wraps onto a second row so nothing ever needs sliding. */
+@media (min-width:721px){
+  .tabs.fit0 button svg{display:none}
+  .tabs.fit1 [data-tab="dash"] span{display:none}
+  .tabs.fit1 button{padding-left:5px;padding-right:5px}
+  .tabs.fit2 button{font-size:13px;padding-left:4px;padding-right:4px;gap:4px}
+  .tabs.fit3 .townitem span,.tabs.fit4 button span{display:none}
+  .tabs.fit1 [data-tab="dash"] svg,.tabs.fit3 .townitem svg,.tabs.fit4 button svg{display:block!important;width:17px;height:17px}
+  .tabs.fit5{flex-wrap:wrap;justify-content:flex-start;row-gap:0}
+}

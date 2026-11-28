@@ -1,4 +1,4 @@
-/* lh-build 202611272300 */
+/* lh-build 202611280240 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
@@ -97,6 +97,8 @@
     const e = Math.min(BIG.length - 1, Math.floor(Math.log10(n) / 3)), v = n / Math.pow(1000, e);
     return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.floor(v).toLocaleString('en-US')) + BIG[e];
   }
+  // Short gold for buttons: 685.8K instead of 685,801 (full number in the tooltip).
+  const fmtK = n => n >= 1e4 && n < 1e6 ? (Math.floor(n / 100) / 10).toFixed(1).replace(/\.0$/, '') + 'K' : fmt(n);
   function fmtTime(sec) {
     sec = Math.floor(sec);
     const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
@@ -1583,6 +1585,53 @@
     if (acts.length > 30) acts = acts.slice(-30);
     try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
   }
+  // v144 rhythm watch (John, 27 Nov 2026: "keep track if any clicks are repetitive or timed... people setting up
+  // scripts... every 15 min to join the boss fight"). The game only counts how input arrives and sends a small summary
+  // with each cloud sync; the server (infra/lambda/rhythm.js) looks for fixed timers, button routines, auto-clicker taps,
+  // script-made clicks and play without sleep, and lists the player on the Admin tab's Watch list for a person to
+  // review. It never changes play. Kept: tap counts, which buttons and when, the hours with input. Never kept: what is
+  // typed, or anything outside the game.
+  const RH = (function () {
+    const KEY = HCS ? 'lh_rh_hc' : 'lh_rh', H = 36e5;
+    const fresh = () => ({ tp: 0, ss: 0, tw: 0, ew: 0, kr: 0, ut: 0, uk: '', btn: [], hr: [] });
+    let c = fresh(), lx = null, ly = null, tt = [], dirty = false;
+    try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o && Array.isArray(o.btn)) c = Object.assign(fresh(), o); } catch (e) {}
+    const keyOf = el => {
+      if (!el || !el.getAttribute) return '?';
+      if (el.id) return '#' + el.id;
+      for (const a of el.attributes) if (/^data-/.test(a.name) && !/^data-(tip|confirm)$/.test(a.name)) return a.name.slice(5) + (a.value && a.value.length < 14 ? ':' + a.value : '');
+      return (el.tagName || '').toLowerCase() + ':' + String(el.textContent || '').trim().slice(0, 14);
+    };
+    const hour = t => { const h = Math.floor(t / H); if (c.hr[c.hr.length - 1] !== h) { c.hr.push(h); if (c.hr.length > 48) c.hr.shift(); dirty = true; } };
+    ['pointerdown', 'click', 'keydown'].forEach(ev => window.addEventListener(ev, e => {
+      const now = Date.now(); hour(now);
+      if (!e.isTrusted) { c.ut++; c.uk = keyOf(e.target && e.target.closest ? e.target.closest('button,[role=button],a,[data-dt]') || e.target : e.target); dirty = true; }
+      if (ev !== 'click') return;
+      const b = e.target && e.target.closest ? e.target.closest('button,[role=button],a,[data-dt]') : null;
+      if (b && b.id !== 'arena') { c.btn.push([keyOf(b), now, e.isTrusted ? 1 : 0]); if (c.btn.length > 150) c.btn.shift(); dirty = true; }
+    }, { passive: true, capture: true }));
+    function tap(ev) {
+      const now = Date.now(); c.tp++; dirty = true;
+      if (ev && ev.repeat) { c.kr++; return; } // a held key repeats on the browser's own timer: not a script
+      if (ev && ev.clientX != null) { if (lx != null && Math.abs(ev.clientX - lx) <= 1 && Math.abs(ev.clientY - ly) <= 1) c.ss++; lx = ev.clientX; ly = ev.clientY; }
+      tt.push(now);
+      if (tt.length >= 21) {
+        const g = []; for (let i = 1; i < tt.length; i++) if (tt[i] - tt[i - 1] < 1000) g.push(tt[i] - tt[i - 1]);
+        if (g.length >= 15) { const m = g.reduce((a, x) => a + x, 0) / g.length, sd = Math.sqrt(g.reduce((a, x) => a + (x - m) * (x - m), 0) / g.length); c.tw++; if (m > 0 && sd / m < 0.05) c.ew++; }
+        tt = [];
+      }
+    }
+    // take() hands the summary to a sync; back() puts it back if the sync failed.
+    function take() { const o = Object.assign({}, c, { cn: Date.now() }); c = fresh(); dirty = true; return o; }
+    function back(o) {
+      if (!o) return;
+      ['tp', 'ss', 'tw', 'ew', 'kr', 'ut'].forEach(k => { c[k] += o[k] || 0; });
+      c.btn = o.btn.concat(c.btn).slice(-150); c.hr = Array.from(new Set(o.hr.concat(c.hr))).slice(-48); c.uk = c.uk || o.uk; dirty = true;
+    }
+    const keep = () => { if (!dirty) return; dirty = false; try { localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) {} };
+    setInterval(keep, 30000); window.addEventListener('pagehide', keep); document.addEventListener('visibilitychange', () => { if (document.hidden) keep(); });
+    return { tap, take, back };
+  })();
   // v138 shop funnel: shop opened, checkout started, purchase credited. Rides to the admin log like bell entries,
   // so we can see where buyers drop off (before v138 only finished store orders were visible).
   function shopTrack(step, what) {
@@ -1945,7 +1994,7 @@
       if (!guest) {
         const n = buyN() === 'max' ? Math.max(1, L.maxAffordable(S, id)) : buyN();
         const cost = L.trainCost(S, id, n), td = L.trainDust(S, id, n);
-        btn = '<button class="buy anywhere" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button>' + '<div class="minirow"><button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' + (id !== 'you' ? '<button class="rest icon" data-unseat="' + i + '" title="Send ' + esc(m.name) + ' to the campfire to free this seat" aria-label="Send ' + esc(m.name) + ' to the campfire">' + icon('flame') + '</button>' : '') + '</div>';
+        btn = '<button class="buy anywhere" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em title="' + fmt(cost) + ' gold">' + fmtK(cost) + '</em></span>' + trainDustTag(td) + '</button>' + '<div class="minirow"><button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' + (id !== 'you' ? '<button class="rest icon" data-unseat="' + i + '" title="Send ' + esc(m.name) + ' to the campfire to free this seat" aria-label="Send ' + esc(m.name) + ' to the campfire">' + icon('flame') + '</button>' : '') + '</div>';
       } else btn = '<button class="btn ghost small" data-dismiss="' + id + '">Dismiss</button>';
       const mv = '<div class="mv"><button class="mini up" data-move="' + i + ':-1"' + (i === 0 ? ' disabled' : '') + ' title="Move forward" aria-label="Move ' + esc(m.name) + ' forward">&#9650;</button><button class="mini dn" data-move="' + i + ':1"' + (i === L.PARTY_SIZE - 1 ? ' disabled' : '') + ' title="Move back" aria-label="Move ' + esc(m.name) + ' back">&#9660;</button></div>';
       const lk = seatLooks(id), sbg = lk && lk.g && lk.g !== 'night' ? cosOf('g', lk.g)[0] : '';
@@ -1959,7 +2008,7 @@
       box.innerHTML = html; seatsHtml = html;
       const fns = L.formationNotes(S), nw = fns.filter(n => n.warn).length;
       $('fsum').innerHTML = nw ? 'Formation tips: <b>' + nw + (nw === 1 ? ' warning' : ' warnings') + '</b>' : 'Formation tips: looking good';
-      $('fnotes').innerHTML = fns.map(n => '<li class="' + (n.warn ? 'warn' : 'ok') + '">' + esc(n.text) + '</li>').join('') + '<li class="tip">Healers heal less the farther they stand from who they heal. Some monsters ambush from behind and hit the rear first; a tank at the back guards it.</li>';
+      $('fnotes').innerHTML = fns.map(n => '<li class="' + (n.warn ? 'warn' : 'ok') + '">' + esc(n.text) + '</li>').join('') + '<li class="fhint">Healers heal less the farther they stand from who they heal. Some monsters ambush from behind and hit the rear first; a tank at the back guards it.</li>';
     }
     paintHp();
     const bench = S.unlocked.filter(x => !S.party.includes(x));
@@ -1974,13 +2023,15 @@
       return '<button class="job' + (on ? ' on' : '') + '" data-job="' + j.id + '" title="' + esc(j.desc) + '"><span class="jic">' + icon(j.icon) + '</span><b>' + j.name + '</b>' +
         (on ? '<small><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt="">' + esc(m.name) + '</small><em>' + L.jobText(j, L.jobValue(S, j, id)) + '</em>' + (L.postOn(S, id) ? uqPerk(id) : '') : '<small class="none">Nobody yet</small><em>' + j.fmt + '</em>') + '</button>';
     }).join('') + '</div>');
-    let benchHtml = jobsHtml + bench.map(id => {
+    let benchHtml = jobsHtml + (bench.length ? '<p class="note awaynote">' + icon('flame') + 'Train, Job and Bring open when you are back at the main camp.</p>' : '') + bench.map(id => {
       const m = L.memberById(id), job = L.jobOf(S, id);
       const n = buyN() === 'max' ? Math.max(1, L.maxAffordable(S, id)) : buyN(), cost = L.trainCost(S, id, n), td = L.trainDust(S, id, n);
       return '<div class="seat bench">' + portrait(id) + '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + '</div><div class="lv">Power level ' + L.lvl(S, id) + ' &middot; ' + esc(m.title) + '</div>' +
         '<div class="jobline' + (job ? ' on' : '') + '">' + (job ? icon(job.icon) + '<b>' + job.name + '</b> ' + L.jobText(job, L.jobValue(S, job, id)) : 'No camp job yet') + (L.UNIQ[id] ? (L.postOn(S, id) ? ' ' + uqPerk(id) : ' <small class="uqhint" data-tip="' + esc(L.UNIQ[id].perk + ': ' + L.UNIQ[id].text) + '" tabindex="0">&#9733; ' + esc(L.UNIQ[id].perk) + ' as ' + esc(uqPostName(id)) + '</small>') : '') + '</div>' + traitChips(id, true) + '</div>' +
-        '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button><div class="minis">' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
-        '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button><button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] || L.isStoryComp(S, id) ? '<button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button>' : '') + '</div></div></div>';
+        // v144 (John): one tidy row (Train, then Job / Auto / Bring / ...). Away from the main camp the camp-only buttons hide (style.css) and one note says why.
+        '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em title="' + fmt(cost) + ' gold">' + fmtK(cost) + '</em></span>' + trainDustTag(td) + '</button><div class="minis">' +
+        '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button>' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
+        '<button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] || L.isStoryComp(S, id) ? '<details class="more"><summary class="rest" aria-label="More for ' + esc(m.name) + '">&middot;&middot;&middot;</summary><div class="morepop"><button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button></div></details>' : '') + '</div></div></div>';
     }).join('');
     if (!bench.length) benchHtml = jobsHtml + '<p class="note">No one is at the fire. Companions who rest here can take a job that helps the whole party.</p>';
     if ($('bench').dataset.h !== benchHtml) { $('bench').innerHTML = benchHtml; $('bench').dataset.h = benchHtml; }
@@ -2020,6 +2071,8 @@
     else if (t.id === 'm-mail') openTrade('mail');
   };
   ['tab-party', 'tab-camp', 'tab-market', 'tab-guild'].forEach(id => $(id).addEventListener('click', partyClick));
+  // The bench "..." menu closes on a tap anywhere else.
+  document.addEventListener('click', e => document.querySelectorAll('details.more[open]').forEach(d => { if (!d.contains(e.target) || e.target.closest('.morepop button')) d.open = false; }));
   // camp jobs: pick who does a job, or which job someone does
   // Unique Legendaries: their extra on their own camp post (jid), or on any post for Thistle.
   const uqFits = (id, jid) => { const u = L.UNIQ[id]; return !!u && (u.job === 'any' || u.job === jid); };
@@ -3649,13 +3702,15 @@
   // Re-checked when the bar resizes and when a count like Gear 70 changes. Icon-only tabs get a title.
   function fitTabs() {
     const t = document.querySelector('.tabs'); if (!t) return;
-    const lv = ['fit0', 'fit1', 'fit2', 'fit3', 'fit4']; t.classList.remove(...lv);
+    const lv = ['fit0', 'fit1', 'fit2', 'fit3', 'fit4', 'fit5']; t.classList.remove(...lv);
     if (!phone()) for (let i = 0; i < lv.length && t.scrollWidth > t.clientWidth + 1; i++) t.classList.add(lv[i]);
     t.querySelectorAll('button[data-tab]').forEach(b => { const s = b.querySelector('span'); if (!s) return; const off = getComputedStyle(s).display === 'none' && !phone(); if (off) b.title = s.textContent.trim(); else b.removeAttribute('title'); });
     fitTabs.k = t.textContent + innerWidth;
   }
   { const t = document.querySelector('.tabs'); if (t && window.ResizeObserver) new ResizeObserver(() => fitTabs()).observe(t);
-    setInterval(() => { const tt = document.querySelector('.tabs'); if (tt && tt.textContent + innerWidth !== fitTabs.k) fitTabs(); }, 1500);
+    // v144: also re-fit when the web font finishes loading (wider text, same size box) or whenever the bar overflows
+    setInterval(() => { const tt = document.querySelector('.tabs'); if (tt && (tt.textContent + innerWidth !== fitTabs.k || (!phone() && tt.scrollWidth > tt.clientWidth + 1))) fitTabs(); }, 1500);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitTabs);
     setTimeout(fitTabs, 300); }
   // v138 phone bar: Market, Guild, PvP and Codex sit under one Town button (9 tabs were too tight on phones).
   function townOpen() {
@@ -3881,6 +3936,7 @@
   let strikesThisSession = 0;
   function doStrike(ev) {
     if (!S.hero || !$('modal').hidden) return;
+    RH.tap(ev);
     L.strike(S, Date.now(), null, events);
     strikesThisSession++;
     if (strikesThisSession === 8) $('hint').style.opacity = 0;
@@ -3980,7 +4036,7 @@
     paintGhost(); paintMerchant();
   }, 500);
   arena.addEventListener('pointerdown', e => { e.preventDefault(); doStrike(e); });
-  arena.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); doStrike(); } });
+  arena.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); doStrike(e); } });
   window.addEventListener('keydown', e => {
     if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || !$('modal').hidden) return;
     const i = +e.key; if (i >= 1 && i <= 5 && S.party[i - 1]) { if (L.castAbility(S, S.party[i - 1], Date.now(), events)) handleEvents(); }
@@ -4347,7 +4403,7 @@
     purse: { n: 'Gold and power', i: 'coin', d: 'Gold, party damage, Dust and Embers.', v: now => '<b class="dbig">' + fmt(S.gold) + ' <small>gold</small></b><p>' + fmt(L.totalDps(S, now)) + ' damage/s · ' + fmt(S.dust || 0) + ' Dust · ' + fmt(S.embers) + ' Embers</p>', a: () => dC('store', 'Store') },
     depth: { n: 'Depth and chapter', i: 'map', d: 'Your floor, deepest floor and chapter goal.', v: () => '<b class="dbig">Floor ' + S.floor + '</b><p>Deepest ' + (S.maxFloorEver || 1) + ' · Chapter ' + L.chapterOf(S) + '</p><p class="dsub">' + esc(dTxt('goaltext')) + '</p>', a: () => dQ('#btn-map', 'Map of the Deep') },
     quests: { n: 'Quests and bounties', i: 'flare', d: 'Daily quests and bounties done.', v: () => '<b class="dbig">' + esc(dTxt('questct')) + '</b><p>Daily quests and bounties</p>', a: () => dQ('#quests', 'Open quests') },
-    party: { n: 'Party', i: 'users', d: 'Who is in your marching order, front to back.', w: 1, v: () => '<ul class="dlist">' + S.party.map((id, k) => { const m = L.memberById(id); return m ? '<li><span>' + (k + 1) + '. ' + esc(m.name) + ' ' + classTag(m.cls) + '</span><b>Power level ' + fmt(S.levels[id] || 0) + '</b></li>' : ''; }).join('') + '</ul>', a: () => dT('party', 'Train party') + dQ('#f-auto', 'Auto-arrange') + dQ('#f-train', 'Training Grounds') },
+    party: { n: 'Party', i: 'users', d: 'Who is in your marching order, front to back.', w: 1, v: () => '<ul class="dlist">' + S.party.map((id, k) => { const m = L.memberById(id); return m ? '<li><span>' + (k + 1) + '. ' + esc(m.name) + ' ' + classTag(m.cls) + '</span><b>Power level ' + fmt(L.lvl(S, id)) + '</b></li>' : ''; }).join('') + '</ul>', a: () => dT('party', 'Train party') + dQ('#f-auto', 'Auto-arrange') + dQ('#f-train', 'Training Grounds') },
     meter: { n: 'Damage meter', i: 'sword', d: 'Who deals your damage, last 30 seconds.', v: now => { const r = L.damageMeter(S, now), t = r.reduce((a, x) => a + x.dps, 0) || 1; return r.length ? '<ul class="dlist">' + r.slice(0, 5).map(x => { const m = METER_NAME[x.key] ? null : L.memberById(x.key); return '<li><span>' + esc(m ? m.name : METER_NAME[x.key] ? METER_NAME[x.key][0] : x.key) + '</span><b>' + fmt(x.dps) + '/s · ' + Math.round(x.dps / t * 100) + '%</b></li>'; }).join('') + '</ul>' : '<p class="dsub">No damage yet. Fight for a few seconds.</p>'; } },
     flog: { n: 'Fight log', i: 'skull', d: 'The last few things that happened in fights.', w: 1, v: () => FLOG.length ? '<ul class="dlist dlog">' + FLOG.slice(0, 5).map(x => '<li><span>' + x.text + '</span></li>').join('') + '</ul>' : '<p class="dsub">Nothing yet.</p>' },
     pack: { n: 'Pack', i: 'bag', d: 'Pack space and auto-scrap.', v: () => { const n = L.packCount(S), c = L.bagCap(S); return '<b class="dbig">' + fmt(n) + (S.boh ? ' <small>Bag of Holding</small>' : ' <small>/ ' + fmt(c) + '</small>') + '</b><p>Auto-scrap ' + esc(dTxt('g-autos') || 'Off') + (!S.boh && n >= c ? ' · <span class="dwarn">full, new finds are sold</span>' : '') + '</p>'; }, a: () => dLock('gear') || dT('gear', 'Gear') + dQ('#g-auto', 'Auto-scrap') + dQ('#g-scrap', 'Mass scrap') },
@@ -4649,8 +4705,8 @@
     if (HCS && !S.hc) return; // v142 hotfix: never send a non-Hardcore save from the Hardcore slot
     if (!claim && !cloudReady) return; // not before this device has checked the account save and claimed it
     try {
-      const o = saveObj(), sent = acts.slice();
-      const r = await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId(), claim: claim ? 1 : 0 });
+      const o = saveObj(), sent = acts.slice(), bh = RH.take();
+      let r; try { r = await api('PUT', { data: await packSave(JSON.stringify(o)), floor: o.maxFloorEver, created: o.created || 0, acts: sent, dv: devId(), claim: claim ? 1 : 0, bh }); } catch (e) { RH.back(bh); throw e; }
       lastCloud = Date.now(); cloudReady = true; syncMark(o.stats.playTime, r && r.updated);
       if (r && r.updated) awaySettle(r.updated, o.stats.playTime);
       acts = acts.filter(a => !sent.includes(a)); try { localStorage.setItem(ACT_KEY, JSON.stringify(acts)); } catch (e) {}
@@ -5904,7 +5960,7 @@
     if (!r.ok) throw new Error(r.status === 403 ? 'This account is not an admin.' : j.error === 'self' ? 'You cannot ban yourself.' : j.error === 'player' ? 'That player has not played since bans were added, so their account cannot be found yet.' : j.error === 'name' ? 'The name you typed does not match the hero.' : 'The server said no (' + r.status + ').');
     return j;
   }
-  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [], adminHeld = [];
+  let adminList = null, adminQ = '', adminBusy = false, adminLinks = [], adminLog = [], adminHeld = [], adminFlags = [];
   function paintAdminTab() { const t = $('tabadmin'); if (t) t.hidden = !isAdmin(); }
   async function loadAdmin() {
     $('adminbox').innerHTML = '<p class="note">Loading players…</p>';
@@ -5912,6 +5968,7 @@
     try { adminLinks = (await adminApi('GET', '/admin/links')).links || []; await loadWar(); } catch (e) { adminLinks = []; }
     try { adminLog = (await adminApi('GET', '/admin/audit')).log || []; } catch (e) { adminLog = []; }
     try { adminHeld = (await adminApi('GET', '/admin/held')).held || []; } catch (e) { adminHeld = []; }
+    try { adminFlags = (await adminApi('GET', '/admin/flags')).flags || []; } catch (e) { adminFlags = []; }
     paintAdmin();
   }
   // Where players came from: the first ?ref= tag (or referring site) each signed-in hero arrived with (server field rf).
@@ -5924,6 +5981,20 @@
     const rows = Object.keys(t).sort((a, c) => t[c].n - t[a].n);
     return '<h3 class="sub">Where players came from</h3><p class="note">Each signed-in hero, by the link or site they first arrived from. Active = seen in the last 7 days.</p>' +
       '<div class="adm-list adm-refs">' + rows.map(k => '<div class="adm-row"><span class="adm-n"><b>' + esc(REF_NAME[k] || k) + '</b><small>' + esc(k) + '</small></span><span class="adm-rc"><b>' + t[k].n + '</b> hero' + (t[k].n === 1 ? '' : 'es') + ' &middot; ' + t[k].wk + ' active</span></div>').join('') + '</div>';
+  }
+  // v144 Watch list (rhythm.js): players whose input looks scripted (fixed timers, button routines, auto-clicker taps,
+  // script-made clicks, no sleep, world boss on the cooldown's beat, edited boss scores). Flag only: nothing happens to
+  // them. Collapsed to one line per player; "Reviewed" clears them until the pattern shows up again.
+  function watchList() {
+    if (!adminFlags.length) return '';
+    const by = {}; adminFlags.forEach(f => { (by[f.id] = by[f.id] || []).push(f); });
+    const nm = id => { const p = adminList.players.find(x => x.id === id); return p ? p.name : id; };
+    const worst = l => l.some(f => f.flags.some(x => x.lv === 'bad')) ? 'bad' : 'warn';
+    const ids = Object.keys(by).sort((a, c) => (worst(by[c]) === 'bad') - (worst(by[a]) === 'bad') || Math.max(...by[c].map(f => f.at)) - Math.max(...by[a].map(f => f.at)));
+    return '<h3 class="sub">Watch list</h3><p class="note">Play that looks scripted. Nothing has been done to these players: read the reason, open their log, then decide.</p><div class="adm-list">' +
+      ids.map(id => { const l = by[id], fl = [].concat(...l.map(f => f.flags)), at = Math.max(...l.map(f => f.at));
+        return '<details class="adm-row adm-watch ' + worst(l) + '"><summary><span class="adm-n"><b>' + esc(nm(id)) + (l.some(f => f.hc) ? ' (Hardcore)' : '') + '</b><small>' + (worst(l) === 'bad' ? 'Likely scripted' : 'Worth a look') + ' &middot; ' + fl.length + ' reason' + (fl.length === 1 ? '' : 's') + ' &middot; ' + new Date(at).toLocaleString() + '</small></span></summary>' +
+          '<p class="note">' + fl.map(x => esc(x.t)).join('<br>') + '</p><div class="row"><button class="btn small ghost" data-log="' + id + '">View Log</button><button class="btn small ghost" data-flagok="' + id + '">Reviewed</button></div></details>'; }).join('') + '</div>';
   }
   // v140 held saves (the server's save check) and snapshots: one row per held player; "Saves" opens a player's copies.
   const flagText = f => esc(f.t || f.k);
@@ -5958,7 +6029,7 @@
     const on = adminList.players.filter(p => p.on).length, banned = adminList.players.filter(p => p.banned).length;
     $('adminbox').innerHTML =
       '<div class="adm-stats"><div><small>Players</small><b>' + adminList.players.length + '</b></div><div><small>Online now</small><b>' + on + '</b></div><div><small>Banned</small><b>' + banned + '</b></div><div><small>Last wipe</small><b>' + (adminList.epoch ? new Date(adminList.epoch).toLocaleDateString() : 'never') + '</b></div></div>' +
-      heldList() + refTally(adminList.players) +
+      watchList() + heldList() + refTally(adminList.players) +
       '<div class="adm-bar"><input id="adm-q" type="search" placeholder="Find a player by name" value="' + esc(adminQ) + '"><button class="btn small ghost" id="adm-re">Refresh</button></div>' +
       '<div class="adm-list">' + (list.length ? list.map(p => '<div class="adm-row' + (p.banned ? ' banned' : '') + '"><span class="adm-n"><b>' + esc(p.name || 'Unnamed') + '</b>' + (p.cls ? ' ' + classTag(p.cls) : '') + '<small>' + (p.banned ? 'Banned' : (p.on ? '<span class="online">Online now</span> &middot; ' : 'Seen ' + ago(p.seen) + ' &middot; ') + 'power level ' + p.level + ', floor ' + p.floor) + '</small></span>' +
         '<button class="btn small ghost" data-log="' + p.id + '">View Log</button><button class="btn small ghost" data-saves="' + p.id + '">Saves</button>' +
@@ -5982,6 +6053,13 @@
     if (sv) { const p = adminList.players.find(x => x.id === sv.dataset.saves); if (p) openSaves(p); return; }
     const lg = e.target.closest('[data-log]');
     if (lg) { const p = adminList.players.find(x => x.id === lg.dataset.log); if (p) openPlayerLog(p); return; }
+    const fo = e.target.closest('[data-flagok]');
+    if (fo) {
+      adminBusy = true;
+      try { await adminApi('POST', '/admin/flags/clear', { id: fo.dataset.flagok }); toast('star', 'Marked reviewed', 'They leave the Watch list, and come back only if the pattern shows up again.', 'feat'); }
+      catch (x) { toast('lock', 'That did not work', x.message, 'warn'); }
+      adminBusy = false; loadAdmin(); return;
+    }
     const gr = e.target.closest('[data-grant]');
     if (gr) {
       const p = adminList.players.find(x => x.id === gr.dataset.grant); if (!p) return;
@@ -7837,6 +7915,14 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 144, date: 'November 2026', title: 'Small fixes', items: [
+      'Party panel: borrowed heroes show their real power level instead of 0.',
+      'Camp companion cards are tidier: one row of buttons, short gold costs like 685.8K, and Let go tucked behind the ··· button.',
+      'Away from camp, the camp-only buttons on those cards are hidden, with one line saying where they open.',
+      'The desktop tab bar fits every tab again, no sideways sliding.',
+      'Party tab: the last Formation tips line no longer floats over the other tips.',
+      'Fair play: scripted or automated clicking is now flagged for a staff review.',
+    ] },
     { v: 143, date: 'November 2026', title: 'Hardcore NP+ and small fixes', items: [
       'Hardcore heroes can start a New Playthrough. Each save keeps its own NP+ tier.',
       'Sigils belong to your account, so Hardcore heroes can claim daily quest Sigils and find Sigils too. Both saves share one daily set.',
@@ -9516,5 +9602,7 @@
   requestAnimationFrame(render);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   window.addEventListener('pagehide', save);
-  window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch, openProfile: id => profileModal(id), boardProfile: g => boardProfile(g), openSupport, getSigils };
+  // v144: the debug handle (the live game state) only exists on a local test server. On the live site it let anyone set
+  // their gold or script strikes from the browser console.
+  if (/^(localhost|127\.0\.0\.1|)$/.test(location.hostname)) window.LHDebug = { get S() { return S; }, save, L, events, lootBoss, visitEnch, openProfile: id => profileModal(id), boardProfile: g => boardProfile(g), openSupport, getSigils };
 })();

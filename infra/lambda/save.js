@@ -21,10 +21,15 @@
 // (userId '<sub>#hc', so its own pid, snapshots, activity log and hero row). hccheck.js refuses a Hardcore save whose
 // deaths or lost gear came undone (409 'hcback'), and any save carried between the two slots (409 'hcslot').
 // DELETE on the Hardcore slot (start over) keeps the row with an rst stamp, so an old copy can't come back.
+// v144 rhythm watch (John, 27 Nov 2026: scripts that click on a timer, e.g. every 15 min for the boss; rhythm.js): the
+// game sends a small input summary (bh) with each PUT. Its button history and active hours are kept on the save row
+// (rh); flags go on the activity-log row (rf) and, when not just info, onto the Admin Watch list (pk flagidx). Flag only:
+// it never refuses a save. RHYTHM=off turns it off.
 const D = require('@aws-sdk/client-dynamodb');
 const zlib = require('zlib'), crypto = require('crypto');
 const SC = require('./savecheck');
 const HC = require('./hccheck');
+const RH = require('./rhythm');
 const db = new D.DynamoDBClient({});
 const { TABLE, TRADE, HEROES, WALLETS } = process.env, MODE = process.env.SAVECHECK || 'log';
 const DAY = 864e5, SNAP_DAYS = 35, HELD_DAYS = 30, BACK = 1800;
@@ -69,11 +74,12 @@ async function putHof(sub, s) {
     ConditionExpression: 'attribute_exists(#n) AND attribute_not_exists(ban)', ExpressionAttributeNames: { '#n': 'name' },
     ExpressionAttributeValues: { ':h': { S: JSON.stringify(h) }, ':c': { N: String(h.cr || Date.now()) } } }));
 }
-async function logSave(sub, now, sv, b, flags) {
+async function logSave(sub, now, sv, b, flags, rf) {
   const sn = snap(sv); if (!sn) return;
   let a = ''; try { a = JSON.stringify(Array.isArray(b.acts) ? b.acts.slice(-30) : []).slice(0, 6000); } catch (e) {}
   await db.send(new D.PutItemCommand({ TableName: TRADE, Item: { pk: { S: 'alog#' + pidOf(sub) }, sk: { S: now.toString(36) + crypto.randomBytes(2).toString('hex') },
-    at: { N: String(now) }, s: { S: JSON.stringify(sn) }, a: { S: a }, dv: { S: String(b.dv || '').slice(0, 12) }, ...(flags ? { ck: { S: JSON.stringify(flags).slice(0, 2000) } } : {}), ttl: { N: String(Math.floor(now / 1000) + 30 * 86400) } } }));
+    at: { N: String(now) }, s: { S: JSON.stringify(sn) }, a: { S: a }, dv: { S: String(b.dv || '').slice(0, 12) }, ...(flags ? { ck: { S: JSON.stringify(flags).slice(0, 2000) } } : {}),
+    ...(rf && rf.length ? { rf: { S: JSON.stringify(rf).slice(0, 2000) } } : {}), ...(b.bh && typeof b.bh === 'object' ? { bh: { S: JSON.stringify({ tp: n(b.bh.tp), ss: n(b.bh.ss), tw: n(b.bh.tw), ew: n(b.bh.ew), kr: n(b.bh.kr), ut: n(b.bh.ut), nb: Array.isArray(b.bh.btn) ? b.bh.btn.length : 0 }) } } : {}), ttl: { N: String(Math.floor(now / 1000) + 30 * 86400) } } }));
 }
 // The first check for a player starts from their activity log (up to 600 rows, 30 days), so it knows their income.
 async function seedFrom(sub) {
@@ -128,7 +134,7 @@ exports.handler = async (event) => {
     // The save check reads the trusted reference first (a small read: only ck, crd, the device and the play time).
     let ck = null, crd = 0, chk = null, row = null;
     if (MODE !== 'off' && sv && TRADE) try {
-      row = (await db.send(new D.GetItemCommand({ TableName: TABLE, Key, ProjectionExpression: 'ck, crd, dv, updated', ConsistentRead: true }))).Item || null;
+      row = (await db.send(new D.GetItemCommand({ TableName: TABLE, Key, ProjectionExpression: 'ck, crd, dv, updated, rh', ConsistentRead: true }))).Item || null;
       // A save another device's claim already blocks (409 'moved' below) is not checked: the player gets "Play here".
       const moved = row && row.dv && !b.claim && row.dv.S !== String(b.dv || '').slice(0, 24);
       if (moved) throw { name: 'moved' };
@@ -143,6 +149,20 @@ exports.handler = async (event) => {
       }
       chk = SC.check(ck, sv, now, { crd, np, claim: !!b.claim, dv: String(b.dv || '') });
     } catch (e) { if (e.name !== 'moved') console.log('savecheck', e.name || e.message || e); chk = null; }
+    // Rhythm watch (flag only). Reuses the row read above when there was one.
+    let rz = null;
+    if (sv && b.bh && typeof b.bh === 'object' && process.env.RHYTHM !== 'off') try {
+      const rr = row || (await db.send(new D.GetItemCommand({ TableName: TABLE, Key, ProjectionExpression: 'rh' }))).Item;
+      let st = null; try { st = rr && rr.rh ? JSON.parse(rr.rh.S) : null; } catch (e) {}
+      rz = RH.absorb(st, b.bh, now);
+      const big = rz.flags.filter(f => f.lv !== 'info');
+      if (big.length && TRADE) {
+        rz.st.f0 = rz.st.f0 || now;
+        await db.send(new D.PutItemCommand({ TableName: TRADE, Item: { pk: { S: 'flagidx' }, sk: { S: pidOf(sub) + '#s' }, at: { N: String(now) }, f0: { N: String(rz.st.f0) }, n: { N: String(rz.st.n || 1) },
+          flags: { S: JSON.stringify(big).slice(0, 3000) }, ...(hc ? { hc: { N: '1' } } : {}), ttl: { N: String(Math.floor(now / 1000) + 30 * 86400) } } }));
+        console.log('rhythm', pidOf(sub), big.map(f => f.k).join(','));
+      }
+    } catch (e) { console.log('rhythm', e.name || e.message || e); rz = null; }
     if (chk && !chk.ok) {
       console.log('held', pidOf(sub), MODE, JSON.stringify(chk.flags));
       try {
@@ -154,7 +174,7 @@ exports.handler = async (event) => {
           mode: { S: MODE }, ttl: { N: String(Math.floor(now / 1000) + HELD_DAYS * 86400) } } }));
       } catch (e) { console.log('held copy', e.name); }
       if (MODE === 'on') {
-        if (TRADE) try { await logSave(sub, now, sv, b, chk.flags); } catch (e) {}
+        if (TRADE) try { await logSave(sub, now, sv, b, chk.flags, rz && rz.flags); } catch (e) {}
         return res(409, { error: 'held', flags: chk.flags.map(f => f.k) });
       }
     }
@@ -166,6 +186,7 @@ exports.handler = async (event) => {
     let cond = '(attribute_not_exists(rst) OR rst <= :c)', vals = { ':d': { S: b.data }, ':u': { N: String(now) }, ':f': { N: String(Number(b.floor) || 0) }, ':c': { N: String(Number(b.created) || 0) } };
     let upd = 'SET #d = :d, updated = :u, floor = :f';
     if (hcd) { upd += ', hcd = :h'; vals[':h'] = { S: JSON.stringify(hcd) }; }
+    if (rz) { upd += ', rh = :rh'; vals[':rh'] = { S: JSON.stringify(rz.st) }; }
     if (dv) { upd += ', dv = :v'; vals[':v'] = { S: dv }; if (!claim) cond += ' AND (attribute_not_exists(dv) OR dv = :v)'; }
     else cond += ' AND attribute_not_exists(dv)'; // hotfix 27 Nov 04:47 UTC: an old tab with no device id can't overwrite a newer save
     // Trusted reference: an accepted, clean save becomes the new reference; a held save accepted in log mode does not.
@@ -192,7 +213,7 @@ exports.handler = async (event) => {
     }
     // Daily snapshot: the first accepted save of each UTC day.
     if (snapToday && TRADE) try { await copySave(sub, day, b.data, now, sv, 'daily'); } catch (e) { console.log('snapshot', e.name); }
-    if (TRADE) try { await logSave(sub, now, sv, b, chk && !chk.ok ? chk.flags : null); } catch (e) { console.log('activity log', e.name || e); }
+    if (TRADE) try { await logSave(sub, now, sv, b, chk && !chk.ok ? chk.flags : null, rz && rz.flags); } catch (e) { console.log('activity log', e.name || e); }
     if (HEROES && sv && !(chk && !chk.ok)) try { await putHof(sub, sv); } catch (e) { console.log('hof', e.name); }
     return res(200, { ok: true, updated: now });
   }
