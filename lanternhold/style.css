@@ -425,7 +425,7 @@ button.scene:hover{border-color:var(--accent)}
 .fnotes{list-style:none;padding:0;margin:8px 0 4px;display:grid;gap:4px}
 .fnotes li{font-size:13px;padding:6px 10px;border-radius:8px;background:var(--bg2);border-left:3px solid #3d8a3a;color:var(--muted)}
 .fnotes li.warn{border-left-color:#e8604a;color:var(--text)}
-.fnotes li.tip{border-left-color:var(--line2)}
+.fnotes li.fhint{border-left-color:var(--line2)}
 @media (max-width:720px){.seat .pos{width:24px;font-size:15px}.seat .pos small{display:none}}
 #seats .seat{grid-template-columns:34px 24px 44px minmax(0,1fr) auto;gap:10px}
 #seats .seat.empty{grid-template-columns:34px 44px minmax(0,1fr)}
