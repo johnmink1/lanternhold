@@ -3008,3 +3008,16 @@ body:not(.incamp) .awaynote{display:flex}
 body:not(.incamp) .seat.bench [data-train],body:not(.incamp) .seat.bench [data-seat],body:not(.incamp) .seat.bench [data-jobfor]{display:none}
 @media (max-width:520px){.seat.bench{grid-template-columns:40px minmax(0,1fr)}.seat.bench .minis .more>summary{width:40px}}
 .seat.bench .minis .autot svg{flex:none}
+/* v144 fix (John: "still having to slide this"): the desktop tab bar tightens one step at a time until every tab fits
+   (fitTabs in ui.js). These rules first came in v141 (#93) and were lost in the v142 merge.
+   fit0 drops the icons, fit1 Dashboard becomes an icon, fit2 smaller text, fit3 town tabs become icons,
+   fit4 every tab an icon, fit5 (last resort) wraps onto a second row so nothing ever needs sliding. */
+@media (min-width:721px){
+  .tabs.fit0 button svg{display:none}
+  .tabs.fit1 [data-tab="dash"] span{display:none}
+  .tabs.fit1 button{padding-left:5px;padding-right:5px}
+  .tabs.fit2 button{font-size:13px;padding-left:4px;padding-right:4px;gap:4px}
+  .tabs.fit3 .townitem span,.tabs.fit4 button span{display:none}
+  .tabs.fit1 [data-tab="dash"] svg,.tabs.fit3 .townitem svg,.tabs.fit4 button svg{display:block!important;width:17px;height:17px}
+  .tabs.fit5{flex-wrap:wrap;justify-content:flex-start;row-gap:0}
+}
