@@ -2008,7 +2008,7 @@
       box.innerHTML = html; seatsHtml = html;
       const fns = L.formationNotes(S), nw = fns.filter(n => n.warn).length;
       $('fsum').innerHTML = nw ? 'Formation tips: <b>' + nw + (nw === 1 ? ' warning' : ' warnings') + '</b>' : 'Formation tips: looking good';
-      $('fnotes').innerHTML = fns.map(n => '<li class="' + (n.warn ? 'warn' : 'ok') + '">' + esc(n.text) + '</li>').join('') + '<li class="tip">Healers heal less the farther they stand from who they heal. Some monsters ambush from behind and hit the rear first; a tank at the back guards it.</li>';
+      $('fnotes').innerHTML = fns.map(n => '<li class="' + (n.warn ? 'warn' : 'ok') + '">' + esc(n.text) + '</li>').join('') + '<li class="fhint">Healers heal less the farther they stand from who they heal. Some monsters ambush from behind and hit the rear first; a tank at the back guards it.</li>';
     }
     paintHp();
     const bench = S.unlocked.filter(x => !S.party.includes(x));
@@ -7916,8 +7916,12 @@
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
     { v: 144, date: 'November 2026', title: 'Small fixes', items: [
+      'Party panel: borrowed heroes show their real power level instead of 0.',
       'Camp companion cards are tidier: one row of buttons, short gold costs like 685.8K, and Let go tucked behind the ··· button.',
       'Away from camp, the camp-only buttons on those cards are hidden, with one line saying where they open.',
+      'The desktop tab bar fits every tab again, no sideways sliding.',
+      'Party tab: the last Formation tips line no longer floats over the other tips.',
+      'Fair play: scripted or automated clicking is now flagged for a staff review.',
     ] },
     { v: 143, date: 'November 2026', title: 'Hardcore NP+ and small fixes', items: [
       'Hardcore heroes can start a New Playthrough. Each save keeps its own NP+ tier.',
