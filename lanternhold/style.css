@@ -2989,3 +2989,22 @@ body.hcmode .brand b{color:#ff8a7a}
 .hch{display:flex;align-items:center;justify-content:center;gap:8px;color:#ff6b5a}.hch svg{width:22px;height:22px;flex:0 0 22px}
 .hcnote svg{width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:#ff8a7a}
 .hcb{display:inline-block;margin:0 4px;padding:0 6px;border-radius:9px;font:700 11px/17px var(--ui,inherit);letter-spacing:.3px;color:#fff;background:#8f2318;border:1px solid #ff6b5a;vertical-align:middle;white-space:nowrap}
+/* v144 (John): tidy camp companion cards. One row of small buttons, Let go behind "...", no overlapping "At camp" tags. */
+.seat.bench{grid-template-columns:40px minmax(0,1fr) 188px}
+.seat.bench .minis .autot{letter-spacing:.02em;gap:3px;margin-top:0;width:auto;border-radius:8px}
+.seat.bench .traits{gap:3px}
+.seat.bench .trait{padding:0 5px;font-size:10px;line-height:1.5}
+.seat.bench .minis{display:flex;gap:4px}
+.seat.bench .minis>button{flex:1 1 0}
+.seat.bench .minis .more{position:relative;flex:none}
+.seat.bench .minis .more>summary{list-style:none;display:flex;align-items:center;justify-content:center;width:28px;height:100%;padding:5px 0;font-size:12px;letter-spacing:.04em;box-sizing:border-box}
+.seat.bench .minis .more>summary::-webkit-details-marker{display:none}
+.seat.bench .minis .more[open]>summary{color:var(--text);border-color:var(--ember)}
+.seat.bench .morepop{position:absolute;right:calc(100% + 4px);top:50%;transform:translateY(-50%);z-index:20;background:var(--panel2,#121821);border:1px solid var(--line2);border-radius:9px;padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.seat.bench .morepop button{width:100%;padding:6px 12px}
+.awaynote{display:none;align-items:center;gap:6px;font-size:12.5px;margin:4px 4px 8px}
+.awaynote svg{width:14px;height:14px;color:var(--ember);flex:none}
+body:not(.incamp) .awaynote{display:flex}
+body:not(.incamp) .seat.bench [data-train],body:not(.incamp) .seat.bench [data-seat],body:not(.incamp) .seat.bench [data-jobfor]{display:none}
+@media (max-width:520px){.seat.bench{grid-template-columns:40px minmax(0,1fr)}.seat.bench .minis .more>summary{width:40px}}
+.seat.bench .minis .autot svg{flex:none}
