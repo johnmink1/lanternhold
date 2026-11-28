@@ -1622,7 +1622,7 @@
       }
     }
     // take() hands the summary to a sync; back() puts it back if the sync failed.
-    function take() { const o = Object.assign({}, c, { cn: Date.now() }); c = fresh(); dirty = true; return o; }
+    function take() { const o = Object.assign({}, c, { cn: Date.now() }); c = fresh(); dirty = true; keep(); return o; } // stored at once, so a reload right after can't send the same summary twice
     function back(o) {
       if (!o) return;
       ['tp', 'ss', 'tw', 'ew', 'kr', 'ut'].forEach(k => { c[k] += o[k] || 0; });
