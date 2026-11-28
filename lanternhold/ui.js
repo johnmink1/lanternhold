@@ -1,4 +1,4 @@
-/* lh-build 202611272300 */
+/* lh-build 202611280240 */
 /* Lanternhold — browser front end. */
 (function () {
   'use strict';
