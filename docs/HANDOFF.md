@@ -1,6 +1,6 @@
 # Lanternhold handoff (started 24 Nov 2026, kept current)
 
-This handoff stands on its own for the new Lanternhold project. v143 is live (27 Nov 2026, build 202611272300); the next release is v144, and it can only hold QoL and bug fixes (see Feature freeze). Live at https://lanternhold.born2gamellc.com.
+This handoff stands on its own for the new Lanternhold project. v144 is live (28 Nov 2026, build 202611280240); the next release is v145, and it can only hold QoL and bug fixes (see Feature freeze). Live at https://lanternhold.born2gamellc.com.
 
 ## Where Lanternhold work happens
 
@@ -227,7 +227,17 @@ John: "watch the game logs... look out on odd things". Every 4 hours a read-only
 
 - v132 SHIPPED 26 Nov 2026 19:40 UTC (PR #68, build 202611261905). Server ran 19:37 UTC from `infra/deploy/v132/profile.sh` (heroes, profile, invite) and `infra/deploy/v132/support.sh` (new `lanternhold-support`), fetched in CloudShell from raw GitHub at a pinned commit with an md5 check. The v132 invite.js had lost PR #49's `#d` alias for the reserved word `dec`, so GET /invites failed; invite was rolled back to `~/lhbak/lanternhold-invite-202611261937.zip` at 19:42 UTC and PR #69 carries the fix. Lesson: before deploying a Lambda, diff it against the live code (`aws lambda get-function` zip), not only against the repo.
 
-## v144 rhythm watch: scripts, timed clicks and bug abuse (built 27 Nov 2026, held for the next bundle)
+## v144: small fixes bundle (SHIPPED 28 Nov 2026 ~02:45 UTC, PR #115, build 202611280240)
+
+John, 28 Nov 2026: "go ahead and push". One release bundling the held PRs, one "Small fixes" What's new entry:
+- #110 dashboard Party panel shows borrowed heroes' real power level (read `S.levels`, guests live in `S.guests`; now `L.lvl`).
+- #111 rhythm watch client + hardening (section below). Its server script `infra/deploy/v144/rhythm.sh` had NOT run when the client shipped; the client is safe without it (older server ignores `bh`, `/admin/flags` 404 is caught so the Watch list just stays hidden). v144 changed no other Lambda, so the dist bundles and the 32dc84e pin stay valid.
+- #112 camp companion cards: one button row (Job, Auto, Bring, "···" with Let go), `fmtK()` short gold, camp-only buttons hidden away from the main camp with one `.awaynote` line.
+- #113 desktop tab bar fit steps `fit0`-`fit5` restored in style.css (lost in the v142 merge); fit5 wraps as a last resort.
+- #114 Formation tips general line uses class `fhint` (was `tip`, the global fixed tooltip class).
+- Tested: pop-up on a save at notesShown 143 (1280, 1100, iPhone 13); tab bar scrollWidth = clientWidth at 1280 and 1100.
+
+## v144 rhythm watch: scripts, timed clicks and bug abuse (built 27 Nov 2026, shipped in v144; server script waiting on John)
 
 John, 27 Nov 2026: "keep track if any clicks are repetitive or timed... people setting up scripts... every 15 min to join the boss fight... catch those cheating or using bugs". **Flag and review only**: nothing is refused, blocked or taken; players land on the Admin tab's **Watch list** with a plain reason, and an admin decides. Branch `claude/project-thread-rn7ai9`.
 - Game (`ui.js` `RH`): counts how input arrives and sends `bh` with each `PUT /save`: fight taps (`tp`), taps on the same pixel (`ss`), 20-tap windows and how many were machine-even (`tw`/`ew`, gap spread under 5%), held-key repeats (`kr`, never flagged), script-made input (`ut`, `isTrusted` false), hours with input (`hr`), and the last 150 button presses `[key, ms, trusted]` (fight taps excluded). `cn` = device clock at send, so the server shifts times onto its own clock. Kept in localStorage `lh_rh` until a sync succeeds. Nothing typed is ever kept.
