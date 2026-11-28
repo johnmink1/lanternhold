@@ -97,6 +97,8 @@
     const e = Math.min(BIG.length - 1, Math.floor(Math.log10(n) / 3)), v = n / Math.pow(1000, e);
     return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.floor(v).toLocaleString('en-US')) + BIG[e];
   }
+  // Short gold for buttons: 685.8K instead of 685,801 (full number in the tooltip).
+  const fmtK = n => n >= 1e4 && n < 1e6 ? (Math.floor(n / 100) / 10).toFixed(1).replace(/\.0$/, '') + 'K' : fmt(n);
   function fmtTime(sec) {
     sec = Math.floor(sec);
     const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
@@ -1945,7 +1947,7 @@
       if (!guest) {
         const n = buyN() === 'max' ? Math.max(1, L.maxAffordable(S, id)) : buyN();
         const cost = L.trainCost(S, id, n), td = L.trainDust(S, id, n);
-        btn = '<button class="buy anywhere" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button>' + '<div class="minirow"><button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' + (id !== 'you' ? '<button class="rest icon" data-unseat="' + i + '" title="Send ' + esc(m.name) + ' to the campfire to free this seat" aria-label="Send ' + esc(m.name) + ' to the campfire">' + icon('flame') + '</button>' : '') + '</div>';
+        btn = '<button class="buy anywhere" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em title="' + fmt(cost) + ' gold">' + fmtK(cost) + '</em></span>' + trainDustTag(td) + '</button>' + '<div class="minirow"><button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' + (id !== 'you' ? '<button class="rest icon" data-unseat="' + i + '" title="Send ' + esc(m.name) + ' to the campfire to free this seat" aria-label="Send ' + esc(m.name) + ' to the campfire">' + icon('flame') + '</button>' : '') + '</div>';
       } else btn = '<button class="btn ghost small" data-dismiss="' + id + '">Dismiss</button>';
       const mv = '<div class="mv"><button class="mini up" data-move="' + i + ':-1"' + (i === 0 ? ' disabled' : '') + ' title="Move forward" aria-label="Move ' + esc(m.name) + ' forward">&#9650;</button><button class="mini dn" data-move="' + i + ':1"' + (i === L.PARTY_SIZE - 1 ? ' disabled' : '') + ' title="Move back" aria-label="Move ' + esc(m.name) + ' back">&#9660;</button></div>';
       const lk = seatLooks(id), sbg = lk && lk.g && lk.g !== 'night' ? cosOf('g', lk.g)[0] : '';
@@ -1974,13 +1976,15 @@
       return '<button class="job' + (on ? ' on' : '') + '" data-job="' + j.id + '" title="' + esc(j.desc) + '"><span class="jic">' + icon(j.icon) + '</span><b>' + j.name + '</b>' +
         (on ? '<small><img src="' + SP.spriteURL(m.cls, 2, lookHue(m)) + '" alt="">' + esc(m.name) + '</small><em>' + L.jobText(j, L.jobValue(S, j, id)) + '</em>' + (L.postOn(S, id) ? uqPerk(id) : '') : '<small class="none">Nobody yet</small><em>' + j.fmt + '</em>') + '</button>';
     }).join('') + '</div>');
-    let benchHtml = jobsHtml + bench.map(id => {
+    let benchHtml = jobsHtml + (bench.length ? '<p class="note awaynote">' + icon('flame') + 'Train, Job and Bring open when you are back at the main camp.</p>' : '') + bench.map(id => {
       const m = L.memberById(id), job = L.jobOf(S, id);
       const n = buyN() === 'max' ? Math.max(1, L.maxAffordable(S, id)) : buyN(), cost = L.trainCost(S, id, n), td = L.trainDust(S, id, n);
       return '<div class="seat bench">' + portrait(id) + '<div class="info"><div class="nm"><a class="pname" data-prof="' + id + '">' + esc(m.name) + '</a> ' + classTag(m.cls) + rarTag(id) + '</div><div class="lv">Power level ' + L.lvl(S, id) + ' &middot; ' + esc(m.title) + '</div>' +
         '<div class="jobline' + (job ? ' on' : '') + '">' + (job ? icon(job.icon) + '<b>' + job.name + '</b> ' + L.jobText(job, L.jobValue(S, job, id)) : 'No camp job yet') + (L.UNIQ[id] ? (L.postOn(S, id) ? ' ' + uqPerk(id) : ' <small class="uqhint" data-tip="' + esc(L.UNIQ[id].perk + ': ' + L.UNIQ[id].text) + '" tabindex="0">&#9733; ' + esc(L.UNIQ[id].perk) + ' as ' + esc(uqPostName(id)) + '</small>') : '') + '</div>' + traitChips(id, true) + '</div>' +
-        '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em>' + fmt(cost) + '</em></span>' + trainDustTag(td) + '</button><div class="minis">' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
-        '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button><button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] || L.isStoryComp(S, id) ? '<button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button>' : '') + '</div></div></div>';
+        // v144 (John): one tidy row (Train, then Job / Auto / Bring / ...). Away from the main camp the camp-only buttons hide (style.css) and one note says why.
+        '<div class="acts"><button class="buy" data-train="' + id + '"' + (cost > S.gold || td > (S.dust || 0) ? ' disabled' : '') + '><b>Train +' + n + '</b><span>' + coin + '<em title="' + fmt(cost) + ' gold">' + fmtK(cost) + '</em></span>' + trainDustTag(td) + '</button><div class="minis">' +
+        '<button class="rest" data-jobfor="' + id + '" data-tip="' + (job ? 'Change their camp job' : 'Give them a camp job that helps the party') + '">Job</button>' + '<button class="autot' + ((S.autoTrain || {})[id] && L.passOn(S) ? ' on' : '') + (L.passOn(S) ? '' : ' locked') + '" data-autot="' + id + '" title="Auto-train: spend gold on this character automatically" aria-pressed="' + !!(S.autoTrain || {})[id] + '">' + icon('refresh') + 'Auto</button>' +
+        '<button class="rest" data-seat="' + id + '" data-tip="Bring them into your party">Bring</button>' + ((S.hires || {})[id] || L.isStoryComp(S, id) ? '<details class="more"><summary class="rest" aria-label="More for ' + esc(m.name) + '">&middot;&middot;&middot;</summary><div class="morepop"><button class="rest" data-release="' + id + '" data-tip="Send them back to the Guild Hall. Their gear goes back to your bag.">Let go</button></div></details>' : '') + '</div></div></div>';
     }).join('');
     if (!bench.length) benchHtml = jobsHtml + '<p class="note">No one is at the fire. Companions who rest here can take a job that helps the whole party.</p>';
     if ($('bench').dataset.h !== benchHtml) { $('bench').innerHTML = benchHtml; $('bench').dataset.h = benchHtml; }
@@ -2020,6 +2024,8 @@
     else if (t.id === 'm-mail') openTrade('mail');
   };
   ['tab-party', 'tab-camp', 'tab-market', 'tab-guild'].forEach(id => $(id).addEventListener('click', partyClick));
+  // The bench "..." menu closes on a tap anywhere else.
+  document.addEventListener('click', e => document.querySelectorAll('details.more[open]').forEach(d => { if (!d.contains(e.target) || e.target.closest('.morepop button')) d.open = false; }));
   // camp jobs: pick who does a job, or which job someone does
   // Unique Legendaries: their extra on their own camp post (jid), or on any post for Thistle.
   const uqFits = (id, jid) => { const u = L.UNIQ[id]; return !!u && (u.job === 'any' || u.job === jid); };
@@ -7837,6 +7843,10 @@
   // ---------- patch notes ----------
   // Newest first. Bump `v` for each release; players see the notes once after updating.
   const PATCH_NOTES = [
+    { v: 144, date: 'November 2026', title: 'Small fixes', items: [
+      'Camp companion cards are tidier: one row of buttons, short gold costs like 685.8K, and Let go tucked behind the ··· button.',
+      'Away from camp, the camp-only buttons on those cards are hidden, with one line saying where they open.',
+    ] },
     { v: 143, date: 'November 2026', title: 'Hardcore NP+ and small fixes', items: [
       'Hardcore heroes can start a New Playthrough. Each save keeps its own NP+ tier.',
       'Sigils belong to your account, so Hardcore heroes can claim daily quest Sigils and find Sigils too. Both saves share one daily set.',
